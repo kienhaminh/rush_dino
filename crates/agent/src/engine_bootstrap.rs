@@ -19,6 +19,7 @@ use crate::{
     tools::{
         create_job::CreateJobTool,
         create_skill::CreateSkillTool,
+        file_edit::FileEditTool,
         file_read::FileReadTool,
         list_skills::ListSkillsTool,
         memory_read::MemoryReadTool,
@@ -45,7 +46,7 @@ pub fn build_engine_deps(
     brave_api_key: Option<String>,
     config: &AgentConfig,
 ) -> Result<EngineDeps> {
-    let memory = Arc::new(MemoryManager::new(home_dir.join("memory")));
+    let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
 
     let (inbox_tx, inbox_rx) = mpsc::channel(256);
@@ -63,6 +64,7 @@ pub fn build_engine_deps(
         brave_api_key,
     ));
     registry.register(FileReadTool::new(home_dir.join("documents")));
+    registry.register(FileEditTool::new());
     registry.register(ShellExecTool::new(config.tool_timeout_secs));
     registry.register(MemoryReadTool::new(memory.clone()));
     registry.register(MemoryWriteTool::new(memory.clone()));
