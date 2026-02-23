@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            artifact: rushdino-linux-x86_64
+          - target: aarch64-unknown-linux-gnu
+            artifact: rushdino-linux-aarch64
+          - target: x86_64-apple-darwin
+            artifact: rushdino-macos-x86_64
+          - target: aarch64-apple-darwin
+            artifact: rushdino-macos-aarch64
+          - target: x86_64-pc-windows-msvc
+            artifact: rushdino-windows-x86_64.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm install
+          npm run build
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build backend
+        run: cargo build --release --target ${{ matrix.target }} -p rushdino-cli
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p dist
+          BIN="target/${{ matrix.target }}/release/rushdino"
+          if [[ "${{ matrix.artifact }}" == *.exe ]]; then
+            BIN="target/${{ matrix.target }}/release/rushdino.exe"
+          fi
+          cp "$BIN" "dist/${{ matrix.artifact }}"
+          sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*

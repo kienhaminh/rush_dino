@@ -1,0 +1,13 @@
+[package]
+name = "rushdino-telegram"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono.workspace = true
+teloxide.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+rushdino-common = { path = "../common" }
+rushdino-agent = { path = "../agent" }
