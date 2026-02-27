@@ -9,15 +9,22 @@ name = "rushdino"
 path = "src/main.rs"
 
 [dependencies]
+axum.workspace = true
+base64.workspace = true
 clap.workspace = true
 colored.workspace = true
 daemonize.workspace = true
+hex.workspace = true
 dialoguer.workspace = true
 nix.workspace = true
+open.workspace = true
+rand.workspace = true
 reqwest.workspace = true
 self_update.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+url.workspace = true
 rushdino-common = { path = "../common" }
 rushdino-server = { path = "../server" }
