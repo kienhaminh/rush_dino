@@ -8,7 +8,7 @@ pub fn run() -> Result<()> {
     let options = ["Ollama", "OpenAI", "Anthropic", "Skip"];
     let selection = Select::new()
         .with_prompt("Choose provider")
-        .items(options)
+        .items(&options)
         .default(0)
         .interact()
         .unwrap_or(0);

@@ -2,6 +2,7 @@ pub mod middleware;
 pub mod routes;
 pub mod state;
 pub mod static_files;
+pub mod webchat;
 pub mod ws;
 
 use std::sync::Arc;
@@ -13,15 +14,19 @@ use tower_http::trace::TraceLayer;
 
 use rushdino_agent::{AgentConfig, AgentEngine};
 use rushdino_common::{config::ProviderKind, db, init, AppConfig, CredentialsConfig, Result};
+use rushdino_gateway::Gateway;
 use rushdino_providers::{types::ProviderConfig, Provider};
+
+use crate::webchat::WebChatAdapter;
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
     let config = Arc::new(AppConfig::load()?);
     let credentials = Arc::new(CredentialsConfig::load()?);
 
-    let pool = Arc::new(db::init_pool(&config.db_path).await?);
-    db::run_migrations(pool.as_ref()).await?;
+    let pool = db::init_pool(&config.db_path).await?;
+    db::run_migrations(&pool).await?;
+    let pool = Arc::new(pool);
 
     let provider_config = match config.active_provider {
         ProviderKind::Ollama => ProviderConfig::Ollama {
@@ -46,29 +51,67 @@ pub async fn run_server() -> Result<()> {
     let provider = Arc::new(Provider::from_config(&provider_config)?);
     let engine = Arc::new(AgentEngine::new(
         provider,
-        pool,
+        pool.clone(),
         config.data_dir.clone(),
         credentials.brave_api_key.clone(),
         AgentConfig::default(),
     )?);
 
-    let state = AppState::new(engine.clone(), config.clone());
+    // Build gateway and register all enabled channel adapters.
+    let mut gateway = Gateway::new(engine.clone(), (*pool).clone());
 
-    if credentials
-        .telegram_bot_token
-        .as_deref()
-        .filter(|t| !t.is_empty())
-        .is_some()
-    {
-        let tg_engine = engine;
-        let tg_config = config.clone();
-        let tg_credentials = credentials.clone();
-        tokio::spawn(async move {
-            if let Err(err) = rushdino_telegram::start_bot(tg_engine, tg_config, tg_credentials).await {
-                tracing::error!("telegram bot failed: {err}");
-            }
-        });
+    // Telegram
+    if config.gateway.telegram.enabled {
+        if let Some(token) = credentials.telegram_bot_token.as_deref().filter(|t| !t.is_empty()) {
+            gateway.register(rushdino_telegram::TelegramAdapter::new(
+                token.to_owned(),
+                config.clone(),
+            ));
+            tracing::info!("gateway: telegram adapter registered");
+        } else {
+            tracing::warn!("gateway: telegram enabled but token missing");
+        }
     }
+
+    // Discord
+    if config.gateway.discord.enabled {
+        if let Some(token) =
+            credentials.discord_bot_token.as_deref().filter(|t| !t.is_empty())
+        {
+            gateway.register(rushdino_discord::DiscordAdapter::new(token));
+            tracing::info!("gateway: discord adapter registered");
+        } else {
+            tracing::warn!("gateway: discord enabled but token missing");
+        }
+    }
+
+    // Slack
+    if config.gateway.slack.enabled {
+        let bot = credentials.slack_bot_token.as_deref().unwrap_or("").to_owned();
+        let app = credentials.slack_app_token.as_deref().unwrap_or("").to_owned();
+        if !bot.is_empty() && !app.is_empty() {
+            gateway.register(rushdino_slack::SlackAdapter::new(bot, app));
+            tracing::info!("gateway: slack adapter registered");
+        } else {
+            tracing::warn!("gateway: slack enabled but tokens missing");
+        }
+    }
+
+    // WebChat (always on — drives the axum WebSocket route)
+    let webchat = Arc::new(WebChatAdapter::new());
+    if config.gateway.webchat.enabled {
+        gateway.register_arc(webchat.clone() as Arc<dyn rushdino_gateway::ChannelAdapter>);
+        tracing::info!("gateway: webchat adapter registered");
+    }
+
+    // Spawn the gateway in a background task.
+    tokio::spawn(async move {
+        if let Err(err) = gateway.start().await {
+            tracing::error!("gateway exited with error: {err}");
+        }
+    });
+
+    let state = AppState::new(engine, config.clone(), webchat);
 
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -77,7 +120,8 @@ pub async fn run_server() -> Result<()> {
         .route("/api/conversations", get(routes::conversations::list_conversations))
         .route(
             "/api/conversations/:id",
-            get(routes::conversations::get_conversation).delete(routes::conversations::delete_conversation),
+            get(routes::conversations::get_conversation)
+                .delete(routes::conversations::delete_conversation),
         )
         .route("/api/documents/ingest", post(routes::documents::ingest_documents))
         .fallback(get(static_files::serve_static))

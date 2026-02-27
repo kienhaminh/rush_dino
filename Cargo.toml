@@ -3,8 +3,11 @@ members = [
   "crates/common",
   "crates/providers",
   "crates/agent",
+  "crates/gateway",
   "crates/server",
   "crates/telegram",
+  "crates/discord",
+  "crates/slack",
   "crates/cli",
 ]
 resolver = "2"

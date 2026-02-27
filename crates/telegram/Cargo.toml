@@ -5,9 +5,11 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+async-trait.workspace = true
 chrono.workspace = true
 teloxide.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 rushdino-common = { path = "../common" }
 rushdino-agent = { path = "../agent" }
+rushdino-gateway = { path = "../gateway" }

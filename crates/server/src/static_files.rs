@@ -1,4 +1,7 @@
-use axum::{http::StatusCode, response::IntoResponse};
+use axum::{
+    http::{header, HeaderValue, StatusCode},
+    response::IntoResponse,
+};
 use rust_embed::RustEmbed;
 
 #[derive(RustEmbed)]
@@ -10,11 +13,13 @@ pub async fn serve_static(uri: axum::http::Uri) -> impl IntoResponse {
     let key = if path.is_empty() { "index.html" } else { path };
 
     if let Some(asset) = Assets::get(key) {
-        return (content_type(key), asset.data.into_owned()).into_response();
+        let ct = HeaderValue::from_static(content_type(key));
+        return ([(header::CONTENT_TYPE, ct)], asset.data.into_owned()).into_response();
     }
 
     if let Some(index) = Assets::get("index.html") {
-        return (content_type("index.html"), index.data.into_owned()).into_response();
+        let ct = HeaderValue::from_static("text/html; charset=utf-8");
+        return ([(header::CONTENT_TYPE, ct)], index.data.into_owned()).into_response();
     }
 
     (StatusCode::NOT_FOUND, "not found").into_response()

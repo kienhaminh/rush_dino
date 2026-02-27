@@ -28,6 +28,32 @@ pub struct OllamaConfig {
     pub model: String,
 }
 
+/// Per-channel enable/disable flag.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelConfig {
+    pub enabled: bool,
+}
+
+/// Gateway configuration: controls which channels are active.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GatewayConfig {
+    pub telegram: ChannelConfig,
+    pub discord: ChannelConfig,
+    pub slack: ChannelConfig,
+    pub webchat: ChannelConfig,
+}
+
+impl Default for GatewayConfig {
+    fn default() -> Self {
+        Self {
+            telegram: ChannelConfig { enabled: true },
+            discord: ChannelConfig { enabled: false },
+            slack: ChannelConfig { enabled: false },
+            webchat: ChannelConfig { enabled: true },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub host: String,
@@ -41,6 +67,7 @@ pub struct AppConfig {
     pub ollama: OllamaConfig,
     pub openai: ProviderModelConfig,
     pub anthropic: ProviderModelConfig,
+    pub gateway: GatewayConfig,
 }
 
 impl Default for AppConfig {
@@ -65,6 +92,7 @@ impl Default for AppConfig {
             anthropic: ProviderModelConfig {
                 model: "claude-3-5-sonnet-latest".to_owned(),
             },
+            gateway: GatewayConfig::default(),
         }
     }
 }
@@ -75,6 +103,10 @@ pub struct CredentialsConfig {
     pub anthropic_api_key: Option<String>,
     pub brave_api_key: Option<String>,
     pub telegram_bot_token: Option<String>,
+    pub discord_bot_token: Option<String>,
+    pub slack_bot_token: Option<String>,
+    /// Slack Socket Mode app-level token (xapp-...)
+    pub slack_app_token: Option<String>,
 }
 
 impl AppConfig {

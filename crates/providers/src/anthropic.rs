@@ -23,8 +23,8 @@ impl AnthropicProvider {
         }
     }
 
-    pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
-        let model = request.model.unwrap_or_else(|| self.model.clone());
+    pub async fn chat(&self, mut request: ChatRequest) -> Result<ChatResponse> {
+        let model = request.model.take().unwrap_or_else(|| self.model.clone());
         let body = to_anthropic_body(request, model, false);
 
         let payload: Value = self
