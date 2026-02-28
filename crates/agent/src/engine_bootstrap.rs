@@ -135,15 +135,17 @@ pub fn title_from(input: &str) -> &str {
     }
 }
 
-pub fn system_message(config: &AgentConfig, memory: &MemoryManager) -> Message {
+pub fn system_message(config: &AgentConfig, memory: &MemoryManager, agent_manager: &AgentManager) -> Message {
+    // Use general-assistant system prompt; fall back to config.system_prompt
+    let agent_prompt = agent_manager
+        .get("general-assistant")
+        .map(|a| a.system_prompt)
+        .unwrap_or_else(|| config.system_prompt.clone());
+
     Message {
         id: Uuid::new_v4().to_string(),
         role: Role::System,
-        content: format!(
-            "{}\n\n{}",
-            config.system_prompt,
-            memory.load_context().unwrap_or_default()
-        ),
+        content: format!("{}\n\n{}", agent_prompt, memory.load_context().unwrap_or_default()),
         tool_calls: None,
         created_at: Utc::now(),
     }

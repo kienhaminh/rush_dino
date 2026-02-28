@@ -7,6 +7,7 @@ use rushdino_common::{models::Message, Result};
 use rushdino_providers::{types::ChatChunk, types::ChatResponse, Provider};
 
 use crate::{
+    agent_manager::AgentManager,
     conversation::ConversationManager,
     engine_bootstrap::{build_engine_deps, system_message, title_from, user_message},
     job_manager::{JobManager, JobResult},
@@ -43,6 +44,7 @@ pub struct AgentEngine {
     _job_manager: Arc<JobManager>,
     _orchestrator: Arc<Orchestrator>,
     memory: Arc<MemoryManager>,
+    agent_manager: Arc<AgentManager>,
     config: AgentConfig,
     inbox_rx: Arc<Mutex<mpsc::Receiver<JobResult>>>,
 }
@@ -78,6 +80,7 @@ impl AgentEngine {
             _job_manager: deps.job_manager,
             _orchestrator: deps.orchestrator,
             memory: deps.memory,
+            agent_manager: deps.agent_manager,
             config,
             inbox_rx: Arc::new(Mutex::new(deps.inbox_rx)),
         })
@@ -114,7 +117,7 @@ impl AgentEngine {
         }
 
         if messages.is_empty() {
-            messages.push(system_message(&self.config, self.memory.as_ref()));
+            messages.push(system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref()));
         }
 
         let old_len = messages.len();
@@ -194,7 +197,7 @@ impl AgentEngine {
         }
 
         if messages.is_empty() {
-            messages.push(system_message(&self.config, self.memory.as_ref()));
+            messages.push(system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref()));
         }
 
         let old_len = messages.len();
