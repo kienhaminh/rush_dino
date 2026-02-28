@@ -6,5 +6,6 @@ pub mod list_skills;
 pub mod memory_read;
 pub mod memory_write;
 pub mod shell_exec;
+pub mod spawn_agent;
 pub mod spawn_sub_agent;
 pub mod web_search;
