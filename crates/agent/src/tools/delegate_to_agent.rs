@@ -96,10 +96,16 @@ impl Tool for DelegateToAgentTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("task is required".to_owned()))?;
 
+        // Read the task-local context once; used both for the depth guard and
+        // to propagate session/conversation IDs into the child context.
+        let parent_ctx = current_tool_execution_context().unwrap_or(ToolExecutionContext {
+            session_id: None,
+            conversation_id: None,
+            delegation_depth: 0,
+        });
+        let current_depth = parent_ctx.delegation_depth;
+
         // Enforce delegation depth limit to prevent infinite recursion.
-        let current_depth = current_tool_execution_context()
-            .map(|c| c.delegation_depth)
-            .unwrap_or(0);
         if current_depth >= MAX_DELEGATION_DEPTH {
             return Err(AppError::Agent(format!(
                 "max delegation depth ({MAX_DELEGATION_DEPTH}) reached; cannot delegate to {agent_name}"
@@ -138,11 +144,6 @@ impl Tool for DelegateToAgentTool {
 
         // Build the child context with an incremented delegation depth so that
         // any tools called inside the nested loop respect the same depth limit.
-        let parent_ctx = current_tool_execution_context().unwrap_or(ToolExecutionContext {
-            session_id: None,
-            conversation_id: None,
-            delegation_depth: 0,
-        });
         let child_ctx = ToolExecutionContext {
             delegation_depth: current_depth + 1,
             ..parent_ctx
