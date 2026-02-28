@@ -12,8 +12,9 @@ use crate::{
     job_manager::{JobManager, JobResult},
     memory::MemoryManager,
     orchestrator::Orchestrator,
-    react_loop::run_react_loop,
+    react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     tool_registry::ToolRegistry,
+    tools::shell_exec::{with_tool_execution_context, ToolApproval, ToolExecutionContext},
 };
 
 #[derive(Debug, Clone)]
@@ -46,6 +47,12 @@ pub struct AgentEngine {
     inbox_rx: Arc<Mutex<mpsc::Receiver<JobResult>>>,
 }
 
+#[derive(Debug, Clone)]
+pub enum WsStreamEvent {
+    ChatChunk(ChatChunk),
+    AssistantReset,
+}
+
 impl AgentEngine {
     pub fn new(
         provider: Arc<Provider>,
@@ -53,6 +60,7 @@ impl AgentEngine {
         home_dir: PathBuf,
         brave_api_key: Option<String>,
         config: AgentConfig,
+        approval: Option<Arc<dyn ToolApproval>>,
     ) -> Result<Self> {
         let deps = build_engine_deps(
             provider.clone(),
@@ -60,6 +68,7 @@ impl AgentEngine {
             home_dir,
             brave_api_key,
             &config,
+            approval,
         )?;
 
         Ok(Self {
@@ -154,6 +163,86 @@ impl AgentEngine {
                 .await;
         });
         Ok((conv_id, rx))
+    }
+
+    pub async fn stream_chat_via_ws(
+        &self,
+        session_id: &str,
+        conversation_id: Option<String>,
+        user_input: &str,
+        event_tx: mpsc::Sender<WsStreamEvent>,
+    ) -> Result<String> {
+        let conversation_id = if let Some(id) = conversation_id {
+            id
+        } else {
+            self.conversation
+                .create_conversation(title_from(user_input))
+                .await?
+                .id
+        };
+
+        let mut messages = self
+            .conversation
+            .get_messages(&conversation_id)
+            .await
+            .unwrap_or_default();
+        if messages.is_empty() {
+            let _ = self
+                .conversation
+                .create_conversation_with_id(&conversation_id, title_from(user_input))
+                .await?;
+        }
+
+        if messages.is_empty() {
+            messages.push(system_message(&self.config, self.memory.as_ref()));
+        }
+
+        let old_len = messages.len();
+        let user_msg = user_message(user_input);
+        self.conversation
+            .save_message(&conversation_id, &user_msg)
+            .await?;
+        messages.push(user_msg);
+
+        let (internal_tx, mut internal_rx) = mpsc::channel(128);
+        let event_forward_tx = event_tx.clone();
+        tokio::spawn(async move {
+            while let Some(event) = internal_rx.recv().await {
+                let ws_event = match event {
+                    StreamingEvent::ChatChunk(chunk) => WsStreamEvent::ChatChunk(chunk),
+                    StreamingEvent::AssistantReset => WsStreamEvent::AssistantReset,
+                };
+                if event_forward_tx.send(ws_event).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let context = ToolExecutionContext {
+            session_id: Some(session_id.to_owned()),
+            conversation_id: Some(conversation_id.clone()),
+            delegation_depth: 0,
+        };
+
+        let (_, all_messages) = with_tool_execution_context(
+            context,
+            run_react_loop_streaming(
+                self.provider.clone(),
+                self.tool_registry.clone(),
+                messages,
+                &self.config,
+                internal_tx,
+            ),
+        )
+        .await?;
+
+        for message in all_messages.iter().skip(old_len + 1) {
+            self.conversation
+                .save_message(&conversation_id, message)
+                .await?;
+        }
+
+        Ok(conversation_id)
     }
 
     pub async fn poll_inbox(&self) -> Option<JobResult> {
