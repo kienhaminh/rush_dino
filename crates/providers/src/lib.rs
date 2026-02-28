@@ -18,6 +18,7 @@ pub enum Provider {
     Ollama(OpenAIProvider),
     OpenAI(OpenAIProvider),
     Anthropic(AnthropicProvider),
+    Codex(OpenAIProvider),
     Plugin(PluginProvider),
 }
 
@@ -47,6 +48,11 @@ impl Provider {
             ProviderConfig::Anthropic { model, api_key } => {
                 Ok(Self::Anthropic(AnthropicProvider::new(model.clone(), api_key.clone())))
             }
+            ProviderConfig::Codex { access_token, model } => Ok(Self::Codex(OpenAIProvider::new(
+                "https://api.openai.com/v1".to_owned(),
+                model.clone(),
+                Some(access_token.clone()),
+            ))),
             ProviderConfig::Plugin { manifest_path } => {
                 Ok(Self::Plugin(PluginProvider::from_manifest(manifest_path)?))
             }
@@ -55,7 +61,7 @@ impl Provider {
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
         match self {
-            Self::Ollama(p) | Self::OpenAI(p) => p.chat(request).await,
+            Self::Ollama(p) | Self::OpenAI(p) | Self::Codex(p) => p.chat(request).await,
             Self::Anthropic(p) => p.chat(request).await,
             Self::Plugin(p) => p.chat(request).await,
         }
@@ -63,7 +69,7 @@ impl Provider {
 
     pub async fn stream_chat(&self, request: ChatRequest) -> Result<mpsc::Receiver<ChatChunk>> {
         match self {
-            Self::Ollama(p) | Self::OpenAI(p) => p.stream_chat(request).await,
+            Self::Ollama(p) | Self::OpenAI(p) | Self::Codex(p) => p.stream_chat(request).await,
             Self::Anthropic(p) => p.stream_chat(request).await,
             Self::Plugin(p) => p.stream_chat(request).await,
         }
@@ -71,7 +77,7 @@ impl Provider {
 
     pub fn model(&self) -> &str {
         match self {
-            Self::Ollama(p) | Self::OpenAI(p) => &p.model,
+            Self::Ollama(p) | Self::OpenAI(p) | Self::Codex(p) => &p.model,
             Self::Anthropic(p) => &p.model,
             Self::Plugin(p) => &p.name,
         }

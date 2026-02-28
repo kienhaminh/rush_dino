@@ -58,6 +58,11 @@ pub enum ProviderConfig {
         api_key: String,
         model: String,
     },
+    Codex {
+        /// OAuth access token used as Bearer authorization
+        access_token: String,
+        model: String,
+    },
     Plugin {
         manifest_path: std::path::PathBuf,
     },
