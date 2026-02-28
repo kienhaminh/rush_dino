@@ -46,6 +46,13 @@ pub async fn run_server() -> Result<()> {
         ProviderKind::Plugin => ProviderConfig::Plugin {
             manifest_path: config.data_dir.join("plugins/default.toml"),
         },
+        // Codex uses the OpenAI-compatible API with an OAuth access token.
+        // Full CodexProvider wiring is handled in a dedicated task.
+        ProviderKind::Codex => ProviderConfig::OpenAI {
+            api_key: credentials.codex_access_token.clone().unwrap_or_default(),
+            model: config.codex.model.clone(),
+            base_url: None,
+        },
     };
 
     let provider = Arc::new(Provider::from_config(&provider_config)?);
