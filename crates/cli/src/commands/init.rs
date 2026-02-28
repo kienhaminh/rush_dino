@@ -2,10 +2,12 @@ use dialoguer::{Input, Password, Select};
 
 use rushdino_common::{init, Result};
 
+use super::codex_login;
+
 pub fn run() -> Result<()> {
     let home = init::ensure_rushdino_dir()?;
 
-    let options = ["Ollama", "OpenAI", "Anthropic", "Skip"];
+    let options = ["Ollama", "OpenAI", "Anthropic", "Codex (OAuth)", "Skip"];
     let selection = Select::new()
         .with_prompt("Choose provider")
         .items(&options)
@@ -52,6 +54,26 @@ pub fn run() -> Result<()> {
             config = config.replace("active_provider = \"ollama\"", "active_provider = \"anthropic\"");
             credentials = rewrite_value(credentials, "anthropic_api_key", &key);
         }
+        "Codex (OAuth)" => {
+            let tokens = tokio::runtime::Runtime::new()
+                .expect("tokio runtime")
+                .block_on(codex_login::run())
+                .map_err(|e| {
+                    eprintln!("Codex OAuth failed: {e}");
+                    e
+                })?;
+
+            config = config
+                .replace("active_provider = \"ollama\"", "active_provider = \"codex\"")
+                .replace("active_provider = \"openai\"", "active_provider = \"codex\"")
+                .replace("active_provider = \"anthropic\"", "active_provider = \"codex\"");
+
+            credentials = rewrite_value(credentials, "codex_access_token", &tokens.access_token);
+            credentials = rewrite_value(credentials, "codex_refresh_token", &tokens.refresh_token);
+            credentials = rewrite_int_value(credentials, "codex_token_expires_at", tokens.expires_at);
+
+            println!("Authenticated with OpenAI Codex.");
+        }
         _ => {}
     }
 
@@ -78,6 +100,17 @@ fn rewrite_value(mut doc: String, key: &str, value: &str) -> String {
         if line.trim_start().starts_with(&format!("{key} =")) {
             doc = doc.replace(line, &quoted);
             break;
+        }
+    }
+    doc
+}
+
+fn rewrite_int_value(mut doc: String, key: &str, value: i64) -> String {
+    let unquoted = format!("{key} = {value}");
+    for line in doc.clone().lines() {
+        if line.trim_start().starts_with(&format!("{key} =")) {
+            doc = doc.replace(line, &unquoted);
+            return doc;
         }
     }
     doc
