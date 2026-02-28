@@ -1,3 +1,4 @@
+pub mod agent_manager;
 pub mod context;
 pub mod conversation;
 mod conversation_mapper;
@@ -11,7 +12,9 @@ pub mod skill_manager;
 pub mod tool_registry;
 pub mod tools;
 
+pub use agent_manager::{AgentManager, AgentTemplate};
 pub use engine::{AgentConfig, AgentEngine};
 pub use job_manager::JobResult;
 pub use skill_manager::{Skill, SkillManager};
 pub use tool_registry::{Tool, ToolRegistry};
+pub use tools::shell_exec::{ToolApproval, ToolApprovalRequest};
