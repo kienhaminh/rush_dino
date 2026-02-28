@@ -123,7 +123,7 @@ mod tests {
     async fn returns_error_when_name_missing() {
         let dir = std::env::temp_dir()
             .join(format!("test-spawn-err-{}", uuid::Uuid::new_v4()));
-        let mgr = Arc::new(AgentManager::new(dir));
+        let mgr = Arc::new(AgentManager::new(dir.clone()));
         let tool = SpawnAgentTool::new(mgr);
 
         let result = tool
@@ -134,8 +134,6 @@ mod tests {
             .await;
 
         assert!(result.is_err());
-        let _ = std::fs::remove_dir_all(
-            std::env::temp_dir().join("test-spawn-err-nonexistent"),
-        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
