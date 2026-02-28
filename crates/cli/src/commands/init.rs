@@ -4,7 +4,7 @@ use rushdino_common::{init, Result};
 
 use super::codex_login;
 
-pub fn run() -> Result<()> {
+pub async fn run() -> Result<()> {
     let home = init::ensure_rushdino_dir()?;
 
     let options = ["Ollama", "OpenAI", "Anthropic", "Codex (OAuth)", "Skip"];
@@ -55,9 +55,8 @@ pub fn run() -> Result<()> {
             credentials = rewrite_value(credentials, "anthropic_api_key", &key);
         }
         "Codex (OAuth)" => {
-            let tokens = tokio::runtime::Runtime::new()
-                .expect("tokio runtime")
-                .block_on(codex_login::run())
+            let tokens = codex_login::run()
+                .await
                 .map_err(|e| {
                     eprintln!("Codex OAuth failed: {e}");
                     e

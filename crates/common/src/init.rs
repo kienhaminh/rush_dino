@@ -70,7 +70,7 @@ fn default_config_template(home: &Path) -> String {
 }
 
 fn default_credentials_template() -> &'static str {
-    "openai_api_key = \"\"\nanthropic_api_key = \"\"\nbrave_api_key = \"\"\ntelegram_bot_token = \"\"\n"
+    "openai_api_key = \"\"\nanthropic_api_key = \"\"\nbrave_api_key = \"\"\ntelegram_bot_token = \"\"\ncodex_access_token = \"\"\ncodex_refresh_token = \"\"\ncodex_token_expires_at = 0\n"
 }
 
 #[cfg(unix)]
