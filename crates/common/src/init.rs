@@ -63,7 +63,7 @@ fn write_if_missing(path: &Path, content: &[u8]) -> Result<()> {
 
 fn default_config_template(home: &Path) -> String {
     format!(
-        "host = \"127.0.0.1\"\nport = 3000\nlog_level = \"info\"\nactive_provider = \"ollama\"\ndata_dir = \"{}\"\ndb_path = \"{}\"\nbrave_search_endpoint = \"https://api.search.brave.com/res/v1/web/search\"\nallowed_chat_ids = []\n\n[ollama]\nbase_url = \"http://localhost:11434/v1\"\nmodel = \"llama3.2:latest\"\n\n[openai]\nmodel = \"gpt-4.1-mini\"\n\n[anthropic]\nmodel = \"claude-3-5-sonnet-latest\"\n",
+        "host = \"127.0.0.1\"\nport = 3000\nlog_level = \"info\"\nactive_provider = \"ollama\"\ndata_dir = \"{}\"\ndb_path = \"{}\"\nbrave_search_endpoint = \"https://api.search.brave.com/res/v1/web/search\"\nallowed_chat_ids = []\n\n[ollama]\nbase_url = \"http://localhost:11434/v1\"\nmodel = \"llama3.2:latest\"\n\n[openai]\nmodel = \"gpt-4.1-mini\"\n\n[anthropic]\nmodel = \"claude-3-5-sonnet-latest\"\n\n[codex]\nmodel = \"gpt-4.1-mini\"\n",
         home.display(),
         home.join("data.db").display()
     )
