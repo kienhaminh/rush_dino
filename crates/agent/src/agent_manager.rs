@@ -24,9 +24,18 @@ impl AgentManager {
         Self { agents_dir }
     }
 
+    /// Rejects names that could escape the agents directory via path traversal.
+    fn validate_name(name: &str) -> Result<()> {
+        if name.is_empty() || name.contains('/') || name.contains('\\') || name.starts_with('.') {
+            return Err(AppError::Validation(format!("invalid agent name: {name:?}")));
+        }
+        Ok(())
+    }
+
     /// Reads an agent template by name from `{agents_dir}/{name}.toml`.
-    /// Returns None if the file is missing or invalid.
+    /// Returns None if the file is missing, the name is invalid, or parsing fails.
     pub fn get(&self, name: &str) -> Option<AgentTemplate> {
+        Self::validate_name(name).ok()?;
         let path = self.agents_dir.join(format!("{name}.toml"));
         let content = fs::read_to_string(path).ok()?;
         toml::from_str(&content).ok()
@@ -59,6 +68,7 @@ impl AgentManager {
     /// Creates the directory if it does not already exist.
     /// Returns the path where the file was written.
     pub fn save(&self, template: &AgentTemplate) -> Result<PathBuf> {
+        Self::validate_name(&template.name)?;
         fs::create_dir_all(&self.agents_dir)?;
         let path = self.agents_dir.join(format!("{}.toml", template.name));
         let content = toml::to_string_pretty(template)
@@ -93,34 +103,40 @@ mod tests {
     fn get_returns_none_for_missing_file() {
         let dir = temp_dir();
         fs::create_dir_all(&dir).unwrap();
-        let manager = AgentManager::new(dir);
+        let manager = AgentManager::new(dir.clone());
 
         assert!(manager.get("nonexistent").is_none());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn save_and_get_round_trip() {
         let dir = temp_dir();
-        let manager = AgentManager::new(dir);
+        let manager = AgentManager::new(dir.clone());
         let template = sample_template("my-agent");
 
         manager.save(&template).expect("save should succeed");
 
         let loaded = manager.get("my-agent").expect("template should be found");
         assert_eq!(loaded, template);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn list_returns_all_valid_tomls() {
         let dir = temp_dir();
-        let manager = AgentManager::new(dir);
+        let manager = AgentManager::new(dir.clone());
         let template = sample_template("list-agent");
 
         manager.save(&template).expect("save should succeed");
 
         let templates = manager.list();
         assert_eq!(templates.len(), 1);
-        assert_eq!(templates[0].name, "list-agent");
+        assert_eq!(templates[0], template);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -131,8 +147,10 @@ mod tests {
         let mut file = fs::File::create(&bad_path).unwrap();
         file.write_all(b"not valid toml ][").unwrap();
 
-        let manager = AgentManager::new(dir);
+        let manager = AgentManager::new(dir.clone());
         let templates = manager.list();
         assert!(templates.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
