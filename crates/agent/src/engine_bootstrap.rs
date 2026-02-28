@@ -68,6 +68,7 @@ pub fn build_engine_deps(
     // captures them. The closure is SYNC so all construction inside must be sync.
     let provider_c = provider.clone();
     let agent_manager_c = agent_manager.clone();
+    let agent_manager_c2 = agent_manager.clone();
     let config_c = config.clone();
     let memory_c = memory.clone();
     let skills_c = skills.clone();
@@ -108,7 +109,7 @@ pub fn build_engine_deps(
         r.register(CreateSkillTool::new(skills_c.clone()));
         r.register(ListSkillsTool::new(skills_c));
         r.register(delegate_tool);
-        r.register(SpawnAgentTool::new(agent_manager.clone()));
+        r.register(SpawnAgentTool::new(agent_manager_c2));
         r
     });
 
