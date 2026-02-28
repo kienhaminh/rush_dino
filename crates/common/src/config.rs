@@ -14,6 +14,7 @@ pub enum ProviderKind {
     Ollama,
     Openai,
     Anthropic,
+    Codex,
     Plugin,
 }
 
@@ -67,6 +68,7 @@ pub struct AppConfig {
     pub ollama: OllamaConfig,
     pub openai: ProviderModelConfig,
     pub anthropic: ProviderModelConfig,
+    pub codex: ProviderModelConfig,
     pub gateway: GatewayConfig,
 }
 
@@ -92,6 +94,9 @@ impl Default for AppConfig {
             anthropic: ProviderModelConfig {
                 model: "claude-3-5-sonnet-latest".to_owned(),
             },
+            codex: ProviderModelConfig {
+                model: "gpt-4.1-mini".to_owned(),
+            },
             gateway: GatewayConfig::default(),
         }
     }
@@ -107,6 +112,12 @@ pub struct CredentialsConfig {
     pub slack_bot_token: Option<String>,
     /// Slack Socket Mode app-level token (xapp-...)
     pub slack_app_token: Option<String>,
+    /// OpenAI Codex OAuth access token
+    pub codex_access_token: Option<String>,
+    /// OpenAI Codex OAuth refresh token
+    pub codex_refresh_token: Option<String>,
+    /// Unix timestamp (seconds) when codex_access_token expires
+    pub codex_token_expires_at: Option<i64>,
 }
 
 impl AppConfig {
