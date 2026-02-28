@@ -127,11 +127,19 @@ impl AgentEngine {
             .await?;
         messages.push(user_msg);
 
-        let (response, all_messages) = run_react_loop(
-            self.provider.clone(),
-            self.tool_registry.clone(),
-            messages,
-            &self.config,
+        let context = ToolExecutionContext {
+            session_id: None,
+            conversation_id: Some(conversation_id.to_owned()),
+            delegation_depth: 0,
+        };
+        let (response, all_messages) = with_tool_execution_context(
+            context,
+            run_react_loop(
+                self.provider.clone(),
+                self.tool_registry.clone(),
+                messages,
+                &self.config,
+            ),
         )
         .await?;
 

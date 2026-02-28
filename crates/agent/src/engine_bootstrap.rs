@@ -128,10 +128,43 @@ pub fn build_engine_deps(
 }
 
 pub fn title_from(input: &str) -> &str {
-    if input.len() > 60 {
-        &input[..60]
-    } else {
-        input
+    if input.len() <= 60 {
+        return input;
+    }
+    // Walk backwards from byte 60 to find the last valid char boundary,
+    // preventing a panic when byte 60 falls in the middle of a multi-byte codepoint.
+    let mut boundary = 60;
+    while !input.is_char_boundary(boundary) {
+        boundary -= 1;
+    }
+    &input[..boundary]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn title_from_does_not_panic_on_multibyte_utf8() {
+        // Each emoji is 4 bytes; 16 * 4 = 64 bytes, which straddles the 60-byte boundary.
+        let emoji_str = "🎉".repeat(16);
+        let result = title_from(&emoji_str);
+        // Must not exceed 60 bytes.
+        assert!(result.len() <= 60);
+        // Must still be valid UTF-8 (not truncated mid-codepoint).
+        assert!(std::str::from_utf8(result.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn title_from_short_string_unchanged() {
+        assert_eq!(title_from("hello"), "hello");
+    }
+
+    #[test]
+    fn title_from_ascii_60_chars() {
+        let s = "a".repeat(80);
+        let result = title_from(&s);
+        assert_eq!(result.len(), 60);
     }
 }
 
