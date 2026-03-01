@@ -2,8 +2,10 @@ use std::{sync::Arc, time::Instant};
 
 use rushdino_agent::AgentEngine;
 use rushdino_common::AppConfig;
+use rushdino_security::rate_limit::EndpointLimiters;
 
 use crate::approval_gate::ApprovalGate;
+use crate::middleware::HmacAuthState;
 use crate::webchat::WebChatAdapter;
 
 #[derive(Clone)]
@@ -15,6 +17,10 @@ pub struct AppState {
     pub webchat: Arc<WebChatAdapter>,
     /// Session-scoped tool approval gate for dangerous tool commands.
     pub gate: Arc<ApprovalGate>,
+    /// HMAC authentication state — `None` when auth is disabled.
+    pub hmac_auth: Option<Arc<HmacAuthState>>,
+    /// Per-endpoint rate limiters — `None` when rate limiting is disabled.
+    pub rate_limiters: Option<Arc<EndpointLimiters>>,
 }
 
 impl AppState {
@@ -23,6 +29,8 @@ impl AppState {
         config: Arc<AppConfig>,
         webchat: Arc<WebChatAdapter>,
         gate: Arc<ApprovalGate>,
+        hmac_auth: Option<Arc<HmacAuthState>>,
+        rate_limiters: Option<Arc<EndpointLimiters>>,
     ) -> Self {
         Self {
             engine,
@@ -30,6 +38,8 @@ impl AppState {
             start_time: Instant::now(),
             webchat,
             gate,
+            hmac_auth,
+            rate_limiters,
         }
     }
 }

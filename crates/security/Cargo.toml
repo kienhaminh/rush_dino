@@ -1,0 +1,39 @@
+[package]
+name = "rushdino-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+hmac = "0.12"
+sha2.workspace = true
+subtle = "2.6"
+aes-gcm = "0.10"
+argon2 = "0.5"
+zeroize = { version = "1.8", features = ["derive"] }
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+rand = "0.8"
+base64.workspace = true
+dashmap = "6"
+governor = "0.6"
+ipnet = "2.9"
+regex = "1"
+url.workspace = true
+tokio = { version = "1", features = ["sync", "time"] }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+
+[features]
+wasm-sandbox = ["wasmtime"]
+seccomp = ["seccompiler"]
+
+[dependencies.wasmtime]
+version = "22"
+optional = true
+
+[dependencies.seccompiler]
+version = "0.4"
+optional = true

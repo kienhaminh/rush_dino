@@ -4,6 +4,7 @@ members = [
   "crates/providers",
   "crates/agent",
   "crates/gateway",
+  "crates/security",
   "crates/server",
   "crates/extensions/telegram",
   "crates/extensions/discord",

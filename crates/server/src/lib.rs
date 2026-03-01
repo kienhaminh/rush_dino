@@ -9,6 +9,7 @@ pub mod ws;
 use std::{path::Path, sync::Arc};
 
 use axum::{
+    middleware as axum_middleware,
     routing::{get, post},
     Router,
 };
@@ -20,8 +21,13 @@ use rushdino_agent::{AgentConfig, AgentEngine, ToolApproval};
 use rushdino_common::{config::ProviderKind, db, init, AppConfig, AppError, CredentialsConfig, Result};
 use rushdino_gateway::Gateway;
 use rushdino_providers::{codex_refresh, types::ProviderConfig, Provider};
+use rushdino_security::rate_limit::EndpointLimiters;
 
-use crate::{approval_gate::ApprovalGate, webchat::WebChatAdapter};
+use crate::{
+    approval_gate::ApprovalGate,
+    middleware::{cors_layer, hmac_auth_middleware, rate_limit_middleware, HmacAuthState},
+    webchat::WebChatAdapter,
+};
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
@@ -115,7 +121,24 @@ pub async fn run_server() -> Result<()> {
         }
     });
 
-    let state = AppState::new(engine, config.clone(), webchat, gate);
+    // Build optional HMAC auth state from CredentialsConfig
+    let hmac_auth = if config.security.hmac_auth_enabled {
+        if let Some(secret) = credentials.api_secret.as_deref().filter(|s| !s.is_empty()) {
+            let secret_bytes = hex::decode(secret).unwrap_or_else(|_| secret.as_bytes().to_vec());
+            tracing::info!("security: HMAC-SHA256 authentication enabled");
+            Some(Arc::new(HmacAuthState::new(secret_bytes)))
+        } else {
+            tracing::warn!("security: hmac_auth_enabled=true but no api_secret configured; auth disabled");
+            None
+        }
+    } else {
+        None
+    };
+
+    // Always enable rate limiting
+    let rate_limiters = Some(Arc::new(EndpointLimiters::new()));
+
+    let state = AppState::new(engine, config.clone(), webchat, gate, hmac_auth, rate_limiters);
 
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -129,7 +152,9 @@ pub async fn run_server() -> Result<()> {
         )
         .route("/api/documents/ingest", post(routes::documents::ingest_documents))
         .fallback(get(static_files::serve_static))
-        .layer(middleware::cors_layer())
+        .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
+        .layer(axum_middleware::from_fn_with_state(state.clone(), hmac_auth_middleware))
+        .layer(cors_layer(&config))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 

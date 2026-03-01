@@ -45,6 +45,7 @@ fn credentials_save_round_trip_special_chars() {
         codex_access_token: Some("codex-access".to_owned()),
         codex_refresh_token: Some("codex-refresh".to_owned()),
         codex_token_expires_at: Some(1_760_000_000),
+        api_secret: None,
     };
 
     credentials
