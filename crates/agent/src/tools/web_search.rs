@@ -2,17 +2,29 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use rushdino_common::{AppError, Result};
+use rushdino_security::validation::validate_url;
 
 use crate::tool_registry::Tool;
 
 pub struct WebSearchTool {
     endpoint: String,
     api_key: Option<String>,
+    /// Hosts explicitly allowed even if they resolve to private IPs (empty = public IPs only).
+    allowed_external_hosts: Vec<String>,
 }
 
 impl WebSearchTool {
     pub fn new(endpoint: String, api_key: Option<String>) -> Self {
-        Self { endpoint, api_key }
+        Self {
+            endpoint,
+            api_key,
+            allowed_external_hosts: Vec::new(),
+        }
+    }
+
+    pub fn with_allowed_hosts(mut self, hosts: Vec<String>) -> Self {
+        self.allowed_external_hosts = hosts;
+        self
     }
 }
 
@@ -45,6 +57,11 @@ impl Tool for WebSearchTool {
             .as_deref()
             .filter(|x| !x.is_empty())
             .ok_or_else(|| AppError::Validation("BRAVE API key missing".to_owned()))?;
+
+        // SSRF guard: validate the search endpoint URL before issuing the request.
+        // This prevents an operator misconfiguration from routing requests to internal IPs.
+        validate_url(&self.endpoint, &self.allowed_external_hosts)
+            .map_err(|e| AppError::Validation(format!("web_search endpoint blocked: {e}")))?;
 
         let payload: Value = reqwest::Client::new()
             .get(&self.endpoint)

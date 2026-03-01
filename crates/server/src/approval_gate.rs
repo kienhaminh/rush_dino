@@ -130,6 +130,11 @@ impl ApprovalGate {
         }
     }
 
+    /// Returns `true` if a pending approval with the given `request_id` exists.
+    pub async fn has_pending(&self, request_id: &str) -> bool {
+        self.pending.lock().await.contains_key(request_id)
+    }
+
     pub async fn resolve(&self, session_id: &str, request_id: &str, approved: bool) -> Result<()> {
         let mut pending = self.pending.lock().await;
         let Some(owner) = pending.get(request_id).map(|entry| entry.owner_session_id.clone()) else {

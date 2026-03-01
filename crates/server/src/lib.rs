@@ -151,6 +151,8 @@ pub async fn run_server() -> Result<()> {
                 .delete(routes::conversations::delete_conversation),
         )
         .route("/api/documents/ingest", post(routes::documents::ingest_documents))
+        .route("/api/approval/:request_id", get(routes::approval::get_approval_status))
+        .route("/api/approval/:request_id", post(routes::approval::resolve_approval))
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), hmac_auth_middleware))

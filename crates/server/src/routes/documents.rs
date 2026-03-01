@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
-use axum::{extract::State, Json};
+use axum::{extract::State, http::StatusCode, Json};
 use serde::Deserialize;
 use walkdir::WalkDir;
 
-use rushdino_common::Result;
+use rushdino_common::{AppError, Result};
+use rushdino_security::validation::validate_path;
 
 use crate::state::AppState;
 
@@ -17,14 +18,29 @@ pub async fn ingest_documents(
     State(state): State<AppState>,
     Json(request): Json<IngestRequest>,
 ) -> Result<Json<serde_json::Value>> {
+    let default_root = state.config.data_dir.join("documents");
+
     let root = request
         .path
+        .as_deref()
         .map(PathBuf::from)
-        .unwrap_or_else(|| state.config.data_dir.join("documents"));
+        .unwrap_or_else(|| default_root.clone());
+
+    // Build the list of allowed roots from config, plus the default documents dir.
+    let mut allowed_roots = state.config.security.allowed_read_roots.clone();
+    if allowed_roots.is_empty() {
+        allowed_roots.push(state.config.data_dir.clone());
+    }
+
+    // Validate the requested path to prevent path traversal attacks.
+    let safe_root = validate_path(&root, &allowed_roots).map_err(|e| {
+        tracing::warn!("document ingest path rejected: {e}");
+        AppError::Validation(format!("forbidden path: {e}"))
+    })?;
 
     let mut scanned = 0_u32;
     let mut failed = 0_u32;
-    for entry in WalkDir::new(root).into_iter() {
+    for entry in WalkDir::new(safe_root).into_iter() {
         match entry {
             Ok(e) if e.file_type().is_file() => scanned += 1,
             Ok(_) => {}
