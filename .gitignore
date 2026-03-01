@@ -2,6 +2,9 @@
 
 # dependencies
 /node_modules
+/frontend/node_modules/
+/openclaw
+/docs
 /.pnp
 .pnp.*
 .yarn/*
@@ -77,3 +80,6 @@ __pycache__
 *.db
 *.db-shm
 *.db-wal
+
+# Git worktrees
+.worktrees/
