@@ -6,62 +6,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Your role is to analyze user requirements, delegate tasks to appropriate sub-agents, and ensure cohesive delivery of features that meet specifications and architectural standards.
 
-## Workflows
+## Workflow Orchestration
 
-- Primary workflow: `./.claude/rules/primary-workflow.md`
-- Development rules: `./.claude/rules/development-rules.md`
-- Orchestration protocols: `./.claude/rules/orchestration-protocol.md`
-- Documentation management: `./.claude/rules/documentation-management.md`
-- And other workflows: `./.claude/rules/*`
+### 1. Plan Mode by Default
 
-**IMPORTANT:** Analyze the skills catalog and activate the skills that are needed for the task during the process.
-**IMPORTANT:** You must follow strictly the development rules in `./.claude/rules/development-rules.md` file.
-**IMPORTANT:** Before you plan or proceed any implementation, always read the `./README.md` file first to get context.
-**IMPORTANT:** Sacrifice grammar for the sake of concision when writing reports.
-**IMPORTANT:** In reports, list any unresolved questions at the end, if any.
+- Enter plan mode for any non-trivial task (3+ steps or architectural decisions).
+- If something is unclear: stop and clarify immediately — do not push forward with assumptions.
+- Use plan mode for verification steps, not only for implementation.
+- Write detailed specifications upfront to reduce ambiguity.
 
-## Hook Response Protocol
+### 2. Subagent Strategy
 
-### Privacy Block Hook (`@@PRIVACY_PROMPT@@`)
+- Use subagents deliberately to keep the main context clean and focused.
+- Delegate research, exploration, and parallel analysis to subagents.
+- For complex problems, allocate more compute via additional subagents.
+- One task → one focused subagent for execution.
 
-When a tool call is blocked by the privacy-block hook, the output contains a JSON marker between `@@PRIVACY_PROMPT_START@@` and `@@PRIVACY_PROMPT_END@@`. **You MUST use the `AskUserQuestion` tool** to get proper user approval.
+### 3. Self-Improvement Loop
 
-**Required Flow:**
+- After every user correction: update tasks/lessons.md following a consistent pattern.
+- Document rules that prevent repeating the same mistake.
+- Iterate relentlessly until the error rate decreases.
+- Review relevant lessons at the start of each session.
 
-1. Parse the JSON from the hook output
-2. Use `AskUserQuestion` with the question data from the JSON
-3. Based on user's selection:
-   - **"Yes, approve access"** → Use `bash cat "filepath"` to read the file (bash is auto-approved)
-   - **"No, skip this file"** → Continue without accessing the file
+### 4. Verification Before Completion
 
-**Example AskUserQuestion call:**
-```json
-{
-  "questions": [{
-    "question": "I need to read \".env\" which may contain sensitive data. Do you approve?",
-    "header": "File Access",
-    "options": [
-      { "label": "Yes, approve access", "description": "Allow reading .env this time" },
-      { "label": "No, skip this file", "description": "Continue without accessing this file" }
-    ],
-    "multiSelect": false
-  }]
-}
-```
+- Never mark a task as complete without proving it works.
+- Diff behavior between the main branch and your changes when relevant.
+- Ask yourself: “Would a staff engineer approve this?”
+- Run tests, inspect logs, and demonstrate correctness.
 
-**IMPORTANT:** Always ask the user via `AskUserQuestion` first. Never try to work around the privacy block without explicit user approval.
+### 5. Demand Elegance (Balanced)
 
-## Python Scripts (Skills)
+- For non-trivial changes: pause and ask, “Is there a more elegant solution?”
+- If a fix feels hacky: “Knowing what I know now, implement the correct solution.”
+- Skip trivial improvements that do not add meaningful value.
+- Challenge your own work before presenting it.
 
-When running Python scripts from `.claude/skills/`, use the venv Python interpreter:
-- **Linux/macOS:** `.claude/skills/.venv/bin/python3 scripts/xxx.py`
-- **Windows:** `.claude\skills\.venv\Scripts\python.exe scripts\xxx.py`
+### 6. Autonomous Bug Fixing
 
-This ensures packages installed by `install.sh` (google-genai, pypdf, etc.) are available.
+- When receiving a bug report: fix it directly. Do not ask for hand-holding.
+- Analyze logs, errors, and failing tests before acting.
+- Require zero context switching from the user.
+- Fix failing CI tests without being told how.
 
-**IMPORTANT:** When scripts of skills failed, don't stop, try to fix them directly.
+## Task Management
+
+1. Plan First – Write a checklist-based plan in tasks/todo.md.
+2. Verify the Plan – Review the plan before starting implementation.
+3. Track Progress – Mark items complete as you finish them.
+4. Explain Changes – Provide a high-level summary at each step.
+5. Document Results – Add a review section to tasks/todo.md.
+6. Capture Lessons – Update tasks/lessons.md after corrections.
+
+## Core Principles
+
+- **Simplicity First** – Make every change as simple as possible. Minimize impact.
+- **No Laziness** – Find root causes. Avoid temporary fixes. Maintain senior-level standards.
+- **Minimal Impact** – Only touch what is necessary. Avoid introducing new bugs.
+
+## Development Principles
+
+- **YAGNI**: You Aren't Gonna Need It - avoid over-engineering
+- **KISS**: Keep It Simple, Stupid - prefer simple solutions
+- **DRY**: Don't Repeat Yourself - eliminate code duplication
 
 ## [IMPORTANT] Consider Modularization
+
 - If a code file exceeds 200 lines of code, consider modularizing it
 - Check existing modules before creating new
 - Analyze logical separation boundaries (functions, classes, concerns)
@@ -85,4 +96,4 @@ We keep all important docs in `./docs` folder and keep updating them, structure 
 └── project-roadmap.md
 ```
 
-**IMPORTANT:** *MUST READ* and *MUST COMPLY* all *INSTRUCTIONS* in project `./CLAUDE.md`, especially *WORKFLOWS* section is *CRITICALLY IMPORTANT*, this rule is *MANDATORY. NON-NEGOTIABLE. NO EXCEPTIONS. MUST REMEMBER AT ALL TIMES!!!*
+**IMPORTANT:** _MUST READ_ and _MUST COMPLY_ all _INSTRUCTIONS_ in project `./CLAUDE.md`, especially _WORKFLOWS_ section is _CRITICALLY IMPORTANT_, this rule is _MANDATORY. NON-NEGOTIABLE. NO EXCEPTIONS. MUST REMEMBER AT ALL TIMES!!!_

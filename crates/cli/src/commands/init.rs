@@ -6,55 +6,102 @@ use rushdino_common::{init, Result};
 use super::codex_login;
 use super::{rewrite_active_provider, rewrite_int_value, rewrite_value};
 
+/// Returns `None` if the user pressed Esc (abort), `Some(index)` otherwise.
+fn select_opt(prompt: &str, items: &[&str], default: usize) -> Option<usize> {
+    Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(prompt)
+        .items(items)
+        .default(default)
+        .interact_opt()
+        .unwrap_or(None)
+}
+
 pub async fn run() -> Result<()> {
     println!("\n{} {}", "🦕".bold(), "Initializing RushDino".blue().bold());
     println!("{}", "========================================".dimmed());
+    println!(
+        "  {} Press {} at any time to abort.\n",
+        "ℹ".cyan(),
+        "Esc".yellow()
+    );
 
-    println!("\n{}", "Step 1: System Check...".blue().bold());
+    println!("{}", "Step 1: System Check...".blue().bold());
     let home = init::ensure_rushdino_dir()?;
     println!("{} Created directories at {}", "✔".green(), home.display());
 
     println!("\n{}", "Step 2: AI Provider Configuration...".blue().bold());
-    let options = ["Ollama", "OpenAI", "Anthropic", "Skip"];
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Choose primary AI provider")
-        .items(&options)
-        .default(0)
-        .interact()
-        .unwrap_or(0);
+    let provider_options = ["Ollama", "OpenAI", "Anthropic", "Skip"];
+    let Some(provider_sel) = select_opt("Choose primary AI provider", &provider_options, 0) else {
+        println!("\n{} Initialization aborted.", "✖".red());
+        return Ok(());
+    };
 
     let mut config = std::fs::read_to_string(home.join("config.toml"))?;
     let mut credentials = std::fs::read_to_string(home.join("credentials.toml"))?;
 
-    match options[selection] {
+    match provider_options[provider_sel] {
         "Ollama" => {
-            let base_url: String = Input::with_theme(&ColorfulTheme::default())
-                .with_prompt("Ollama base URL")
-                .default("http://localhost:11434/v1".to_owned())
-                .interact_text()
-                .unwrap_or_else(|_| "http://localhost:11434/v1".to_owned());
-            let model: String = Input::with_theme(&ColorfulTheme::default())
-                .with_prompt("Ollama model")
-                .default("llama3.2:latest".to_owned())
-                .interact_text()
-                .unwrap_or_else(|_| "llama3.2:latest".to_owned());
+            let base_url_opts = ["http://localhost:11434/v1 (default)", "Enter custom URL", "Skip"];
+            let Some(url_sel) = select_opt("Ollama base URL", &base_url_opts, 0) else {
+                println!("\n{} Initialization aborted.", "✖".red());
+                return Ok(());
+            };
+
+            let base_url = match base_url_opts[url_sel] {
+                "Enter custom URL" => {
+                    let url: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Ollama base URL")
+                        .interact_text()
+                        .unwrap_or_else(|_| "http://localhost:11434/v1".to_owned());
+                    url
+                }
+                "Skip" => {
+                    println!("{} Skipped Ollama URL configuration.", "i".yellow());
+                    String::new()
+                }
+                _ => "http://localhost:11434/v1".to_owned(),
+            };
+
+            let model_opts = ["llama3.2:latest (default)", "Enter custom model", "Skip"];
+            let Some(model_sel) = select_opt("Ollama model", &model_opts, 0) else {
+                println!("\n{} Initialization aborted.", "✖".red());
+                return Ok(());
+            };
+
+            let model = match model_opts[model_sel] {
+                "Enter custom model" => {
+                    let m: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Ollama model")
+                        .interact_text()
+                        .unwrap_or_else(|_| "llama3.2:latest".to_owned());
+                    m
+                }
+                "Skip" => {
+                    println!("{} Skipped Ollama model configuration.", "i".yellow());
+                    String::new()
+                }
+                _ => "llama3.2:latest".to_owned(),
+            };
 
             config = rewrite_active_provider(config, "ollama");
-            config = rewrite_value(config, "base_url", &base_url);
-            config = rewrite_value(config, "model", &model);
-            
-            println!("{} Configured Ollama with model {model}", "✔".green());
+            if !base_url.is_empty() {
+                config = rewrite_value(config, "base_url", &base_url);
+            }
+            if !model.is_empty() {
+                config = rewrite_value(config, "model", &model);
+            }
+
+            let display_model = if model.is_empty() { "llama3.2:latest".to_owned() } else { model };
+            println!("{} Configured Ollama with model {display_model}", "✔".green());
         }
         "OpenAI" => {
-            let auth_options = ["API key", "Codex OAuth"];
-            let auth_selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Choose OpenAI authentication method")
-                .items(&auth_options)
-                .default(0)
-                .interact()
-                .unwrap_or(0);
+            let auth_options = ["API key", "Codex OAuth", "Skip"];
+            let Some(auth_sel) = select_opt("Choose OpenAI authentication method", &auth_options, 0) else {
+                println!("\n{} Initialization aborted.", "✖".red());
+                return Ok(());
+            };
 
-            match auth_options[auth_selection] {
+            match auth_options[auth_sel] {
                 "API key" => {
                     let key = Password::with_theme(&ColorfulTheme::default())
                         .with_prompt("OPENAI_API_KEY")
@@ -82,19 +129,19 @@ pub async fn run() -> Result<()> {
 
                     println!("{} Configured OpenAI via Codex OAuth", "✔".green());
                 }
-                _ => {}
+                _ => {
+                    println!("{} Skipped OpenAI configuration.", "i".yellow());
+                }
             }
         }
         "Anthropic" => {
             let auth_options = ["API key", "Skip"];
-            let auth_selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Choose Anthropic authentication method")
-                .items(&auth_options)
-                .default(0)
-                .interact()
-                .unwrap_or(0);
+            let Some(auth_sel) = select_opt("Choose Anthropic authentication method", &auth_options, 0) else {
+                println!("\n{} Initialization aborted.", "✖".red());
+                return Ok(());
+            };
 
-            match auth_options[auth_selection] {
+            match auth_options[auth_sel] {
                 "API key" => {
                     let key = Password::with_theme(&ColorfulTheme::default())
                         .with_prompt("ANTHROPIC_API_KEY")
@@ -115,24 +162,25 @@ pub async fn run() -> Result<()> {
         }
     }
 
-    println!("\n{}", "Step 3: Server Port...".blue().bold());
-    let port: u16 = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt("Server port")
-        .default(28847)
-        .interact_text()
-        .unwrap_or(28847);
-    config = rewrite_int_value(config, "port", port as i64);
-    println!("{} Server port set to {port}", "✔".green());
+    println!("\n{}", "Step 3: Search Configuration...".blue().bold());
+    let search_options = ["Enter BRAVE_API_KEY", "Skip"];
+    let Some(search_sel) = select_opt("Configure Brave Search (optional)", &search_options, 1) else {
+        println!("\n{} Initialization aborted.", "✖".red());
+        return Ok(());
+    };
 
-    println!("\n{}", "Step 4: Search Configuration...".blue().bold());
-    let brave: String = Password::with_theme(&ColorfulTheme::default())
-        .with_prompt("BRAVE_API_KEY (optional)")
-        .allow_empty_password(true)
-        .interact()
-        .unwrap_or_default();
-    if !brave.is_empty() {
-        credentials = rewrite_value(credentials, "brave_api_key", &brave);
-        println!("{} Configured Brave Search", "✔".green());
+    if search_options[search_sel] == "Enter BRAVE_API_KEY" {
+        let brave = Password::with_theme(&ColorfulTheme::default())
+            .with_prompt("BRAVE_API_KEY")
+            .allow_empty_password(true)
+            .interact()
+            .unwrap_or_default();
+        if !brave.is_empty() {
+            credentials = rewrite_value(credentials, "brave_api_key", &brave);
+            println!("{} Configured Brave Search", "✔".green());
+        } else {
+            println!("{} Skipped Search Provider configuration.", "i".yellow());
+        }
     } else {
         println!("{} Skipped Search Provider configuration.", "i".yellow());
     }

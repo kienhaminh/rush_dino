@@ -30,6 +30,6 @@ rushdino-common = { path = "../common" }
 rushdino-providers = { path = "../providers" }
 rushdino-agent = { path = "../agent" }
 rushdino-gateway = { path = "../gateway" }
-rushdino-telegram = { path = "../telegram" }
-rushdino-discord = { path = "../discord" }
-rushdino-slack = { path = "../slack" }
+rushdino-telegram = { path = "../extensions/telegram" }
+rushdino-discord = { path = "../extensions/discord" }
+rushdino-slack = { path = "../extensions/slack" }

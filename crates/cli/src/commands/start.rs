@@ -1,44 +1,32 @@
-use std::{fs::File, process};
-
-use colored::Colorize;
-use daemonize::Daemonize;
-
-use rushdino_common::{init, Result};
-
-use crate::daemon;
+use rushdino_common::{init, AppConfig, AppError, Result};
 
 pub async fn run(foreground: bool) -> Result<()> {
     init::ensure_rushdino_dir()?;
 
-    if let Some(pid) = daemon::read_pid() {
-        if daemon::is_running(pid) {
-            println!("{} {pid}", "Already running with PID:".yellow());
-            return Ok(());
-        }
-        daemon::remove_pid()?;
-    }
-
     if foreground {
-        println!("{}", "Starting in foreground".green());
+        println!("Running in foreground mode...");
         return rushdino_server::run_server().await;
     }
 
+    let config = AppConfig::load()?;
     let home = init::default_home_dir();
     let log_path = home.join("logs/rushdino.log");
-    let stdout = File::create(&log_path)?;
-    let stderr = stdout.try_clone()?;
 
-    let daemonize = Daemonize::new()
-        .pid_file(daemon::pid_file_path())
-        .working_directory(&home)
-        .stdout(stdout)
-        .stderr(stderr);
+    println!("\n🦕 Starting RushDino Gateway");
+    println!("🌐 API Endpoint: http://{}:{}", config.host, config.port);
+    println!("🧠 Provider: {:?}", config.active_provider);
 
-    daemonize
-        .start()
-        .map_err(|e| rushdino_common::AppError::Agent(format!("daemonize failed: {e}")))?;
+    let binary = std::env::current_exe()
+        .map_err(|e| AppError::Agent(format!("cannot find binary: {e}")))?;
 
-    let pid = process::id();
-    println!("{} {pid}", "Started RushDino. PID:".green());
-    rushdino_server::run_server().await
+    let manager = crate::service::detect()?;
+    manager.install_and_start(
+        binary.to_str().unwrap_or("rushdino"),
+        log_path.to_str().unwrap_or(""),
+    )?;
+
+    println!("\n🚀 RushDino started as system service!");
+    println!("Web UI: http://{}:{}", config.host, config.port);
+    println!("Log: {}", log_path.display());
+    Ok(())
 }

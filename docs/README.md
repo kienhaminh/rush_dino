@@ -106,14 +106,21 @@ Details: [Codebase Summary](./codebase-summary.md#crates-overview)
 
 New in this release:
 - ✓ `crates/gateway` — Multi-channel message routing
-- ✓ `crates/discord` — Discord adapter (serenity)
-- ✓ `crates/slack` — Slack adapter (Socket Mode)
+- ✓ `crates/extensions/discord` — Discord adapter (serenity)
+- ✓ `crates/extensions/slack` — Slack adapter (Socket Mode)
 - ✓ Telegram adapter upgraded to use ChannelAdapter trait
 - ✓ WebChat adapter for browser connections
 - ✓ SessionManager for persistent session tracking
 - ✓ Configuration system for channel enablement
 
 See [Codebase Summary - Recent Changes](./codebase-summary.md#recent-changes-v010) for detailed list.
+
+### Safety + Streaming Remediation (2026-02-28)
+
+- Codex startup now attempts OAuth token refresh and persists refreshed credentials safely.
+- If Codex refresh fails, the server can use `codex_fallback_provider` from `config.toml` when that provider is correctly configured.
+- WebSocket chat now streams direct engine chunks with typed events (`chat_chunk`, `assistant_reset`, `approval_request`, `approval_result`, `error`).
+- Dangerous `shell_exec` commands now require per-session approval in the web UI.
 
 ## Documentation Development
 

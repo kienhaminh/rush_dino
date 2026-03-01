@@ -1,6 +1,5 @@
 mod anthropic;
 mod openai;
-mod openai_mapping;
 mod plugin;
 pub mod types;
 
@@ -10,6 +9,7 @@ use rushdino_common::{AppError, Result};
 use types::{ChatChunk, ChatRequest, ChatResponse, ProviderConfig};
 
 pub use anthropic::AnthropicProvider;
+pub use openai::codex_refresh;
 pub use openai::OpenAIProvider;
 pub use plugin::PluginProvider;
 

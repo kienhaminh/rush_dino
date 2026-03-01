@@ -5,9 +5,9 @@ members = [
   "crates/agent",
   "crates/gateway",
   "crates/server",
-  "crates/telegram",
-  "crates/discord",
-  "crates/slack",
+  "crates/extensions/telegram",
+  "crates/extensions/discord",
+  "crates/extensions/slack",
   "crates/cli",
 ]
 resolver = "2"
@@ -27,13 +27,11 @@ axum = { version = "0.7", features = ["ws", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.5", features = ["derive"] }
 colored = "2"
-daemonize = "0.5"
 dialoguer = "0.11"
 dirs = "5"
 figment = { version = "0.10", features = ["env", "toml"] }
 futures = "0.3"
 hex = "0.4"
-nix = { version = "0.29", features = ["signal"] }
 open = "5"
 rand = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }

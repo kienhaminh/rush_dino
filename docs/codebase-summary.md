@@ -114,7 +114,7 @@ pub struct OutgoingMessage {
 3. Gateway spawned in background task
 4. WebSocket route wired to `WebChatAdapter` sender channel
 
-### `crates/telegram` — MODIFIED
+### `crates/extensions/telegram` — MODIFIED
 
 **Purpose:** Telegram channel integration
 
@@ -124,7 +124,7 @@ pub struct OutgoingMessage {
 - Converts teloxide updates to `IncomingMessage`
 - Sends responses via Telegram API
 
-### `crates/discord` — NEW
+### `crates/extensions/discord` — NEW
 
 **Purpose:** Discord channel integration
 
@@ -134,7 +134,7 @@ pub struct OutgoingMessage {
 - Listens on Discord gateway WebSocket
 - Routes messages and responses through Discord
 
-### `crates/slack` — NEW
+### `crates/extensions/slack` — NEW
 
 **Purpose:** Slack channel integration
 
@@ -168,9 +168,9 @@ pub struct OutgoingMessage {
 - `crates/gateway/src/session.rs` — Session persistence
 
 ### Channel Adapters
-- `crates/telegram/src/lib.rs` — Telegram
-- `crates/discord/src/lib.rs` — Discord
-- `crates/slack/src/lib.rs` — Slack
+- `crates/extensions/telegram/src/lib.rs` — Telegram
+- `crates/extensions/discord/src/lib.rs` — Discord
+- `crates/extensions/slack/src/lib.rs` — Slack
 - `crates/server/src/webchat.rs` — Web chat
 
 ### Server & HTTP
@@ -232,15 +232,15 @@ cd frontend && npm install && npm run dev
 
 ### New Crates Added
 - `crates/gateway/` — Multi-channel gateway (adapter trait, orchestrator, router, session manager)
-- `crates/discord/` — Discord adapter with serenity
-- `crates/slack/` — Slack Socket Mode adapter
+- `crates/extensions/discord/` — Discord adapter with serenity
+- `crates/extensions/slack/` — Slack Socket Mode adapter
 
 ### Files Modified
 - `crates/common/src/config.rs` — Added `GatewayConfig`, `ChannelConfig`
 - `crates/common/src/credentials.rs` — Added `discord_bot_token`, `slack_bot_token`, `slack_app_token`
 - `crates/common/src/error.rs` — Added `MigrateError` variant
 - `crates/common/migrations/002_gateway_sessions.sql` — New migration for session persistence
-- `crates/telegram/src/lib.rs` — Implements `ChannelAdapter` trait
+- `crates/extensions/telegram/src/lib.rs` — Implements `ChannelAdapter` trait
 - `crates/server/src/lib.rs` — Gateway initialization and adapter registration
 - `crates/server/src/state.rs` — Added `webchat: Arc<WebChatAdapter>`
 - `crates/server/src/webchat.rs` — New `WebChatAdapter` implementing `ChannelAdapter`

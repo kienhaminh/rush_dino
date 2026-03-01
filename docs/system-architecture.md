@@ -122,7 +122,7 @@ pub struct OutgoingMessage {
 
 ## Channel Adapters
 
-### Telegram (`crates/telegram`)
+### Telegram (`crates/extensions/telegram`)
 
 **Implementation:** `TelegramAdapter: ChannelAdapter`
 **Library:** teloxide 0.13
@@ -133,7 +133,7 @@ pub struct OutgoingMessage {
 - Converts Telegram update messages to `IncomingMessage`
 - Sends responses via Telegram API
 
-### Discord (`crates/discord`)
+### Discord (`crates/extensions/discord`)
 
 **Implementation:** `DiscordAdapter: ChannelAdapter`
 **Library:** serenity 0.12
@@ -144,7 +144,7 @@ pub struct OutgoingMessage {
 - Handles slash commands and direct messages
 - Sends replies to appropriate Discord channels/users
 
-### Slack (`crates/slack`)
+### Slack (`crates/extensions/slack`)
 
 **Implementation:** `SlackAdapter: ChannelAdapter`
 **Library:** reqwest + tokio-tungstenite

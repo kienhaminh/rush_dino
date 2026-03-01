@@ -2,24 +2,18 @@ use colored::Colorize;
 
 use rushdino_common::{AppConfig, Result};
 
-use crate::daemon;
-
 pub async fn run() -> Result<()> {
-    let Some(pid) = daemon::read_pid() else {
-        println!("{}", "RushDino is not running".yellow());
-        return Ok(());
-    };
+    let manager = crate::service::detect()?;
 
-    if !daemon::is_running(pid) {
-        println!("{}", "PID stale, process not alive".yellow());
-        daemon::remove_pid()?;
+    if !manager.is_running() {
+        println!("{}", "RushDino is not running".yellow());
         return Ok(());
     }
 
+    println!("{}", manager.status_line());
+
     let config = AppConfig::load()?;
     let url = format!("http://{}:{}/healthz", config.host, config.port);
-
-    println!("{} {pid}", "Running PID:".green());
     if let Ok(res) = reqwest::get(url).await {
         if let Ok(health) = res.json::<serde_json::Value>().await {
             println!("status: {}", health["status"].as_str().unwrap_or("unknown"));
@@ -27,6 +21,5 @@ pub async fn run() -> Result<()> {
             println!("provider: {}", health["provider"]);
         }
     }
-
     Ok(())
 }

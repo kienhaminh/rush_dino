@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::{fs, path::Path, path::PathBuf};
 
 use figment::{
     providers::{Env, Format, Serialized, Toml},
@@ -69,6 +69,8 @@ pub struct AppConfig {
     pub openai: ProviderModelConfig,
     pub anthropic: ProviderModelConfig,
     pub codex: ProviderModelConfig,
+    /// Optional provider to use when Codex token refresh fails at startup.
+    pub codex_fallback_provider: Option<ProviderKind>,
     pub gateway: GatewayConfig,
 }
 
@@ -77,7 +79,7 @@ impl Default for AppConfig {
         let home = init::default_home_dir();
         Self {
             host: "127.0.0.1".to_owned(),
-            port: 3000,
+            port: 28847,
             log_level: "info".to_owned(),
             active_provider: ProviderKind::Ollama,
             db_path: home.join("data.db"),
@@ -97,6 +99,7 @@ impl Default for AppConfig {
             codex: ProviderModelConfig {
                 model: "gpt-4.1-mini".to_owned(),
             },
+            codex_fallback_provider: None,
             gateway: GatewayConfig::default(),
         }
     }
@@ -148,5 +151,18 @@ impl CredentialsConfig {
         }
         let figment = Figment::from(Serialized::defaults(Self::default())).merge(Toml::file(path));
         Ok(figment.extract()?)
+    }
+
+    pub fn save_to_path(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let serialized = toml::to_string(self)
+            .map_err(|e| crate::AppError::Validation(format!("failed to serialize credentials: {e}")))?;
+        let tmp_path = path.with_extension("tmp");
+        fs::write(&tmp_path, serialized)?;
+        fs::rename(tmp_path, path)?;
+        Ok(())
     }
 }

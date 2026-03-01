@@ -1,5 +1,5 @@
 mod commands;
-mod daemon;
+mod service;
 
 use clap::{Parser, Subcommand};
 
@@ -23,6 +23,25 @@ enum Command {
     Restart,
     Status,
     Upgrade,
+    Configure {
+        #[arg(long)]
+        login: Option<String>,
+    },
+    Dashboard {
+        #[arg(long)]
+        no_open: bool,
+    },
+    Health,
+    Doctor,
+    Reset,
+    Uninstall,
+    Config,
+    Message,
+    Sessions,
+    Memory,
+    Agent,
+    Agents,
+    Browser,
 }
 
 #[tokio::main]
@@ -45,5 +64,18 @@ async fn run() -> Result<()> {
         }
         Command::Status => commands::status::run().await,
         Command::Upgrade => commands::upgrade::run().await,
+        Command::Configure { login } => commands::configure::run(login).await,
+        Command::Dashboard { no_open } => commands::dashboard::run(no_open).await,
+        Command::Health => commands::health::run().await,
+        Command::Doctor => commands::doctor::run().await,
+        Command::Reset => commands::reset::run().await,
+        Command::Uninstall => commands::uninstall::run().await,
+        Command::Config => commands::config::run().await,
+        Command::Message => commands::message::run().await,
+        Command::Sessions => commands::sessions::run().await,
+        Command::Memory => commands::memory::run().await,
+        Command::Agent => commands::agent::run().await,
+        Command::Agents => commands::agents::run().await,
+        Command::Browser => commands::browser::run().await,
     }
 }

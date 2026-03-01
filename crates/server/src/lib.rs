@@ -1,3 +1,4 @@
+pub mod approval_gate;
 pub mod middleware;
 pub mod routes;
 pub mod state;
@@ -5,68 +6,65 @@ pub mod static_files;
 pub mod webchat;
 pub mod ws;
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
-use axum::{routing::{get, post}, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use state::AppState;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
-use rushdino_agent::{AgentConfig, AgentEngine};
-use rushdino_common::{config::ProviderKind, db, init, AppConfig, CredentialsConfig, Result};
+use rushdino_agent::{AgentConfig, AgentEngine, ToolApproval};
+use rushdino_common::{config::ProviderKind, db, init, AppConfig, AppError, CredentialsConfig, Result};
 use rushdino_gateway::Gateway;
-use rushdino_providers::{types::ProviderConfig, Provider};
+use rushdino_providers::{codex_refresh, types::ProviderConfig, Provider};
 
-use crate::webchat::WebChatAdapter;
+use crate::{approval_gate::ApprovalGate, webchat::WebChatAdapter};
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
     let config = Arc::new(AppConfig::load()?);
-    let credentials = Arc::new(CredentialsConfig::load()?);
+    let mut credentials = CredentialsConfig::load()?;
+
+    let effective_provider = resolve_effective_provider(config.as_ref(), &mut credentials).await?;
+    let provider_config = select_provider_config(config.as_ref(), &credentials, effective_provider.clone())?;
+    if effective_provider != config.active_provider {
+        tracing::warn!(
+            "provider: falling back from {:?} to {:?}",
+            config.active_provider,
+            effective_provider
+        );
+    }
 
     let pool = db::init_pool(&config.db_path).await?;
     db::run_migrations(&pool).await?;
     let pool = Arc::new(pool);
 
-    let provider_config = match config.active_provider {
-        ProviderKind::Ollama => ProviderConfig::Ollama {
-            base_url: config.ollama.base_url.clone(),
-            model: config.ollama.model.clone(),
-            api_key: None,
-        },
-        ProviderKind::Openai => ProviderConfig::OpenAI {
-            api_key: credentials.openai_api_key.clone().unwrap_or_default(),
-            model: config.openai.model.clone(),
-            base_url: None,
-        },
-        ProviderKind::Anthropic => ProviderConfig::Anthropic {
-            api_key: credentials.anthropic_api_key.clone().unwrap_or_default(),
-            model: config.anthropic.model.clone(),
-        },
-        ProviderKind::Plugin => ProviderConfig::Plugin {
-            manifest_path: config.data_dir.join("plugins/default.toml"),
-        },
-        ProviderKind::Codex => ProviderConfig::Codex {
-            access_token: credentials.codex_access_token.clone().unwrap_or_default(),
-            model: config.codex.model.clone(),
-        },
-    };
-
     let provider = Arc::new(Provider::from_config(&provider_config)?);
+    let gate = ApprovalGate::new();
     let engine = Arc::new(AgentEngine::new(
         provider,
         pool.clone(),
         config.data_dir.clone(),
         credentials.brave_api_key.clone(),
         AgentConfig::default(),
+        Some(gate.clone() as Arc<dyn ToolApproval>),
     )?);
+
+    let credentials = Arc::new(credentials);
 
     // Build gateway and register all enabled channel adapters.
     let mut gateway = Gateway::new(engine.clone(), (*pool).clone());
 
     // Telegram
     if config.gateway.telegram.enabled {
-        if let Some(token) = credentials.telegram_bot_token.as_deref().filter(|t| !t.is_empty()) {
+        if let Some(token) = credentials
+            .telegram_bot_token
+            .as_deref()
+            .filter(|t| !t.is_empty())
+        {
             gateway.register(rushdino_telegram::TelegramAdapter::new(
                 token.to_owned(),
                 config.clone(),
@@ -79,8 +77,10 @@ pub async fn run_server() -> Result<()> {
 
     // Discord
     if config.gateway.discord.enabled {
-        if let Some(token) =
-            credentials.discord_bot_token.as_deref().filter(|t| !t.is_empty())
+        if let Some(token) = credentials
+            .discord_bot_token
+            .as_deref()
+            .filter(|t| !t.is_empty())
         {
             gateway.register(rushdino_discord::DiscordAdapter::new(token));
             tracing::info!("gateway: discord adapter registered");
@@ -115,7 +115,7 @@ pub async fn run_server() -> Result<()> {
         }
     });
 
-    let state = AppState::new(engine, config.clone(), webchat);
+    let state = AppState::new(engine, config.clone(), webchat, gate);
 
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -139,7 +139,152 @@ pub async fn run_server() -> Result<()> {
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .map_err(|e| rushdino_common::AppError::Agent(format!("server error: {e}")))
+        .map_err(|e| AppError::Agent(format!("server error: {e}")))
+}
+
+async fn resolve_effective_provider(
+    config: &AppConfig,
+    credentials: &mut CredentialsConfig,
+) -> Result<ProviderKind> {
+    if config.active_provider != ProviderKind::Codex {
+        return Ok(config.active_provider.clone());
+    }
+
+    let access_token = credentials.codex_access_token.as_deref().unwrap_or("");
+    let refresh_token = credentials.codex_refresh_token.as_deref().unwrap_or("");
+    let needs_refresh =
+        access_token.is_empty() || codex_refresh::token_needs_refresh(credentials.codex_token_expires_at);
+
+    if !needs_refresh {
+        return Ok(ProviderKind::Codex);
+    }
+
+    if refresh_token.is_empty() {
+        tracing::warn!("codex: refresh token missing while token is stale");
+        return fallback_provider_on_codex_failure(config, credentials, "refresh token missing");
+    }
+
+    tracing::info!("codex: access token stale, refreshing");
+    match codex_refresh::refresh_codex_token(refresh_token).await {
+        Ok((new_access, new_refresh, new_expires_at)) => {
+            let credentials_path = init::default_home_dir().join("credentials.toml");
+            persist_refreshed_codex_tokens(
+                credentials,
+                &credentials_path,
+                new_access,
+                new_refresh,
+                new_expires_at,
+            )?;
+            tracing::info!("codex: token refresh succeeded");
+            Ok(ProviderKind::Codex)
+        }
+        Err(err) => {
+            tracing::warn!("codex: token refresh failed: {err}");
+            fallback_provider_on_codex_failure(config, credentials, "refresh failed")
+        }
+    }
+}
+
+fn persist_refreshed_codex_tokens(
+    credentials: &mut CredentialsConfig,
+    path: &Path,
+    access_token: String,
+    refresh_token: String,
+    expires_at: i64,
+) -> Result<()> {
+    credentials.codex_access_token = Some(access_token);
+    credentials.codex_refresh_token = Some(refresh_token);
+    credentials.codex_token_expires_at = Some(expires_at);
+    credentials.save_to_path(path)?;
+    Ok(())
+}
+
+fn fallback_provider_on_codex_failure(
+    config: &AppConfig,
+    credentials: &CredentialsConfig,
+    reason: &str,
+) -> Result<ProviderKind> {
+    let fallback = config.codex_fallback_provider.clone().ok_or_else(|| {
+        AppError::Provider(format!(
+            "codex provider cannot start ({reason}) and codex_fallback_provider is not configured"
+        ))
+    })?;
+    if fallback == ProviderKind::Codex {
+        return Err(AppError::Provider(
+            "codex_fallback_provider cannot be codex".to_owned(),
+        ));
+    }
+    // Validation: fallback must be fully configured before we switch.
+    let _ = select_provider_config(config, credentials, fallback.clone())?;
+    Ok(fallback)
+}
+
+fn select_provider_config(
+    config: &AppConfig,
+    credentials: &CredentialsConfig,
+    provider: ProviderKind,
+) -> Result<ProviderConfig> {
+    match provider {
+        ProviderKind::Ollama => {
+            if config.ollama.base_url.trim().is_empty() || config.ollama.model.trim().is_empty() {
+                return Err(AppError::Provider(
+                    "ollama fallback requires non-empty base_url and model".to_owned(),
+                ));
+            }
+            Ok(ProviderConfig::Ollama {
+                base_url: config.ollama.base_url.clone(),
+                model: config.ollama.model.clone(),
+                api_key: None,
+            })
+        }
+        ProviderKind::Openai => {
+            let api_key = credentials.openai_api_key.clone().unwrap_or_default();
+            if api_key.trim().is_empty() {
+                return Err(AppError::Provider(
+                    "openai provider requires openai_api_key".to_owned(),
+                ));
+            }
+            Ok(ProviderConfig::OpenAI {
+                api_key,
+                model: config.openai.model.clone(),
+                base_url: None,
+            })
+        }
+        ProviderKind::Anthropic => {
+            let api_key = credentials.anthropic_api_key.clone().unwrap_or_default();
+            if api_key.trim().is_empty() {
+                return Err(AppError::Provider(
+                    "anthropic provider requires anthropic_api_key".to_owned(),
+                ));
+            }
+            Ok(ProviderConfig::Anthropic {
+                api_key,
+                model: config.anthropic.model.clone(),
+            })
+        }
+        ProviderKind::Plugin => {
+            let manifest_path = config.data_dir.join("plugins/default.toml");
+            if !manifest_path.exists() {
+                return Err(AppError::Provider(format!(
+                    "plugin provider requires manifest at {}",
+                    manifest_path.display()
+                )));
+            }
+            Ok(ProviderConfig::Plugin { manifest_path })
+        }
+        ProviderKind::Codex => {
+            let access_token = credentials.codex_access_token.clone().unwrap_or_default();
+            if access_token.trim().is_empty() {
+                return Err(AppError::Provider(
+                    "codex provider requires codex_access_token".to_owned(),
+                ));
+            }
+            Ok(ProviderConfig::Codex {
+                access_token,
+                model: config.codex.model.clone(),
+            })
+        }
+    }
 }
 
 async fn shutdown_signal() {
@@ -161,5 +306,96 @@ async fn shutdown_signal() {
     tokio::select! {
         _ = ctrl_c => {},
         _ = terminate => {},
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use rushdino_common::{init, ProviderKind};
+
+    use super::{
+        fallback_provider_on_codex_failure, persist_refreshed_codex_tokens, select_provider_config,
+    };
+
+    #[test]
+    fn fallback_requires_configuration() {
+        let mut config = rushdino_common::AppConfig::default();
+        config.active_provider = ProviderKind::Codex;
+        config.codex_fallback_provider = None;
+        let credentials = rushdino_common::CredentialsConfig::default();
+
+        assert!(fallback_provider_on_codex_failure(&config, &credentials, "refresh failed").is_err());
+    }
+
+    #[test]
+    fn fallback_cannot_be_codex() {
+        let mut config = rushdino_common::AppConfig::default();
+        config.active_provider = ProviderKind::Codex;
+        config.codex_fallback_provider = Some(ProviderKind::Codex);
+        let credentials = rushdino_common::CredentialsConfig::default();
+
+        assert!(fallback_provider_on_codex_failure(&config, &credentials, "refresh failed").is_err());
+    }
+
+    #[test]
+    fn fallback_to_openai_requires_key() {
+        let mut config = rushdino_common::AppConfig::default();
+        config.active_provider = ProviderKind::Codex;
+        config.codex_fallback_provider = Some(ProviderKind::Openai);
+        let credentials = rushdino_common::CredentialsConfig::default();
+
+        assert!(fallback_provider_on_codex_failure(&config, &credentials, "refresh failed").is_err());
+    }
+
+    #[test]
+    fn fallback_to_openai_selects_provider_when_valid() {
+        let mut config = rushdino_common::AppConfig::default();
+        config.active_provider = ProviderKind::Codex;
+        config.codex_fallback_provider = Some(ProviderKind::Openai);
+        let credentials = rushdino_common::CredentialsConfig {
+            openai_api_key: Some("sk-test".to_owned()),
+            ..rushdino_common::CredentialsConfig::default()
+        };
+
+        let selected =
+            fallback_provider_on_codex_failure(&config, &credentials, "refresh failed")
+                .expect("fallback should be selected");
+        assert_eq!(selected, ProviderKind::Openai);
+    }
+
+    #[test]
+    fn codex_refresh_persistence_updates_memory_and_disk() {
+        let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+        init::ensure_rushdino_dir_at(&root).expect("init test root");
+        let path = root.join("credentials.toml");
+        let mut credentials = rushdino_common::CredentialsConfig::default();
+
+        persist_refreshed_codex_tokens(
+            &mut credentials,
+            &path,
+            "access-new".to_owned(),
+            "refresh-new".to_owned(),
+            1_760_000_000,
+        )
+        .expect("refresh persistence should succeed");
+
+        let reloaded =
+            rushdino_common::CredentialsConfig::load_from_path(&path).expect("reload credentials");
+        assert_eq!(credentials.codex_access_token, Some("access-new".to_owned()));
+        assert_eq!(reloaded.codex_access_token, Some("access-new".to_owned()));
+        assert_eq!(reloaded.codex_refresh_token, Some("refresh-new".to_owned()));
+        assert_eq!(reloaded.codex_token_expires_at, Some(1_760_000_000));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn select_provider_rejects_missing_plugin_manifest() {
+        let mut config = rushdino_common::AppConfig::default();
+        config.data_dir = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+        let credentials = rushdino_common::CredentialsConfig::default();
+        assert!(select_provider_config(&config, &credentials, ProviderKind::Plugin).is_err());
     }
 }

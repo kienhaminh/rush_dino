@@ -27,3 +27,42 @@ pub fn random_state() -> String {
     let bytes: Vec<u8> = (0..16).map(|_| rand::random::<u8>()).collect();
     hex::encode(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_pkce() {
+        let (verifier, challenge) = generate_pkce();
+        
+        // Verifier should be a base64url encoded 32-byte string, approx 43 chars
+        assert!(!verifier.is_empty());
+        assert_eq!(verifier.len(), 43); // ceil(32 * 4 / 3) = 43
+        
+        // Challenge should also be a base64url encoded 32-byte SHA256 string
+        assert!(!challenge.is_empty());
+        assert_eq!(challenge.len(), 43);
+
+        // Ensure challenge matches SHA256 of verifier
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+        let mut hasher = sha2::Sha256::new();
+        sha2::Digest::update(&mut hasher, verifier.as_bytes());
+        let expected_challenge = URL_SAFE_NO_PAD.encode(sha2::Digest::finalize(hasher).as_slice());
+        
+        assert_eq!(challenge, expected_challenge);
+    }
+
+    #[test]
+    fn test_random_state() {
+        let state1 = random_state();
+        let state2 = random_state();
+        
+        // 16 bytes encoded as hex = 32 characters
+        assert_eq!(state1.len(), 32);
+        assert_eq!(state2.len(), 32);
+        
+        // Ensure they are reasonably random
+        assert_ne!(state1, state2);
+    }
+}
