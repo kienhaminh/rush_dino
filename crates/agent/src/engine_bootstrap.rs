@@ -21,6 +21,7 @@ use crate::{
         create_job::CreateJobTool,
         create_skill::CreateSkillTool,
         delegate_to_agent::DelegateToAgentTool,
+        file_edit::FileEditTool,
         file_read::FileReadTool,
         list_skills::ListSkillsTool,
         memory_read::MemoryReadTool,
@@ -50,7 +51,7 @@ pub fn build_engine_deps(
     config: &AgentConfig,
     approval: Option<Arc<dyn crate::tools::shell_exec::ToolApproval>>,
 ) -> Result<EngineDeps> {
-    let memory = Arc::new(MemoryManager::new(home_dir.join("memory")));
+    let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
 
     let (inbox_tx, inbox_rx) = mpsc::channel(256);
@@ -63,6 +64,20 @@ pub fn build_engine_deps(
     ));
 
     let agent_manager = Arc::new(AgentManager::new(home_dir.join("agents")));
+    let mut registry = ToolRegistry::new();
+    registry.register(WebSearchTool::new(
+        "https://api.search.brave.com/res/v1/web/search".to_owned(),
+        brave_api_key,
+    ));
+    registry.register(FileReadTool::new(home_dir.join("documents")));
+    registry.register(FileEditTool::new());
+    registry.register(ShellExecTool::new(config.tool_timeout_secs));
+    registry.register(MemoryReadTool::new(memory.clone()));
+    registry.register(MemoryWriteTool::new(memory.clone()));
+    registry.register(CreateJobTool::new(jobs.clone()));
+    registry.register(SpawnSubAgentTool::new(orchestrator.clone()));
+    registry.register(CreateSkillTool::new(skills.clone()));
+    registry.register(ListSkillsTool::new(skills));
 
     // Clone all variables needed inside the Arc::new_cyclic closure before it
     // captures them. The closure is SYNC so all construction inside must be sync.
