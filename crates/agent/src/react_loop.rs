@@ -8,7 +8,21 @@ use rushdino_common::{models::{Message, Role, ToolCall}, AppError, Result};
 use rushdino_providers::{types::{ChatChunk, ChatRequest, ChatResponse}, Provider};
 use tokio::sync::mpsc;
 
+use rushdino_security::{taint::TaintLevel, validation::scan_prompt_injection};
+
 use crate::{context::truncate_messages, engine::AgentConfig, tool_registry::ToolRegistry};
+
+/// Compute the minimum taint level for tool arguments based on the conversation messages.
+///
+/// Any user message makes the baseline at least `UserInput`, because the LLM's tool calls
+/// are influenced by whatever the user sent.
+fn compute_base_taint(messages: &[Message]) -> TaintLevel {
+    if messages.iter().any(|m| m.role == Role::User) {
+        TaintLevel::UserInput
+    } else {
+        TaintLevel::Clean
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum StreamingEvent {
@@ -41,7 +55,8 @@ pub async fn run_react_loop(
             return Ok((response, messages));
         }
 
-        append_tool_outputs(&mut messages, registry.clone(), response.tool_calls.clone()).await;
+        let base_taint = compute_base_taint(&messages);
+        append_tool_outputs(&mut messages, registry.clone(), response.tool_calls.clone(), base_taint).await;
 
         last = Some(response);
     }
@@ -135,7 +150,8 @@ pub async fn run_react_loop_streaming(
             created_at: Utc::now(),
         });
 
-        append_tool_outputs(&mut messages, registry.clone(), response.tool_calls.clone()).await;
+        let base_taint = compute_base_taint(&messages);
+        append_tool_outputs(&mut messages, registry.clone(), response.tool_calls.clone(), base_taint).await;
         last = Some(response);
     }
 
@@ -164,10 +180,40 @@ async fn append_tool_outputs(
     messages: &mut Vec<Message>,
     registry: Arc<ToolRegistry>,
     calls: Vec<ToolCall>,
+    base_taint: TaintLevel,
 ) {
     let futures = calls.into_iter().map(|call| {
         let registry = registry.clone();
+        let base_taint = base_taint.clone();
         async move {
+            // Scan tool arguments for injected content that may have been smuggled
+            // through tool outputs or adversarially crafted user input.
+            let args_str = serde_json::to_string(&call.arguments).unwrap_or_default();
+            let scan = scan_prompt_injection(&args_str);
+            let effective_taint = base_taint.max(scan.taint);
+
+            if effective_taint >= TaintLevel::Malicious {
+                tracing::warn!(
+                    tool = %call.name,
+                    score = scan.score,
+                    "blocking tool execution: malicious taint level in arguments"
+                );
+                return (
+                    call,
+                    "tool execution blocked: high-confidence prompt injection detected in arguments"
+                        .to_owned(),
+                    true,
+                );
+            }
+
+            if effective_taint >= TaintLevel::Suspicious {
+                tracing::warn!(
+                    tool = %call.name,
+                    score = scan.score,
+                    "suspicious taint in tool arguments; executing with caution"
+                );
+            }
+
             if let Some(tool) = registry.get(&call.name) {
                 match tool.execute(call.arguments.clone()).await {
                     Ok(value) => (call, value, false),
