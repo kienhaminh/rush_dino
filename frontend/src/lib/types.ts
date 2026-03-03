@@ -68,6 +68,7 @@ export interface AppConfigView {
   anthropic: ProviderModelConfig;
   codex: ProviderModelConfig;
   gateway: GatewayConfig;
+  allowed_chat_ids: number[];
   security: SecurityConfig;
   [key: string]: unknown;
 }
