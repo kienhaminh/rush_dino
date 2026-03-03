@@ -1,10 +1,12 @@
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import type { AppConfigView, GatewayConfig } from '@/lib/types';
+import type { AppConfigView, CredentialsView, GatewayConfig } from '@/lib/types';
 
 interface Props {
   config: AppConfigView;
   onChange: (patch: Partial<AppConfigView>) => void;
+  credentials: CredentialsView;
+  onCredentialsChange: (patch: Partial<CredentialsView>) => void;
 }
 
 const CHANNELS: { key: keyof GatewayConfig; label: string; description: string }[] = [
@@ -14,7 +16,7 @@ const CHANNELS: { key: keyof GatewayConfig; label: string; description: string }
   { key: 'webchat', label: 'WebChat', description: 'Enable the built-in WebSocket chat UI.' },
 ];
 
-export function ConfigSectionGateway({ config, onChange }: Props) {
+export function ConfigSectionGateway({ config, onChange, credentials, onCredentialsChange }: Props) {
   function setChannel(key: keyof GatewayConfig, enabled: boolean) {
     onChange({
       gateway: {

@@ -190,7 +190,12 @@ export function ConfigPage() {
                   <ConfigSectionCredentials credentials={credentials} onChange={handleCredentialsChange} />
                 )}
                 {activeSection === 'gateway' && (
-                  <ConfigSectionGateway config={config} onChange={handleConfigChange} />
+                  <ConfigSectionGateway
+                    config={config}
+                    onChange={handleConfigChange}
+                    credentials={credentials}
+                    onCredentialsChange={handleCredentialsChange}
+                  />
                 )}
                 {activeSection === 'server' && (
                   <ConfigSectionServer config={config} onChange={handleConfigChange} />
