@@ -1,9 +1,9 @@
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
-import type { Conversation } from "../../lib/types";
-import { ConversationItem } from "./conversation-item";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { MessageSquare, Plus, Trash2 } from 'lucide-react';
+import type { Conversation } from '../../lib/types';
+import { ConversationItem } from './conversation-item';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -21,13 +21,9 @@ export function ConversationList({
   onNew,
 }: ConversationListProps) {
   return (
-    <div className="flex flex-col flex-1 min-h-0 bg-white shadow-sm border rounded-2xl overflow-hidden">
-      <div className="p-4 border-b bg-muted/30">
-        <Button
-          onClick={onNew}
-          className="w-full gap-2 rounded-xl"
-          variant="default"
-        >
+    <div className="flex flex-col flex-1 min-h-0 bg-card border border-border/40 rounded-2xl overflow-hidden">
+      <div className="p-4 border-b border-border/40 bg-muted/30">
+        <Button onClick={onNew} className="w-full gap-2 rounded-xl" variant="default">
           <Plus size={16} /> New Chat
         </Button>
       </div>

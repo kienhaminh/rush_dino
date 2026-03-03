@@ -2,16 +2,17 @@ import { cn } from '@/lib/utils';
 import { TAB_GROUPS, TAB_ICONS, TAB_LABELS, type Tab } from '@/lib/navigation';
 import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
   activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
 }
 
-export function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }: SidebarProps) {
+export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const navigate = useNavigate();
 
   const toggleGroup = (label: string) => {
     setCollapsedGroups((prev: Record<string, boolean>) => ({
@@ -20,15 +21,19 @@ export function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }:
     }));
   };
 
+  const handleTabClick = (tab: Tab) => {
+    navigate(tab === 'chat' ? '/' : `/${tab}`);
+  };
+
   return (
     <aside
       className={cn(
-        'flex flex-col bg-white border-r transition-all duration-300 ease-in-out h-full shrink-0',
+        'flex flex-col bg-background border-r border-border/40 transition-all duration-300 ease-in-out h-full shrink-0',
         collapsed ? 'w-[70px]' : 'w-[260px]',
       )}
     >
       {/* Brand / Header */}
-      <div className="flex items-center justify-between px-4 py-5 border-b shrink-0">
+      <div className="flex items-center justify-between px-4 h-[72px] border-b border-border/40 shrink-0 w-full">
         {!collapsed && (
           <div className="flex items-center gap-2 overflow-hidden">
             <div className="h-8 w-8 flex items-center justify-center rounded-lg bg-primary text-primary-foreground shrink-0 shadow-sm ring-1 ring-primary/20">
@@ -49,7 +54,6 @@ export function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }:
             <span className="font-bold text-lg">R</span>
           </div>
         )}
-        {/* Toggle Collapse Button could go here or in topbar */}
       </div>
 
       {/* Navigation */}
@@ -85,7 +89,7 @@ export function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }:
                       return (
                         <button
                           key={tab}
-                          onClick={() => onTabChange(tab as Tab)}
+                          onClick={() => handleTabClick(tab as Tab)}
                           title={TAB_LABELS[tab as Tab]}
                           className={cn(
                             'w-10 h-10 mx-auto flex items-center justify-center rounded-xl transition-all mb-1',
@@ -102,7 +106,7 @@ export function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }:
                     return (
                       <button
                         key={tab}
-                        onClick={() => onTabChange(tab as Tab)}
+                        onClick={() => handleTabClick(tab as Tab)}
                         className={cn(
                           'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative',
                           active
@@ -134,7 +138,7 @@ export function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }:
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t mt-auto shrink-0 bg-neutral-50/50">
+      <div className="p-4 border-t border-border/40 mt-auto shrink-0 bg-muted/30">
         <button
           onClick={onToggleCollapse}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-all"

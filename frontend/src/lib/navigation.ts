@@ -69,3 +69,19 @@ export const TAB_LABELS: Record<Tab, string> = {
   debug: 'Debug',
   logs: 'Logs',
 };
+
+export const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  agents: 'Manage AI agents',
+  chat: 'Interact with AI assistant',
+  overview: 'System status, connection settings, and general statistics.',
+  channels: 'Channel status snapshots from the gateway',
+  instances: 'Manage system instances',
+  sessions: 'View and manage active sessions',
+  usage: 'System usage tracking and metrics',
+  cron: 'Manage scheduled tasks',
+  skills: 'Manage AI skills and capabilities',
+  nodes: 'System nodes and infrastructure',
+  config: 'System configuration settings',
+  debug: 'System debugging tools',
+  logs: 'System operation logs',
+};

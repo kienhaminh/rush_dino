@@ -1,15 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "include": [
-    "src/components/common/index.ts",
-    "src/components/common/assistant-identity.ts",
-    "src/components/common/external-link.ts",
-    "src/components/common/open-external-url.ts",
-    "src/components/common/text-direction.ts",
-    "src/components/common/uuid.ts",
-    "src/components/common/usage-helpers.ts",
-    "src/components/common/usage-types.ts",
-    "src/components/common/usage/**/*.ts"
+    "src/components/common/**/*.ts"
   ],
   "exclude": [
     "src/components/common/**/*.test.ts"

@@ -2,10 +2,10 @@ export type {
   UsageQueryResult,
   UsageQueryTerm,
   UsageSessionQueryTarget,
-} from "./query-types.ts";
-export { extractQueryTerms } from "./query-terms.ts";
-export { matchesUsageQuery } from "./query-match.ts";
-export { filterSessionsByQuery } from "./query-filter.ts";
+} from "./query.ts";
+export { extractQueryTerms } from "./query.ts";
+export { matchesUsageQuery } from "./query.ts";
+export { filterSessionsByQuery } from "./query.ts";
 export { parseToolSummary } from "./tool-summary.ts";
 
 export type {
