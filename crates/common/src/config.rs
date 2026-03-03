@@ -194,6 +194,18 @@ impl AppConfig {
             .merge(Env::prefixed("RUSHDINO_").split("__"));
         Ok(figment.extract()?)
     }
+
+    pub fn save_to_path(&self, path: &Path) -> Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let serialized = toml::to_string(self)
+            .map_err(|e| crate::AppError::Validation(format!("failed to serialize config: {e}")))?;
+        let tmp_path = path.with_extension("tmp");
+        fs::write(&tmp_path, &serialized)?;
+        fs::rename(&tmp_path, path)?;
+        Ok(())
+    }
 }
 
 impl CredentialsConfig {

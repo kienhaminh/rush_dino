@@ -10,7 +10,7 @@ use std::{path::Path, sync::Arc};
 
 use axum::{
     middleware as axum_middleware,
-    routing::{get, post},
+    routing::{get, patch, post},
     Router,
 };
 use state::AppState;
@@ -31,6 +31,9 @@ use crate::{
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
+    let home = init::default_home_dir();
+    let config_path = home.join("config.toml");
+    let credentials_path = home.join("credentials.toml");
     let config = Arc::new(AppConfig::load()?);
     let mut credentials = CredentialsConfig::load()?;
 
@@ -138,7 +141,7 @@ pub async fn run_server() -> Result<()> {
     // Always enable rate limiting
     let rate_limiters = Some(Arc::new(EndpointLimiters::new()));
 
-    let state = AppState::new(engine, config.clone(), webchat, gate, hmac_auth, rate_limiters);
+    let state = AppState::new(engine, config.clone(), config_path, credentials_path, webchat, gate, hmac_auth, rate_limiters);
 
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -153,6 +156,14 @@ pub async fn run_server() -> Result<()> {
         .route("/api/documents/ingest", post(routes::documents::ingest_documents))
         .route("/api/approval/:request_id", get(routes::approval::get_approval_status))
         .route("/api/approval/:request_id", post(routes::approval::resolve_approval))
+        .route(
+            "/api/config",
+            get(routes::config::get_config).patch(routes::config::patch_config),
+        )
+        .route(
+            "/api/credentials",
+            get(routes::config::get_credentials).patch(routes::config::patch_credentials),
+        )
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), hmac_auth_middleware))

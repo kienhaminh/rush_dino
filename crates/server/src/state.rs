@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use rushdino_agent::AgentEngine;
 use rushdino_common::AppConfig;
@@ -13,6 +13,10 @@ pub struct AppState {
     pub engine: Arc<AgentEngine>,
     pub config: Arc<AppConfig>,
     pub start_time: Instant,
+    /// Path to config.toml — used by config API routes for read/write.
+    pub config_path: PathBuf,
+    /// Path to credentials.toml — used by config API routes for read/write.
+    pub credentials_path: PathBuf,
     /// WebChat adapter shared with the gateway — used by the WebSocket handler.
     pub webchat: Arc<WebChatAdapter>,
     /// Session-scoped tool approval gate for dangerous tool commands.
@@ -27,6 +31,8 @@ impl AppState {
     pub fn new(
         engine: Arc<AgentEngine>,
         config: Arc<AppConfig>,
+        config_path: PathBuf,
+        credentials_path: PathBuf,
         webchat: Arc<WebChatAdapter>,
         gate: Arc<ApprovalGate>,
         hmac_auth: Option<Arc<HmacAuthState>>,
@@ -36,6 +42,8 @@ impl AppState {
             engine,
             config,
             start_time: Instant::now(),
+            config_path,
+            credentials_path,
             webchat,
             gate,
             hmac_auth,

@@ -67,7 +67,7 @@ pub fn build_engine_deps(
     let mut registry = ToolRegistry::new();
     registry.register(WebSearchTool::new(
         "https://api.search.brave.com/res/v1/web/search".to_owned(),
-        brave_api_key,
+        brave_api_key.clone(),
     ));
     registry.register(FileReadTool::new(home_dir.join("documents")));
     registry.register(FileEditTool::new());
@@ -77,7 +77,7 @@ pub fn build_engine_deps(
     registry.register(CreateJobTool::new(jobs.clone()));
     registry.register(SpawnSubAgentTool::new(orchestrator.clone()));
     registry.register(CreateSkillTool::new(skills.clone()));
-    registry.register(ListSkillsTool::new(skills));
+    registry.register(ListSkillsTool::new(skills.clone()));
 
     // Clone all variables needed inside the Arc::new_cyclic closure before it
     // captures them. The closure is SYNC so all construction inside must be sync.
