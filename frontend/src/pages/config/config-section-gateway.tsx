@@ -27,8 +27,8 @@ function TelegramPanel({ config, onChange, credentials, onCredentialsChange }: T
   const [chatIdInput, setChatIdInput] = useState('');
 
   function addChatId() {
+    if (!/^-?\d+$/.test(chatIdInput.trim())) return;
     const id = parseInt(chatIdInput.trim(), 10);
-    if (isNaN(id)) return;
     if ((config.allowed_chat_ids ?? []).includes(id)) {
       setChatIdInput('');
       return;
@@ -41,7 +41,7 @@ function TelegramPanel({ config, onChange, credentials, onCredentialsChange }: T
     onChange({ allowed_chat_ids: (config.allowed_chat_ids ?? []).filter((x) => x !== id) });
   }
 
-  const chatIdValid = chatIdInput.trim() !== '' && !isNaN(parseInt(chatIdInput.trim(), 10));
+  const chatIdValid = /^-?\d+$/.test(chatIdInput.trim());
 
   return (
     <div className="border-t border-border/50 px-4 pb-4 pt-3 space-y-4">
