@@ -1,24 +1,22 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MessageCircleIcon } from 'lucide-react';
-import type { ChannelsProps } from './ChannelsPage';
 
 export function GenericChannelCard({
-  props,
-  channelKey,
   title,
   description,
   status,
-  hasProbe = true,
+  onConfigure,
+  onToggleEnabled,
+  enabled,
 }: {
-  props: ChannelsProps;
-  channelKey: string;
   title: string;
   description: string;
   status: any;
-  hasProbe?: boolean;
+  onConfigure: () => void;
+  onToggleEnabled: () => void;
+  enabled: boolean;
 }) {
   const formatTime = (ts: number | null | undefined) =>
     ts ? new Date(ts).toLocaleString() : 'n/a';
@@ -41,7 +39,7 @@ export function GenericChannelCard({
         </Badge>
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col justify-start pt-4 space-y-4">
+      <CardContent className="flex-1 pt-4">
         <div className="grid grid-cols-2 gap-y-2 text-sm bg-muted/30 p-3 rounded-md">
           <div className="flex justify-between items-center text-muted-foreground">
             <span>Configured</span>
@@ -55,49 +53,27 @@ export function GenericChannelCard({
             <span>Last start</span>
             <span className="font-medium text-foreground">{formatTime(status?.lastStartAt)}</span>
           </div>
-          {hasProbe && (
-            <div className="flex justify-between items-center text-muted-foreground col-span-2 mt-1">
-              <span>Last probe</span>
-              <span className="font-medium text-foreground">{formatTime(status?.lastProbeAt)}</span>
-            </div>
-          )}
+          <div className="flex justify-between items-center text-muted-foreground col-span-2 mt-1">
+            <span>Last probe</span>
+            <span className="font-medium text-foreground">{formatTime(status?.lastProbeAt)}</span>
+          </div>
         </div>
 
         {status?.lastError && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
             {status.lastError}
           </div>
         )}
-
-        {hasProbe && status?.probe && (
-          <div className="p-3 bg-primary/10 border border-primary/20 text-primary text-xs rounded-md font-medium">
-            Probe {status.probe.ok ? 'ok' : 'failed'} • {status.probe.status ?? ''}{' '}
-            {status.probe.error ?? ''}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 w-full mt-auto pt-4">
-          {hasProbe ? (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => props.onRefresh(true)}
-            >
-              Probe
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1 text-xs"
-              onClick={() => props.onRefresh(false)}
-            >
-              Refresh
-            </Button>
-          )}
-        </div>
       </CardContent>
+
+      <CardFooter className="flex gap-2 w-full pt-4 border-t border-border/50">
+        <Button variant="secondary" size="sm" className="flex-1 text-xs" onClick={onConfigure}>
+          Configure
+        </Button>
+        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onToggleEnabled}>
+          {enabled ? 'Disable' : 'Enable'}
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

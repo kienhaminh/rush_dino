@@ -1,4 +1,5 @@
 pub mod approval_gate;
+mod knowledge_graph_bridge;
 pub mod middleware;
 pub mod routes;
 pub mod state;
@@ -10,7 +11,7 @@ use std::{path::Path, sync::Arc};
 
 use axum::{
     middleware as axum_middleware,
-    routing::{get, post},
+    routing::{get, patch, post},
     Router,
 };
 use state::AppState;
@@ -20,17 +21,22 @@ use tower_http::trace::TraceLayer;
 use rushdino_agent::{AgentConfig, AgentEngine, ToolApproval};
 use rushdino_common::{config::ProviderKind, db, init, AppConfig, AppError, CredentialsConfig, Result};
 use rushdino_gateway::Gateway;
+use rushdino_knowledge_graph::KnowledgeGraphService;
 use rushdino_providers::{codex_refresh, types::ProviderConfig, Provider};
 use rushdino_security::rate_limit::EndpointLimiters;
 
 use crate::{
     approval_gate::ApprovalGate,
+    knowledge_graph_bridge::KnowledgeGraphBridge,
     middleware::{cors_layer, hmac_auth_middleware, rate_limit_middleware, HmacAuthState},
     webchat::WebChatAdapter,
 };
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
+    let home = init::default_home_dir();
+    let config_path = home.join("config.toml");
+    let credentials_path = home.join("credentials.toml");
     let config = Arc::new(AppConfig::load()?);
     let mut credentials = CredentialsConfig::load()?;
 
@@ -49,6 +55,20 @@ pub async fn run_server() -> Result<()> {
     let pool = Arc::new(pool);
 
     let provider = Arc::new(Provider::from_config(&provider_config)?);
+    let knowledge_graph_service = if config.knowledge_graph.enabled {
+        Some(Arc::new(KnowledgeGraphService::new(
+            (*pool).clone(),
+            provider.clone(),
+            config.knowledge_graph.clone(),
+            config.data_dir.clone(),
+        )))
+    } else {
+        None
+    };
+
+    let knowledge_graph_bridge = knowledge_graph_service
+        .as_ref()
+        .map(|service| Arc::new(KnowledgeGraphBridge::new(service.clone())) as Arc<dyn rushdino_agent::KnowledgeGraphAccess>);
     let gate = ApprovalGate::new();
     let engine = Arc::new(AgentEngine::new(
         provider,
@@ -57,6 +77,7 @@ pub async fn run_server() -> Result<()> {
         credentials.brave_api_key.clone(),
         AgentConfig::default(),
         Some(gate.clone() as Arc<dyn ToolApproval>),
+        knowledge_graph_bridge,
     )?);
 
     let credentials = Arc::new(credentials);
@@ -138,21 +159,80 @@ pub async fn run_server() -> Result<()> {
     // Always enable rate limiting
     let rate_limiters = Some(Arc::new(EndpointLimiters::new()));
 
-    let state = AppState::new(engine, config.clone(), webchat, gate, hmac_auth, rate_limiters);
+    if let Some(kg) = &knowledge_graph_service {
+        if config.knowledge_graph.backfill_on_startup {
+            let kg = kg.clone();
+            tokio::spawn(async move {
+                if let Err(err) = kg.run_backfill().await {
+                    tracing::warn!("knowledge graph startup backfill failed: {err}");
+                }
+            });
+        }
+    }
+
+    let state = AppState::new(
+        engine,
+        config.clone(),
+        config_path,
+        credentials_path,
+        webchat,
+        gate,
+        hmac_auth,
+        rate_limiters,
+        knowledge_graph_service.clone(),
+    );
 
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
         .route("/api/conversations", get(routes::conversations::list_conversations))
+        .route("/api/agents", get(routes::agents::list_agents))
+        .route("/api/agents/progress", get(routes::agent_progress::get_agent_progress))
+        .route("/api/agents/:id/runtime", get(routes::agents::get_agent_runtime))
+        .route(
+            "/api/agents/:id/files/:filename",
+            patch(routes::agents::update_agent_file),
+        )
+        .route(
+            "/api/workflows",
+            get(routes::workflows::list_workflows).post(routes::workflows::create_workflow),
+        )
+        .route(
+            "/api/workflows/:id",
+            get(routes::workflows::get_workflow)
+                .patch(routes::workflows::update_workflow)
+                .delete(routes::workflows::delete_workflow),
+        )
+        .route(
+            "/api/workflows/:id/runs",
+            get(routes::workflows::list_workflow_runs).post(routes::workflows::start_workflow_run),
+        )
+        .route(
+            "/api/workflow-runs/:run_id",
+            get(routes::workflows::get_workflow_run),
+        )
         .route(
             "/api/conversations/:id",
             get(routes::conversations::get_conversation)
                 .delete(routes::conversations::delete_conversation),
         )
         .route("/api/documents/ingest", post(routes::documents::ingest_documents))
+        .route("/api/graph/search", get(routes::graph::search))
+        .route("/api/graph/facts", get(routes::graph::facts))
+        .route("/api/graph/node/:id", get(routes::graph::node))
+        .route("/api/graph/stats", get(routes::graph::stats))
+        .route("/api/graph/backfill", post(routes::graph::backfill))
         .route("/api/approval/:request_id", get(routes::approval::get_approval_status))
         .route("/api/approval/:request_id", post(routes::approval::resolve_approval))
+        .route(
+            "/api/config",
+            get(routes::config::get_config).patch(routes::config::patch_config),
+        )
+        .route(
+            "/api/credentials",
+            get(routes::config::get_credentials).patch(routes::config::patch_credentials),
+        )
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
         .layer(axum_middleware::from_fn_with_state(state.clone(), hmac_auth_middleware))

@@ -2,6 +2,7 @@ use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Input, Password, Select};
 
 use rushdino_common::{init, Result};
+use rushdino_auth::{auth_options_for_provider, AuthProviderId};
 
 use super::codex_login;
 use super::{rewrite_active_provider, rewrite_int_value, rewrite_value};
@@ -95,7 +96,26 @@ pub async fn run() -> Result<()> {
             println!("{} Configured Ollama with model {display_model}", "✔".green());
         }
         "OpenAI" => {
-            let auth_options = ["API key", "Codex OAuth", "Skip"];
+            let auth_catalog = auth_options_for_provider(AuthProviderId::Openai);
+            let is_headless = rushdino_auth::oauth_pkce::is_remote();
+            if is_headless {
+                println!(
+                    "{} Detected headless or remote environment — using CLI-based authentication only.",
+                    "i".yellow()
+                );
+            }
+
+            let mut auth_options = auth_catalog
+                .iter()
+                .filter_map(|opt| match opt.method {
+                    rushdino_auth::AuthMethod::ApiKey => Some("API key"),
+                    rushdino_auth::AuthMethod::OAuthPkce if !is_headless => Some("Codex OAuth"),
+                    rushdino_auth::AuthMethod::OAuthPkce => None,
+                    rushdino_auth::AuthMethod::None => Some("None"),
+                })
+                .collect::<Vec<_>>();
+            auth_options.push("Skip");
+
             let Some(auth_sel) = select_opt("Choose OpenAI authentication method", &auth_options, 0) else {
                 println!("\n{} Initialization aborted.", "✖".red());
                 return Ok(());

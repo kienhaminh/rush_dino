@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use std::path::Path;
 use tokio::fs;
 
 use rushdino_common::{AppError, Result};
@@ -65,7 +64,7 @@ impl Tool for FileEditTool {
         // Read the file
         let content = fs::read_to_string(path)
             .await
-            .map_err(|e| AppError::Io(format!("Failed to read file '{}': {}", path, e)))?;
+            .map_err(AppError::Io)?;
 
         // Check if old_text exists in content
         if !content.contains(old_text) {
@@ -90,7 +89,7 @@ impl Tool for FileEditTool {
         // Write back
         fs::write(path, new_content)
             .await
-            .map_err(|e| AppError::Io(format!("Failed to write file '{}': {}", path, e)))?;
+            .map_err(AppError::Io)?;
 
         Ok(format!(
             "Successfully edited file '{}'. Replaced {} occurrence(s).",

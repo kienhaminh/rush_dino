@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { NetworkIcon, SearchIcon, RefreshCwIcon, MessageCircleIcon } from 'lucide-react';
+import { SearchIcon, RefreshCwIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-
+import type { AppConfigView, CredentialsView } from '@/lib/types';
 import { WhatsAppCard } from './whatsapp-card';
 import { TelegramCard } from './telegram-card';
 import { DiscordCard } from './discord-card';
@@ -21,31 +19,49 @@ export type ChannelKey =
   | 'imessage'
   | 'nostr';
 
+export type ChannelConfigAction = 'save' | 'connect' | 'test';
+
+export type ChannelUiSettings = {
+  values?: Record<string, unknown>;
+  // Legacy fields retained for backward-compatible local storage migration.
+  allowList?: string;
+  permissions?: {
+    readMessages?: boolean;
+    writeMessages?: boolean;
+    updateMessages?: boolean;
+    deleteMessages?: boolean;
+  };
+};
+
+export type ChannelDetailConfigPatch = {
+  enabled?: boolean;
+  telegramBotToken?: string;
+  discordBotToken?: string;
+  slackBotToken?: string;
+  slackAppToken?: string;
+  uiSettings?: ChannelUiSettings;
+};
+
 export type ChannelsProps = {
   connected: boolean;
   loading: boolean;
   snapshot: ChannelsStatusSnapshot | null;
   lastError: string | null;
   lastSuccessAt: number | null;
-  whatsappMessage: string | null;
-  whatsappQrDataUrl: string | null;
-  whatsappConnected: boolean | null;
-  whatsappBusy: boolean;
-  configSchema: unknown;
-  configSchemaLoading: boolean;
-  configForm: Record<string, unknown> | null;
-  configUiHints: Record<string, unknown>;
-  configSaving: boolean;
-  configFormDirty: boolean;
+  appConfig: AppConfigView | null;
+  credentials: CredentialsView | null;
+  channelConfigSaving: boolean;
+  channelUiSettings: Partial<Record<ChannelKey, ChannelUiSettings>>;
   nostrProfileFormState: 'loading' | 'error' | 'ready' | null;
   nostrProfileAccountId: string | null;
   onRefresh: (probe: boolean) => void;
-  onWhatsAppStart: (force: boolean) => void;
-  onWhatsAppWait: () => void;
-  onWhatsAppLogout: () => void;
-  onConfigPatch: (path: Array<string | number>, value: unknown) => void;
-  onConfigSave: () => void;
-  onConfigReload: () => void;
+  onChannelToggle: (channel: ChannelKey, enabled: boolean) => void;
+  onChannelConfigAction: (
+    channel: ChannelKey,
+    patch: ChannelDetailConfigPatch,
+    action: ChannelConfigAction,
+  ) => void;
+  onOpenChannelConfig: (channel: ChannelKey) => void;
   onNostrProfileEdit: (accountId: string, profile: unknown) => void;
   onNostrProfileFieldChange: (field: string, value: string) => void;
   onNostrProfileSave: () => void;
@@ -58,11 +74,10 @@ export function ChannelsPage(props: ChannelsProps) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');
 
-  const channelsMeta = props.snapshot?.channelMeta || [];
   const channelData = props.snapshot?.channels || {};
   const channelAccounts = props.snapshot?.channelAccounts || {};
 
-  const orderedChannels = [
+  const orderedChannels: ChannelKey[] = [
     'whatsapp',
     'telegram',
     'discord',
@@ -82,7 +97,11 @@ export function ChannelsPage(props: ChannelsProps) {
             {props.lastSuccessAt ? new Date(props.lastSuccessAt).toLocaleTimeString() : 'n/a'}
           </p>
           <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 bg-background border border-border hover:bg-secondary transition-colors h-9 px-4 rounded font-medium text-sm">
+            <button
+              className="flex items-center gap-2 bg-background border border-border hover:bg-secondary transition-colors h-9 px-4 rounded font-medium text-sm disabled:opacity-60"
+              onClick={() => props.onRefresh(false)}
+              disabled={props.loading}
+            >
               <RefreshCwIcon className="w-4 h-4" />
               Refresh
             </button>
@@ -121,83 +140,119 @@ export function ChannelsPage(props: ChannelsProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {orderedChannels
             .filter(
-              (c) =>
-                c.includes(search.toLowerCase()) &&
+              (channel) =>
+                channel.includes(search.toLowerCase()) &&
                 (activeTab === 'all' ||
-                  (activeTab === 'connected' && channelData[c]?.connected) ||
-                  (activeTab === 'disconnected' && !channelData[c]?.connected)),
+                  (activeTab === 'connected' && channelData[channel]?.connected) ||
+                  (activeTab === 'disconnected' && !channelData[channel]?.connected)),
             )
-            .map((key) => {
-              const status = channelData[key] || {};
-              const accounts = channelAccounts[key] || [];
+            .map((channel) => {
+              const status = channelData[channel] || {};
+              const accounts = channelAccounts[channel] || [];
+              const running = Boolean(status?.running);
+              const handleToggle = () => props.onChannelToggle(channel, !running);
 
-              switch (key) {
+              switch (channel) {
                 case 'whatsapp':
-                  return <WhatsAppCard key={key} props={props} whatsapp={status} />;
+                  return (
+                    <WhatsAppCard
+                      key={channel}
+                      whatsapp={status}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
+                    />
+                  );
                 case 'telegram':
                   return (
-                    <TelegramCard key={key} props={props} telegram={status} accounts={accounts} />
+                    <TelegramCard
+                      key={channel}
+                      telegram={status}
+                      accounts={accounts}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
+                    />
                   );
                 case 'discord':
-                  return <DiscordCard key={key} props={props} discord={status} />;
+                  return (
+                    <DiscordCard
+                      key={channel}
+                      discord={status}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
+                    />
+                  );
                 case 'nostr':
-                  return <NostrCard key={key} props={props} nostr={status} accounts={accounts} />;
+                  return (
+                    <NostrCard
+                      key={channel}
+                      nostr={status}
+                      accounts={accounts}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
+                    />
+                  );
                 case 'googlechat':
                   return (
                     <GenericChannelCard
-                      key={key}
-                      channelKey={key}
-                      props={props}
+                      key={channel}
                       title="Google Chat"
                       description="Bot status and channel configuration."
                       status={status}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
                     />
                   );
                 case 'slack':
                   return (
                     <GenericChannelCard
-                      key={key}
-                      channelKey={key}
-                      props={props}
+                      key={channel}
                       title="Slack"
                       description="Socket mode status and channel configuration."
                       status={status}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
                     />
                   );
                 case 'signal':
                   return (
                     <GenericChannelCard
-                      key={key}
-                      channelKey={key}
-                      props={props}
+                      key={channel}
                       title="Signal"
                       description="Signal daemon status."
                       status={status}
-                      hasProbe={false}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
                     />
                   );
                 case 'imessage':
                   return (
                     <GenericChannelCard
-                      key={key}
-                      channelKey={key}
-                      props={props}
+                      key={channel}
                       title="iMessage"
                       description="macOS Messages integration status."
                       status={status}
-                      hasProbe={false}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
                     />
                   );
                 default:
                   return (
                     <GenericChannelCard
-                      key={key}
-                      channelKey={key}
-                      props={props}
-                      title={key}
+                      key={channel}
+                      title={channel}
                       description="Channel details"
                       status={status}
-                      hasProbe={false}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
                     />
                   );
               }

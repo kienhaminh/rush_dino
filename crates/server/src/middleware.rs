@@ -15,7 +15,6 @@ use tower_http::cors::CorsLayer;
 use rushdino_common::AppConfig;
 use rushdino_security::{
     auth_hmac::{verify_request, AuthError, NonceCache},
-    rate_limit::EndpointLimiters,
 };
 
 use crate::state::AppState;

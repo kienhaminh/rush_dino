@@ -1,18 +1,20 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MessageCircleIcon, SendIcon } from 'lucide-react';
-import type { ChannelsProps } from './ChannelsPage';
+import { SendIcon } from 'lucide-react';
 
 export function TelegramCard({
-  props,
   telegram,
   accounts,
+  onConfigure,
+  onToggleEnabled,
+  enabled,
 }: {
-  props: ChannelsProps;
   telegram?: any;
   accounts: any[];
+  onConfigure: () => void;
+  onToggleEnabled: () => void;
+  enabled: boolean;
 }) {
   const formatTime = (ts: number) => new Date(ts).toLocaleString();
   const hasMultipleAccounts = accounts.length > 1;
@@ -36,7 +38,7 @@ export function TelegramCard({
           {telegram?.connected ? 'Connected' : 'Offline'}
         </Badge>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col justify-start pt-4 space-y-4">
+      <CardContent className="flex-1 pt-4">
         {hasMultipleAccounts ? (
           <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2">
             {accounts.map((account, idx) => {
@@ -105,39 +107,24 @@ export function TelegramCard({
                 {telegram?.lastStartAt ? formatTime(telegram.lastStartAt) : 'n/a'}
               </span>
             </div>
-            <div className="flex justify-between items-center text-muted-foreground col-span-2 mt-1">
-              <span>Last probe</span>
-              <span className="font-medium text-foreground">
-                {telegram?.lastProbeAt ? formatTime(telegram.lastProbeAt) : 'n/a'}
-              </span>
-            </div>
           </div>
         )}
 
         {telegram?.lastError && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
             {telegram.lastError}
           </div>
         )}
-
-        {telegram?.probe && (
-          <div className="p-3 bg-primary/10 border border-primary/20 text-primary text-xs rounded-md font-medium">
-            Probe {telegram.probe.ok ? 'ok' : 'failed'} • {telegram.probe.status ?? ''}{' '}
-            {telegram.probe.error ?? ''}
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 w-full mt-auto pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 text-xs"
-            onClick={() => props.onRefresh(true)}
-          >
-            Probe
-          </Button>
-        </div>
       </CardContent>
+
+      <CardFooter className="flex gap-2 w-full pt-4 border-t border-border/50">
+        <Button variant="secondary" size="sm" className="flex-1 text-xs" onClick={onConfigure}>
+          Configure
+        </Button>
+        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onToggleEnabled}>
+          {enabled ? 'Disable' : 'Enable'}
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

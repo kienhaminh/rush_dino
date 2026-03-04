@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{Aead, KeyInit, OsRng as AesOsRng},
+    aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
 };
 use argon2::{Argon2, Params};

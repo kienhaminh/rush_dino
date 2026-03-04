@@ -11,6 +11,8 @@ import {
   ScrollText,
   Folder,
   Loader,
+  LayoutGrid,
+  GitBranch,
 } from 'lucide-react';
 
 export const TAB_GROUPS = [
@@ -19,12 +21,14 @@ export const TAB_GROUPS = [
     label: 'control',
     tabs: ['overview', 'channels', 'instances', 'sessions', 'usage', 'cron'],
   },
-  { label: 'agent', tabs: ['agents', 'skills', 'nodes'] },
+  { label: 'agent', tabs: ['agent-board', 'agents', 'workflows', 'skills', 'nodes'] },
   { label: 'settings', tabs: ['config', 'debug', 'logs'] },
 ] as const;
 
 export type Tab =
+  | 'agent-board'
   | 'agents'
+  | 'workflows'
   | 'overview'
   | 'channels'
   | 'instances'
@@ -39,7 +43,9 @@ export type Tab =
   | 'logs';
 
 export const TAB_ICONS: Record<Tab, any> = {
+  'agent-board': LayoutGrid,
   agents: Folder,
+  workflows: GitBranch,
   chat: MessageSquare,
   overview: BarChart,
   channels: Link,
@@ -55,13 +61,15 @@ export const TAB_ICONS: Record<Tab, any> = {
 };
 
 export const TAB_LABELS: Record<Tab, string> = {
+  'agent-board': 'Board',
   agents: 'Agents',
+  workflows: 'Workflows',
   chat: 'Workspace',
   overview: 'Overview',
   channels: 'Channels',
   instances: 'Instances',
   sessions: 'Sessions',
-  usage: 'Usage',
+  usage: 'Metrics',
   cron: 'Cron',
   skills: 'Skills',
   nodes: 'Nodes',
@@ -71,13 +79,15 @@ export const TAB_LABELS: Record<Tab, string> = {
 };
 
 export const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  'agent-board': 'Overview status board for all agents',
   agents: 'Manage AI agents',
+  workflows: 'Manage end-to-end workflows and step assignments',
   chat: 'Interact with AI assistant',
   overview: 'System status, connection settings, and general statistics.',
   channels: 'Channel status snapshots from the gateway',
   instances: 'Manage system instances',
   sessions: 'View and manage active sessions',
-  usage: 'System usage tracking and metrics',
+  usage: 'Token usage, cost analytics, and AI provider configuration',
   cron: 'Manage scheduled tasks',
   skills: 'Manage AI skills and capabilities',
   nodes: 'System nodes and infrastructure',

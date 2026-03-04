@@ -3,6 +3,7 @@ use dialoguer::{theme::ColorfulTheme, Input, Password, Select};
 use std::fs;
 
 use rushdino_common::{init, Result, AppError};
+use rushdino_auth::{auth_options_for_provider, AuthMethod, AuthProviderId};
 
 use super::codex_login;
 use super::{rewrite_active_provider, rewrite_int_value, rewrite_value};
@@ -48,7 +49,22 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
             println!("{} Configured Ollama with model {model}", "✔".green());
         }
         "openai" => {
-            let auth_options = ["API key", "Codex OAuth"];
+            let is_headless = rushdino_auth::oauth_pkce::is_remote();
+            if is_headless {
+                println!(
+                    "{} Detected headless or remote environment — using CLI-based authentication only.",
+                    "i".yellow()
+                );
+            }
+
+            let auth_options = auth_options_for_provider(AuthProviderId::Openai)
+                .iter()
+                .filter_map(|opt| match opt.method {
+                    AuthMethod::ApiKey => Some("API key"),
+                    AuthMethod::OAuthPkce if !is_headless => Some("Codex OAuth"),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
             let auth_selection = Select::with_theme(&ColorfulTheme::default())
                 .with_prompt("Choose OpenAI authentication method")
                 .items(&auth_options)

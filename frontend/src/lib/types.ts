@@ -27,3 +27,62 @@ export interface ChatChunk {
   tool_calls: ToolCall[];
   done: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Config types — mirror the Rust AppConfig / CredentialsConfig structs
+// ---------------------------------------------------------------------------
+
+export type ProviderKind = 'ollama' | 'openai' | 'anthropic' | 'codex' | 'plugin';
+
+export interface OllamaConfig {
+  base_url: string;
+  model: string;
+}
+
+export interface ProviderModelConfig {
+  model: string;
+}
+
+export interface ChannelConfig {
+  enabled: boolean;
+}
+
+export interface GatewayConfig {
+  telegram: ChannelConfig;
+  discord: ChannelConfig;
+  slack: ChannelConfig;
+  webchat: ChannelConfig;
+}
+
+export interface SecurityConfig {
+  hmac_auth_enabled: boolean;
+  allowed_origins: string[];
+}
+
+export interface AppConfigView {
+  host: string;
+  port: number;
+  /** Legacy single-provider field — kept for backward compat with older backends. */
+  active_provider: ProviderKind;
+  /** Multi-provider field. When set, takes precedence over active_provider. */
+  active_providers?: ProviderKind[];
+  ollama: OllamaConfig;
+  openai: ProviderModelConfig;
+  anthropic: ProviderModelConfig;
+  codex: ProviderModelConfig;
+  gateway: GatewayConfig;
+  allowed_chat_ids: number[];
+  security: SecurityConfig;
+  [key: string]: unknown;
+}
+
+/** All credential fields are optional strings. */
+export interface CredentialsView {
+  openai_api_key?: string;
+  anthropic_api_key?: string;
+  brave_api_key?: string;
+  telegram_bot_token?: string;
+  discord_bot_token?: string;
+  slack_bot_token?: string;
+  slack_app_token?: string;
+}

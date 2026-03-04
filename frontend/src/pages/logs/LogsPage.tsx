@@ -116,32 +116,32 @@ export function LogsPage() {
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-          <div className="px-6 border-b border-border/40 bg-background/30 backdrop-blur-sm shrink-0">
-            <TabsList className="bg-transparent h-12 p-0 gap-8">
+          <div className="flex items-center overflow-x-auto border-b border-border bg-card/30 px-6 flex-shrink-0">
+            <TabsList className="bg-transparent h-auto p-0 flex">
               <TabsTrigger
                 value="live"
-                className="bg-transparent border-none p-0 h-full text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground data-[state=active]:text-primary data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary relative rounded-none transition-all"
+                className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
               >
                 <div className="flex items-center gap-2">
-                  <ScrollText size={14} />
+                  <ScrollText size={16} />
                   Live Stream
                 </div>
               </TabsTrigger>
               <TabsTrigger
                 value="errors"
-                className="bg-transparent border-none p-0 h-full text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground data-[state=active]:text-rose-400 data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-rose-400 relative rounded-none transition-all"
+                className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-rose-400 data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-rose-400 data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
               >
                 <div className="flex items-center gap-2">
-                  <ShieldAlert size={14} />
+                  <ShieldAlert size={16} />
                   Error Logs
                 </div>
               </TabsTrigger>
               <TabsTrigger
                 value="archive"
-                className="bg-transparent border-none p-0 h-full text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground data-[state=active]:text-primary data-[state=active]:after:content-[''] data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary relative rounded-none transition-all"
+                className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
               >
                 <div className="flex items-center gap-2">
-                  <History size={14} />
+                  <History size={16} />
                   Archive
                 </div>
               </TabsTrigger>

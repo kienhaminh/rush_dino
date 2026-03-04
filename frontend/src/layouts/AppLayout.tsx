@@ -14,6 +14,7 @@ function pathToTab(pathname: string): Tab {
   const segment = pathname.replace(/^\//, '').split('/')[0];
   const knownTabs: Tab[] = [
     'chat',
+    'agent-board',
     'overview',
     'channels',
     'instances',
@@ -23,6 +24,7 @@ function pathToTab(pathname: string): Tab {
     'skills',
     'nodes',
     'agents',
+    'workflows',
     'config',
     'debug',
     'logs',

@@ -1,5 +1,10 @@
+pub mod agent_progress;
+pub mod agents;
 pub mod approval;
 pub mod chat;
+pub mod config;
 pub mod conversations;
 pub mod documents;
+pub mod graph;
 pub mod health;
+pub mod workflows;

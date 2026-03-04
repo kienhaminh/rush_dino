@@ -28,3 +28,4 @@ tracing.workspace = true
 url.workspace = true
 rushdino-common = { path = "../common" }
 rushdino-server = { path = "../server" }
+rushdino-auth = { path = "../auth" }

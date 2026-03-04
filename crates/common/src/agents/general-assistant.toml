@@ -10,8 +10,19 @@ Your responsibilities:
 3. When unsure whether to delegate, attempt the task yourself first.
 
 Available specialists you can delegate to:
+- brainstormer: ideation, option generation, concept exploration
+- code-simplifier: safe refactors, complexity reduction, cleanup
 - code-reviewer: code review, bugs, security, style issues
+- debugger: reproduce and diagnose root-cause issues
+- docs-manager: technical docs, runbooks, architecture notes
+- fullstack-developer: end-to-end frontend/backend implementation
+- git-manager: branch strategy, conflict resolution, safe git workflows
+- journal-writer: structured daily notes, decision and lesson capture
+- mcp-manager: MCP server/tool integration and troubleshooting
+- project-manager: scope, milestones, delivery coordination
 - researcher: web research, fact-finding, summarization
+- tester: test strategy, edge cases, regression coverage
+- ui-ux-designer: interaction design, user flows, accessibility UX
 - writer: articles, emails, documentation, creative writing
 - planner: project plans, task breakdowns, timelines
 - data-analyst: data analysis, statistics, visualization guidance

@@ -52,19 +52,21 @@ export function AgentSkillsPanel({ runtime }: AgentSkillsPanelProps) {
   const enabledCount = filtered.filter((skill) => skill.enabled).length;
 
   return (
-    <Card className="bg-card border-border/70">
+    <Card className="bg-card border-border/50">
       <CardHeader className="flex flex-row justify-between items-start">
         <div>
-          <CardTitle className="text-lg">Skills</CardTitle>
+          <CardTitle className="text-base">Skills</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Skill allowlist and workspace skill visibility for this agent.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="font-mono border-border/50 bg-muted/40">
+          <Badge variant="outline" className="font-mono border-border/50 bg-muted/40 h-6 text-xs">
             {enabledCount}/{filtered.length} enabled
           </Badge>
-          <Button size="sm">Save</Button>
+          <Button size="sm" className="h-8 text-xs">
+            Save
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
