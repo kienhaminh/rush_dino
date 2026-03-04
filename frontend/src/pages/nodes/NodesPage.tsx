@@ -16,31 +16,39 @@ export function NodesPage() {
 
   return (
     <div className="flex-1 w-full min-w-0 flex flex-col h-full bg-background p-6 md:p-8 overflow-y-auto space-y-8">
-      <div className="flex gap-4 items-center mb-6">
-        <div className="relative flex-1 max-w-md">
-          <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search nodes by hostname..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-card border-border"
-          />
-        </div>
-        <div className="flex bg-muted p-1 rounded-md">
+      <div className="flex flex-col mb-6 space-y-4">
+        <div className="flex items-center overflow-x-auto border-b border-border bg-card/30 px-6 mx-[-1.5rem] md:mx-[-2rem] flex-shrink-0">
           {['infrastructure', 'exec approvals'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as 'infrastructure' | 'exec approvals')}
-              className={`px-4 py-1.5 text-xs font-medium rounded capitalize transition-all ${activeTab === tab ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap capitalize
+                ${
+                  activeTab === tab
+                    ? 'text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary after:rounded-t'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
             >
               {tab}
             </button>
           ))}
         </div>
-        <Button size="sm" variant="destructive" className="text-xs gap-2">
-          <ShieldAlertIcon className="w-4 h-4" />
-          Security Audit
-        </Button>
+
+        <div className="flex gap-4 items-center w-full">
+          <div className="relative flex-1 max-w-md">
+            <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search nodes by hostname..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9 bg-card border-border"
+            />
+          </div>
+          <Button size="sm" variant="destructive" className="text-xs gap-2 ml-auto">
+            <ShieldAlertIcon className="w-4 h-4" />
+            Security Audit
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

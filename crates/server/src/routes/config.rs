@@ -2,7 +2,7 @@
 //!
 //! GET  /api/config        — return current AppConfig as JSON
 //! PATCH /api/config       — merge JSON patch into AppConfig, save to disk
-//! GET  /api/credentials   — return CredentialsConfig with secrets redacted as "***"
+//! GET  /api/credentials   — return CredentialsConfig as JSON
 //! PATCH /api/credentials  — merge JSON patch, skip fields whose value is "***"
 
 use axum::{extract::State, Json};
@@ -12,7 +12,7 @@ use rushdino_common::{AppConfig, AppError, CredentialsConfig, Result};
 
 use crate::state::AppState;
 
-/// Redaction sentinel — returned in place of non-empty secret values on GET.
+/// Redaction sentinel — used when frontend sends "***" to mean "unchanged".
 const REDACTED: &str = "***";
 
 /// GET /api/config — return the on-disk AppConfig as JSON.
@@ -44,12 +44,11 @@ pub async fn patch_config(
     Ok(Json(result))
 }
 
-/// GET /api/credentials — return CredentialsConfig with non-empty secrets replaced by "***".
+/// GET /api/credentials — return CredentialsConfig as JSON (including telegram_bot_token).
 pub async fn get_credentials(State(state): State<AppState>) -> Result<Json<Value>> {
     let creds = CredentialsConfig::load_from_path(&state.credentials_path)?;
-    let mut value = serde_json::to_value(&creds)
+    let value = serde_json::to_value(&creds)
         .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
-    redact_secrets(&mut value);
     Ok(Json(value))
 }
 
@@ -68,41 +67,20 @@ pub async fn patch_credentials(
 
     let updated: CredentialsConfig = serde_json::from_value(current_value)
         .map_err(|e| AppError::Validation(format!("invalid credentials: {e}")))?;
+    tracing::info!(
+        path = %state.credentials_path.display(),
+        "saving credentials to disk"
+    );
     updated.save_to_path(&state.credentials_path)?;
 
-    // Return redacted view so we never leak secrets in responses.
-    let mut result = serde_json::to_value(&updated)
+    let result = serde_json::to_value(&updated)
         .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
-    redact_secrets(&mut result);
     Ok(Json(result))
 }
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/// Recursively replace non-empty string values with "***" for credentials view.
-fn redact_secrets(value: &mut Value) {
-    match value {
-        Value::Object(map) => {
-            for v in map.values_mut() {
-                if let Value::String(s) = v {
-                    if !s.is_empty() {
-                        *s = REDACTED.to_owned();
-                    }
-                } else {
-                    redact_secrets(v);
-                }
-            }
-        }
-        Value::Array(arr) => {
-            for v in arr.iter_mut() {
-                redact_secrets(v);
-            }
-        }
-        _ => {}
-    }
-}
 
 /// Remove any string fields equal to "***" from a JSON value (recursive).
 /// Fields that are null are also preserved to allow explicit clearing.

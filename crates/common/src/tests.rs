@@ -1,6 +1,17 @@
 use std::fs;
 
-use crate::{config::{AppConfig, CredentialsConfig}, init};
+use crate::{
+    config::{AppConfig, CredentialsConfig},
+    init,
+};
+
+#[derive(serde::Deserialize)]
+struct BundledAgentTemplate {
+    name: String,
+    description: String,
+    system_prompt: String,
+    icon: Option<String>,
+}
 
 #[test]
 fn load_default_config_without_file() {
@@ -26,6 +37,38 @@ fn ensure_dir_creates_expected_structure() {
     assert!(root.join("agents/spawn-agent.toml").exists());
 
     let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn bundled_agents_are_valid_and_named_consistently() {
+    let mut names = std::collections::HashSet::new();
+    for (key, content) in crate::agents::BUNDLED_AGENTS {
+        let template: BundledAgentTemplate =
+            toml::from_str(content).unwrap_or_else(|e| panic!("invalid bundled agent {key}: {e}"));
+        assert_eq!(&template.name, key, "template name must match bundle key");
+        assert!(
+            names.insert(template.name.clone()),
+            "duplicate bundled agent name: {}",
+            template.name
+        );
+        assert!(
+            !template.description.trim().is_empty(),
+            "template {} must have description",
+            template.name
+        );
+        assert!(
+            !template.system_prompt.trim().is_empty(),
+            "template {} must have system prompt",
+            template.name
+        );
+        if let Some(icon) = template.icon {
+            assert!(
+                !icon.trim().is_empty(),
+                "template {} icon cannot be blank",
+                template.name
+            );
+        }
+    }
 }
 
 #[test]
@@ -57,7 +100,10 @@ fn credentials_save_round_trip_special_chars() {
     assert_eq!(loaded.anthropic_api_key, credentials.anthropic_api_key);
     assert_eq!(loaded.codex_access_token, credentials.codex_access_token);
     assert_eq!(loaded.codex_refresh_token, credentials.codex_refresh_token);
-    assert_eq!(loaded.codex_token_expires_at, credentials.codex_token_expires_at);
+    assert_eq!(
+        loaded.codex_token_expires_at,
+        credentials.codex_token_expires_at
+    );
 
     let _ = fs::remove_dir_all(root);
 }

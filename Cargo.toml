@@ -10,6 +10,9 @@ members = [
   "crates/extensions/discord",
   "crates/extensions/slack",
   "crates/cli",
+  "crates/auth",
+  "crates/knowledge-graph",
+  "crates/desktop-native",
 ]
 resolver = "2"
 
@@ -52,6 +55,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
+eframe = "0.30"
 
 [workspace.lints.clippy]
 pedantic = "warn"

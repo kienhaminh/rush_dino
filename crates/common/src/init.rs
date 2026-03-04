@@ -6,8 +6,14 @@ use std::{
 use crate::agents::BUNDLED_AGENTS;
 use crate::error::Result;
 
+/// Returns the RushDino data directory. Default is always `~/.rushdino`.
+/// Use `RUSHDINO_HOME` to override.
 pub fn default_home_dir() -> PathBuf {
+    if let Ok(home) = std::env::var("RUSHDINO_HOME") {
+        return PathBuf::from(home);
+    }
     dirs::home_dir()
+        .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".rushdino")
 }
@@ -397,7 +403,7 @@ fn write_if_missing(path: &Path, content: &[u8]) -> Result<()> {
 
 fn default_config_template(home: &Path) -> String {
     format!(
-        "host = \"127.0.0.1\"\nport = 28847\nlog_level = \"info\"\nactive_provider = \"ollama\"\ncodex_fallback_provider = \"openai\"\ndata_dir = \"{}\"\ndb_path = \"{}\"\nbrave_search_endpoint = \"https://api.search.brave.com/res/v1/web/search\"\nallowed_chat_ids = []\n\n[ollama]\nbase_url = \"http://localhost:11434/v1\"\nmodel = \"llama3.2:latest\"\n\n[openai]\nmodel = \"gpt-4.1-mini\"\n\n[anthropic]\nmodel = \"claude-3-5-sonnet-latest\"\n\n[codex]\nmodel = \"gpt-4.1-mini\"\n",
+        "host = \"127.0.0.1\"\nport = 28847\nlog_level = \"info\"\nactive_provider = \"ollama\"\ncodex_fallback_provider = \"openai\"\ndata_dir = \"{}\"\ndb_path = \"{}\"\nbrave_search_endpoint = \"https://api.search.brave.com/res/v1/web/search\"\nallowed_chat_ids = []\n\n[ollama]\nbase_url = \"http://localhost:11434/v1\"\nmodel = \"llama3.2:latest\"\n\n[openai]\nmodel = \"gpt-4.1-mini\"\n\n[anthropic]\nmodel = \"claude-3-5-sonnet-latest\"\n\n[codex]\nmodel = \"gpt-4.1-mini\"\n\n[knowledge_graph]\nenabled = false\nauto_context = true\nmax_context_facts = 12\nmax_extraction_chars = 4000\nbackfill_on_startup = true\nextract_from_conversations = true\nextract_from_memory = true\nextract_from_documents = true\n",
         home.display(),
         home.join("data.db").display()
     )

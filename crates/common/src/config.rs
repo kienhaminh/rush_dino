@@ -109,6 +109,34 @@ impl Default for GatewayConfig {
     }
 }
 
+/// Local knowledge graph settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeGraphConfig {
+    pub enabled: bool,
+    pub auto_context: bool,
+    pub max_context_facts: u32,
+    pub max_extraction_chars: u32,
+    pub backfill_on_startup: bool,
+    pub extract_from_conversations: bool,
+    pub extract_from_memory: bool,
+    pub extract_from_documents: bool,
+}
+
+impl Default for KnowledgeGraphConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            auto_context: true,
+            max_context_facts: 12,
+            max_extraction_chars: 4_000,
+            backfill_on_startup: true,
+            extract_from_conversations: true,
+            extract_from_memory: true,
+            extract_from_documents: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub host: String,
@@ -127,6 +155,7 @@ pub struct AppConfig {
     pub codex_fallback_provider: Option<ProviderKind>,
     pub gateway: GatewayConfig,
     pub security: SecurityConfig,
+    pub knowledge_graph: KnowledgeGraphConfig,
 }
 
 impl Default for AppConfig {
@@ -157,6 +186,7 @@ impl Default for AppConfig {
             codex_fallback_provider: None,
             gateway: GatewayConfig::default(),
             security: SecurityConfig::default(),
+            knowledge_graph: KnowledgeGraphConfig::default(),
         }
     }
 }

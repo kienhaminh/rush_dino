@@ -1,6 +1,16 @@
-import type { AgentRecord, AgentRuntimeData } from './agent-types';
+import type { AgentRecord, AgentRuntimeData, AgentSoulData, AgentMemoryEntry } from './agent-types';
 
-export const AGENT_PANELS = ['overview', 'files', 'tools', 'skills', 'channels', 'cron'] as const;
+export const AGENT_PANELS = [
+  'overview',
+  'progress',
+  'soul',
+  'memory',
+  'files',
+  'tools',
+  'skills',
+  'channels',
+  'cron',
+] as const;
 
 export const MOCK_AGENTS: AgentRecord[] = [
   {
@@ -21,10 +31,315 @@ export const MOCK_AGENTS: AgentRecord[] = [
     model: 'claude-3.7-sonnet',
     description: 'Focused on retrieval and web research tasks.',
   },
+  {
+    id: 'brainstormer',
+    name: 'Brainstormer',
+    emoji: '💡',
+    isDefault: false,
+    workspace: 'workspace/brainstormer',
+    model: 'gpt-4o',
+    description: 'Ideation specialist for generating options and concepts.',
+  },
+  {
+    id: 'code-simplifier',
+    name: 'Code Simplifier',
+    emoji: '🧹',
+    isDefault: false,
+    workspace: 'workspace/code-simplifier',
+    model: 'gpt-4o',
+    description: 'Refactoring specialist for reducing complexity safely.',
+  },
+  {
+    id: 'debugger',
+    name: 'Debugger',
+    emoji: '🪲',
+    isDefault: false,
+    workspace: 'workspace/debugger',
+    model: 'gpt-4o',
+    description: 'Root-cause specialist for failures and runtime issues.',
+  },
+  {
+    id: 'docs-manager',
+    name: 'Docs Manager',
+    emoji: '📚',
+    isDefault: false,
+    workspace: 'workspace/docs',
+    model: 'gpt-4o-mini',
+    description: 'Maintains technical docs, runbooks, and decision records.',
+  },
+  {
+    id: 'fullstack-developer',
+    name: 'Fullstack Developer',
+    emoji: '🧩',
+    isDefault: false,
+    workspace: 'workspace/fullstack',
+    model: 'gpt-4o',
+    description: 'Implements end-to-end features across frontend and backend.',
+  },
+  {
+    id: 'git-manager',
+    name: 'Git Manager',
+    emoji: '🌿',
+    isDefault: false,
+    workspace: 'workspace/git',
+    model: 'gpt-4o-mini',
+    description: 'Handles branch strategy, rebases, and conflict resolution.',
+  },
+  {
+    id: 'journal-writer',
+    name: 'Journal Writer',
+    emoji: '📓',
+    isDefault: false,
+    workspace: 'workspace/journal',
+    model: 'gpt-4o-mini',
+    description: 'Captures progress, decisions, and lessons learned.',
+  },
+  {
+    id: 'mcp-manager',
+    name: 'MCP Manager',
+    emoji: '🔌',
+    isDefault: false,
+    workspace: 'workspace/mcp',
+    model: 'gpt-4o',
+    description: 'Configures and troubleshoots MCP integrations.',
+  },
+  {
+    id: 'project-manager',
+    name: 'Project Manager',
+    emoji: '🗂️',
+    isDefault: false,
+    workspace: 'workspace/project',
+    model: 'gpt-4o-mini',
+    description: 'Owns scope, milestones, and delivery coordination.',
+  },
+  {
+    id: 'tester',
+    name: 'Tester',
+    emoji: '✅',
+    isDefault: false,
+    workspace: 'workspace/test',
+    model: 'gpt-4o-mini',
+    description: 'Designs test strategy and regression coverage.',
+  },
+  {
+    id: 'ui-ux-designer',
+    name: 'UI/UX Designer',
+    emoji: '🧭',
+    isDefault: false,
+    workspace: 'workspace/design',
+    model: 'gpt-4o',
+    description: 'Designs user flows, interaction patterns, and accessibility.',
+  },
 ];
+
+// ------------------------------------------------------------------
+// Shared soul templates
+// ------------------------------------------------------------------
+
+const SOUL_MAIN: AgentSoulData = {
+  persona: 'A reliable, pragmatic generalist that routes and coordinates across all domains.',
+  tone: 'Direct, clear, and action-oriented. Minimal fluff.',
+  coreValues: [
+    'Clarity over cleverness',
+    'Ask before assuming',
+    'Surface blockers early',
+    'Prefer reversible actions',
+  ],
+  traits: [
+    {
+      id: 't1',
+      label: 'Decisive',
+      description: 'Makes a call when options are clear rather than stalling.',
+    },
+    {
+      id: 't2',
+      label: 'Transparent',
+      description: 'Shows reasoning and flags uncertainty explicitly.',
+    },
+    {
+      id: 't3',
+      label: 'Concise',
+      description: 'Keeps output tight — bullets over prose when possible.',
+    },
+    {
+      id: 't4',
+      label: 'Proactive',
+      description: 'Anticipates the next logical step and mentions it.',
+    },
+  ],
+  systemPrompt:
+    'You are the main coordination agent. Your job is to triage requests, delegate to specialist agents, and provide clear, actionable responses. Always prefer the simplest correct path. When unsure, ask one clarifying question.',
+};
+
+const SOUL_RESEARCH: AgentSoulData = {
+  persona: 'A meticulous researcher who prizes source quality and intellectual honesty.',
+  tone: 'Measured, inquisitive, and citation-aware. Academic but accessible.',
+  coreValues: [
+    'Primary sources first',
+    'Flag speculation clearly',
+    'Cite everything non-obvious',
+    'Acknowledge conflicting evidence',
+  ],
+  traits: [
+    { id: 't1', label: 'Thorough', description: 'Explores multiple angles before concluding.' },
+    {
+      id: 't2',
+      label: 'Skeptical',
+      description: 'Challenges assumptions and tests claims against evidence.',
+    },
+    {
+      id: 't3',
+      label: 'Organized',
+      description: 'Structures findings in scannable, hierarchical outputs.',
+    },
+    {
+      id: 't4',
+      label: 'Humble',
+      description: 'Admits knowledge boundaries rather than fabricating.',
+    },
+  ],
+  systemPrompt:
+    'You are a research specialist. Your outputs must be grounded in evidence. Always attribute claims to sources. When synthesizing, distinguish between established fact, expert consensus, and minority view. Avoid filler.',
+};
+
+const SOUL_BRAINSTORMER: AgentSoulData = {
+  persona: 'An energetic creative partner who generates divergent ideas without self-censorship.',
+  tone: 'Enthusiastic, generative, and non-judgmental. Sparks > polish.',
+  coreValues: [
+    'Quantity enables quality',
+    'Wild ideas are welcome',
+    'Defer evaluation',
+    "Build on others's ideas",
+  ],
+  traits: [
+    {
+      id: 't1',
+      label: 'Generative',
+      description: 'Produces many varied options, not just safe ones.',
+    },
+    {
+      id: 't2',
+      label: 'Playful',
+      description: 'Uses analogies, hypotheticals and "what if" framing.',
+    },
+    {
+      id: 't3',
+      label: 'Lateral',
+      description: 'Draws from unrelated domains to spark new angles.',
+    },
+    {
+      id: 't4',
+      label: 'Non-judgmental',
+      description: 'Lists all ideas first, evaluates separately.',
+    },
+  ],
+  systemPrompt:
+    'You are a brainstorming partner. Your goal is to generate the maximum number of diverse, interesting ideas. Do not filter or self-censor. Present ideas in rapid-fire lists. Invite the user to build on what resonates.',
+};
+
+const SOUL_DEFAULT: AgentSoulData = {
+  persona: 'A focused specialist operating within its defined domain.',
+  tone: 'Professional, precise, and task-oriented.',
+  coreValues: [
+    'Domain expertise first',
+    'No scope creep',
+    'Fail loudly on ambiguity',
+    'Document decisions',
+  ],
+  traits: [
+    { id: 't1', label: 'Focused', description: 'Stays within its area of responsibility.' },
+    { id: 't2', label: 'Precise', description: 'Uses exact terminology and avoids approximation.' },
+    {
+      id: 't3',
+      label: 'Reliable',
+      description: 'Produces consistent outputs across similar inputs.',
+    },
+  ],
+  systemPrompt:
+    'You are a specialized agent. Focus exclusively on your domain. Delegate out-of-scope requests to the appropriate agent. Produce high-quality, expert-level output.',
+};
+
+// ------------------------------------------------------------------
+// Memory helpers
+// ------------------------------------------------------------------
+
+function makeMemory(
+  id: string,
+  content: string,
+  type: AgentMemoryEntry['type'],
+  importance: AgentMemoryEntry['importance'],
+  tag: string,
+  createdAt: string,
+  active = true,
+): AgentMemoryEntry {
+  return { id, content, type, importance, tag, createdAt, active };
+}
+
+// ------------------------------------------------------------------
+// Runtime data per agent
+// ------------------------------------------------------------------
 
 export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
   main: {
+    soul: SOUL_MAIN,
+    memory: [
+      makeMemory(
+        'm1',
+        'User prefers bullet-point summaries over prose paragraphs.',
+        'preference',
+        'high',
+        'output-style',
+        '2026-02-10',
+      ),
+      makeMemory(
+        'm2',
+        'The project stack is: Vite + React + TypeScript + TailwindCSS + Shadcn UI.',
+        'fact',
+        'critical',
+        'project',
+        '2026-02-01',
+      ),
+      makeMemory(
+        'm3',
+        'Always check tasks/todo.md before starting a new implementation task.',
+        'instruction',
+        'critical',
+        'workflow',
+        '2026-02-05',
+      ),
+      makeMemory(
+        'm4',
+        'Kien prefers dark-themed UIs and values premium aesthetic over minimal.',
+        'preference',
+        'medium',
+        'design',
+        '2026-02-12',
+      ),
+      makeMemory(
+        'm5',
+        'Backend uses Rust. Avoid suggesting Node.js for server-side concerns.',
+        'fact',
+        'high',
+        'project',
+        '2026-02-08',
+      ),
+      makeMemory(
+        'm6',
+        'The main development branch is "main". Feature branches use kebab-case.',
+        'fact',
+        'medium',
+        'git',
+        '2026-02-03',
+      ),
+      makeMemory(
+        'm7',
+        'Never commit secrets or API keys. Always use .env files.',
+        'instruction',
+        'critical',
+        'security',
+        '2026-02-01',
+      ),
+    ],
     files: [
       {
         name: 'AGENTS.md',
@@ -55,8 +370,20 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
         id: 'core',
         label: 'Core Tools',
         tools: [
-          { id: 'read', label: 'Read', description: 'Read files and directories.', enabled: true, source: 'core' },
-          { id: 'edit', label: 'Edit', description: 'Modify workspace files.', enabled: true, source: 'core' },
+          {
+            id: 'read',
+            label: 'Read',
+            description: 'Read files and directories.',
+            enabled: true,
+            source: 'core',
+          },
+          {
+            id: 'edit',
+            label: 'Edit',
+            description: 'Modify workspace files.',
+            enabled: true,
+            source: 'core',
+          },
           {
             id: 'exec',
             label: 'Exec',
@@ -142,11 +469,7 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
         ],
       },
     ],
-    cronStatus: {
-      enabled: true,
-      jobs: 3,
-      nextWake: 'in 11m',
-    },
+    cronStatus: { enabled: true, jobs: 3, nextWake: 'in 11m' },
     cronJobs: [
       {
         id: 'job-main-digest',
@@ -160,7 +483,59 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
       },
     ],
   },
+
   research: {
+    soul: SOUL_RESEARCH,
+    memory: [
+      makeMemory(
+        'm1',
+        'Always prefer official documentation over third-party blog posts.',
+        'instruction',
+        'critical',
+        'sourcing',
+        '2026-02-01',
+      ),
+      makeMemory(
+        'm2',
+        'The user is researching AI agent architectures and multi-agent coordination.',
+        'context',
+        'high',
+        'topic',
+        '2026-02-14',
+      ),
+      makeMemory(
+        'm3',
+        "Anthropic's Constitutional AI paper (2022) is a primary reference for alignment.",
+        'fact',
+        'high',
+        'references',
+        '2026-02-10',
+      ),
+      makeMemory(
+        'm4',
+        'User prefers research summaries in ≤5 key takeaways with source links.',
+        'preference',
+        'medium',
+        'output-style',
+        '2026-02-08',
+      ),
+      makeMemory(
+        'm5',
+        'Cross-reference claims against at least two independent sources.',
+        'instruction',
+        'high',
+        'quality',
+        '2026-02-01',
+      ),
+      makeMemory(
+        'm6',
+        'LangChain and AutoGen are the primary frameworks to compare against.',
+        'fact',
+        'medium',
+        'topic',
+        '2026-02-12',
+      ),
+    ],
     files: [
       {
         name: 'AGENTS.md',
@@ -183,8 +558,20 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
         id: 'analysis',
         label: 'Analysis',
         tools: [
-          { id: 'read', label: 'Read', description: 'Read files and dirs.', enabled: true, source: 'core' },
-          { id: 'exec', label: 'Exec', description: 'Run analysis commands.', enabled: true, source: 'core' },
+          {
+            id: 'read',
+            label: 'Read',
+            description: 'Read files and dirs.',
+            enabled: true,
+            source: 'core',
+          },
+          {
+            id: 'exec',
+            label: 'Exec',
+            description: 'Run analysis commands.',
+            enabled: true,
+            source: 'core',
+          },
           {
             id: 'memory-search',
             label: 'Memory Search',
@@ -269,11 +656,7 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
         ],
       },
     ],
-    cronStatus: {
-      enabled: true,
-      jobs: 1,
-      nextWake: 'in 34m',
-    },
+    cronStatus: { enabled: true, jobs: 1, nextWake: 'in 34m' },
     cronJobs: [
       {
         id: 'job-research-watch',
@@ -287,4 +670,120 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
       },
     ],
   },
+
+  brainstormer: {
+    soul: SOUL_BRAINSTORMER,
+    memory: [
+      makeMemory(
+        'm1',
+        'User tends to respond best to 5–10 idea options rather than 2–3.',
+        'preference',
+        'high',
+        'output-style',
+        '2026-02-15',
+      ),
+      makeMemory(
+        'm2',
+        'The product is an AI agent management dashboard called RushDino.',
+        'context',
+        'critical',
+        'project',
+        '2026-02-01',
+      ),
+      makeMemory(
+        'm3',
+        'Analogies from gaming, architecture, and nature resonate with the user.',
+        'preference',
+        'medium',
+        'communication',
+        '2026-02-11',
+      ),
+      makeMemory(
+        'm4',
+        'Avoid suggesting ideas that require major architectural changes unless asked.',
+        'instruction',
+        'high',
+        'scope',
+        '2026-02-08',
+      ),
+      makeMemory(
+        'm5',
+        'User values novel UI interactions — micro-animations, glassmorphism, etc.',
+        'preference',
+        'medium',
+        'design',
+        '2026-02-14',
+      ),
+    ],
+    files: [
+      {
+        name: 'AGENTS.md',
+        path: '/workspace/brainstormer/AGENTS.md',
+        size: '3.1 KB',
+        updatedAt: '30m ago',
+        content: '# Brainstormer\n\nGenerate diverse, creative concepts without self-filtering.',
+      },
+    ],
+    toolsProfile: 'minimal',
+    toolSections: [
+      {
+        id: 'core',
+        label: 'Core Tools',
+        tools: [
+          {
+            id: 'read',
+            label: 'Read',
+            description: 'Read context files.',
+            enabled: true,
+            source: 'core',
+          },
+          {
+            id: 'web-search',
+            label: 'Web Search',
+            description: 'Search for inspiration.',
+            enabled: true,
+            source: 'core',
+          },
+        ],
+      },
+    ],
+    skills: [
+      {
+        name: 'frontend-design',
+        description: 'Visual design concepts and UI patterns.',
+        group: 'bundled',
+        source: 'bundled',
+        enabled: true,
+        emoji: '🎨',
+      },
+    ],
+    channels: [],
+    cronStatus: { enabled: false, jobs: 0, nextWake: 'n/a' },
+    cronJobs: [],
+  },
 };
+
+// Fallback soul for agents without specific soul data
+const FALLBACK_SOUL: AgentSoulData = SOUL_DEFAULT;
+const FALLBACK_MEMORY: AgentMemoryEntry[] = [];
+
+/**
+ * Returns a complete AgentRuntimeData stub for any agent ID,
+ * merging fallback soul/memory if not explicitly mocked.
+ */
+export function getAgentRuntime(agentId: string): AgentRuntimeData {
+  const existing = MOCK_AGENT_RUNTIME[agentId];
+  if (existing) return existing;
+
+  return {
+    soul: FALLBACK_SOUL,
+    memory: FALLBACK_MEMORY,
+    files: [],
+    toolsProfile: 'runtime',
+    toolSections: [],
+    skills: [],
+    channels: [],
+    cronStatus: { enabled: false, jobs: 0, nextWake: 'n/a' },
+    cronJobs: [],
+  };
+}

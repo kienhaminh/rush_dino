@@ -1,2 +1,3 @@
+export { MetricsPage } from './MetricsPage';
 export { UsagePage } from './UsagePage';
-export * from './usageTypes';
+export * from './usage-types';

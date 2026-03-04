@@ -1,11 +1,19 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ActivityIcon, NetworkIcon, MessageCircleIcon, SmartphoneIcon } from 'lucide-react';
-import type { ChannelsProps } from './ChannelsPage';
+import { SmartphoneIcon } from 'lucide-react';
 
-export function WhatsAppCard({ props, whatsapp }: { props: ChannelsProps; whatsapp?: any }) {
+export function WhatsAppCard({
+  whatsapp,
+  onConfigure,
+  onToggleEnabled,
+  enabled,
+}: {
+  whatsapp?: any;
+  onConfigure: () => void;
+  onToggleEnabled: () => void;
+  enabled: boolean;
+}) {
   const formatTime = (ts: number) => new Date(ts).toLocaleString();
   const formatDuration = (ms: number) => `${Math.floor(ms / 60000)}m`;
 
@@ -28,7 +36,7 @@ export function WhatsAppCard({ props, whatsapp }: { props: ChannelsProps; whatsa
           {whatsapp?.connected ? 'Connected' : 'Offline'}
         </Badge>
       </CardHeader>
-      <CardContent className="flex-1 flex flex-col justify-start pt-4 space-y-4">
+      <CardContent className="flex-1 pt-4">
         <div className="grid grid-cols-2 gap-y-2 text-sm bg-muted/30 p-3 rounded-md">
           <div className="flex justify-between items-center text-muted-foreground">
             <span>Configured</span>
@@ -65,66 +73,20 @@ export function WhatsAppCard({ props, whatsapp }: { props: ChannelsProps; whatsa
         </div>
 
         {whatsapp?.lastError && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
             {whatsapp.lastError}
           </div>
         )}
-
-        {props.whatsappMessage && (
-          <div className="p-3 bg-primary/10 border border-primary/20 text-primary text-xs rounded-md">
-            {props.whatsappMessage}
-          </div>
-        )}
-
-        {props.whatsappQrDataUrl && (
-          <div className="flex justify-center p-4 bg-white rounded-md border border-border">
-            <img
-              src={props.whatsappQrDataUrl}
-              alt="WhatsApp QR"
-              className="w-48 h-48 object-contain"
-            />
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 w-full mt-auto pt-4">
-          <Button
-            variant="default"
-            size="sm"
-            className="flex-1 text-xs"
-            disabled={props.whatsappBusy}
-            onClick={() => props.onWhatsAppStart(false)}
-          >
-            {props.whatsappBusy ? 'Working...' : 'Show QR'}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 text-xs"
-            disabled={props.whatsappBusy}
-            onClick={() => props.onWhatsAppStart(true)}
-          >
-            Relink
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            className="flex-1 text-xs"
-            disabled={props.whatsappBusy}
-            onClick={() => props.onWhatsAppWait()}
-          >
-            Wait
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            className="flex-1 text-xs"
-            disabled={props.whatsappBusy}
-            onClick={() => props.onWhatsAppLogout()}
-          >
-            Logout
-          </Button>
-        </div>
       </CardContent>
+
+      <CardFooter className="flex gap-2 w-full pt-4 border-t border-border/50">
+        <Button variant="secondary" size="sm" className="flex-1 text-xs" onClick={onConfigure}>
+          Configure
+        </Button>
+        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onToggleEnabled}>
+          {enabled ? 'Disable' : 'Enable'}
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

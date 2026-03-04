@@ -12,6 +12,7 @@ use crate::{
     agent_manager::AgentManager,
     conversation::ConversationManager,
     engine::AgentConfig,
+    knowledge_graph::KnowledgeGraphAccess,
     job_manager::{JobManager, JobResult},
     memory::MemoryManager,
     orchestrator::Orchestrator,
@@ -20,9 +21,11 @@ use crate::{
     tools::{
         create_job::CreateJobTool,
         create_skill::CreateSkillTool,
+        create_workflow::CreateWorkflowTool,
         delegate_to_agent::DelegateToAgentTool,
         file_edit::FileEditTool,
         file_read::FileReadTool,
+        knowledge_graph_query::KnowledgeGraphQueryTool,
         list_skills::ListSkillsTool,
         memory_read::MemoryReadTool,
         memory_write::MemoryWriteTool,
@@ -31,6 +34,7 @@ use crate::{
         spawn_sub_agent::SpawnSubAgentTool,
         web_search::WebSearchTool,
     },
+    workflow_manager::WorkflowManager,
 };
 
 pub struct EngineDeps {
@@ -40,6 +44,7 @@ pub struct EngineDeps {
     pub orchestrator: Arc<Orchestrator>,
     pub memory: Arc<MemoryManager>,
     pub agent_manager: Arc<AgentManager>,
+    pub workflow_manager: Arc<WorkflowManager>,
     pub inbox_rx: mpsc::Receiver<JobResult>,
 }
 
@@ -50,9 +55,11 @@ pub fn build_engine_deps(
     brave_api_key: Option<String>,
     config: &AgentConfig,
     approval: Option<Arc<dyn crate::tools::shell_exec::ToolApproval>>,
+    knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
 ) -> Result<EngineDeps> {
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
+    let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
 
     let (inbox_tx, inbox_rx) = mpsc::channel(256);
     let jobs = Arc::new(JobManager::new(pool.clone(), inbox_tx.clone()));
@@ -64,34 +71,23 @@ pub fn build_engine_deps(
     ));
 
     let agent_manager = Arc::new(AgentManager::new(home_dir.join("agents")));
-    let mut registry = ToolRegistry::new();
-    registry.register(WebSearchTool::new(
-        "https://api.search.brave.com/res/v1/web/search".to_owned(),
-        brave_api_key.clone(),
-    ));
-    registry.register(FileReadTool::new(home_dir.join("documents")));
-    registry.register(FileEditTool::new());
-    registry.register(ShellExecTool::new(config.tool_timeout_secs));
-    registry.register(MemoryReadTool::new(memory.clone()));
-    registry.register(MemoryWriteTool::new(memory.clone()));
-    registry.register(CreateJobTool::new(jobs.clone()));
-    registry.register(SpawnSubAgentTool::new(orchestrator.clone()));
-    registry.register(CreateSkillTool::new(skills.clone()));
-    registry.register(ListSkillsTool::new(skills.clone()));
 
     // Clone all variables needed inside the Arc::new_cyclic closure before it
     // captures them. The closure is SYNC so all construction inside must be sync.
     let provider_c = provider.clone();
     let agent_manager_c = agent_manager.clone();
     let agent_manager_c2 = agent_manager.clone();
+    let agent_manager_c3 = agent_manager.clone();
     let config_c = config.clone();
     let memory_c = memory.clone();
     let skills_c = skills.clone();
     let jobs_c = jobs.clone();
     let orchestrator_c = orchestrator.clone();
+    let workflow_manager_c = workflow_manager.clone();
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
     let approval_c = approval.clone();
+    let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
 
     // Arc::new_cyclic allows DelegateToAgentTool to hold a Weak<ToolRegistry>
@@ -116,13 +112,21 @@ pub fn build_engine_deps(
             brave_c,
         ));
         r.register(FileReadTool::new(home_c.join("documents")));
+        r.register(FileEditTool::new());
         r.register(shell_exec);
         r.register(MemoryReadTool::new(memory_c.clone()));
-        r.register(MemoryWriteTool::new(memory_c));
+        r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
         r.register(CreateJobTool::new(jobs_c));
+        r.register(CreateWorkflowTool::new(
+            workflow_manager_c,
+            agent_manager_c3,
+        ));
         r.register(SpawnSubAgentTool::new(orchestrator_c));
         r.register(CreateSkillTool::new(skills_c.clone()));
         r.register(ListSkillsTool::new(skills_c));
+        if let Some(graph) = graph_c {
+            r.register(KnowledgeGraphQueryTool::new(graph));
+        }
         r.register(delegate_tool);
         r.register(SpawnAgentTool::new(agent_manager_c2));
         r
@@ -138,6 +142,7 @@ pub fn build_engine_deps(
         orchestrator,
         memory,
         agent_manager,
+        workflow_manager,
         inbox_rx,
     })
 }

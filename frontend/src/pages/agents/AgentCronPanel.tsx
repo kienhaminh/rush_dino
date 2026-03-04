@@ -10,13 +10,19 @@ type AgentCronPanelProps = {
 export function AgentCronPanel({ runtime }: AgentCronPanelProps) {
   return (
     <div className="space-y-4">
-      <Card className="bg-card border-border/70">
+      <Card className="bg-card border-border/50">
         <CardHeader className="flex flex-row justify-between items-start">
           <div>
-            <CardTitle className="text-lg">Scheduler</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">Gateway cron status for this agent.</p>
+            <CardTitle className="text-base">Scheduler</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Gateway cron status for this agent.
+            </p>
           </div>
-          <Button variant="outline" size="sm" className="border-border/50 bg-transparent hover:bg-muted/50">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs border-border/50 bg-transparent hover:bg-muted/50"
+          >
             Refresh
           </Button>
         </CardHeader>
@@ -38,9 +44,9 @@ export function AgentCronPanel({ runtime }: AgentCronPanelProps) {
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border/70">
+      <Card className="bg-card border-border/50">
         <CardHeader>
-          <CardTitle className="text-lg">Agent Cron Jobs</CardTitle>
+          <CardTitle className="text-base">Agent Cron Jobs</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">Scheduled jobs targeting this agent.</p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -48,7 +54,10 @@ export function AgentCronPanel({ runtime }: AgentCronPanelProps) {
             <p className="text-sm text-muted-foreground">No jobs assigned.</p>
           ) : (
             runtime.cronJobs.map((job) => (
-              <div key={job.id} className="border border-border/50 rounded-lg p-4 bg-muted/20 space-y-2">
+              <div
+                key={job.id}
+                className="border border-border/50 rounded-lg p-4 bg-muted/20 space-y-2"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold">{job.name}</p>
                   <Badge variant={job.enabled ? 'default' : 'secondary'}>

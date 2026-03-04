@@ -4,11 +4,17 @@ mod util;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use teloxide::prelude::*;
+use teloxide::{
+    dispatching::{Dispatcher, UpdateFilterExt},
+    error_handlers::LoggingErrorHandler,
+    prelude::*,
+    types::Update,
+    update_listeners,
+};
 use tokio::sync::mpsc;
 
 use rushdino_agent::AgentEngine;
-use rushdino_common::{AppConfig, CredentialsConfig, Result};
+use rushdino_common::{AppConfig, AppError, CredentialsConfig, Result};
 use rushdino_gateway::{ChannelAdapter, IncomingMessage, OutgoingMessage};
 
 use crate::util::{escape_html, split_message};
@@ -35,7 +41,7 @@ impl ChannelAdapter for TelegramAdapter {
         let bot = Bot::new(&self.token);
         let config = self.config.clone();
 
-        teloxide::repl(bot.clone(), move |bot: Bot, msg: Message| {
+        let handler = Update::filter_message().endpoint(move |bot: Bot, msg: Message| {
             let tx = tx.clone();
             let config = config.clone();
             async move {
@@ -74,8 +80,21 @@ impl ChannelAdapter for TelegramAdapter {
 
                 respond(())
             }
-        })
-        .await;
+        });
+
+        let ignore_update = |_upd| Box::pin(async {});
+        let listener = update_listeners::polling_default(bot.clone()).await;
+        let mut dispatcher = Dispatcher::builder(bot, handler)
+            .default_handler(ignore_update)
+            .enable_ctrlc_handler()
+            .build();
+        dispatcher
+            .try_dispatch_with_listener(
+                listener,
+                LoggingErrorHandler::with_custom_text("An error from the update listener"),
+            )
+            .await
+            .map_err(|err| AppError::Agent(format!("telegram dispatcher startup failed: {err}")))?;
 
         Ok(())
     }

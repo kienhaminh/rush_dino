@@ -1,9 +1,7 @@
-import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HexagonIcon } from 'lucide-react';
-import type { ChannelsProps } from './ChannelsPage';
 
 function truncatePubkey(pubkey: string | null | undefined): string {
   if (!pubkey) return 'n/a';
@@ -12,13 +10,17 @@ function truncatePubkey(pubkey: string | null | undefined): string {
 }
 
 export function NostrCard({
-  props,
   nostr,
   accounts,
+  onConfigure,
+  onToggleEnabled,
+  enabled,
 }: {
-  props: ChannelsProps;
   nostr?: any;
   accounts: any[];
+  onConfigure: () => void;
+  onToggleEnabled: () => void;
+  enabled: boolean;
 }) {
   const formatTime = (ts: number | null | undefined) =>
     ts ? new Date(ts).toLocaleString() : 'n/a';
@@ -54,7 +56,7 @@ export function NostrCard({
         </Badge>
       </CardHeader>
 
-      <CardContent className="flex-1 flex flex-col justify-start pt-4 space-y-4">
+      <CardContent className="flex-1 pt-4">
         {hasMultipleAccounts ? (
           <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2">
             {accounts.map((account, idx) => {
@@ -132,7 +134,7 @@ export function NostrCard({
         )}
 
         {summaryLastError && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
+          <div className="mt-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-md">
             {summaryLastError}
           </div>
         )}
@@ -141,18 +143,6 @@ export function NostrCard({
         <div className="mt-4 p-3 bg-muted/50 rounded-lg border border-border/50">
           <div className="flex justify-between items-center mb-2">
             <h4 className="font-medium text-sm">Profile</h4>
-            {summaryConfigured && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-6 text-[10px]"
-                onClick={() =>
-                  props.onNostrProfileEdit(primaryAccount?.accountId ?? 'default', profile)
-                }
-              >
-                Edit Profile
-              </Button>
-            )}
           </div>
           {hasProfile ? (
             <div className="space-y-2 text-xs">
@@ -189,23 +179,19 @@ export function NostrCard({
               )}
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground">
-              No profile set. Click "Edit Profile" to add your name, bio, and avatar.
-            </div>
+            <div className="text-xs text-muted-foreground">No profile set yet.</div>
           )}
         </div>
-
-        <div className="flex flex-wrap gap-2 w-full mt-auto pt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 text-xs"
-            onClick={() => props.onRefresh(false)}
-          >
-            Refresh
-          </Button>
-        </div>
       </CardContent>
+
+      <CardFooter className="flex gap-2 w-full pt-4 border-t border-border/50">
+        <Button variant="secondary" size="sm" className="flex-1 text-xs" onClick={onConfigure}>
+          Configure
+        </Button>
+        <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={onToggleEnabled}>
+          {enabled ? 'Disable' : 'Enable'}
+        </Button>
+      </CardFooter>
     </Card>
   );
 }

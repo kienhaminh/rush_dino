@@ -1,9 +1,15 @@
 use std::{sync::Arc, time::Instant};
 
-use teloxide::prelude::*;
+use teloxide::{
+    dispatching::{Dispatcher, UpdateFilterExt},
+    error_handlers::LoggingErrorHandler,
+    prelude::*,
+    types::Update,
+    update_listeners,
+};
 
 use rushdino_agent::AgentEngine;
-use rushdino_common::{AppConfig, Result};
+use rushdino_common::{AppConfig, AppError, Result};
 
 use crate::util::{escape_html, split_message};
 
@@ -11,7 +17,7 @@ pub async fn run_bot(token: String, engine: Arc<AgentEngine>, config: Arc<AppCon
     let bot = Bot::new(token);
     let start = Instant::now();
 
-    teloxide::repl(bot, move |bot: Bot, msg: Message| {
+    let handler = Update::filter_message().endpoint(move |bot: Bot, msg: Message| {
         let engine = engine.clone();
         let config = config.clone();
         async move {
@@ -66,8 +72,22 @@ pub async fn run_bot(token: String, engine: Arc<AgentEngine>, config: Arc<AppCon
 
             respond(())
         }
-    })
-    .await;
+    });
+
+    let ignore_update = |_upd| Box::pin(async {});
+    let listener = update_listeners::polling_default(bot.clone()).await;
+    let mut dispatcher = Dispatcher::builder(bot, handler)
+        .default_handler(ignore_update)
+        .enable_ctrlc_handler()
+        .build();
+
+    dispatcher
+        .try_dispatch_with_listener(
+            listener,
+            LoggingErrorHandler::with_custom_text("An error from the update listener"),
+        )
+        .await
+        .map_err(|err| AppError::Agent(format!("telegram dispatcher startup failed: {err}")))?;
 
     Ok(())
 }

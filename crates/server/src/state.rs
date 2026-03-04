@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 
 use rushdino_agent::AgentEngine;
 use rushdino_common::AppConfig;
+use rushdino_knowledge_graph::KnowledgeGraphService;
 use rushdino_security::rate_limit::EndpointLimiters;
 
 use crate::approval_gate::ApprovalGate;
@@ -25,6 +26,8 @@ pub struct AppState {
     pub hmac_auth: Option<Arc<HmacAuthState>>,
     /// Per-endpoint rate limiters — `None` when rate limiting is disabled.
     pub rate_limiters: Option<Arc<EndpointLimiters>>,
+    /// Local knowledge graph service (optional).
+    pub knowledge_graph: Option<Arc<KnowledgeGraphService>>,
 }
 
 impl AppState {
@@ -37,6 +40,7 @@ impl AppState {
         gate: Arc<ApprovalGate>,
         hmac_auth: Option<Arc<HmacAuthState>>,
         rate_limiters: Option<Arc<EndpointLimiters>>,
+        knowledge_graph: Option<Arc<KnowledgeGraphService>>,
     ) -> Self {
         Self {
             engine,
@@ -48,6 +52,7 @@ impl AppState {
             gate,
             hmac_auth,
             rate_limiters,
+            knowledge_graph,
         }
     }
 }

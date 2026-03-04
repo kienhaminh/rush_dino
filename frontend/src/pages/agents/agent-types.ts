@@ -1,4 +1,13 @@
-export type AgentPanel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron';
+export type AgentPanel =
+  | 'overview'
+  | 'progress'
+  | 'soul'
+  | 'memory'
+  | 'files'
+  | 'tools'
+  | 'skills'
+  | 'channels'
+  | 'cron';
 
 export type AgentRecord = {
   id: string;
@@ -74,6 +83,48 @@ export type AgentCronJob = {
   payload: string;
 };
 
+// ------------------------------------------------------------------
+// Soul — agent personality, values, behavioral directives
+// ------------------------------------------------------------------
+
+export type AgentTrait = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+export type AgentSoulData = {
+  /** Short system-level personality description shown in the header */
+  persona: string;
+  /** Communication style descriptor */
+  tone: string;
+  /** Core values the agent prioritizes */
+  coreValues: string[];
+  /** Behavioral traits & habits */
+  traits: AgentTrait[];
+  /** Raw system prompt directive text */
+  systemPrompt: string;
+};
+
+// ------------------------------------------------------------------
+// Memory — persistent knowledge entries for the agent
+// ------------------------------------------------------------------
+
+export type MemoryEntryType = 'fact' | 'instruction' | 'preference' | 'context';
+export type MemoryImportance = 'critical' | 'high' | 'medium' | 'low';
+
+export type AgentMemoryEntry = {
+  id: string;
+  content: string;
+  type: MemoryEntryType;
+  importance: MemoryImportance;
+  createdAt: string;
+  /** Optional tag or topic label */
+  tag?: string;
+  /** Whether this memory is currently active/used by the agent */
+  active: boolean;
+};
+
 export type AgentRuntimeData = {
   files: AgentFileRecord[];
   toolsProfile: string;
@@ -82,4 +133,48 @@ export type AgentRuntimeData = {
   channels: AgentChannelRecord[];
   cronStatus: AgentCronStatus;
   cronJobs: AgentCronJob[];
+  soul: AgentSoulData;
+  memory: AgentMemoryEntry[];
+};
+
+export type AgentProgressCardStatus = 'now' | 'recent' | 'blocked';
+
+export type AgentProgressCard = {
+  id: string;
+  status: AgentProgressCardStatus;
+  title: string;
+  sourceTool: string;
+  conversationId: string;
+  startedAt: string;
+  completedAt: string;
+  isError: boolean;
+};
+
+export type AgentProgressColumns = {
+  now: AgentProgressCard[];
+  recent: AgentProgressCard[];
+  blocked: AgentProgressCard[];
+};
+
+export type AgentProgressSummary = {
+  nowCount: number;
+  recentCount: number;
+  blockedCount: number;
+  totalCount: number;
+  lastActivityAt?: string;
+};
+
+export type AgentProgressLane = {
+  agentId: string;
+  name: string;
+  emoji: string;
+  summary: AgentProgressSummary;
+  columns: AgentProgressColumns;
+};
+
+export type AgentProgressBoardResponse = {
+  generatedAt: string;
+  lookbackMinutes: number;
+  activeWindowSeconds: number;
+  lanes: AgentProgressLane[];
 };

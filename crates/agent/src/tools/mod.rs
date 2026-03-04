@@ -1,9 +1,11 @@
 pub mod create_job;
 pub mod create_skill;
+pub mod create_workflow;
 pub mod delegate_to_agent;
 pub mod file_edit;
 pub mod file_read;
 pub mod list_skills;
+pub mod knowledge_graph_query;
 pub mod memory_read;
 pub mod memory_write;
 pub mod shell_exec;

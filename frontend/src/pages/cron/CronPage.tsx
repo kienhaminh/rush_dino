@@ -200,23 +200,23 @@ export function CronPage() {
           <CronStats status={MOCK_STATUS} />
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
-            <div className="flex items-center justify-between mb-8 border-b border-border/40 pb-1">
-              <TabsList className="bg-transparent h-auto p-0 gap-6">
+            <div className="flex items-center overflow-x-auto border-b border-border bg-card/30 px-6 flex-shrink-0 mx-[-1rem] lg:mx-[-1.5rem] mb-6">
+              <TabsList className="bg-transparent h-auto p-0 flex">
                 <TabsTrigger
                   value="jobs"
-                  className="bg-transparent border-none p-0 pb-3 text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all"
+                  className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
                 >
                   <div className="flex items-center gap-2">
-                    <ListIcon size={14} />
+                    <ListIcon size={16} />
                     Active Jobs
                   </div>
                 </TabsTrigger>
                 <TabsTrigger
                   value="history"
-                  className="bg-transparent border-none p-0 pb-3 text-xs font-bold uppercase tracking-[0.15em] text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none transition-all"
+                  className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-foreground data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
                 >
                   <div className="flex items-center gap-2">
-                    <HistoryIcon size={14} />
+                    <HistoryIcon size={16} />
                     Execution History
                   </div>
                 </TabsTrigger>

@@ -64,9 +64,11 @@ impl Tool for DelegateToAgentTool {
     fn description(&self) -> &str {
         "Delegate the current task to a more suitable specialist agent. \
          Use this when you determine the task is outside your domain. \
-         Available agents: general-assistant, code-reviewer, researcher, writer, \
-         planner, data-analyst, devops-engineer, software-engineer, \
-         artist-designer, content-creator, social-network-assistant, spawn-agent."
+         Available agents: brainstormer, code-simplifier, general-assistant, code-reviewer, \
+         debugger, docs-manager, fullstack-developer, git-manager, journal-writer, \
+         mcp-manager, project-manager, researcher, tester, ui-ux-designer, writer, \
+         planner, data-analyst, devops-engineer, software-engineer, artist-designer, \
+         content-creator, social-network-assistant, spawn-agent."
     }
 
     fn parameters(&self) -> Value {
@@ -192,8 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_error_for_unknown_agent() {
-        let dir = std::env::temp_dir()
-            .join(format!("test-delegate-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("test-delegate-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let tool = make_tool_with_manager(&dir);
 
@@ -211,8 +212,7 @@ mod tests {
 
     #[tokio::test]
     async fn respects_max_delegation_depth() {
-        let dir = std::env::temp_dir()
-            .join(format!("test-depth-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("test-depth-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let manager = Arc::new(AgentManager::new(dir.clone()));
 
@@ -250,7 +250,10 @@ mod tests {
         .await;
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("max delegation depth"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("max delegation depth"));
         let _ = fs::remove_dir_all(&dir);
     }
 }

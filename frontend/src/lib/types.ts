@@ -62,7 +62,10 @@ export interface SecurityConfig {
 export interface AppConfigView {
   host: string;
   port: number;
+  /** Legacy single-provider field — kept for backward compat with older backends. */
   active_provider: ProviderKind;
+  /** Multi-provider field. When set, takes precedence over active_provider. */
+  active_providers?: ProviderKind[];
   ollama: OllamaConfig;
   openai: ProviderModelConfig;
   anthropic: ProviderModelConfig;
@@ -73,7 +76,7 @@ export interface AppConfigView {
   [key: string]: unknown;
 }
 
-/** All credential fields are optional strings. Non-empty values are returned as "***". */
+/** All credential fields are optional strings. */
 export interface CredentialsView {
   openai_api_key?: string;
   anthropic_api_key?: string;

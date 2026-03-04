@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::Deserialize;
 use walkdir::WalkDir;
 
 use rushdino_common::{AppError, Result};
+use rushdino_knowledge_graph::is_supported_text_file;
 use rushdino_security::validation::validate_path;
 
 use crate::state::AppState;
@@ -40,9 +41,36 @@ pub async fn ingest_documents(
 
     let mut scanned = 0_u32;
     let mut failed = 0_u32;
+    let mut ingested = 0_u32;
+    let mut skipped = 0_u32;
     for entry in WalkDir::new(safe_root).into_iter() {
         match entry {
-            Ok(e) if e.file_type().is_file() => scanned += 1,
+            Ok(e) if e.file_type().is_file() => {
+                scanned += 1;
+                if !is_supported_text_file(e.path()) {
+                    skipped = skipped.saturating_add(1);
+                    continue;
+                }
+
+                if let Some(kg) = &state.knowledge_graph {
+                    match kg.ingest_document_file(e.path()).await {
+                        Ok(result) => {
+                            ingested = ingested.saturating_add(result.ingested);
+                            skipped = skipped.saturating_add(result.skipped);
+                            failed = failed.saturating_add(result.failed);
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                "document ingest failed for {}: {err}",
+                                e.path().display()
+                            );
+                            failed = failed.saturating_add(1);
+                        }
+                    }
+                } else {
+                    skipped = skipped.saturating_add(1);
+                }
+            }
             Ok(_) => {}
             Err(_) => failed += 1,
         }
@@ -51,6 +79,7 @@ pub async fn ingest_documents(
     Ok(Json(serde_json::json!({
         "scanned": scanned,
         "failed": failed,
-        "ingested": scanned.saturating_sub(failed),
+        "ingested": ingested,
+        "skipped": skipped,
     })))
 }
