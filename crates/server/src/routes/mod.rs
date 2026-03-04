@@ -7,4 +7,6 @@ pub mod conversations;
 pub mod documents;
 pub mod graph;
 pub mod health;
+pub mod logs;
+pub mod usage_metrics;
 pub mod workflows;

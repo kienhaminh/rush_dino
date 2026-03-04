@@ -8,7 +8,7 @@ use crate::error::Result;
 
 /// Returns the RushDino data directory. Default is always `~/.rushdino`.
 /// Use `RUSHDINO_HOME` to override.
-pub fn default_home_dir() -> PathBuf {
+pub fn canonical_home_dir() -> PathBuf {
     if let Ok(home) = std::env::var("RUSHDINO_HOME") {
         return PathBuf::from(home);
     }
@@ -18,8 +18,20 @@ pub fn default_home_dir() -> PathBuf {
         .join(".rushdino")
 }
 
+pub fn canonical_data_dir(home: &Path) -> PathBuf {
+    home.to_path_buf()
+}
+
+pub fn canonical_db_path(home: &Path) -> PathBuf {
+    home.join("data.db")
+}
+
+pub fn default_home_dir() -> PathBuf {
+    canonical_home_dir()
+}
+
 pub fn ensure_rushdino_dir() -> Result<PathBuf> {
-    let home = default_home_dir();
+    let home = canonical_home_dir();
     ensure_rushdino_dir_at(&home)?;
     Ok(home)
 }

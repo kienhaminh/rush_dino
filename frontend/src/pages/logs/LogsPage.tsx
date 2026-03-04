@@ -4,61 +4,54 @@ import { LogsStream } from './logs-stream';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollText, ShieldAlert, History } from 'lucide-react';
 import type { LogEntry, LogLevel, LogsFilters } from './logs-types';
+import { fetchLogs } from '@/lib/api';
 
-// ─── Mock Data Helpers ────────────────────────────────────────────────────────
-
-const SUBSYSTEMS = ['Gateway', 'Worker', 'Cron', 'Auth', 'Database', 'Agent:alpha', 'Agent:beta'];
 const LEVELS: LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
-function generateMockLogs(count: number): LogEntry[] {
-  const logs: LogEntry[] = [];
-  const now = new Date();
-
-  for (let i = 0; i < count; i++) {
-    const time = new Date(now.getTime() - (count - i) * 1000);
-    const level = LEVELS[Math.floor(Math.random() * LEVELS.length)];
-    const subsystem = SUBSYSTEMS[Math.floor(Math.random() * SUBSYSTEMS.length)];
-
-    let message = '';
-    switch (level) {
-      case 'error':
-      case 'fatal':
-        message = `Failed to process request: ${['Timeout', 'Connection Reset', 'Out of Memory', 'Invalid Token'][Math.floor(Math.random() * 4)]}`;
-        break;
-      case 'warn':
-        message = `High latency detected on ${subsystem} (avg: ${Math.floor(Math.random() * 1000) + 500}ms)`;
-        break;
-      case 'info':
-        message = `${subsystem} successfully ${['initialized', 'started', 'completed task', 'synced'][Math.floor(Math.random() * 4)]}`;
-        break;
-      default:
-        message = `Routine ${['check', 'poll', 'heartbeat'][Math.floor(Math.random() * 3)]} for ${subsystem}`;
-    }
-
-    logs.push({
-      id: `log-${i}`,
-      time: time.toLocaleTimeString([], { hour12: false }),
-      level,
-      subsystem,
-      message,
-      raw: JSON.stringify({ time: time.toISOString(), level, subsystem, message }),
-    });
+function asLogLevel(level: string): LogLevel {
+  if (LEVELS.includes(level as LogLevel)) {
+    return level as LogLevel;
   }
-  return logs;
+  return 'info';
 }
 
-const MOCK_LOGS = generateMockLogs(50);
-
-// ─── LogsPage ───────────────────────────────────────────────────────────────
+function mapRecord(record: {
+  id: string;
+  level: string;
+  target: string;
+  message: string;
+  fields?: Record<string, unknown> | null;
+  createdAt: string;
+}): LogEntry {
+  const date = new Date(record.createdAt);
+  const time = Number.isNaN(date.getTime())
+    ? record.createdAt
+    : date.toLocaleTimeString([], { hour12: false });
+  return {
+    id: record.id,
+    time,
+    level: asLogLevel(record.level),
+    subsystem: record.target,
+    message: record.message,
+    raw: JSON.stringify({
+      time: record.createdAt,
+      level: record.level,
+      target: record.target,
+      message: record.message,
+      fields: record.fields ?? null,
+    }),
+  };
+}
 
 export function LogsPage() {
   const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<LogEntry[]>(MOCK_LOGS);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<LogsFilters>({
     query: '',
     levels: {
-      trace: false,
+      trace: true,
       debug: true,
       info: true,
       warn: true,
@@ -70,29 +63,47 @@ export function LogsPage() {
 
   const [activeTab, setActiveTab] = useState('live');
 
+  const levelFilter = useMemo(
+    () => LEVELS.filter((level) => filters.levels[level]),
+    [filters.levels],
+  );
+
+  const loadLogs = async () => {
+    setLoading(true);
+    try {
+      const response = await fetchLogs({
+        level: levelFilter,
+        q: filters.query || undefined,
+        limit: 300,
+      });
+      setLogs(response.items.map(mapRecord));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load logs.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadLogs();
+    const timer = setInterval(() => {
+      void loadLogs();
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [filters.query, levelFilter.join(',')]);
+
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
       if (!filters.levels[log.level]) return false;
-      if (filters.query) {
-        const q = filters.query.toLowerCase();
-        return (
-          log.message.toLowerCase().includes(q) ||
-          (log.subsystem?.toLowerCase().includes(q) ?? false)
-        );
-      }
-      return true;
+      if (!filters.query) return true;
+      const q = filters.query.toLowerCase();
+      return (
+        log.message.toLowerCase().includes(q) ||
+        (log.subsystem?.toLowerCase().includes(q) ?? false)
+      );
     });
   }, [logs, filters]);
-
-  const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => {
-      // Simulate new logs arriving
-      const newLogs = generateMockLogs(5);
-      setLogs((prev) => [...prev, ...newLogs].slice(-100)); // Keep last 100
-      setLoading(false);
-    }, 800);
-  };
 
   const handleExport = () => {
     const blob = new Blob([filteredLogs.map((l) => l.raw).join('\n')], { type: 'text/plain' });
@@ -108,11 +119,15 @@ export function LogsPage() {
     <div className="flex-1 flex flex-col min-w-0 h-full bg-background overflow-hidden">
       <LogsHeader
         loading={loading}
-        onRefresh={handleRefresh}
+        onRefresh={() => void loadLogs()}
         onExport={handleExport}
         filters={filters}
         onFilterChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
       />
+
+      {error ? (
+        <div className="px-6 py-3 text-sm text-rose-500 border-b border-border/40">{error}</div>
+      ) : null}
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
@@ -153,18 +168,7 @@ export function LogsPage() {
               value="live"
               className="flex-1 h-full m-0 focus-visible:outline-none flex flex-col min-h-0 text-foreground overflow-hidden"
             >
-              <LogsStream
-                entries={filteredLogs}
-                autoFollow={filters.autoFollow}
-                onScroll={(e) => {
-                  // If user scrolls up, disable auto-follow
-                  const target = e.currentTarget;
-                  const isAtBottom = target.scrollHeight - target.scrollTop === target.clientHeight;
-                  if (!isAtBottom && filters.autoFollow) {
-                    setFilters((prev) => ({ ...prev, autoFollow: false }));
-                  }
-                }}
-              />
+              <LogsStream entries={filteredLogs} autoFollow={filters.autoFollow} />
             </TabsContent>
 
             <TabsContent
@@ -182,15 +186,12 @@ export function LogsPage() {
               className="flex-1 h-full m-0 flex flex-col justify-center items-center"
             >
               <div className="flex-1 flex flex-col items-center justify-center h-full p-12 text-center opacity-40">
-                <div className="w-16 h-16 rounded-3xl bg-muted/20 border border-border/40 flex items-center justify-center mb-4 transition-transform hover:scale-105">
+                <div className="w-16 h-16 rounded-3xl bg-muted/20 border border-border/40 flex items-center justify-center mb-4">
                   <History size={32} />
                 </div>
-                <h3 className="text-sm font-bold uppercase tracking-widest mb-1">
-                  Archive Unavailable
-                </h3>
+                <h3 className="text-sm font-bold uppercase tracking-widest mb-1">Archive</h3>
                 <p className="text-xs max-w-xs leading-relaxed">
-                  Log archiving is not configured for this environment. Please check your gateway
-                  settings.
+                  Logs are backed by SQLite. Use export for snapshots.
                 </p>
               </div>
             </TabsContent>
@@ -198,17 +199,14 @@ export function LogsPage() {
         </Tabs>
       </div>
 
-      {/* Connection Info footer */}
       <div className="px-6 py-2 border-t border-border/40 bg-muted/20 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Connected to Gateway
           </div>
-          <div className="flex items-center gap-1.5">File: gateway.jsonl</div>
-          <div className="flex items-center gap-1.5 text-primary/60">
-            {filteredLogs.length} Entries
-          </div>
+          <div className="flex items-center gap-1.5">SQLite source</div>
+          <div className="flex items-center gap-1.5 text-primary/60">{filteredLogs.length} Entries</div>
         </div>
         <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40">
           Last Updated: {new Date().toLocaleTimeString()}

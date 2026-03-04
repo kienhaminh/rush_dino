@@ -1,4 +1,11 @@
-import type { AppConfigView, Conversation, CredentialsView, Message } from './types';
+import type {
+  AppConfigView,
+  Conversation,
+  CredentialsView,
+  FetchLogsResponse,
+  Message,
+  UsageMetricsResponse,
+} from './types';
 import type {
   AgentRecord,
   AgentRuntimeData,
@@ -220,6 +227,50 @@ export async function fetchWorkflowRuns(
 
 export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunDetail> {
   const endpoint = `/api/workflow-runs/${encodeURIComponent(runId)}`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchLogs(params?: {
+  level?: string[];
+  q?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<FetchLogsResponse> {
+  const query = new URLSearchParams();
+  if (params?.level?.length) {
+    query.set('level', params.level.join(','));
+  }
+  if (params?.q) {
+    query.set('q', params.q);
+  }
+  if (params?.limit != null) {
+    query.set('limit', String(params.limit));
+  }
+  if (params?.cursor) {
+    query.set('cursor', params.cursor);
+  }
+  const endpoint = `/api/logs${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchUsageMetrics(params?: {
+  start?: string;
+  end?: string;
+  provider?: string;
+  model?: string;
+  conversationId?: string;
+  limit?: number;
+}): Promise<UsageMetricsResponse> {
+  const query = new URLSearchParams();
+  if (params?.start) query.set('start', params.start);
+  if (params?.end) query.set('end', params.end);
+  if (params?.provider) query.set('provider', params.provider);
+  if (params?.model) query.set('model', params.model);
+  if (params?.conversationId) query.set('conversation_id', params.conversationId);
+  if (params?.limit != null) query.set('limit', String(params.limit));
+  const endpoint = `/api/usage/metrics${query.size ? `?${query.toString()}` : ''}`;
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
 }

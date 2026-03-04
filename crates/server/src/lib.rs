@@ -1,6 +1,7 @@
 pub mod approval_gate;
 mod knowledge_graph_bridge;
 pub mod middleware;
+mod runtime_log_store;
 pub mod routes;
 pub mod state;
 pub mod static_files;
@@ -29,6 +30,7 @@ use crate::{
     approval_gate::ApprovalGate,
     knowledge_graph_bridge::KnowledgeGraphBridge,
     middleware::{cors_layer, hmac_auth_middleware, rate_limit_middleware, HmacAuthState},
+    runtime_log_store::RuntimeLogStore,
     webchat::WebChatAdapter,
 };
 
@@ -37,7 +39,7 @@ pub async fn run_server() -> Result<()> {
     let home = init::default_home_dir();
     let config_path = home.join("config.toml");
     let credentials_path = home.join("credentials.toml");
-    let config = Arc::new(AppConfig::load()?);
+    let config = Arc::new(AppConfig::load_and_reconcile()?);
     let mut credentials = CredentialsConfig::load()?;
 
     let effective_provider = resolve_effective_provider(config.as_ref(), &mut credentials).await?;
@@ -53,6 +55,31 @@ pub async fn run_server() -> Result<()> {
     let pool = db::init_pool(&config.db_path).await?;
     db::run_migrations(&pool).await?;
     let pool = Arc::new(pool);
+    let runtime_logs = Arc::new(RuntimeLogStore::new(pool.clone()));
+    let _ = log_runtime(
+        &runtime_logs,
+        "info",
+        "server",
+        "server startup initialized",
+        Some(serde_json::json!({
+            "dbPath": config.db_path.display().to_string(),
+            "dataDir": config.data_dir.display().to_string(),
+        })),
+    )
+    .await;
+    if effective_provider != config.active_provider {
+        let _ = log_runtime(
+            &runtime_logs,
+            "warn",
+            "provider",
+            "provider fallback engaged",
+            Some(serde_json::json!({
+                "from": format!("{:?}", config.active_provider),
+                "to": format!("{:?}", effective_provider),
+            })),
+        )
+        .await;
+    }
 
     let provider = Arc::new(Provider::from_config(&provider_config)?);
     let knowledge_graph_service = if config.knowledge_graph.enabled {
@@ -75,6 +102,7 @@ pub async fn run_server() -> Result<()> {
         pool.clone(),
         config.data_dir.clone(),
         credentials.brave_api_key.clone(),
+        provider_kind_label(&effective_provider).to_owned(),
         AgentConfig::default(),
         Some(gate.clone() as Arc<dyn ToolApproval>),
         knowledge_graph_bridge,
@@ -97,8 +125,24 @@ pub async fn run_server() -> Result<()> {
                 config.clone(),
             ));
             tracing::info!("gateway: telegram adapter registered");
+            let _ = log_runtime(
+                &runtime_logs,
+                "info",
+                "gateway.telegram",
+                "telegram adapter registered",
+                None,
+            )
+            .await;
         } else {
             tracing::warn!("gateway: telegram enabled but token missing");
+            let _ = log_runtime(
+                &runtime_logs,
+                "warn",
+                "gateway.telegram",
+                "telegram enabled but token missing",
+                None,
+            )
+            .await;
         }
     }
 
@@ -111,8 +155,24 @@ pub async fn run_server() -> Result<()> {
         {
             gateway.register(rushdino_discord::DiscordAdapter::new(token));
             tracing::info!("gateway: discord adapter registered");
+            let _ = log_runtime(
+                &runtime_logs,
+                "info",
+                "gateway.discord",
+                "discord adapter registered",
+                None,
+            )
+            .await;
         } else {
             tracing::warn!("gateway: discord enabled but token missing");
+            let _ = log_runtime(
+                &runtime_logs,
+                "warn",
+                "gateway.discord",
+                "discord enabled but token missing",
+                None,
+            )
+            .await;
         }
     }
 
@@ -123,8 +183,24 @@ pub async fn run_server() -> Result<()> {
         if !bot.is_empty() && !app.is_empty() {
             gateway.register(rushdino_slack::SlackAdapter::new(bot, app));
             tracing::info!("gateway: slack adapter registered");
+            let _ = log_runtime(
+                &runtime_logs,
+                "info",
+                "gateway.slack",
+                "slack adapter registered",
+                None,
+            )
+            .await;
         } else {
             tracing::warn!("gateway: slack enabled but tokens missing");
+            let _ = log_runtime(
+                &runtime_logs,
+                "warn",
+                "gateway.slack",
+                "slack enabled but tokens missing",
+                None,
+            )
+            .await;
         }
     }
 
@@ -133,12 +209,29 @@ pub async fn run_server() -> Result<()> {
     if config.gateway.webchat.enabled {
         gateway.register_arc(webchat.clone() as Arc<dyn rushdino_gateway::ChannelAdapter>);
         tracing::info!("gateway: webchat adapter registered");
+        let _ = log_runtime(
+            &runtime_logs,
+            "info",
+            "gateway.webchat",
+            "webchat adapter registered",
+            None,
+        )
+        .await;
     }
 
     // Spawn the gateway in a background task.
+    let runtime_logs_c = runtime_logs.clone();
     tokio::spawn(async move {
         if let Err(err) = gateway.start().await {
             tracing::error!("gateway exited with error: {err}");
+            let _ = runtime_logs_c
+                .insert(
+                    "error",
+                    "gateway",
+                    "gateway exited with error",
+                    Some(serde_json::json!({ "error": err.to_string() })),
+                )
+                .await;
         }
     });
 
@@ -180,6 +273,7 @@ pub async fn run_server() -> Result<()> {
         hmac_auth,
         rate_limiters,
         knowledge_graph_service.clone(),
+        runtime_logs.clone(),
     );
 
     let app = Router::new()
@@ -187,6 +281,8 @@ pub async fn run_server() -> Result<()> {
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
         .route("/api/conversations", get(routes::conversations::list_conversations))
+        .route("/api/logs", get(routes::logs::get_logs))
+        .route("/api/usage/metrics", get(routes::usage_metrics::get_usage_metrics))
         .route("/api/agents", get(routes::agents::list_agents))
         .route("/api/agents/progress", get(routes::agent_progress::get_agent_progress))
         .route("/api/agents/:id/runtime", get(routes::agents::get_agent_runtime))
@@ -243,10 +339,38 @@ pub async fn run_server() -> Result<()> {
     let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
     tracing::info!("rushdino server listening on http://{addr}");
+    let _ = log_runtime(
+        &runtime_logs,
+        "info",
+        "server",
+        "server listening",
+        Some(serde_json::json!({ "addr": addr })),
+    )
+    .await;
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| AppError::Agent(format!("server error: {e}")))
+}
+
+async fn log_runtime(
+    store: &RuntimeLogStore,
+    level: &str,
+    target: &str,
+    message: &str,
+    fields: Option<serde_json::Value>,
+) -> Result<()> {
+    store.insert(level, target, message, fields).await
+}
+
+fn provider_kind_label(kind: &ProviderKind) -> &'static str {
+    match kind {
+        ProviderKind::Ollama => "ollama",
+        ProviderKind::Openai => "openai",
+        ProviderKind::Anthropic => "anthropic",
+        ProviderKind::Codex => "codex",
+        ProviderKind::Plugin => "plugin",
+    }
 }
 
 async fn resolve_effective_provider(
@@ -346,11 +470,6 @@ fn select_provider_config(
         }
         ProviderKind::Openai => {
             let api_key = credentials.openai_api_key.clone().unwrap_or_default();
-            if api_key.trim().is_empty() {
-                return Err(AppError::Provider(
-                    "openai provider requires openai_api_key".to_owned(),
-                ));
-            }
             Ok(ProviderConfig::OpenAI {
                 api_key,
                 model: config.openai.model.clone(),
@@ -359,11 +478,6 @@ fn select_provider_config(
         }
         ProviderKind::Anthropic => {
             let api_key = credentials.anthropic_api_key.clone().unwrap_or_default();
-            if api_key.trim().is_empty() {
-                return Err(AppError::Provider(
-                    "anthropic provider requires anthropic_api_key".to_owned(),
-                ));
-            }
             Ok(ProviderConfig::Anthropic {
                 api_key,
                 model: config.anthropic.model.clone(),
@@ -381,11 +495,6 @@ fn select_provider_config(
         }
         ProviderKind::Codex => {
             let access_token = credentials.codex_access_token.clone().unwrap_or_default();
-            if access_token.trim().is_empty() {
-                return Err(AppError::Provider(
-                    "codex provider requires codex_access_token".to_owned(),
-                ));
-            }
             Ok(ProviderConfig::Codex {
                 access_token,
                 model: config.codex.model.clone(),
@@ -447,13 +556,16 @@ mod tests {
     }
 
     #[test]
-    fn fallback_to_openai_requires_key() {
+    fn fallback_to_openai_works_without_key() {
         let mut config = rushdino_common::AppConfig::default();
         config.active_provider = ProviderKind::Codex;
         config.codex_fallback_provider = Some(ProviderKind::Openai);
         let credentials = rushdino_common::CredentialsConfig::default();
 
-        assert!(fallback_provider_on_codex_failure(&config, &credentials, "refresh failed").is_err());
+        let selected =
+            fallback_provider_on_codex_failure(&config, &credentials, "refresh failed")
+                .expect("fallback should be selected");
+        assert_eq!(selected, ProviderKind::Openai);
     }
 
     #[test]

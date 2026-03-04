@@ -5055,6 +5055,7 @@ dependencies = [
  "rust-embed",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "toml",
  "tower-http 0.5.2",

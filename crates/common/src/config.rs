@@ -218,6 +218,15 @@ impl AppConfig {
         Self::load_from_path(&config_path)
     }
 
+    pub fn load_and_reconcile() -> Result<Self> {
+        let home = init::canonical_home_dir();
+        let config_path = home.join("config.toml");
+        let mut config = Self::load_from_path(&config_path)?;
+        reconcile_storage_paths(&mut config, &home)?;
+        config.save_to_path(&config_path)?;
+        Ok(config)
+    }
+
     pub fn load_from_path(path: &Path) -> Result<Self> {
         let figment = Figment::from(Serialized::defaults(Self::default()))
             .merge(Toml::file(path))
@@ -236,6 +245,71 @@ impl AppConfig {
         fs::rename(&tmp_path, path)?;
         Ok(())
     }
+}
+
+fn reconcile_storage_paths(config: &mut AppConfig, home: &Path) -> Result<()> {
+    let canonical_data_dir = init::canonical_data_dir(home);
+    let canonical_db_path = init::canonical_db_path(home);
+    let current_data_dir = absolute_from_home(&config.data_dir, home);
+    let current_db_path = absolute_from_home(&config.db_path, home);
+
+    let data_outside_home = !is_within_home(&current_data_dir, home);
+    let db_outside_home = !is_within_home(&current_db_path, home);
+    if !data_outside_home && !db_outside_home {
+        return Ok(());
+    }
+
+    fs::create_dir_all(&canonical_data_dir)?;
+    if data_outside_home {
+        for dir in ["agents", "skills", "documents", "memory", "plugins", "logs"] {
+            copy_dir_if_missing(&current_data_dir.join(dir), &canonical_data_dir.join(dir))?;
+        }
+    }
+
+    if db_outside_home && current_db_path.exists() && !canonical_db_path.exists() {
+        if let Some(parent) = canonical_db_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(&current_db_path, &canonical_db_path)?;
+    }
+
+    config.data_dir = canonical_data_dir;
+    config.db_path = canonical_db_path;
+    Ok(())
+}
+
+fn absolute_from_home(path: &Path, home: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        home.join(path)
+    }
+}
+
+fn is_within_home(path: &Path, home: &Path) -> bool {
+    path.starts_with(home)
+}
+
+fn copy_dir_if_missing(src: &Path, dst: &Path) -> Result<()> {
+    if !src.exists() || !src.is_dir() {
+        return Ok(());
+    }
+
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_if_missing(&src_path, &dst_path)?;
+        } else if !dst_path.exists() {
+            if let Some(parent) = dst_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::copy(&src_path, &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 impl CredentialsConfig {

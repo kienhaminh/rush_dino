@@ -86,3 +86,55 @@ export interface CredentialsView {
   slack_bot_token?: string;
   slack_app_token?: string;
 }
+
+export interface RuntimeLogRecord {
+  id: string;
+  level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | string;
+  target: string;
+  message: string;
+  fields?: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface FetchLogsResponse {
+  items: RuntimeLogRecord[];
+  nextCursor?: string;
+}
+
+export interface UsageMetricRow {
+  id: string;
+  conversationId: string;
+  provider: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  createdAt: string;
+}
+
+export interface UsageTotals {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  rowCount: number;
+}
+
+export interface UsageAggregateKey {
+  key: string;
+  totals: UsageTotals;
+}
+
+export interface DailyUsageEntry {
+  date: string;
+  totals: UsageTotals;
+}
+
+export interface UsageMetricsResponse {
+  items: UsageMetricRow[];
+  aggregates: {
+    totals: UsageTotals;
+    byProvider: UsageAggregateKey[];
+    byModel: UsageAggregateKey[];
+  };
+  daily: DailyUsageEntry[];
+}

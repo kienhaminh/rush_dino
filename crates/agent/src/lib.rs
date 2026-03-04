@@ -13,6 +13,7 @@ pub mod react_loop;
 pub mod skill_manager;
 pub mod tool_registry;
 pub mod tools;
+pub mod usage_metrics_store;
 pub mod workflow_manager;
 pub mod workflow_runner;
 pub mod workflow_types;
@@ -28,6 +29,7 @@ pub use knowledge_graph::KnowledgeGraphAccess;
 pub use skill_manager::{Skill, SkillManager};
 pub use tool_registry::{Tool, ToolRegistry};
 pub use tools::shell_exec::{ToolApproval, ToolApprovalRequest};
+pub use usage_metrics_store::{UsageMetricRow, UsageMetricsStore};
 pub use workflow_types::{
     CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem, WorkflowRunDetail,
     WorkflowRunListItem, WorkflowRunStartResponse, WorkflowSource, WorkflowStatus, WorkflowStepInput,

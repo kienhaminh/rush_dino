@@ -38,6 +38,7 @@ use crate::{
 };
 
 pub struct EngineDeps {
+    pub pool: Arc<SqlitePool>,
     pub conversation: Arc<ConversationManager>,
     pub tool_registry: Arc<ToolRegistry>,
     pub job_manager: Arc<JobManager>,
@@ -136,6 +137,7 @@ pub fn build_engine_deps(
     memory.render_tool_doc(&registry.names())?;
 
     Ok(EngineDeps {
+        pool: pool.clone(),
         conversation: Arc::new(ConversationManager::new(pool)),
         tool_registry: registry,
         job_manager: jobs,

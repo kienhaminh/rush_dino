@@ -8,7 +8,7 @@ pub async fn run(foreground: bool) -> Result<()> {
         return rushdino_server::run_server().await;
     }
 
-    let config = AppConfig::load()?;
+    let config = AppConfig::load_and_reconcile()?;
     let home = init::default_home_dir();
     let log_path = home.join("logs/rushdino.log");
 

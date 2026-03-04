@@ -20,6 +20,7 @@ use crate::{
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     tool_registry::ToolRegistry,
     tools::shell_exec::{with_tool_execution_context, ToolApproval, ToolExecutionContext},
+    usage_metrics_store::UsageMetricsStore,
     workflow_manager::WorkflowManager,
     workflow_runner::WorkflowRunner,
     workflow_types::{
@@ -57,6 +58,8 @@ pub struct AgentEngine {
     agent_manager: Arc<AgentManager>,
     workflow_manager: Arc<WorkflowManager>,
     workflow_runner: Arc<WorkflowRunner>,
+    usage_metrics: Arc<UsageMetricsStore>,
+    provider_name: String,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
     config: AgentConfig,
     inbox_rx: Arc<Mutex<mpsc::Receiver<JobResult>>>,
@@ -74,6 +77,7 @@ impl AgentEngine {
         pool: Arc<SqlitePool>,
         home_dir: PathBuf,
         brave_api_key: Option<String>,
+        provider_name: String,
         config: AgentConfig,
         approval: Option<Arc<dyn ToolApproval>>,
         knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
@@ -97,6 +101,7 @@ impl AgentEngine {
             deps.workflow_manager.clone(),
             config.clone(),
         ));
+        let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
 
         Ok(Self {
             provider,
@@ -108,6 +113,8 @@ impl AgentEngine {
             agent_manager: deps.agent_manager,
             workflow_manager: deps.workflow_manager,
             workflow_runner,
+            usage_metrics,
+            provider_name,
             knowledge_graph,
             config,
             inbox_rx: Arc::new(Mutex::new(deps.inbox_rx)),
@@ -186,6 +193,7 @@ impl AgentEngine {
             self.conversation.save_message(conversation_id, message).await?;
             self.maybe_ingest_message("conversation_message", message).await;
         }
+        self.persist_usage_metric(conversation_id, &response).await;
 
         Ok(response)
     }
@@ -284,7 +292,7 @@ impl AgentEngine {
             delegation_depth: 0,
         };
 
-        let (_, all_messages) = with_tool_execution_context(
+        let (response, all_messages) = with_tool_execution_context(
             context,
             run_react_loop_streaming(
                 self.provider.clone(),
@@ -303,6 +311,7 @@ impl AgentEngine {
                 .await?;
             self.maybe_ingest_message("conversation_message", message).await;
         }
+        self.persist_usage_metric(&conversation_id, &response).await;
 
         Ok(conversation_id)
     }
@@ -314,6 +323,20 @@ impl AgentEngine {
 
     pub async fn list_conversations(&self) -> Result<Vec<rushdino_common::models::Conversation>> {
         self.conversation.list_conversations().await
+    }
+
+    pub async fn list_usage_metrics(
+        &self,
+        start: Option<&str>,
+        end: Option<&str>,
+        provider: Option<&str>,
+        model: Option<&str>,
+        conversation_id: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<crate::usage_metrics_store::UsageMetricRow>> {
+        self.usage_metrics
+            .list_usage(start, end, provider, model, conversation_id, limit)
+            .await
     }
 
     pub async fn get_conversation_messages(&self, id: &str) -> Result<Vec<Message>> {
@@ -413,6 +436,25 @@ impl AgentEngine {
         };
         if let Err(err) = graph.ingest_text(source_type, &message.id, &message.content).await {
             tracing::debug!("knowledge graph ingest failed for {}: {err}", message.id);
+        }
+    }
+
+    async fn persist_usage_metric(&self, conversation_id: &str, response: &ChatResponse) {
+        let Some(usage) = response.usage.as_ref() else {
+            return;
+        };
+
+        if let Err(err) = self
+            .usage_metrics
+            .insert_usage(
+                conversation_id,
+                &self.provider_name,
+                self.provider.model(),
+                usage,
+            )
+            .await
+        {
+            tracing::warn!("failed to persist usage metric: {err}");
         }
     }
 
