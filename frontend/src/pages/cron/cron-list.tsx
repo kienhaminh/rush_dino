@@ -2,6 +2,13 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   ClockIcon,
   CalendarIcon,
   ArchiveIcon,
@@ -58,24 +65,32 @@ export function CronList({
       {/* Filters & Sorting */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-end">
         <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto scrollbar-none">
-          <select
-            className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm"
+          <Select
             value={filters.enabled}
-            onChange={(e) => onFilterChange({ enabled: e.target.value as CronJobsEnabledFilter })}
+            onValueChange={(value) => onFilterChange({ enabled: value as CronJobsEnabledFilter })}
           >
-            <option value="all">All States</option>
-            <option value="enabled">Enabled</option>
-            <option value="disabled">Disabled</option>
-          </select>
-          <select
-            className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm"
+            <SelectTrigger className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All States</SelectItem>
+              <SelectItem value="enabled">Enabled</SelectItem>
+              <SelectItem value="disabled">Disabled</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
             value={filters.sortBy}
-            onChange={(e) => onFilterChange({ sortBy: e.target.value as CronJobsSortBy })}
+            onValueChange={(value) => onFilterChange({ sortBy: value as CronJobsSortBy })}
           >
-            <option value="nextRunAtMs">Sort: Next Run</option>
-            <option value="updatedAtMs">Sort: Recently Updated</option>
-            <option value="name">Sort: Name</option>
-          </select>
+            <SelectTrigger className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="nextRunAtMs">Sort: Next Run</SelectItem>
+              <SelectItem value="updatedAtMs">Sort: Recently Updated</SelectItem>
+              <SelectItem value="name">Sort: Name</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

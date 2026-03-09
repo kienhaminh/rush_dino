@@ -13,7 +13,11 @@ use rushdino_common::{AppConfig, AppError, Result};
 
 use crate::util::{escape_html, split_message};
 
-pub async fn run_bot(token: String, engine: Arc<AgentEngine>, config: Arc<AppConfig>) -> Result<()> {
+pub async fn run_bot(
+    token: String,
+    engine: Arc<AgentEngine>,
+    config: Arc<AppConfig>,
+) -> Result<()> {
     let bot = Bot::new(token);
     let start = Instant::now();
 

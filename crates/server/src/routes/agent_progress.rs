@@ -31,6 +31,7 @@ pub async fn get_agent_progress(
     State(state): State<AppState>,
     Query(query): Query<AgentProgressQuery>,
 ) -> Result<Json<AgentProgressResponse>> {
+    let engine = state.engine()?;
     let lookback_minutes = query
         .lookback_minutes
         .unwrap_or(DEFAULT_LOOKBACK_MINUTES)
@@ -41,8 +42,7 @@ pub async fn get_agent_progress(
         .unwrap_or(DEFAULT_ACTIVE_WINDOW_SECONDS)
         .clamp(1, 3600);
 
-    let lanes = state
-        .engine
+    let lanes = engine
         .build_agent_progress_lanes(lookback_minutes, per_column, active_window_seconds)
         .await?;
 

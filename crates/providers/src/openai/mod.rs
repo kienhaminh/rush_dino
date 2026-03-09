@@ -12,6 +12,7 @@ use self::mapping::{
 };
 
 pub mod codex_refresh;
+pub mod codex_responses;
 mod mapping;
 
 #[derive(Clone)]
@@ -44,7 +45,10 @@ impl OpenAIProvider {
 
         let mut req = self
             .client
-            .post(format!("{}/chat/completions", self.base_url.trim_end_matches('/')))
+            .post(format!(
+                "{}/chat/completions",
+                self.base_url.trim_end_matches('/')
+            ))
             .json(&body)
             .timeout(std::time::Duration::from_secs(60));
 
@@ -81,7 +85,10 @@ impl OpenAIProvider {
 
         let mut req = self
             .client
-            .post(format!("{}/chat/completions", self.base_url.trim_end_matches('/')))
+            .post(format!(
+                "{}/chat/completions",
+                self.base_url.trim_end_matches('/')
+            ))
             .json(&body)
             .timeout(std::time::Duration::from_secs(60));
 
@@ -133,7 +140,8 @@ impl OpenAIProvider {
                             .and_then(Value::as_str)
                             .unwrap_or_default()
                             .to_owned();
-                        let tool_calls = parse_tool_calls(value.pointer("/choices/0/delta/tool_calls"));
+                        let tool_calls =
+                            parse_tool_calls(value.pointer("/choices/0/delta/tool_calls"));
                         let _ = tx
                             .send(ChatChunk {
                                 delta,

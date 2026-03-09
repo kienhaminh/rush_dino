@@ -107,6 +107,14 @@ export function TelegramCard({
                 {telegram?.lastStartAt ? formatTime(telegram.lastStartAt) : 'n/a'}
               </span>
             </div>
+            <div className="flex justify-between items-center text-muted-foreground pt-2 border-t border-border/50 col-span-2">
+              <span>Paired users</span>
+              <span className="font-medium text-foreground">{telegram?.pairedCount ?? 0}</span>
+            </div>
+            <div className="flex justify-between items-center text-muted-foreground col-span-2 mt-1">
+              <span>Pending pairing</span>
+              <span className="font-medium text-foreground">{telegram?.pendingPairingCount ?? 0}</span>
+            </div>
           </div>
         )}
 

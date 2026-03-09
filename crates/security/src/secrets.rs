@@ -3,7 +3,7 @@ use aes_gcm::{
     Aes256Gcm, Key, Nonce,
 };
 use argon2::{Argon2, Params};
-use rand::{RngCore, rngs::OsRng};
+use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zeroize::{Zeroize, ZeroizeOnDrop};
@@ -51,14 +51,20 @@ pub fn derive_key(password: &[u8], salt: &[u8; SALT_LEN]) -> Result<SecretKey, S
 /// Encrypt `plaintext` with AES-256-GCM using the given key.
 ///
 /// Vault layout: `nonce(12) || salt(32) || ciphertext`
-pub fn encrypt_vault(plaintext: &[u8], key: &SecretKey, salt: &[u8; SALT_LEN]) -> Result<Vec<u8>, SecretsError> {
+pub fn encrypt_vault(
+    plaintext: &[u8],
+    key: &SecretKey,
+    salt: &[u8; SALT_LEN],
+) -> Result<Vec<u8>, SecretsError> {
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key.0));
 
     let mut nonce_bytes = [0u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let ciphertext = cipher.encrypt(nonce, plaintext).map_err(|_| SecretsError::EncryptionFailed)?;
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext)
+        .map_err(|_| SecretsError::EncryptionFailed)?;
 
     let mut blob = Vec::with_capacity(NONCE_LEN + SALT_LEN + ciphertext.len());
     blob.extend_from_slice(&nonce_bytes);
@@ -81,7 +87,9 @@ pub fn decrypt_vault(blob: &[u8], key: &SecretKey) -> Result<Vec<u8>, SecretsErr
     let ciphertext = &blob[NONCE_LEN + SALT_LEN..];
 
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key.0));
-    cipher.decrypt(nonce, ciphertext).map_err(|_| SecretsError::DecryptionFailed)
+    cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| SecretsError::DecryptionFailed)
 }
 
 /// Extract the salt embedded in a vault blob (bytes [12..44]).
@@ -103,20 +111,22 @@ pub fn generate_salt() -> [u8; SALT_LEN] {
 
 /// Encrypt a `Serialize`able value into a vault blob.
 pub fn seal<T: Serialize>(value: &T, password: &[u8]) -> Result<Vec<u8>, SecretsError> {
-    let plaintext = serde_json::to_vec(value)
-        .map_err(|e| SecretsError::Serialization(e.to_string()))?;
+    let plaintext =
+        serde_json::to_vec(value).map_err(|e| SecretsError::Serialization(e.to_string()))?;
     let salt = generate_salt();
     let key = derive_key(password, &salt)?;
     encrypt_vault(&plaintext, &key, &salt)
 }
 
 /// Decrypt a vault blob and deserialize the value.
-pub fn unseal<T: for<'de> Deserialize<'de>>(blob: &[u8], password: &[u8]) -> Result<T, SecretsError> {
+pub fn unseal<T: for<'de> Deserialize<'de>>(
+    blob: &[u8],
+    password: &[u8],
+) -> Result<T, SecretsError> {
     let salt = extract_salt(blob)?;
     let key = derive_key(password, &salt)?;
     let plaintext = decrypt_vault(blob, &key)?;
-    serde_json::from_slice(&plaintext)
-        .map_err(|e| SecretsError::Serialization(e.to_string()))
+    serde_json::from_slice(&plaintext).map_err(|e| SecretsError::Serialization(e.to_string()))
 }
 
 #[cfg(test)]
@@ -146,7 +156,10 @@ mod tests {
 
     #[test]
     fn wrong_password_fails() {
-        let payload = TestPayload { api_key: "sk-x".to_owned(), token: "y".to_owned() };
+        let payload = TestPayload {
+            api_key: "sk-x".to_owned(),
+            token: "y".to_owned(),
+        };
         let blob = seal(&payload, b"correct").expect("seal");
         let result: Result<TestPayload, _> = unseal(&blob, b"wrong");
         assert!(result.is_err());

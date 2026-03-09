@@ -19,8 +19,14 @@ export type ChannelSettingField = {
   options?: Array<{ label: string; value: string }>;
 };
 
-const DM_POLICY_OPTIONS = [
+const DM_POLICY_OPTIONS_WITH_PAIRING = [
   { label: 'Pairing', value: 'pairing' },
+  { label: 'Allow list', value: 'allowlist' },
+  { label: 'Open', value: 'open' },
+  { label: 'Disabled', value: 'disabled' },
+];
+
+const DM_POLICY_OPTIONS_STANDARD = [
   { label: 'Allow list', value: 'allowlist' },
   { label: 'Open', value: 'open' },
   { label: 'Disabled', value: 'disabled' },
@@ -50,43 +56,54 @@ const REPLY_TO_MODE_OPTIONS = [
   { label: 'All', value: 'all' },
 ];
 
-const COMMON_ACCESS_FIELDS: ChannelSettingField[] = [
-  {
-    key: 'dmPolicy',
-    label: 'DM Policy',
-    section: 'Access Control',
-    type: 'select',
-    options: DM_POLICY_OPTIONS,
-  },
-  {
-    key: 'allowFrom',
-    label: 'Allow List',
-    section: 'Access Control',
-    type: 'list',
-    placeholder: 'IDs / usernames / handles (comma or newline separated)',
-  },
-  {
-    key: 'groupPolicy',
-    label: 'Group Policy',
-    section: 'Access Control',
-    type: 'select',
-    options: GROUP_POLICY_OPTIONS,
-  },
-  {
-    key: 'groupAllowFrom',
-    label: 'Group Allow List',
-    section: 'Access Control',
-    type: 'list',
-    placeholder: 'Group sender allow list',
-  },
-  {
-    key: 'defaultTo',
-    label: 'Default Delivery Target',
-    section: 'Access Control',
-    type: 'text',
-    placeholder: 'Default target when no explicit reply target is provided',
-  },
-];
+export function defaultDmPolicyForChannel(channel: ChannelKey) {
+  return channel === 'telegram' || channel === 'discord' ? 'pairing' : 'open';
+}
+
+function createCommonAccessFields(
+  dmPolicyOptions: Array<{ label: string; value: string }>,
+): ChannelSettingField[] {
+  return [
+    {
+      key: 'dmPolicy',
+      label: 'DM Policy',
+      section: 'Access Control',
+      type: 'select',
+      options: dmPolicyOptions,
+    },
+    {
+      key: 'allowFrom',
+      label: 'Allow List',
+      section: 'Access Control',
+      type: 'list',
+      placeholder: 'IDs / usernames / handles (comma or newline separated)',
+    },
+    {
+      key: 'groupPolicy',
+      label: 'Group Policy',
+      section: 'Access Control',
+      type: 'select',
+      options: GROUP_POLICY_OPTIONS,
+    },
+    {
+      key: 'groupAllowFrom',
+      label: 'Group Allow List',
+      section: 'Access Control',
+      type: 'list',
+      placeholder: 'Group sender allow list',
+    },
+    {
+      key: 'defaultTo',
+      label: 'Default Delivery Target',
+      section: 'Access Control',
+      type: 'text',
+      placeholder: 'Default target when no explicit reply target is provided',
+    },
+  ];
+}
+
+const PAIRING_ACCESS_FIELDS = createCommonAccessFields(DM_POLICY_OPTIONS_WITH_PAIRING);
+const STANDARD_ACCESS_FIELDS = createCommonAccessFields(DM_POLICY_OPTIONS_STANDARD);
 
 const COMMON_MESSAGE_FIELDS: ChannelSettingField[] = [
   {
@@ -156,22 +173,55 @@ const TELEGRAM_FIELDS: ChannelSettingField[] = [
     type: 'secret',
     placeholder: '123456:ABC...',
   },
-  {
-    key: 'tokenFile',
-    label: 'Token File',
-    section: 'Connection',
-    type: 'text',
-    description: 'Optional path to token file.',
-  },
   { key: 'proxy', label: 'Proxy URL', section: 'Connection', type: 'text' },
-  { key: 'webhookUrl', label: 'Webhook URL', section: 'Connection', type: 'text' },
-  { key: 'webhookSecret', label: 'Webhook Secret', section: 'Connection', type: 'secret' },
-  { key: 'webhookPath', label: 'Webhook Path', section: 'Connection', type: 'text' },
-  { key: 'webhookHost', label: 'Webhook Host', section: 'Connection', type: 'text' },
-  { key: 'webhookPort', label: 'Webhook Port', section: 'Connection', type: 'number' },
-  { key: 'timeoutSeconds', label: 'API Timeout (s)', section: 'Connection', type: 'number' },
-  ...COMMON_ACCESS_FIELDS,
-  ...COMMON_MESSAGE_FIELDS,
+  {
+    key: 'dmPolicy',
+    label: 'DM Policy',
+    section: 'Access Control',
+    type: 'select',
+    options: DM_POLICY_OPTIONS_WITH_PAIRING,
+  },
+  {
+    key: 'allowFrom',
+    label: 'Allow List',
+    section: 'Access Control',
+    type: 'list',
+    placeholder: 'IDs / usernames / handles (comma or newline separated)',
+  },
+  {
+    key: 'groupPolicy',
+    label: 'Group Policy',
+    section: 'Access Control',
+    type: 'select',
+    options: GROUP_POLICY_OPTIONS,
+  },
+  {
+    key: 'historyLimit',
+    label: 'Group History Limit',
+    section: 'Message Handling',
+    type: 'number',
+    placeholder: '0 to disable',
+  },
+  {
+    key: 'textChunkLimit',
+    label: 'Text Chunk Limit',
+    section: 'Message Handling',
+    type: 'number',
+  },
+  {
+    key: 'streaming',
+    label: 'Streaming Mode',
+    section: 'Message Handling',
+    type: 'select',
+    options: STREAMING_OPTIONS,
+  },
+  {
+    key: 'nativeStreaming',
+    label: 'Native Draft Streaming',
+    section: 'Message Handling',
+    type: 'boolean',
+    description: 'Stream direct-message replies as Telegram draft previews when supported.',
+  },
   {
     key: 'replyToMode',
     label: 'Reply To Mode',
@@ -203,16 +253,6 @@ const TELEGRAM_FIELDS: ChannelSettingField[] = [
     ],
   },
   { key: 'linkPreview', label: 'Enable Link Preview', section: 'Message Handling', type: 'boolean' },
-  { key: 'permissions.readMessages', label: 'Read Messages', section: 'Permissions', type: 'boolean' },
-  { key: 'permissions.writeMessages', label: 'Write Messages', section: 'Permissions', type: 'boolean' },
-  { key: 'permissions.updateMessages', label: 'Update Messages', section: 'Permissions', type: 'boolean' },
-  { key: 'permissions.deleteMessages', label: 'Delete Messages', section: 'Permissions', type: 'boolean' },
-  { key: 'actions.reactions', label: 'Allow Reactions', section: 'Actions', type: 'boolean' },
-  { key: 'actions.sendMessage', label: 'Allow Send Message', section: 'Actions', type: 'boolean' },
-  { key: 'actions.editMessage', label: 'Allow Edit Message', section: 'Actions', type: 'boolean' },
-  { key: 'actions.deleteMessage', label: 'Allow Delete Message', section: 'Actions', type: 'boolean' },
-  { key: 'actions.sticker', label: 'Allow Sticker', section: 'Actions', type: 'boolean' },
-  { key: 'actions.createForumTopic', label: 'Allow Forum Topic Creation', section: 'Actions', type: 'boolean' },
 ];
 
 const DISCORD_FIELDS: ChannelSettingField[] = [
@@ -223,10 +263,48 @@ const DISCORD_FIELDS: ChannelSettingField[] = [
     type: 'secret',
     placeholder: 'Discord bot token',
   },
-  { key: 'proxy', label: 'Proxy URL', section: 'Connection', type: 'text' },
   { key: 'allowBots', label: 'Allow Bot Messages', section: 'Access Control', type: 'boolean' },
-  ...COMMON_ACCESS_FIELDS,
-  ...COMMON_MESSAGE_FIELDS,
+  {
+    key: 'dmPolicy',
+    label: 'DM Policy',
+    section: 'Access Control',
+    type: 'select',
+    options: DM_POLICY_OPTIONS_WITH_PAIRING,
+  },
+  {
+    key: 'allowFrom',
+    label: 'Allow List',
+    section: 'Access Control',
+    type: 'list',
+    placeholder: 'IDs / usernames / handles (comma or newline separated)',
+  },
+  {
+    key: 'groupPolicy',
+    label: 'Group Policy',
+    section: 'Access Control',
+    type: 'select',
+    options: GROUP_POLICY_OPTIONS,
+  },
+  {
+    key: 'historyLimit',
+    label: 'Group History Limit',
+    section: 'Message Handling',
+    type: 'number',
+    placeholder: '0 to disable',
+  },
+  {
+    key: 'textChunkLimit',
+    label: 'Text Chunk Limit',
+    section: 'Message Handling',
+    type: 'number',
+  },
+  {
+    key: 'streaming',
+    label: 'Streaming Mode',
+    section: 'Message Handling',
+    type: 'select',
+    options: STREAMING_OPTIONS,
+  },
   {
     key: 'replyToMode',
     label: 'Reply To Mode',
@@ -240,68 +318,6 @@ const DISCORD_FIELDS: ChannelSettingField[] = [
     section: 'Message Handling',
     type: 'number',
   },
-  {
-    key: 'ackReactionScope',
-    label: 'Ack Reaction Scope',
-    section: 'Message Handling',
-    type: 'select',
-    options: [
-      { label: 'Group Mentions', value: 'group-mentions' },
-      { label: 'Group All', value: 'group-all' },
-      { label: 'Direct', value: 'direct' },
-      { label: 'All', value: 'all' },
-      { label: 'Off', value: 'off' },
-    ],
-  },
-  { key: 'activity', label: 'Presence Activity', section: 'Presence', type: 'text' },
-  {
-    key: 'status',
-    label: 'Presence Status',
-    section: 'Presence',
-    type: 'select',
-    options: [
-      { label: 'Online', value: 'online' },
-      { label: 'Do Not Disturb', value: 'dnd' },
-      { label: 'Idle', value: 'idle' },
-      { label: 'Invisible', value: 'invisible' },
-    ],
-  },
-  { key: 'activityType', label: 'Activity Type', section: 'Presence', type: 'number' },
-  { key: 'activityUrl', label: 'Activity URL', section: 'Presence', type: 'text' },
-  { key: 'intents.presence', label: 'Enable Presence Intent', section: 'Presence', type: 'boolean' },
-  {
-    key: 'intents.guildMembers',
-    label: 'Enable Guild Members Intent',
-    section: 'Presence',
-    type: 'boolean',
-  },
-  { key: 'threadBindings.enabled', label: 'Enable Thread Bindings', section: 'Thread Bindings', type: 'boolean' },
-  { key: 'threadBindings.idleHours', label: 'Thread Idle Hours', section: 'Thread Bindings', type: 'number' },
-  {
-    key: 'threadBindings.maxAgeHours',
-    label: 'Thread Max Age Hours',
-    section: 'Thread Bindings',
-    type: 'number',
-  },
-  {
-    key: 'execApprovals.enabled',
-    label: 'Enable Exec Approvals',
-    section: 'Approvals',
-    type: 'boolean',
-  },
-  {
-    key: 'execApprovals.approvers',
-    label: 'Approval Recipients',
-    section: 'Approvals',
-    type: 'list',
-    placeholder: 'Discord user IDs',
-  },
-  { key: 'actions.reactions', label: 'Allow Reactions', section: 'Actions', type: 'boolean' },
-  { key: 'actions.messages', label: 'Allow Messages', section: 'Actions', type: 'boolean' },
-  { key: 'actions.threads', label: 'Allow Threads', section: 'Actions', type: 'boolean' },
-  { key: 'actions.permissions', label: 'Allow Permission Ops', section: 'Actions', type: 'boolean' },
-  { key: 'actions.search', label: 'Allow Search', section: 'Actions', type: 'boolean' },
-  { key: 'actions.presence', label: 'Allow Presence Changes', section: 'Actions', type: 'boolean' },
 ];
 
 const SLACK_FIELDS: ChannelSettingField[] = [
@@ -319,7 +335,6 @@ const SLACK_FIELDS: ChannelSettingField[] = [
     type: 'secret',
     placeholder: 'xapp-...',
   },
-  { key: 'userToken', label: 'User Token', section: 'Connection', type: 'secret' },
   { key: 'signingSecret', label: 'Signing Secret', section: 'Connection', type: 'secret' },
   {
     key: 'mode',
@@ -334,8 +349,47 @@ const SLACK_FIELDS: ChannelSettingField[] = [
   { key: 'webhookPath', label: 'Webhook Path', section: 'Connection', type: 'text' },
   { key: 'allowBots', label: 'Allow Bot Messages', section: 'Access Control', type: 'boolean' },
   { key: 'requireMention', label: 'Require Mention', section: 'Access Control', type: 'boolean' },
-  ...COMMON_ACCESS_FIELDS,
-  ...COMMON_MESSAGE_FIELDS,
+  {
+    key: 'dmPolicy',
+    label: 'DM Policy',
+    section: 'Access Control',
+    type: 'select',
+    options: DM_POLICY_OPTIONS_STANDARD,
+  },
+  {
+    key: 'allowFrom',
+    label: 'Allow List',
+    section: 'Access Control',
+    type: 'list',
+    placeholder: 'IDs / usernames / handles (comma or newline separated)',
+  },
+  {
+    key: 'groupPolicy',
+    label: 'Group Policy',
+    section: 'Access Control',
+    type: 'select',
+    options: GROUP_POLICY_OPTIONS,
+  },
+  {
+    key: 'historyLimit',
+    label: 'Group History Limit',
+    section: 'Message Handling',
+    type: 'number',
+    placeholder: '0 to disable',
+  },
+  {
+    key: 'textChunkLimit',
+    label: 'Text Chunk Limit',
+    section: 'Message Handling',
+    type: 'number',
+  },
+  {
+    key: 'streaming',
+    label: 'Streaming Mode',
+    section: 'Message Handling',
+    type: 'select',
+    options: STREAMING_OPTIONS,
+  },
   {
     key: 'replyToMode',
     label: 'Reply To Mode',
@@ -356,39 +410,6 @@ const SLACK_FIELDS: ChannelSettingField[] = [
       { label: 'Allow list', value: 'allowlist' },
     ],
   },
-  {
-    key: 'reactionAllowlist',
-    label: 'Reaction Notification Allow List',
-    section: 'Message Handling',
-    type: 'list',
-  },
-  {
-    key: 'thread.historyScope',
-    label: 'Thread History Scope',
-    section: 'Threads',
-    type: 'select',
-    options: [
-      { label: 'Thread', value: 'thread' },
-      { label: 'Channel', value: 'channel' },
-    ],
-  },
-  { key: 'thread.inheritParent', label: 'Inherit Parent Transcript', section: 'Threads', type: 'boolean' },
-  {
-    key: 'thread.initialHistoryLimit',
-    label: 'Thread Initial History Limit',
-    section: 'Threads',
-    type: 'number',
-  },
-  { key: 'slashCommand.enabled', label: 'Enable Slash Command', section: 'Commands', type: 'boolean' },
-  { key: 'slashCommand.name', label: 'Slash Command Name', section: 'Commands', type: 'text' },
-  { key: 'slashCommand.sessionPrefix', label: 'Slash Session Prefix', section: 'Commands', type: 'text' },
-  { key: 'slashCommand.ephemeral', label: 'Slash Replies Ephemeral', section: 'Commands', type: 'boolean' },
-  { key: 'actions.reactions', label: 'Allow Reactions', section: 'Actions', type: 'boolean' },
-  { key: 'actions.messages', label: 'Allow Messages', section: 'Actions', type: 'boolean' },
-  { key: 'actions.pins', label: 'Allow Pins', section: 'Actions', type: 'boolean' },
-  { key: 'actions.search', label: 'Allow Search', section: 'Actions', type: 'boolean' },
-  { key: 'actions.permissions', label: 'Allow Permission Ops', section: 'Actions', type: 'boolean' },
-  { key: 'actions.memberInfo', label: 'Allow Member Info', section: 'Actions', type: 'boolean' },
 ];
 
 const WHATSAPP_FIELDS: ChannelSettingField[] = [
@@ -397,7 +418,7 @@ const WHATSAPP_FIELDS: ChannelSettingField[] = [
   { key: 'sendReadReceipts', label: 'Send Read Receipts', section: 'Message Handling', type: 'boolean' },
   { key: 'messagePrefix', label: 'Inbound Message Prefix', section: 'Message Handling', type: 'text' },
   { key: 'debounceMs', label: 'Debounce (ms)', section: 'Message Handling', type: 'number' },
-  ...COMMON_ACCESS_FIELDS,
+  ...STANDARD_ACCESS_FIELDS,
   ...COMMON_MESSAGE_FIELDS,
   { key: 'ackReaction.emoji', label: 'Ack Emoji', section: 'Reactions', type: 'text' },
   { key: 'ackReaction.direct', label: 'Ack in Direct Chats', section: 'Reactions', type: 'boolean' },
@@ -420,7 +441,7 @@ const WHATSAPP_FIELDS: ChannelSettingField[] = [
 const GOOGLE_CHAT_FIELDS: ChannelSettingField[] = [
   { key: 'allowBots', label: 'Allow Bot Messages', section: 'Access Control', type: 'boolean' },
   { key: 'requireMention', label: 'Require Mention', section: 'Access Control', type: 'boolean' },
-  ...COMMON_ACCESS_FIELDS,
+  ...STANDARD_ACCESS_FIELDS,
   ...COMMON_MESSAGE_FIELDS,
   {
     key: 'replyToMode',
@@ -488,7 +509,7 @@ const SIGNAL_FIELDS: ChannelSettingField[] = [
   { key: 'ignoreAttachments', label: 'Ignore Attachments', section: 'Message Handling', type: 'boolean' },
   { key: 'ignoreStories', label: 'Ignore Stories', section: 'Message Handling', type: 'boolean' },
   { key: 'sendReadReceipts', label: 'Send Read Receipts', section: 'Message Handling', type: 'boolean' },
-  ...COMMON_ACCESS_FIELDS,
+  ...STANDARD_ACCESS_FIELDS,
   ...COMMON_MESSAGE_FIELDS,
   {
     key: 'reactionNotifications',
@@ -550,14 +571,14 @@ const IMESSAGE_FIELDS: ChannelSettingField[] = [
     placeholder: 'Allowed remote attachment roots',
   },
   { key: 'probeTimeoutMs', label: 'Probe Timeout (ms)', section: 'Connection', type: 'number' },
-  ...COMMON_ACCESS_FIELDS,
+  ...STANDARD_ACCESS_FIELDS,
   ...COMMON_MESSAGE_FIELDS,
 ];
 
 const NOSTR_FIELDS: ChannelSettingField[] = [
   { key: 'privateKey', label: 'Private Key', section: 'Connection', type: 'secret' },
   { key: 'relays', label: 'Relay URLs', section: 'Connection', type: 'list' },
-  ...COMMON_ACCESS_FIELDS,
+  ...STANDARD_ACCESS_FIELDS,
   {
     key: 'profile.name',
     label: 'Profile Name',

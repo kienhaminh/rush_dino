@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use rushdino_common::{config::ProviderKind, AppConfig, AppError, Result};
 
+use crate::provider_runtime::default_profile_model;
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -118,9 +119,11 @@ struct SkillDoc {
 }
 
 pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
-    let mut items = state.engine.list_agent_templates();
+    let engine = state.engine()?;
+    let config = state.config();
+    let mut items = engine.list_agent_templates();
     items.sort_by(|a, b| a.name.cmp(&b.name));
-    let default_model = active_model(state.config.as_ref());
+    let default_model = active_model(config.as_ref());
 
     let mapped = items
         .into_iter()
@@ -129,8 +132,7 @@ pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_jso
             name: humanize_agent_name(&agent.name),
             emoji: agent.icon.unwrap_or_else(|| "🤖".to_owned()),
             is_default: agent.name == "general-assistant",
-            workspace: state
-                .config
+            workspace: config
                 .data_dir
                 .join("agents")
                 .join(format!("{}.toml", agent.name))
@@ -148,27 +150,34 @@ pub async fn get_agent_runtime(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<AgentRuntimeResponse>> {
+    let engine = state.engine()?;
+    let config = state.config();
     if !is_valid_agent_id(&id) {
         return Err(AppError::Validation("invalid agent id".to_owned()));
     }
 
-    let _ = state
-        .engine
+    let _ = engine
         .get_agent_template(&id)
         .ok_or_else(|| AppError::Validation(format!("unknown agent: {id}")))?;
 
-    let agents_dir = state.config.data_dir.join("agents");
-    let skills_dir = state.config.data_dir.join("skills");
+    let agents_dir = config.data_dir.join("agents");
+    let skills_dir = config.data_dir.join("skills");
     let file = read_agent_file_record(&agents_dir, &id);
     let mut files = vec![file];
-    
+
     // Add workspace files
-    for ws_file in ["SOUL.md", "AGENTS.md", "USER.md", "IDENTITY.md", "TOOLS.md", "HEARTBEAT.md"] {
+    for ws_file in [
+        "SOUL.md",
+        "AGENTS.md",
+        "USER.md",
+        "IDENTITY.md",
+        "TOOLS.md",
+        "HEARTBEAT.md",
+    ] {
         files.push(read_workspace_file_record(&agents_dir, &id, ws_file));
     }
 
-    let tools = state
-        .engine
+    let tools = engine
         .tool_registry
         .definitions()
         .into_iter()
@@ -214,12 +223,19 @@ pub async fn update_agent_file(
     State(state): State<AppState>,
     Json(payload): Json<UpdateAgentFileRequest>,
 ) -> Result<Json<AgentFileRecord>> {
-    if !is_valid_agent_id(&agent_id) || file_name.contains('/') || file_name.contains('\\') || file_name.is_empty() {
-        return Err(AppError::Validation("invalid agent id or filename".to_owned()));
+    let config = state.config();
+    if !is_valid_agent_id(&agent_id)
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.is_empty()
+    {
+        return Err(AppError::Validation(
+            "invalid agent id or filename".to_owned(),
+        ));
     }
 
-    let agents_dir = state.config.data_dir.join("agents");
-    
+    let agents_dir = config.data_dir.join("agents");
+
     // Determine path based on if it's the core agent definition or a workspace file
     let path = if file_name == format!("{}.toml", agent_id) {
         agents_dir.join(&file_name)
@@ -242,18 +258,34 @@ pub async fn update_agent_file(
     Ok(Json(record))
 }
 
+pub async fn delete_agent(
+    Path(agent_id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>> {
+    let engine = state.engine()?;
+    if !is_valid_agent_id(&agent_id) {
+        return Err(AppError::Validation("invalid agent id".to_owned()));
+    }
+
+    if agent_id == "general-assistant" {
+        return Err(AppError::Validation(
+            "cannot delete the default general-assistant template".to_owned(),
+        ));
+    }
+
+    engine.delete_agent_template(&agent_id)?;
+    Ok(Json(serde_json::json!({ "deleted": true, "id": agent_id })))
+}
+
 fn is_valid_agent_id(id: &str) -> bool {
     !id.is_empty() && !id.starts_with('.') && !id.contains('/') && !id.contains('\\')
 }
 
 fn active_model(config: &AppConfig) -> String {
-    match config.active_provider {
-        ProviderKind::Ollama => config.ollama.model.clone(),
-        ProviderKind::Openai => config.openai.model.clone(),
-        ProviderKind::Anthropic => config.anthropic.model.clone(),
-        ProviderKind::Codex => config.codex.model.clone(),
+    default_profile_model(config).unwrap_or_else(|| match config.active_provider {
         ProviderKind::Plugin => "plugin".to_owned(),
-    }
+        _ => "unavailable".to_owned(),
+    })
 }
 
 fn humanize_agent_name(raw: &str) -> String {
@@ -307,7 +339,11 @@ fn read_agent_file_record(agents_dir: &PathBuf, agent_id: &str) -> AgentFileReco
     }
 }
 
-fn read_workspace_file_record(agents_dir: &PathBuf, agent_id: &str, file_name: &str) -> AgentFileRecord {
+fn read_workspace_file_record(
+    agents_dir: &PathBuf,
+    agent_id: &str,
+    file_name: &str,
+) -> AgentFileRecord {
     let workspace_dir = agents_dir.join(agent_id);
     let path = workspace_dir.join(file_name);
     let path_display = path.display().to_string();

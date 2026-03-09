@@ -46,6 +46,7 @@ mod tests {
             role,
             content: content.to_owned(),
             tool_calls: None,
+            rich_content: None,
             created_at: Utc::now(),
         }
     }

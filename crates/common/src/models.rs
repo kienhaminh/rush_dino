@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::FromRow;
 
+use crate::rich_content::RichContent;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -32,6 +34,8 @@ pub struct Message {
     pub role: Role,
     pub content: String,
     pub tool_calls: Option<Vec<ToolCall>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rich_content: Option<RichContent>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -50,6 +54,7 @@ pub struct StoredMessage {
     pub role: String,
     pub content: String,
     pub tool_calls: Option<String>,
+    pub rich_content: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

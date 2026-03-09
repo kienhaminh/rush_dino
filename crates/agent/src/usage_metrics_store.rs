@@ -68,7 +68,7 @@ impl UsageMetricsStore {
             "SELECT id, conversation_id, provider, model, prompt_tokens, completion_tokens, total_tokens, created_at \
              FROM usage_metrics \
              WHERE (?1 IS NULL OR created_at >= ?1) \
-               AND (?2 IS NULL OR created_at <= ?2) \
+               AND (?2 IS NULL OR created_at < ?2) \
                AND (?3 IS NULL OR provider = ?3) \
                AND (?4 IS NULL OR model = ?4) \
                AND (?5 IS NULL OR conversation_id = ?5) \

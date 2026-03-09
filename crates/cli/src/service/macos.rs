@@ -66,13 +66,11 @@ impl ServiceManager for LaunchdManager {
     fn install_and_start(&self, binary_path: &str, log_path: &str) -> Result<()> {
         let plist = Self::plist_path();
 
-        // Write the plist first — launchctl unload needs the file to exist.
         if let Some(parent) = plist.parent() {
             fs::create_dir_all(parent)?;
         }
         fs::write(&plist, Self::plist_content(binary_path, log_path))?;
 
-        // Unload any running instance now that the plist file exists.
         if self.is_running() {
             let _ = Command::new("launchctl")
                 .args(["unload", plist.to_str().unwrap_or("")])
@@ -97,7 +95,6 @@ impl ServiceManager for LaunchdManager {
         let plist = Self::plist_path();
 
         if !plist.exists() {
-            // Plist was removed externally; fall back to label-based removal.
             let _ = Command::new("launchctl").args(["remove", LABEL]).status();
             return Ok(());
         }

@@ -15,9 +15,26 @@ use rushdino_common::{AppError, Result};
 
 /// HTML page returned to the browser after a successful OAuth callback.
 const SUCCESS_HTML: &str = r#"<!doctype html>
-<html lang="en"><head><meta charset="utf-8"/>
-<title>Authentication successful</title></head>
-<body><p>Authentication successful. Return to your terminal.</p></body>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Authentication successful</title>
+</head>
+<body>
+  <p id="status">Authentication successful. This tab can close now.</p>
+  <script>
+    window.addEventListener("load", () => {
+      window.close();
+      setTimeout(() => {
+        const status = document.getElementById("status");
+        if (status) {
+          status.textContent =
+            "Authentication successful. You can close this tab and return to your terminal.";
+        }
+      }, 300);
+    });
+  </script>
+</body>
 </html>"#;
 
 /// Start a local HTTP server on `:1455`, wait for the OAuth callback, and return

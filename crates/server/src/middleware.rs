@@ -13,9 +13,7 @@ use axum::{
 use tower_http::cors::CorsLayer;
 
 use rushdino_common::AppConfig;
-use rushdino_security::{
-    auth_hmac::{verify_request, AuthError, NonceCache},
-};
+use rushdino_security::auth_hmac::{verify_request, AuthError, NonceCache};
 
 use crate::state::AppState;
 
@@ -65,7 +63,10 @@ pub struct HmacAuthState {
 
 impl HmacAuthState {
     pub fn new(secret: Vec<u8>) -> Self {
-        Self { secret, nonce_cache: Arc::new(NonceCache::new()) }
+        Self {
+            secret,
+            nonce_cache: Arc::new(NonceCache::new()),
+        }
     }
 }
 
@@ -182,8 +183,7 @@ pub async fn rate_limit_middleware(
             tracing::debug!(
                 "rate limit exceeded for {ip} on {path}; retry after {retry_after_secs}s"
             );
-            let mut resp =
-                (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").into_response();
+            let mut resp = (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded").into_response();
             if let Ok(v) = HeaderValue::from_str(&retry_after_secs.to_string()) {
                 resp.headers_mut().insert("Retry-After", v);
             }

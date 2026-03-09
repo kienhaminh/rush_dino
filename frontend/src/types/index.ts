@@ -11,6 +11,10 @@ export interface Message {
   role: Role;
   content: string;
   tool_calls?: ToolCall[];
+  rich_content?: {
+    fallbackText: string;
+    blocks: Array<Record<string, unknown>>;
+  } | null;
   created_at?: string;
 }
 

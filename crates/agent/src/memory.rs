@@ -27,15 +27,9 @@ impl MemoryManager {
                 sections.push(fs::read_to_string(path)?);
             }
         }
-        
-        // Load Tool Definitions (dynamic)
-        let tool_path = self.root.join("memory").join("TOOL.md");
-        if tool_path.exists() {
-            sections.push(fs::read_to_string(tool_path)?);
-        }
 
-        // Load Memory from memory/
-        let memory_md = self.root.join("memory").join("MEMORY.md");
+        // Load canonical MEMORY.md, falling back to the legacy nested path during migration.
+        let memory_md = self.current_memory_path();
         if memory_md.exists() {
             sections.push(fs::read_to_string(memory_md)?);
         }
@@ -45,7 +39,11 @@ impl MemoryManager {
             .date_naive()
             .checked_sub_days(Days::new(1))
             .unwrap_or_else(|| Utc::now().date_naive());
-        let daily = self.root.join("memory").join("daily").join(format!("{yesterday}.md"));
+        let daily = self
+            .root
+            .join("memory")
+            .join("daily")
+            .join(format!("{yesterday}.md"));
         if daily.exists() {
             sections.push(fs::read_to_string(daily)?);
         }
@@ -54,35 +52,86 @@ impl MemoryManager {
     }
 
     pub fn read_named(&self, file_name: &str) -> Result<String> {
-        // Allow reading from root or memory/
-        let path = sanitize(self.root.clone(), file_name);
+        let path = self.resolve_named_path(file_name);
         Ok(fs::read_to_string(path)?)
     }
 
     pub fn write_memory(&self, content: &str, daily: bool) -> Result<PathBuf> {
         let path = if daily {
             let today = Utc::now().date_naive();
-            self.root.join("memory").join("daily").join(format!("{today}.md"))
+            self.root
+                .join("memory")
+                .join("daily")
+                .join(format!("{today}.md"))
         } else {
-            self.root.join("memory").join("MEMORY.md")
+            self.canonical_memory_path()
         };
         fs::write(&path, content)?;
         Ok(path)
     }
 
-    pub fn render_tool_doc(&self, names: &[String]) -> Result<()> {
-        let lines = names
-            .iter()
-            .map(|name| format!("- {name}"))
-            .collect::<Vec<_>>()
-            .join("\n");
-        // Always write to memory/TOOL.md to keep root clean
-        fs::write(self.root.join("memory").join("TOOL.md"), format!("# TOOL\n\n{lines}\n"))?;
-        Ok(())
+    fn canonical_memory_path(&self) -> PathBuf {
+        self.root.join("MEMORY.md")
+    }
+
+    fn legacy_memory_path(&self) -> PathBuf {
+        self.root.join("memory").join("MEMORY.md")
+    }
+
+    fn current_memory_path(&self) -> PathBuf {
+        let canonical = self.canonical_memory_path();
+        if canonical.exists() {
+            canonical
+        } else {
+            self.legacy_memory_path()
+        }
+    }
+
+    fn resolve_named_path(&self, file_name: &str) -> PathBuf {
+        let normalized = file_name.replace('\\', "/");
+        let trimmed = normalized.trim_start_matches('/');
+        if trimmed.eq_ignore_ascii_case("MEMORY.md")
+            || trimmed.eq_ignore_ascii_case("memory/MEMORY.md")
+        {
+            return self.current_memory_path();
+        }
+        sanitize(self.root.clone(), trimmed)
     }
 }
 
 fn sanitize(base: PathBuf, file_name: &str) -> PathBuf {
     let safe = file_name.replace("..", "").replace('\\', "/");
     base.join(safe.trim_start_matches('/'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_root_memory_first() {
+      let root = std::env::temp_dir().join(format!("rushdino-memory-{}", uuid::Uuid::new_v4()));
+      fs::create_dir_all(root.join("memory")).expect("memory dir");
+      fs::write(root.join("MEMORY.md"), "root memory").expect("root memory");
+      fs::write(root.join("memory/MEMORY.md"), "legacy memory").expect("legacy memory");
+
+      let manager = MemoryManager::new(root.clone());
+      let content = manager.read_named("MEMORY.md").expect("read memory");
+      assert_eq!(content, "root memory");
+
+      let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn falls_back_to_legacy_memory_path() {
+      let root = std::env::temp_dir().join(format!("rushdino-memory-{}", uuid::Uuid::new_v4()));
+      fs::create_dir_all(root.join("memory")).expect("memory dir");
+      fs::write(root.join("memory/MEMORY.md"), "legacy memory").expect("legacy memory");
+
+      let manager = MemoryManager::new(root.clone());
+      let content = manager.read_named("MEMORY.md").expect("read memory");
+      assert_eq!(content, "legacy memory");
+
+      let _ = fs::remove_dir_all(root);
+    }
 }

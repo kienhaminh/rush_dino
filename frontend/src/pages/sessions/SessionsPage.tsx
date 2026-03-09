@@ -1,314 +1,123 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Trash2, RefreshCw } from 'lucide-react';
+import { Link as RouterLink } from 'react-router-dom';
+
 import { Badge } from '@/components/ui/badge';
-import {
-  MessageSquareIcon,
-  SearchIcon,
-  DownloadIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-} from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import type { SessionSummary } from '@/lib/types';
 
-export type SessionsListResult = any;
-
-export type SessionsProps = {
+type SessionsPageProps = {
+  sessions: SessionSummary[];
   loading: boolean;
-  result: SessionsListResult | null;
   error: string | null;
-  activeMinutes: string;
-  limit: string;
-  includeGlobal: boolean;
-  includeUnknown: boolean;
-  basePath: string;
-  onFiltersChange: (next: {
-    activeMinutes: string;
-    limit: string;
-    includeGlobal: boolean;
-    includeUnknown: boolean;
-  }) => void;
   onRefresh: () => void;
-  onPatch: (
-    key: string,
-    patch: {
-      label?: string | null;
-      thinkingLevel?: string | null;
-      verboseLevel?: string | null;
-      reasoningLevel?: string | null;
-    },
-  ) => void;
-  onDelete: (key: string) => void;
+  onDelete: (sessionId: string) => void;
 };
 
-const THINK_LEVELS = ['', 'off', 'minimal', 'low', 'medium', 'high', 'xhigh'];
-const VERBOSE_LEVELS = [
-  { value: '', label: 'inherit' },
-  { value: 'off', label: 'off (explicit)' },
-  { value: 'on', label: 'on' },
-  { value: 'full', label: 'full' },
-];
-const REASONING_LEVELS = ['', 'off', 'on', 'stream'];
+function toneForStatus(status: string) {
+  switch (status) {
+    case 'awaiting_approval':
+      return 'border-amber-500/30 text-amber-600 dark:text-amber-400';
+    case 'active':
+      return 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400';
+    case 'blocked':
+      return 'border-rose-500/30 text-rose-600 dark:text-rose-400';
+    default:
+      return 'border-border/50 text-muted-foreground';
+  }
+}
 
-export function SessionsPage(props: SessionsProps) {
-  const rows = props.result?.sessions ?? [];
-  const [search, setSearch] = useState('');
-
-  const filteredRows = search
-    ? rows.filter(
-        (r: any) =>
-          r.key?.includes(search) || r.label?.includes(search) || r.displayName?.includes(search),
-      )
-    : rows;
-
+export function SessionsPage({ sessions, loading, error, onRefresh, onDelete }: SessionsPageProps) {
   return (
-    <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
-      <div className="w-full space-y-8 pb-12">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end pb-2 gap-4">
-          <div>
-            <p className="text-muted-foreground mt-2 text-sm max-w-xl">
-              Store: <span className="font-mono text-xs">{props.result?.path || 'N/A'}</span>
-            </p>
-          </div>
-          <button
-            disabled={props.loading}
-            onClick={props.onRefresh}
-            className="flex items-center gap-2 text-xs font-medium bg-background border border-border hover:bg-secondary transition-colors h-9 px-4 rounded disabled:opacity-50"
-          >
-            <RefreshCwIcon className={`w-4 h-4 ${props.loading ? 'animate-spin' : ''}`} />
-            {props.loading ? 'Refreshing...' : 'Refresh'}
-          </button>
+    <div className="flex-1 min-w-0 h-full overflow-y-auto bg-background px-6 py-6 md:px-8 md:py-8 flex flex-col gap-6 w-full">
+      <section className="rounded-[28px] border border-border/60 bg-card/70 p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+            Sessions are treated as active assistant workspaces. This view makes approvals,
+            recent activity, and cleanup a normal UI workflow instead of a CLI chore.
+          </p>
+          <Button onClick={onRefresh} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
+      </section>
 
-        {props.error && (
-          <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-md text-sm">
-            {props.error}
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex flex-wrap gap-4 items-end bg-card p-4 rounded-lg border border-border/50">
-          <div className="relative flex-1 min-w-[200px]">
-            <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Filter listed sessions..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-background border-border h-9"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5 w-[120px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Active Within
-            </label>
-            <Input
-              className="h-9"
-              value={props.activeMinutes}
-              onChange={(e) =>
-                props.onFiltersChange({
-                  activeMinutes: e.target.value,
-                  limit: props.limit,
-                  includeGlobal: props.includeGlobal,
-                  includeUnknown: props.includeUnknown,
-                })
-              }
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5 w-[100px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Limit
-            </label>
-            <Input
-              className="h-9"
-              value={props.limit}
-              onChange={(e) =>
-                props.onFiltersChange({
-                  activeMinutes: props.activeMinutes,
-                  limit: e.target.value,
-                  includeGlobal: props.includeGlobal,
-                  includeUnknown: props.includeUnknown,
-                })
-              }
-            />
-          </div>
-
-          <div className="flex gap-4 items-center h-9 px-2">
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                checked={props.includeGlobal}
-                onChange={(e) =>
-                  props.onFiltersChange({
-                    activeMinutes: props.activeMinutes,
-                    limit: props.limit,
-                    includeGlobal: e.target.checked,
-                    includeUnknown: props.includeUnknown,
-                  })
-                }
-                className="rounded border-border bg-background"
-              />
-              Global
-            </label>
-            <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
-              <input
-                type="checkbox"
-                checked={props.includeUnknown}
-                onChange={(e) =>
-                  props.onFiltersChange({
-                    activeMinutes: props.activeMinutes,
-                    limit: props.limit,
-                    includeGlobal: props.includeGlobal,
-                    includeUnknown: e.target.checked,
-                  })
-                }
-                className="rounded border-border bg-background"
-              />
-              Unknown
-            </label>
-          </div>
+      {error ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
         </div>
+      ) : null}
 
-        {/* Sessions Table */}
-        <Card className="bg-card border-border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Session Key</th>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Label</th>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Kind</th>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Tokens</th>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Thinking</th>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Verbose</th>
-                  <th className="px-4 py-3 font-medium uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {filteredRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                      No sessions found matching current filters.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRows.map((row: any) => {
-                    const isGlobal = row.kind === 'global';
-                    return (
-                      <tr key={row.key} className="hover:bg-muted/30 transition-colors group">
-                        <td className="px-4 py-4 align-top">
-                          <div className="flex flex-col">
-                            {isGlobal ? (
-                              <span className="font-mono text-foreground font-medium">
-                                {row.key}
-                              </span>
-                            ) : (
-                              <a
-                                href={`${props.basePath}?session=${encodeURIComponent(row.key)}`}
-                                className="font-mono text-primary hover:underline font-medium"
-                              >
-                                {row.key}
-                              </a>
-                            )}
-                            {row.displayName && row.displayName !== row.key && (
-                              <span className="text-xs text-muted-foreground mt-1">
-                                {row.displayName}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4 align-top">
-                          <Input
-                            className="h-8 text-xs bg-background max-w-[150px]"
-                            placeholder="(optional label)"
-                            defaultValue={row.label || ''}
-                            disabled={props.loading}
-                            onBlur={(e) => {
-                              if (e.target.value !== (row.label || '')) {
-                                props.onPatch(row.key, { label: e.target.value || null });
-                              }
-                            }}
-                          />
-                        </td>
-                        <td className="px-4 py-4 align-top">
-                          <Badge
-                            variant="outline"
-                            className="capitalize text-[10px] bg-background/50"
-                          >
-                            {row.kind}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-4 align-top font-mono text-xs text-muted-foreground">
-                          {row.tokens || '0'}
-                        </td>
-                        <td className="px-4 py-4 align-top">
-                          <Select
-                            disabled={props.loading}
-                            value={row.thinkingLevel || ''}
-                            onValueChange={(val) =>
-                              props.onPatch(row.key, { thinkingLevel: val || null })
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs w-[110px]">
-                              <SelectValue placeholder="Inherit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">Inherit</SelectItem>
-                              {THINK_LEVELS.filter(Boolean).map((l) => (
-                                <SelectItem key={l} value={l} className="capitalize">
-                                  {l}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-4 py-4 align-top">
-                          <Select
-                            disabled={props.loading}
-                            value={row.verboseLevel || ''}
-                            onValueChange={(val) =>
-                              props.onPatch(row.key, { verboseLevel: val || null })
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs w-[110px]">
-                              <SelectValue placeholder="Inherit" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {VERBOSE_LEVELS.map((l) => (
-                                <SelectItem key={l.value} value={l.value || 'inherit'}>
-                                  {l.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </td>
-                        <td className="px-4 py-4 align-top">
-                          <button
-                            disabled={props.loading}
-                            onClick={() => props.onDelete(row.key)}
-                            className="p-2 text-destructive hover:bg-destructive/10 rounded-md transition-colors disabled:opacity-50"
-                            title="Delete Session"
-                          >
-                            <Trash2Icon className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
+      <Card className="border-border/60 bg-card/80">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Conversation sessions</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {sessions.length ? (
+            sessions.map((session) => (
+              <div
+                key={session.id}
+                className="flex flex-col gap-4 rounded-3xl border border-border/50 bg-background/50 px-4 py-4 lg:flex-row lg:items-start lg:justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold">{session.title}</p>
+                    <Badge variant="outline" className={`text-[10px] uppercase tracking-wider ${toneForStatus(session.status)}`}>
+                      {session.status.replace('_', ' ')}
+                    </Badge>
+                    {session.pendingApprovalCount > 0 ? (
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-amber-500/30 text-amber-600 dark:text-amber-400">
+                        {session.pendingApprovalCount} waiting
+                      </Badge>
+                    ) : null}
+                  </div>
+                  <p className="font-mono text-[11px] text-muted-foreground">{session.id}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {session.lastMessagePreview ?? 'No messages recorded yet.'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground lg:justify-end">
+                  <div>
+                    <p className="uppercase tracking-widest">Runs</p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {session.activeRunCount} active / {session.queuedRunCount} queued
+                    </p>
+                  </div>
+                  <div>
+                    <p className="uppercase tracking-widest">Messages</p>
+                    <p className="mt-1 text-sm text-foreground">{session.messageCount}</p>
+                  </div>
+                  <div>
+                    <p className="uppercase tracking-widest">Updated</p>
+                    <p className="mt-1 text-sm text-foreground">
+                      {new Date(session.updatedAt).toLocaleString()}
+                    </p>
+                  </div>
+                  {session.lastRunId ? (
+                    <Button asChild variant="outline">
+                      <RouterLink to="/runs">Open run</RouterLink>
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => onDelete(session.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-dashed border-border/60 bg-background/40 px-4 py-10 text-sm text-muted-foreground">
+              No sessions exist yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

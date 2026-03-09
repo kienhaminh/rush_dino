@@ -85,6 +85,7 @@ impl PluginProvider {
         Ok(ChatResponse {
             content: text,
             tool_calls: Vec::new(),
+            rich_content: None,
             usage: None,
             finish_reason: "stop".to_owned(),
         })

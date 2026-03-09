@@ -4,11 +4,11 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
+use crate::conversation_mapper::{map_conversation, map_message, role_to_str};
 use rushdino_common::{
     models::{Conversation, Message, ToolCall},
     AppError, Result,
 };
-use crate::conversation_mapper::{map_conversation, map_message, role_to_str};
 
 pub struct ConversationManager {
     pool: Arc<SqlitePool>,
@@ -74,11 +74,13 @@ impl ConversationManager {
     }
 
     pub async fn get_conversation(&self, id: &str) -> Result<Conversation> {
-        let row = sqlx::query("SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?1")
-            .bind(id)
-            .fetch_optional(self.pool.as_ref())
-            .await?
-            .ok_or_else(|| AppError::NotFound(format!("conversation {id} not found")))?;
+        let row = sqlx::query(
+            "SELECT id, title, created_at, updated_at FROM conversations WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(self.pool.as_ref())
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("conversation {id} not found")))?;
 
         map_conversation(row)
     }
@@ -98,15 +100,22 @@ impl ConversationManager {
             .map(serde_json::to_string)
             .transpose()
             .map_err(|e| AppError::Validation(format!("invalid tool_calls JSON: {e}")))?;
+        let rich_content = message
+            .rich_content
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| AppError::Validation(format!("invalid rich_content JSON: {e}")))?;
 
         sqlx::query(
-            "INSERT INTO messages (id, conversation_id, role, content, tool_calls, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO messages (id, conversation_id, role, content, tool_calls, rich_content, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(&message.id)
         .bind(conversation_id)
         .bind(role_to_str(&message.role))
         .bind(&message.content)
         .bind(tool_calls)
+        .bind(rich_content)
         .bind(message.created_at.to_rfc3339())
         .execute(self.pool.as_ref())
         .await?;
@@ -122,7 +131,7 @@ impl ConversationManager {
 
     pub async fn get_messages(&self, conversation_id: &str) -> Result<Vec<Message>> {
         let rows = sqlx::query(
-            "SELECT id, role, content, tool_calls, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, role, content, tool_calls, rich_content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .bind(conversation_id)
         .fetch_all(self.pool.as_ref())

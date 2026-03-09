@@ -1,4 +1,5 @@
 mod anthropic;
+pub mod catalog;
 mod openai;
 mod plugin;
 pub mod types;
@@ -6,10 +7,11 @@ pub mod types;
 use tokio::sync::mpsc;
 
 use rushdino_common::{AppError, Result};
-use types::{ChatChunk, ChatRequest, ChatResponse, ProviderConfig};
+use types::{ChatChunk, ChatRequest, ChatResponse, ModelInfo, ProviderConfig};
 
 pub use anthropic::AnthropicProvider;
 pub use openai::codex_refresh;
+pub use openai::codex_responses::CodexResponsesProvider;
 pub use openai::OpenAIProvider;
 pub use plugin::PluginProvider;
 
@@ -18,7 +20,7 @@ pub enum Provider {
     Ollama(OpenAIProvider),
     OpenAI(OpenAIProvider),
     Anthropic(AnthropicProvider),
-    Codex(OpenAIProvider),
+    Codex(CodexResponsesProvider),
     Plugin(PluginProvider),
 }
 
@@ -45,13 +47,16 @@ impl Provider {
                 model.clone(),
                 Some(api_key.clone()),
             ))),
-            ProviderConfig::Anthropic { model, api_key } => {
-                Ok(Self::Anthropic(AnthropicProvider::new(model.clone(), api_key.clone())))
-            }
-            ProviderConfig::Codex { access_token, model } => Ok(Self::Codex(OpenAIProvider::new(
-                "https://api.openai.com/v1".to_owned(),
+            ProviderConfig::Anthropic { model, api_key } => Ok(Self::Anthropic(
+                AnthropicProvider::new(model.clone(), api_key.clone()),
+            )),
+            ProviderConfig::Codex {
+                access_token,
+                model,
+            } => Ok(Self::Codex(CodexResponsesProvider::new(
                 model.clone(),
-                Some(access_token.clone()),
+                access_token.clone(),
+                None,
             ))),
             ProviderConfig::Plugin { manifest_path } => {
                 Ok(Self::Plugin(PluginProvider::from_manifest(manifest_path)?))
@@ -61,7 +66,8 @@ impl Provider {
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
         match self {
-            Self::Ollama(p) | Self::OpenAI(p) | Self::Codex(p) => p.chat(request).await,
+            Self::Ollama(p) | Self::OpenAI(p) => p.chat(request).await,
+            Self::Codex(p) => p.chat(request).await,
             Self::Anthropic(p) => p.chat(request).await,
             Self::Plugin(p) => p.chat(request).await,
         }
@@ -69,15 +75,28 @@ impl Provider {
 
     pub async fn stream_chat(&self, request: ChatRequest) -> Result<mpsc::Receiver<ChatChunk>> {
         match self {
-            Self::Ollama(p) | Self::OpenAI(p) | Self::Codex(p) => p.stream_chat(request).await,
+            Self::Ollama(p) | Self::OpenAI(p) => p.stream_chat(request).await,
+            Self::Codex(p) => p.stream_chat(request).await,
             Self::Anthropic(p) => p.stream_chat(request).await,
             Self::Plugin(p) => p.stream_chat(request).await,
         }
     }
 
+    pub async fn list_models(&self) -> Result<Vec<ModelInfo>> {
+        let kind = match self {
+            Self::Ollama(_) => rushdino_common::config::ProviderKind::Ollama,
+            Self::OpenAI(_) => rushdino_common::config::ProviderKind::Openai,
+            Self::Anthropic(_) => rushdino_common::config::ProviderKind::Anthropic,
+            Self::Codex(_) => rushdino_common::config::ProviderKind::OpenaiCodex,
+            Self::Plugin(_) => rushdino_common::config::ProviderKind::Plugin,
+        };
+        Ok(catalog::get_static_models(kind))
+    }
+
     pub fn model(&self) -> &str {
         match self {
-            Self::Ollama(p) | Self::OpenAI(p) | Self::Codex(p) => &p.model,
+            Self::Ollama(p) | Self::OpenAI(p) => &p.model,
+            Self::Codex(p) => &p.model,
             Self::Anthropic(p) => &p.model,
             Self::Plugin(p) => &p.name,
         }

@@ -26,12 +26,19 @@ pub fn map_message(row: sqlx::sqlite::SqliteRow) -> Result<Message> {
         .map(serde_json::from_str::<Vec<ToolCall>>)
         .transpose()
         .map_err(|e| AppError::Validation(format!("invalid stored tool_calls: {e}")))?;
+    let rich_content_raw: Option<String> = row.try_get("rich_content")?;
+    let rich_content = rich_content_raw
+        .as_deref()
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(|e| AppError::Validation(format!("invalid stored rich_content: {e}")))?;
 
     Ok(Message {
         id: row.try_get("id")?,
         role: parse_role(&role),
         content: row.try_get("content")?,
         tool_calls,
+        rich_content,
         created_at: parse_ts(&row.try_get::<String, _>("created_at")?)?,
     })
 }

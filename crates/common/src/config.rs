@@ -1,4 +1,4 @@
-use std::{fs, path::Path, path::PathBuf};
+use std::{collections::HashMap, fs, path::Path, path::PathBuf};
 
 use figment::{
     providers::{Env, Format, Serialized, Toml},
@@ -15,7 +15,35 @@ pub enum ProviderKind {
     Openai,
     Anthropic,
     Codex,
+    #[serde(rename = "openai_codex")]
+    OpenaiCodex,
     Plugin,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthMethod {
+    ApiKey,
+    OAuth,
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProviderProfile {
+    pub id: String,
+    pub name: String,
+    pub provider_kind: ProviderKind,
+    pub auth_method: AuthMethod,
+    pub default_model: String,
+    pub base_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProfileSecrets {
+    pub api_key: Option<String>,
+    pub access_token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub token_expires_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -84,15 +112,50 @@ impl Default for SecurityConfig {
 }
 
 /// Per-channel enable/disable flag.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DmPolicy {
+    Open,
+    Pairing,
+    Allowlist,
+    Disabled,
+}
+
+impl Default for DmPolicy {
+    fn default() -> Self {
+        Self::Open
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChannelAccessConfig {
+    #[serde(default)]
+    pub dm_policy: DmPolicy,
+    #[serde(default)]
+    pub allow_from: Vec<String>,
+}
+
+/// Per-channel enable/disable flag.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChannelConfig {
     pub enabled: bool,
+    #[serde(default)]
+    pub access: ChannelAccessConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TelegramChannelConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub access: ChannelAccessConfig,
+    #[serde(default)]
+    pub native_streaming: bool,
 }
 
 /// Gateway configuration: controls which channels are active.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayConfig {
-    pub telegram: ChannelConfig,
+    pub telegram: TelegramChannelConfig,
     pub discord: ChannelConfig,
     pub slack: ChannelConfig,
     pub webchat: ChannelConfig,
@@ -101,12 +164,55 @@ pub struct GatewayConfig {
 impl Default for GatewayConfig {
     fn default() -> Self {
         Self {
-            telegram: ChannelConfig { enabled: true },
-            discord: ChannelConfig { enabled: false },
-            slack: ChannelConfig { enabled: false },
-            webchat: ChannelConfig { enabled: true },
+            telegram: TelegramChannelConfig {
+                enabled: true,
+                access: ChannelAccessConfig {
+                    dm_policy: DmPolicy::Pairing,
+                    allow_from: Vec::new(),
+                },
+                native_streaming: false,
+            },
+            discord: ChannelConfig {
+                enabled: false,
+                access: ChannelAccessConfig {
+                    dm_policy: DmPolicy::Pairing,
+                    allow_from: Vec::new(),
+                },
+            },
+            slack: ChannelConfig {
+                enabled: false,
+                access: ChannelAccessConfig::default(),
+            },
+            webchat: ChannelConfig {
+                enabled: true,
+                access: ChannelAccessConfig::default(),
+            },
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ShellExecSandboxConfig {
+    pub enabled: bool,
+    pub workspace_root: PathBuf,
+    pub allow_network: bool,
+    pub extra_write_roots: Vec<PathBuf>,
+}
+
+impl Default for ShellExecSandboxConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            workspace_root: PathBuf::from("workspaces"),
+            allow_network: false,
+            extra_write_roots: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExecutionConfig {
+    pub shell_exec_sandbox: ShellExecSandboxConfig,
 }
 
 /// Local knowledge graph settings.
@@ -143,6 +249,10 @@ pub struct AppConfig {
     pub port: u16,
     pub log_level: String,
     pub active_provider: ProviderKind,
+    pub profiles: Vec<ProviderProfile>,
+    #[serde(default, deserialize_with = "deserialize_optional_nonempty_string")]
+    pub default_profile_id: Option<String>,
+    pub fallback_profile_ids: Vec<String>,
     pub data_dir: PathBuf,
     pub db_path: PathBuf,
     pub brave_search_endpoint: String,
@@ -150,11 +260,13 @@ pub struct AppConfig {
     pub ollama: OllamaConfig,
     pub openai: ProviderModelConfig,
     pub anthropic: ProviderModelConfig,
+    #[serde(rename = "openai_codex", alias = "codex")]
     pub codex: ProviderModelConfig,
     /// Optional provider to use when Codex token refresh fails at startup.
     pub codex_fallback_provider: Option<ProviderKind>,
     pub gateway: GatewayConfig,
     pub security: SecurityConfig,
+    pub execution: ExecutionConfig,
     pub knowledge_graph: KnowledgeGraphConfig,
 }
 
@@ -166,6 +278,9 @@ impl Default for AppConfig {
             port: 28847,
             log_level: "info".to_owned(),
             active_provider: ProviderKind::Ollama,
+            profiles: Vec::new(),
+            default_profile_id: None,
+            fallback_profile_ids: Vec::new(),
             db_path: home.join("data.db"),
             data_dir: home,
             brave_search_endpoint: "https://api.search.brave.com/res/v1/web/search".to_owned(),
@@ -186,6 +301,7 @@ impl Default for AppConfig {
             codex_fallback_provider: None,
             gateway: GatewayConfig::default(),
             security: SecurityConfig::default(),
+            execution: ExecutionConfig::default(),
             knowledge_graph: KnowledgeGraphConfig::default(),
         }
     }
@@ -193,6 +309,7 @@ impl Default for AppConfig {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CredentialsConfig {
+    pub profiles: HashMap<String, ProfileSecrets>,
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub brave_api_key: Option<String>,
@@ -228,9 +345,13 @@ impl AppConfig {
     }
 
     pub fn load_from_path(path: &Path) -> Result<Self> {
-        let figment = Figment::from(Serialized::defaults(Self::default()))
-            .merge(Toml::file(path))
-            .merge(Env::prefixed("RUSHDINO_").split("__"));
+        let mut figment = Figment::from(Serialized::defaults(Self::default()));
+        if path.exists() {
+            let raw = fs::read_to_string(path)?;
+            let normalized = normalize_legacy_config_toml(&raw);
+            figment = figment.merge(Toml::string(&normalized));
+        }
+        let figment = figment.merge(Env::prefixed("RUSHDINO_").split("__"));
         Ok(figment.extract()?)
     }
 
@@ -312,6 +433,10 @@ fn copy_dir_if_missing(src: &Path, dst: &Path) -> Result<()> {
     Ok(())
 }
 
+fn normalize_legacy_config_toml(raw: &str) -> String {
+    raw.replace("\n[codex]\n", "\n[openai_codex]\n")
+}
+
 impl CredentialsConfig {
     pub fn load() -> Result<Self> {
         let home = init::default_home_dir();
@@ -332,11 +457,29 @@ impl CredentialsConfig {
             fs::create_dir_all(parent)?;
         }
 
-        let serialized = toml::to_string(self)
-            .map_err(|e| crate::AppError::Validation(format!("failed to serialize credentials: {e}")))?;
+        let serialized = toml::to_string(self).map_err(|e| {
+            crate::AppError::Validation(format!("failed to serialize credentials: {e}"))
+        })?;
         let tmp_path = path.with_extension("tmp");
         fs::write(&tmp_path, serialized)?;
         fs::rename(tmp_path, path)?;
         Ok(())
     }
+}
+
+fn deserialize_optional_nonempty_string<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(value.and_then(|s| {
+        let trimmed = s.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        }
+    }))
 }

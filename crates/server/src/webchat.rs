@@ -1,13 +1,13 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::sync::{mpsc, Mutex};
 
 use rushdino_common::Result;
-use rushdino_gateway::{ChannelAdapter, IncomingMessage, OutgoingMessage};
+use rushdino_gateway::{
+    rich_message::render_markdown_message, AdapterContext, ChannelAdapter,
+    GatewayAdapterCapabilities, GatewayRichDeliveryMode, IncomingMessage, OutgoingMessage,
+};
 
 /// Per-client response sender: router calls send_message → client WebSocket receives it.
 type ResponseTx = mpsc::UnboundedSender<String>;
@@ -50,7 +50,13 @@ impl WebChatAdapter {
         if let Some(tx) = self.gateway_tx.get() {
             let incoming = IncomingMessage {
                 channel_id: "webchat".to_owned(),
-                sender_id: client_id,
+                sender_id: client_id.clone(),
+                actor_id: client_id.clone(),
+                actor_display: None,
+                reply_target: client_id,
+                is_direct_message: true,
+                enable_streaming_preview: false,
+                external_message_id: None,
                 text,
                 timestamp: chrono::Utc::now(),
             };
@@ -71,13 +77,29 @@ impl ChannelAdapter for WebChatAdapter {
         "webchat"
     }
 
+    fn capabilities(&self) -> GatewayAdapterCapabilities {
+        GatewayAdapterCapabilities {
+            plain_text: true,
+            markdown: true,
+            code_blocks: true,
+            images: GatewayRichDeliveryMode::Degraded,
+            link_buttons: GatewayRichDeliveryMode::Degraded,
+        }
+    }
+
     /// Stores the gateway tx so `handle_incoming` can forward messages, then returns.
     /// WebSocket connections are driven by axum — there is nothing to listen for here.
     ///
     /// Note: the `tx` moved into `gateway_tx` keeps the router channel open until
     /// `WebChatAdapter` itself is dropped (when `AppState` is dropped on shutdown).
-    async fn start(&self, tx: mpsc::Sender<IncomingMessage>) -> Result<()> {
-        self.gateway_tx.set(tx).ok();
+    async fn start(&self, context: AdapterContext) -> Result<()> {
+        self.gateway_tx.set(context.inbound_tx).ok();
+        context.lifecycle.connected().await;
+        let mut shutdown_rx = context.shutdown_rx.clone();
+        if *shutdown_rx.borrow() {
+            return Ok(());
+        }
+        let _ = shutdown_rx.changed().await;
         Ok(())
     }
 
@@ -85,7 +107,7 @@ impl ChannelAdapter for WebChatAdapter {
     async fn send_message(&self, recipient: &str, msg: OutgoingMessage) -> Result<()> {
         let channels = self.response_channels.lock().await;
         if let Some(tx) = channels.get(recipient) {
-            let _ = tx.send(msg.text);
+            let _ = tx.send(render_markdown_message(&msg, &self.capabilities()));
         }
         Ok(())
     }

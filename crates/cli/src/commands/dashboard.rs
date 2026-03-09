@@ -13,7 +13,10 @@ pub async fn run(no_open: bool) -> Result<()> {
         println!("{} Opening in your browser...", "⏳".yellow());
         match open::that(&dashboard_url) {
             Ok(_) => {
-                println!("{} Opened in your browser. Keep that tab to control RushDino.", "✔".green());
+                println!(
+                    "{} Opened in your browser. Keep that tab to control RushDino.",
+                    "✔".green()
+                );
             }
             Err(e) => {
                 println!("{} Could not open browser automatically: {e}", "✖".red());
@@ -21,7 +24,10 @@ pub async fn run(no_open: bool) -> Result<()> {
             }
         }
     } else {
-        println!("{} Browser launch disabled (--no-open). Use the URL above.", "i".yellow());
+        println!(
+            "{} Browser launch disabled (--no-open). Use the URL above.",
+            "i".yellow()
+        );
     }
 
     Ok(())

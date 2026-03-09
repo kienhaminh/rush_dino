@@ -43,6 +43,7 @@ impl Orchestrator {
                     role: Role::User,
                     content: instructions.clone(),
                     tool_calls: None,
+                    rich_content: None,
                     created_at: Utc::now(),
                 }],
                 tools: None,

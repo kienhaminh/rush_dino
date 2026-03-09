@@ -75,6 +75,7 @@ pub fn parse_openai_response(payload: &Value) -> Result<ChatResponse> {
     Ok(ChatResponse {
         content,
         tool_calls,
+        rich_content: None,
         usage,
         finish_reason,
     })

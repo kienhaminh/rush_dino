@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SearchIcon, RefreshCwIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import type { AppConfigView, CredentialsView } from '@/lib/types';
+import type { AppConfigView, ChannelAccessConfig, CredentialsView } from '@/lib/types';
 import { WhatsAppCard } from './whatsapp-card';
 import { TelegramCard } from './telegram-card';
 import { DiscordCard } from './discord-card';
@@ -35,10 +35,12 @@ export type ChannelUiSettings = {
 
 export type ChannelDetailConfigPatch = {
   enabled?: boolean;
+  telegramNativeStreaming?: boolean;
   telegramBotToken?: string;
   discordBotToken?: string;
   slackBotToken?: string;
   slackAppToken?: string;
+  gatewayAccess?: ChannelAccessConfig;
   uiSettings?: ChannelUiSettings;
 };
 

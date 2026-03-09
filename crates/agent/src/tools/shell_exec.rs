@@ -1,31 +1,21 @@
-use std::{future::Future, sync::Arc, time::Duration};
+use std::{future::Future, path::PathBuf};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
-use tokio::process::Command;
 
 use rushdino_common::{AppError, Result};
 
-use crate::tool_registry::Tool;
+use crate::{
+    system_broker::{SharedSystemBroker, ShellExecRequest},
+    tool_registry::Tool,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolExecutionContext {
     pub session_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub run_id: Option<String>,
     pub delegation_depth: u8,
-}
-
-#[derive(Debug, Clone)]
-pub struct ToolApprovalRequest {
-    pub session_id: String,
-    pub conversation_id: String,
-    pub tool: String,
-    pub args: Value,
-}
-
-#[async_trait]
-pub trait ToolApproval: Send + Sync {
-    async fn request_approval(&self, request: ToolApprovalRequest) -> Result<()>;
 }
 
 tokio::task_local! {
@@ -45,20 +35,15 @@ pub fn current_tool_execution_context() -> Option<ToolExecutionContext> {
 
 pub struct ShellExecTool {
     timeout_secs: u64,
-    approval: Option<Arc<dyn ToolApproval>>,
+    broker: SharedSystemBroker,
 }
 
 impl ShellExecTool {
-    pub fn new(timeout_secs: u64) -> Self {
+    pub fn new(timeout_secs: u64, broker: SharedSystemBroker) -> Self {
         Self {
             timeout_secs,
-            approval: None,
+            broker,
         }
-    }
-
-    pub fn with_approval(mut self, approval: Arc<dyn ToolApproval>) -> Self {
-        self.approval = Some(approval);
-        self
     }
 }
 
@@ -69,7 +54,7 @@ impl Tool for ShellExecTool {
     }
 
     fn description(&self) -> &str {
-        "Execute shell command in local environment"
+        "Execute shell command through the local RushDino system broker"
     }
 
     fn parameters(&self) -> Value {
@@ -88,51 +73,28 @@ impl Tool for ShellExecTool {
             .get("command")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("command is required".to_owned()))?;
+        let cwd = args.get("cwd").and_then(Value::as_str).map(PathBuf::from);
+        let context = current_tool_execution_context();
 
-        if is_dangerous_command(command) {
-            let approval = self.approval.as_ref().ok_or_else(|| {
-                AppError::Agent(
-                    "shell_exec blocked: dangerous command requires approval support".to_owned(),
-                )
-            })?;
+        let result = self
+            .broker
+            .execute_shell(ShellExecRequest {
+                command: command.to_owned(),
+                host_cwd: cwd,
+                timeout_secs: self.timeout_secs,
+                session_id: context.as_ref().and_then(|ctx| ctx.session_id.clone()),
+                conversation_id: context.as_ref().and_then(|ctx| ctx.conversation_id.clone()),
+                run_id: context.and_then(|ctx| ctx.run_id),
+            })
+            .await?;
 
-            let context = current_tool_execution_context().ok_or_else(|| {
-                AppError::Agent("shell_exec blocked: dangerous command outside request context".to_owned())
-            })?;
-            let session_id = context.session_id.ok_or_else(|| {
-                AppError::Agent("shell_exec blocked: dangerous command outside websocket session".to_owned())
-            })?;
-            let conversation_id = context.conversation_id.ok_or_else(|| {
-                AppError::Agent("shell_exec blocked: missing conversation context".to_owned())
-            })?;
-
-            approval
-                .request_approval(ToolApprovalRequest {
-                    session_id,
-                    conversation_id,
-                    tool: "shell_exec".to_owned(),
-                    args: args.clone(),
-                })
-                .await?;
-        }
-
-        let cwd = args.get("cwd").and_then(Value::as_str);
-        let mut cmd = Command::new("sh");
-        cmd.arg("-lc").arg(command);
-        if let Some(cwd) = cwd {
-            cmd.current_dir(cwd);
-        }
-
-        let output = tokio::time::timeout(Duration::from_secs(self.timeout_secs), cmd.output())
-            .await
-            .map_err(|_| AppError::Agent("shell_exec timed out".to_owned()))?
-            .map_err(|e| AppError::Agent(format!("shell_exec failed: {e}")))?;
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
         Ok(format!(
-            "status: {}\nstdout:\n{}\nstderr:\n{}",
-            output.status, stdout, stderr
+            "status: {}\nhost_cwd: {}\nsandbox_cwd: {}\nstdout:\n{}\nstderr:\n{}",
+            result.exit_status,
+            result.host_cwd.display(),
+            result.sandbox_cwd.display(),
+            result.stdout,
+            result.stderr
         ))
     }
 }
@@ -167,7 +129,77 @@ pub fn is_dangerous_command(command: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
+
+    use async_trait::async_trait;
+    use serde_json::json;
+
+    use rushdino_common::Result;
+
     use super::{is_dangerous_command, ToolExecutionContext};
+    use crate::{
+        system_broker::{ShellExecRequest, ShellExecResult, SystemBroker},
+        tool_registry::Tool,
+    };
+
+    #[derive(Default)]
+    struct MockBroker {
+        last_request: Mutex<Option<ShellExecRequest>>,
+    }
+
+    #[async_trait]
+    impl SystemBroker for MockBroker {
+        async fn execute_shell(&self, request: ShellExecRequest) -> Result<ShellExecResult> {
+            *self
+                .last_request
+                .lock()
+                .expect("mock broker mutex should not be poisoned") = Some(request);
+            Ok(ShellExecResult {
+                exit_status: "exit status: 0".to_owned(),
+                stdout: "ok".to_owned(),
+                stderr: String::new(),
+                host_cwd: PathBuf::from("/tmp/host"),
+                sandbox_cwd: PathBuf::from("/tmp/sandbox"),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn shell_exec_forwards_request_to_broker() {
+        let broker = Arc::new(MockBroker::default());
+        let tool = super::ShellExecTool::new(30, broker.clone());
+
+        let output = super::with_tool_execution_context(
+            ToolExecutionContext {
+                session_id: Some("session-1".to_owned()),
+                conversation_id: Some("conv-1".to_owned()),
+                run_id: Some("run-1".to_owned()),
+                delegation_depth: 0,
+            },
+            tool.execute(json!({
+                "command": "pwd",
+                "cwd": "/tmp/example"
+            })),
+        )
+        .await
+        .expect("tool should succeed");
+
+        let request = broker
+            .last_request
+            .lock()
+            .expect("mock broker mutex should not be poisoned")
+            .clone()
+            .expect("broker should receive request");
+        assert_eq!(request.command, "pwd");
+        assert_eq!(request.host_cwd, Some(PathBuf::from("/tmp/example")));
+        assert_eq!(request.session_id.as_deref(), Some("session-1"));
+        assert_eq!(request.conversation_id.as_deref(), Some("conv-1"));
+        assert_eq!(request.run_id.as_deref(), Some("run-1"));
+        assert!(output.contains("sandbox_cwd: /tmp/sandbox"));
+    }
 
     #[test]
     fn dangerous_command_detection_matches_expected_cases() {
@@ -183,6 +215,7 @@ mod tests {
         let ctx = ToolExecutionContext {
             session_id: None,
             conversation_id: None,
+            run_id: None,
             delegation_depth: 0,
         };
         assert_eq!(ctx.delegation_depth, 0);

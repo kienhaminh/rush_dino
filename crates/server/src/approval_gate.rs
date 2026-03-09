@@ -1,12 +1,11 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot, Mutex};
 use uuid::Uuid;
 
-use rushdino_agent::{ToolApproval, ToolApprovalRequest};
 use rushdino_common::{AppError, Result};
 
 const DEFAULT_APPROVAL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -16,12 +15,15 @@ pub struct ApprovalRequest {
     pub request_id: String,
     pub session_id: String,
     pub conversation_id: String,
+    pub run_id: Option<String>,
     pub tool: String,
     pub args: Value,
 }
 
 struct PendingApproval {
     owner_session_id: String,
+    request: ApprovalRequest,
+    created_at: DateTime<Utc>,
     responder: oneshot::Sender<bool>,
 }
 
@@ -74,6 +76,7 @@ impl ApprovalGate {
         &self,
         session_id: &str,
         conversation_id: &str,
+        run_id: Option<&str>,
         tool: &str,
         args: Value,
     ) -> Result<()> {
@@ -91,21 +94,23 @@ impl ApprovalGate {
 
         let request_id = Uuid::new_v4().to_string();
         let (response_tx, response_rx) = oneshot::channel::<bool>();
-        self.pending.lock().await.insert(
-            request_id.clone(),
-            PendingApproval {
-                owner_session_id: session_id.to_owned(),
-                responder: response_tx,
-            },
-        );
-
         let request = ApprovalRequest {
             request_id: request_id.clone(),
             session_id: session_id.to_owned(),
             conversation_id: conversation_id.to_owned(),
+            run_id: run_id.map(ToOwned::to_owned),
             tool: tool.to_owned(),
             args,
         };
+        self.pending.lock().await.insert(
+            request_id.clone(),
+            PendingApproval {
+                owner_session_id: session_id.to_owned(),
+                request: request.clone(),
+                created_at: Utc::now(),
+                responder: response_tx,
+            },
+        );
 
         if sender.send(request).await.is_err() {
             self.pending.lock().await.remove(&request_id);
@@ -135,9 +140,38 @@ impl ApprovalGate {
         self.pending.lock().await.contains_key(request_id)
     }
 
-    pub async fn resolve(&self, session_id: &str, request_id: &str, approved: bool) -> Result<()> {
+    pub async fn list_pending(&self) -> Vec<ApprovalRequest> {
+        let mut requests = self
+            .pending
+            .lock()
+            .await
+            .values()
+            .map(|entry| (entry.created_at, entry.request.clone()))
+            .collect::<Vec<_>>();
+        requests.sort_by(|a, b| b.0.cmp(&a.0));
+        requests.into_iter().map(|(_, request)| request).collect()
+    }
+
+    pub async fn find_pending_for_run(&self, run_id: &str) -> Option<ApprovalRequest> {
+        self.pending
+            .lock()
+            .await
+            .values()
+            .find(|entry| entry.request.run_id.as_deref() == Some(run_id))
+            .map(|entry| entry.request.clone())
+    }
+
+    pub async fn resolve(
+        &self,
+        session_id: &str,
+        request_id: &str,
+        approved: bool,
+    ) -> Result<ApprovalRequest> {
         let mut pending = self.pending.lock().await;
-        let Some(owner) = pending.get(request_id).map(|entry| entry.owner_session_id.clone()) else {
+        let Some(owner) = pending
+            .get(request_id)
+            .map(|entry| entry.owner_session_id.clone())
+        else {
             return Err(AppError::NotFound(format!(
                 "approval request '{request_id}' not found"
             )));
@@ -154,21 +188,9 @@ impl ApprovalGate {
                 "approval request '{request_id}' not found"
             )));
         };
+        let request = entry.request.clone();
         let _ = entry.responder.send(approved);
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl ToolApproval for ApprovalGate {
-    async fn request_approval(&self, request: ToolApprovalRequest) -> Result<()> {
-        self.request_approval(
-            &request.session_id,
-            &request.conversation_id,
-            &request.tool,
-            request.args,
-        )
-        .await
+        Ok(request)
     }
 }
 
@@ -189,15 +211,24 @@ mod tests {
         let gate_clone = gate.clone();
         let approval_task = tokio::spawn(async move {
             gate_clone
-                .request_approval("owner", "conv-1", "shell_exec", json!({"command": "rm -rf /tmp/x"}))
+                .request_approval(
+                    "owner",
+                    "conv-1",
+                    Some("run-1"),
+                    "shell_exec",
+                    json!({"command": "rm -rf /tmp/x"}),
+                )
                 .await
         });
 
         let request = rx_owner.recv().await.expect("owner should receive request");
         assert_eq!(request.session_id, "owner");
-        assert!(tokio::time::timeout(Duration::from_millis(100), rx_other.recv())
-            .await
-            .is_err());
+        assert_eq!(request.run_id.as_deref(), Some("run-1"));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(100), rx_other.recv())
+                .await
+                .is_err()
+        );
 
         gate.resolve("owner", &request.request_id, true)
             .await
@@ -214,7 +245,13 @@ mod tests {
         let gate_clone = gate.clone();
         let approval_task = tokio::spawn(async move {
             gate_clone
-                .request_approval("owner", "conv-2", "shell_exec", json!({"command": "sudo reboot"}))
+                .request_approval(
+                    "owner",
+                    "conv-2",
+                    Some("run-2"),
+                    "shell_exec",
+                    json!({"command": "sudo reboot"}),
+                )
                 .await
         });
 
@@ -235,7 +272,13 @@ mod tests {
         let _rx_owner = gate.register_session("owner").await;
 
         let result = gate
-            .request_approval("owner", "conv-3", "shell_exec", json!({"command": "rm -rf /"}))
+            .request_approval(
+                "owner",
+                "conv-3",
+                Some("run-3"),
+                "shell_exec",
+                json!({"command": "rm -rf /"}),
+            )
             .await;
         assert!(result.is_err());
     }
@@ -248,7 +291,13 @@ mod tests {
         let gate_clone = gate.clone();
         let approval_task = tokio::spawn(async move {
             gate_clone
-                .request_approval("owner", "conv-4", "shell_exec", json!({"command": "sudo rm -rf /tmp/x"}))
+                .request_approval(
+                    "owner",
+                    "conv-4",
+                    Some("run-4"),
+                    "shell_exec",
+                    json!({"command": "sudo rm -rf /tmp/x"}),
+                )
                 .await
         });
 

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { AgentSidebar } from './AgentSidebar';
 import { AgentOverview } from './AgentOverview';
 import { AgentFilesPanel } from './AgentFilesPanel';
@@ -6,14 +7,12 @@ import { AgentToolsPanel } from './AgentToolsPanel';
 import { AgentSkillsPanel } from './AgentSkillsPanel';
 import { AgentChannelsPanel } from './AgentChannelsPanel';
 import { AgentCronPanel } from './AgentCronPanel';
-import { AgentSoulPanel } from './AgentSoulPanel';
-import { AgentMemoryPanel } from './AgentMemoryPanel';
 import { AgentProgressBoardPanel } from './AgentProgressBoardPanel';
 import { AGENT_PANELS } from './agent-mock-data';
 import type { AgentPanel, AgentRecord, AgentRuntimeData } from './agent-types';
-import { fetchAgentRuntime, fetchAgents } from '@/lib/api';
+import { deleteAgent, fetchAgentRuntime, fetchAgents } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
-import { RefreshCwIcon } from 'lucide-react';
+import { RefreshCwIcon, Trash2Icon } from 'lucide-react';
 import { useAgentProgressBoard } from './use-agent-progress-board';
 
 const PANELS: AgentPanel[] = [...AGENT_PANELS];
@@ -39,8 +38,6 @@ const EMPTY_RUNTIME: AgentRuntimeData = {
 const PANEL_LABELS: Record<AgentPanel, string> = {
   overview: 'Overview',
   progress: 'Progress',
-  soul: 'Soul',
-  memory: 'Memory',
   files: 'Files',
   tools: 'Tools',
   skills: 'Skills',
@@ -117,6 +114,26 @@ export function AgentsPage() {
     refresh: refreshProgressBoard,
   } = useAgentProgressBoard(activePanel === 'progress');
 
+  const handleDeleteAgent = useCallback(async () => {
+    if (!selectedAgent || selectedAgent.isDefault) return;
+    if (!window.confirm(`Delete agent "${selectedAgent.name}" and its workspace files?`)) {
+      return;
+    }
+
+    try {
+      await deleteAgent(selectedAgent.id);
+      toast.success('Agent deleted.');
+      setRuntimeByAgent((prev) => {
+        const next = { ...prev };
+        delete next[selectedAgent.id];
+        return next;
+      });
+      await loadAgents();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete agent.');
+    }
+  }, [loadAgents, selectedAgent]);
+
   return (
     <div className="flex h-full w-full bg-background overflow-hidden">
       {/* Agent Directory Sidebar */}
@@ -166,6 +183,17 @@ export function AgentsPage() {
               <RefreshCwIcon className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               {loading ? 'Refreshing...' : 'Refresh'}
             </button>
+            {!selectedAgent.isDefault ? (
+              <button
+                onClick={() => {
+                  void handleDeleteAgent();
+                }}
+                className="flex items-center gap-2 text-xs font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors h-8 px-3 rounded"
+              >
+                <Trash2Icon className="w-3.5 h-3.5" />
+                Delete
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -215,8 +243,6 @@ export function AgentsPage() {
           ) : (
             <>
               {activePanel === 'overview' && <AgentOverview agent={selectedAgent} />}
-              {activePanel === 'soul' && <AgentSoulPanel runtime={runtime} />}
-              {activePanel === 'memory' && <AgentMemoryPanel runtime={runtime} />}
               {activePanel === 'files' && (
                 <AgentFilesPanel agentId={selectedAgent.id} runtime={runtime} />
               )}

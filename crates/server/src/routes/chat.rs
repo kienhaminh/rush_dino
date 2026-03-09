@@ -4,7 +4,6 @@ use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use rushdino_agent::tools::shell_exec::{with_tool_execution_context, ToolExecutionContext};
 use rushdino_common::{AppError, Result};
 use rushdino_security::{
     taint::TaintLevel,
@@ -12,9 +11,6 @@ use rushdino_security::{
 };
 
 use crate::state::AppState;
-
-/// Timeout to wait for an approval request from the agent during an HTTP chat.
-const HTTP_APPROVAL_POLL_TIMEOUT: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Deserialize)]
 pub struct ChatRequest {
@@ -25,8 +21,11 @@ pub struct ChatRequest {
 /// Normal completed response.
 #[derive(Debug, Serialize)]
 pub struct ChatResponse {
+    pub run_id: String,
     pub conversation_id: String,
     pub content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rich_content: Option<rushdino_common::RichContent>,
     pub finish_reason: String,
     pub tool_calls: Vec<rushdino_common::models::ToolCall>,
     /// Either `"completed"` or `"pending_approval"`.
@@ -48,6 +47,7 @@ pub async fn chat(
     State(state): State<AppState>,
     Json(request): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>> {
+    let engine = state.engine()?;
     // Layer 4d: enforce message size limit.
     check_body_size(request.message.len())
         .map_err(|e| AppError::Validation(format!("message too large: {e}")))?;
@@ -78,73 +78,69 @@ pub async fn chat(
     let session_id = Uuid::new_v4().to_string();
     let mut approval_rx = state.gate.register_session(&session_id).await;
 
-    let engine = state.engine.clone();
     let gate = state.gate.clone();
-    let conv_id = request.conversation_id.clone();
     let message = request.message.clone();
-    let session_id_clone = session_id.clone();
+    let (run, mut result_rx) = engine
+        .submit_http_run(&session_id, request.conversation_id.clone(), &message)
+        .await?;
 
-    // Run the agent in a background task so we can concurrently monitor the
-    // approval channel.
-    let agent_task = tokio::spawn(async move {
-        let ctx = ToolExecutionContext {
-            session_id: Some(session_id_clone),
-            conversation_id: conv_id.clone(),
-            delegation_depth: 0,
-        };
-        with_tool_execution_context(ctx, async move {
-            engine.chat_or_create(conv_id, &message).await
-        })
-        .await
-    });
+    tokio::select! {
+        approval = approval_rx.recv() => {
+            let approval_request = approval.ok_or_else(|| {
+                AppError::Agent("approval channel closed before the run completed".to_owned())
+            })?;
 
-    // Poll for an approval request from the agent for a short window.
-    // If none arrives (non-dangerous command path), just await the agent result.
-    let approval_check =
-        tokio::time::timeout(HTTP_APPROVAL_POLL_TIMEOUT, approval_rx.recv()).await;
+            tracing::info!(
+                request_id = %approval_request.request_id,
+                run_id = ?approval_request.run_id,
+                tool = %approval_request.tool,
+                "HTTP chat: dangerous tool requires approval"
+            );
 
-    if let Ok(Some(approval_request)) = approval_check {
-        // A dangerous tool triggered the approval gate.
-        // Return the pending state to the caller so they can resolve via
-        // POST /api/approval/{request_id}.
-        tracing::info!(
-            request_id = %approval_request.request_id,
-            tool = %approval_request.tool,
-            "HTTP chat: dangerous tool requires approval"
-        );
+            let cleanup_gate = gate.clone();
+            let cleanup_engine = engine.clone();
+            let cleanup_session = session_id.clone();
+            let cleanup_run_id = run.id.clone();
+            tokio::spawn(async move {
+                let _ = cleanup_engine
+                    .wait_for_run(&cleanup_run_id, Duration::from_secs(300), true)
+                    .await;
+                cleanup_gate.unregister_session(&cleanup_session).await;
+            });
 
-        // Unregister the session here — the client will resolve directly via the gate.
-        // The background agent task will remain blocked in gate.request_approval()
-        // until the client calls POST /api/approval/{request_id}.
-        let _ = agent_task; // keep it alive (it's detached)
+            return Ok(Json(ChatResponse {
+                run_id: run.id,
+                conversation_id: approval_request.conversation_id,
+                content: String::new(),
+                rich_content: None,
+                finish_reason: "pending_approval".to_owned(),
+                tool_calls: Vec::new(),
+                status: "pending_approval".to_owned(),
+                pending_approval: Some(PendingApprovalInfo {
+                    request_id: approval_request.request_id,
+                    session_id,
+                    tool: approval_request.tool,
+                }),
+            }));
+        }
+        result = &mut result_rx => {
+            gate.unregister_session(&session_id).await;
+            let response = result
+                .map_err(|err| AppError::Agent(format!("run result channel dropped: {err}")))?
+                .map_err(AppError::Agent)?;
 
-        return Ok(Json(ChatResponse {
-            conversation_id: approval_request.conversation_id,
-            content: String::new(),
-            finish_reason: "pending_approval".to_owned(),
-            tool_calls: Vec::new(),
-            status: "pending_approval".to_owned(),
-            pending_approval: Some(PendingApprovalInfo {
-                request_id: approval_request.request_id,
-                session_id,
-                tool: approval_request.tool,
-            }),
-        }));
+            return Ok(Json(ChatResponse {
+                run_id: run.id,
+                conversation_id: run
+                    .conversation_id
+                    .unwrap_or_else(|| Uuid::new_v4().to_string()),
+                content: response.content,
+                rich_content: response.rich_content,
+                finish_reason: response.finish_reason,
+                tool_calls: response.tool_calls,
+                status: "completed".to_owned(),
+                pending_approval: None,
+            }));
+        }
     }
-
-    // No approval needed — await the agent result normally.
-    gate.unregister_session(&session_id).await;
-    let (conversation_id, response) = agent_task
-        .await
-        .map_err(|e| AppError::Agent(format!("agent task panicked: {e}")))?
-        .map_err(|e| e)?;
-
-    Ok(Json(ChatResponse {
-        conversation_id,
-        content: response.content,
-        finish_reason: response.finish_reason,
-        tool_calls: response.tool_calls,
-        status: "completed".to_owned(),
-        pending_approval: None,
-    }))
 }

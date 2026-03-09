@@ -26,11 +26,20 @@ pub struct RedirectInput {
 pub fn parse_redirect_input(input: &str) -> RedirectInput {
     let trimmed = input.trim();
     if trimmed.is_empty() {
-        return RedirectInput { code: None, state: None };
+        return RedirectInput {
+            code: None,
+            state: None,
+        };
     }
     if let Ok(url) = url::Url::parse(trimmed) {
-        let code = url.query_pairs().find(|(k, _)| k == "code").map(|(_, v)| v.into_owned());
-        let state = url.query_pairs().find(|(k, _)| k == "state").map(|(_, v)| v.into_owned());
+        let code = url
+            .query_pairs()
+            .find(|(k, _)| k == "code")
+            .map(|(_, v)| v.into_owned());
+        let state = url
+            .query_pairs()
+            .find(|(k, _)| k == "state")
+            .map(|(_, v)| v.into_owned());
         return RedirectInput { code, state };
     }
     if trimmed.contains('=') {
@@ -40,7 +49,10 @@ pub fn parse_redirect_input(input: &str) -> RedirectInput {
             state: pairs.get("state").map(|v| v.to_string()),
         };
     }
-    RedirectInput { code: Some(trimmed.to_owned()), state: None }
+    RedirectInput {
+        code: Some(trimmed.to_owned()),
+        state: None,
+    }
 }
 
 pub fn is_remote() -> bool {
@@ -92,9 +104,9 @@ pub async fn run() -> Result<OAuthTokens> {
                 ));
             }
         }
-        parsed
-            .code
-            .ok_or_else(|| AppError::Provider("No authorization code found in pasted input".into()))?
+        parsed.code.ok_or_else(|| {
+            AppError::Provider("No authorization code found in pasted input".into())
+        })?
     } else {
         println!("Opening browser for OpenAI OAuth...");
         println!("If the browser doesn't open, visit:\n{auth_url}");

@@ -1,111 +1,115 @@
-import { useState } from 'react';
-import { SkillsPage, type SkillStatusReport, type SkillMessageMap } from './SkillsPage';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
-const INITIAL_REPORT: SkillStatusReport = {
-  skills: [
-    {
-      skillKey: 'workspace:deep-data-crawler-import',
-      name: 'deep-data-crawler-import',
-      description: 'Crawl recursively and package clean NDJSON for ingestion.',
-      source: 'workspace',
-      emoji: '🕸️',
-      disabled: false,
-      missing: { bins: [], env: [] },
-      install: [],
-      primaryEnv: null,
-    },
-    {
-      skillKey: 'bundled:web-design-guidelines',
-      name: 'web-design-guidelines',
-      description: 'Audit UI quality, accessibility, and visual consistency.',
-      source: 'openclaw-bundled',
-      emoji: '📐',
-      disabled: false,
-      missing: { bins: [], env: [] },
-      install: [],
-      primaryEnv: null,
-    },
-    {
-      skillKey: 'bundled:vercel-react-best-practices',
-      name: 'vercel-react-best-practices',
-      description: 'Apply performance patterns for React and Next.js.',
-      source: 'built-in',
-      emoji: '⚡',
-      disabled: true,
-      missing: { bins: ['node'], env: [] },
-      install: [{ id: 'install-node', label: 'Install deps' }],
-      primaryEnv: null,
-    },
-    {
-      skillKey: 'bundled:github-intel',
-      name: 'github-intel',
-      description: 'Pull issue and PR context from GitHub for planning.',
-      source: 'other',
-      emoji: '🐙',
-      disabled: false,
-      missing: { bins: [], env: ['GITHUB_TOKEN'] },
-      install: [],
-      primaryEnv: 'GITHUB_TOKEN',
-    },
-  ],
-};
+import { deleteSkill, fetchSkills, upsertSkill } from '@/lib/api';
+import type { SkillRecord } from '@/lib/types';
+
+import { SkillsPage } from './SkillsPage';
 
 export function SkillsRoute() {
+  const [skills, setSkills] = useState<SkillRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [messages, setMessages] = useState<SkillMessageMap>({});
-  const [report, setReport] = useState<SkillStatusReport>(INITIAL_REPORT);
+  const [draft, setDraft] = useState({
+    name: '',
+    description: '',
+    instructions: '',
+    tools: '',
+  });
+  const [saving, setSaving] = useState(false);
 
-  const handleMessage = (skillKey: string, kind: 'ok' | 'error', message: string) => {
-    setMessages((current) => ({ ...current, [skillKey]: { kind, message } }));
+  const load = async () => {
+    setLoading(true);
+    try {
+      const next = await fetchSkills();
+      setSkills(next);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load skills.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const handleDelete = async (name: string) => {
+    if (!window.confirm(`Delete skill "${name}"? This removes the local workspace skill.`)) {
+      return;
+    }
+    try {
+      await deleteSkill(name);
+      toast.success('Skill deleted.');
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete skill.');
+    }
+  };
+
+  const resetDraft = () => {
+    setDraft({
+      name: '',
+      description: '',
+      instructions: '',
+      tools: '',
+    });
+  };
+
+  const handleSave = async () => {
+    if (!draft.name.trim() || !draft.description.trim() || !draft.instructions.trim()) {
+      toast.error('Name, description, and instructions are required.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await upsertSkill({
+        name: draft.name.trim(),
+        description: draft.description.trim(),
+        instructions: draft.instructions.trim(),
+        tools: draft.tools
+          .split(',')
+          .map((tool) => tool.trim())
+          .filter(Boolean),
+      });
+      toast.success('Skill saved.');
+      resetDraft();
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save skill.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <SkillsPage
-      loading={false}
-      report={report}
-      error={null}
+      skills={skills}
+      loading={loading}
+      error={error}
       filter={filter}
-      edits={edits}
-      busyKey={busyKey}
-      messages={messages}
       onFilterChange={setFilter}
-      onRefresh={() => {}}
-      onToggle={(skillKey, enabled) => {
-        setReport((current: any) => ({
-          ...current,
-          skills: (current.skills ?? []).map((entry: any) =>
-            entry.skillKey === skillKey ? { ...entry, disabled: !enabled } : entry,
-          ),
-        }));
-        handleMessage(
-          skillKey,
-          'ok',
-          enabled ? 'Skill enabled in local draft.' : 'Skill disabled in local draft.',
-        );
+      draft={draft}
+      saving={saving}
+      onDraftChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+      onSave={() => {
+        void handleSave();
       }}
-      onEdit={(skillKey, value) => {
-        setEdits((current) => ({ ...current, [skillKey]: value }));
-      }}
-      onSaveKey={(skillKey) => {
-        const value = edits[skillKey]?.trim();
-        if (!value) {
-          handleMessage(skillKey, 'error', 'API key is empty.');
-          return;
-        }
-        setBusyKey(skillKey);
-        window.setTimeout(() => {
-          setBusyKey(null);
-          handleMessage(skillKey, 'ok', 'API key saved in local draft.');
-        }, 300);
-      }}
-      onInstall={(skillKey, name) => {
-        setBusyKey(skillKey);
-        window.setTimeout(() => {
-          setBusyKey(null);
-          handleMessage(skillKey, 'ok', `Installed dependencies for ${name} (mock).`);
-        }, 500);
+      onResetDraft={resetDraft}
+      onEdit={(skill) =>
+        setDraft({
+          name: skill.name,
+          description: skill.description,
+          instructions: skill.instructions,
+          tools: skill.tools.join(', '),
+        })
+      }
+      onRefresh={() => void load()}
+      onDelete={(name) => {
+        void handleDelete(name);
       }}
     />
   );

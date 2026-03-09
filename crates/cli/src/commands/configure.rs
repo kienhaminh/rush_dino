@@ -2,8 +2,8 @@ use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Input, Password, Select};
 use std::fs;
 
-use rushdino_common::{init, Result, AppError};
 use rushdino_auth::{auth_options_for_provider, AuthMethod, AuthProviderId};
+use rushdino_common::{init, AppError, Result};
 
 use super::codex_login;
 use super::{rewrite_active_provider, rewrite_int_value, rewrite_value};
@@ -23,11 +23,18 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
         p.to_lowercase()
     } else {
         println!("{} {}", "i".yellow(), "No --login parameter provided.");
-        println!("{} Example: rushdino configure --login openai", "i".yellow());
+        println!(
+            "{} Example: rushdino configure --login openai",
+            "i".yellow()
+        );
         return Ok(());
     };
 
-    println!("\n{} Configuring {}...", "⚙️".bold(), provider.blue().bold());
+    println!(
+        "\n{} Configuring {}...",
+        "⚙️".bold(),
+        provider.blue().bold()
+    );
 
     match provider.as_str() {
         "ollama" => {
@@ -45,7 +52,7 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
             config = rewrite_active_provider(config, "ollama");
             config = rewrite_value(config, "base_url", &base_url);
             config = rewrite_value(config, "model", &model);
-            
+
             println!("{} Configured Ollama with model {model}", "✔".green());
         }
         "openai" => {
@@ -84,18 +91,22 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
                     println!("{} Configured OpenAI via API key", "✔".green());
                 }
                 "Codex OAuth" => {
-                    println!("{} Opening browser to authenticate with OpenAI Codex...", "⏳".yellow());
-                    let tokens = codex_login::run()
-                        .await
-                        .map_err(|e| {
-                            eprintln!("{} Codex OAuth failed: {e}", "✖".red());
-                            e
-                        })?;
+                    println!(
+                        "{} Opening browser to authenticate with OpenAI Codex...",
+                        "⏳".yellow()
+                    );
+                    let tokens = codex_login::run().await.map_err(|e| {
+                        eprintln!("{} Codex OAuth failed: {e}", "✖".red());
+                        e
+                    })?;
 
                     config = rewrite_active_provider(config, "codex");
-                    credentials = rewrite_value(credentials, "codex_access_token", &tokens.access_token);
-                    credentials = rewrite_value(credentials, "codex_refresh_token", &tokens.refresh_token);
-                    credentials = rewrite_int_value(credentials, "codex_token_expires_at", tokens.expires_at);
+                    credentials =
+                        rewrite_value(credentials, "codex_access_token", &tokens.access_token);
+                    credentials =
+                        rewrite_value(credentials, "codex_refresh_token", &tokens.refresh_token);
+                    credentials =
+                        rewrite_int_value(credentials, "codex_token_expires_at", tokens.expires_at);
 
                     println!("{} Configured OpenAI via Codex OAuth", "✔".green());
                 }
@@ -130,7 +141,10 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
         }
         _ => {
             println!("{} Unsupported provider: {}", "✖".red(), provider);
-            return Err(AppError::Validation(format!("Unsupported provider: {}", provider)));
+            return Err(AppError::Validation(format!(
+                "Unsupported provider: {}",
+                provider
+            )));
         }
     }
 
@@ -138,8 +152,15 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
     fs::write(&creds_path, credentials)?;
 
     println!("\n{}", "========================================".dimmed());
-    println!("{} {}", "🚀".bold(), "Configuration saved successfully!".green().bold());
-    println!("{} Restart RushDino for changes to take effect.", "i".yellow());
-    
+    println!(
+        "{} {}",
+        "🚀".bold(),
+        "Configuration saved successfully!".green().bold()
+    );
+    println!(
+        "{} Restart RushDino for changes to take effect.",
+        "i".yellow()
+    );
+
     Ok(())
 }

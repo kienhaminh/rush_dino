@@ -1,3 +1,11 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
 interface ProviderConfigProps {
   provider: string;
   model: string;
@@ -15,15 +23,16 @@ export function ProviderConfig({
     <div className="grid gap-3">
       <label className="grid gap-1 text-sm">
         Provider
-        <select
-          className="rounded-lg border border-ink/20 bg-white px-3 py-2"
-          value={provider}
-          onChange={(event) => onProviderChange(event.target.value)}
-        >
-          <option value="ollama">Ollama</option>
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
-        </select>
+        <Select value={provider} onValueChange={(val) => onProviderChange(val)}>
+          <SelectTrigger className="w-full rounded-lg border border-ink/20 bg-white px-3 py-2">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ollama">Ollama</SelectItem>
+            <SelectItem value="openai">OpenAI</SelectItem>
+            <SelectItem value="anthropic">Anthropic</SelectItem>
+          </SelectContent>
+        </Select>
       </label>
       <label className="grid gap-1 text-sm">
         Model

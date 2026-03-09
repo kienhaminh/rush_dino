@@ -11,8 +11,46 @@ export interface Message {
   role: Role;
   content: string;
   tool_calls?: ToolCall[];
+  rich_content?: RichContent | null;
   created_at?: string;
 }
+
+export interface RichContent {
+  fallbackText: string;
+  blocks: RichContentBlock[];
+}
+
+export type TextFormat = 'plain_text' | 'markdown';
+
+export interface LinkTarget {
+  label: string;
+  url: string;
+}
+
+export type RichContentBlock =
+  | {
+      type: 'formatted_text';
+      text: string;
+      format: TextFormat;
+    }
+  | {
+      type: 'code_block';
+      code: string;
+      language?: string | null;
+    }
+  | {
+      type: 'link_list';
+      items: LinkTarget[];
+    }
+  | {
+      type: 'image';
+      url: string;
+      alt?: string | null;
+    }
+  | {
+      type: 'link_buttons';
+      items: LinkTarget[];
+    };
 
 export interface Conversation {
   id: string;
@@ -32,7 +70,18 @@ export interface ChatChunk {
 // Config types — mirror the Rust AppConfig / CredentialsConfig structs
 // ---------------------------------------------------------------------------
 
-export type ProviderKind = 'ollama' | 'openai' | 'anthropic' | 'codex' | 'plugin';
+export type ProviderKind = 'ollama' | 'openai' | 'anthropic' | 'openai_codex' | 'plugin';
+
+export type AuthMethod = 'apikey' | 'oauth' | 'none';
+
+export interface ProviderProfile {
+  id: string;
+  name: string;
+  provider_kind: ProviderKind;
+  auth_method: AuthMethod;
+  default_model: string;
+  base_url?: string;
+}
 
 export interface OllamaConfig {
   base_url: string;
@@ -45,10 +94,23 @@ export interface ProviderModelConfig {
 
 export interface ChannelConfig {
   enabled: boolean;
+  show_typing?: boolean;
+  access?: ChannelAccessConfig;
+}
+
+export interface TelegramChannelConfig extends ChannelConfig {
+  native_streaming?: boolean;
+}
+
+export type DmPolicy = 'open' | 'pairing' | 'allowlist' | 'disabled';
+
+export interface ChannelAccessConfig {
+  dm_policy: DmPolicy;
+  allow_from: string[];
 }
 
 export interface GatewayConfig {
-  telegram: ChannelConfig;
+  telegram: TelegramChannelConfig;
   discord: ChannelConfig;
   slack: ChannelConfig;
   webchat: ChannelConfig;
@@ -59,25 +121,48 @@ export interface SecurityConfig {
   allowed_origins: string[];
 }
 
+export interface ShellExecSandboxConfig {
+  enabled: boolean;
+  workspace_root: string;
+  allow_network: boolean;
+  extra_write_roots: string[];
+}
+
+export interface ExecutionConfig {
+  shell_exec_sandbox: ShellExecSandboxConfig;
+}
+
 export interface AppConfigView {
   host: string;
   port: number;
   /** Legacy single-provider field — kept for backward compat with older backends. */
-  active_provider: ProviderKind;
+  active_provider?: ProviderKind;
   /** Multi-provider field. When set, takes precedence over active_provider. */
   active_providers?: ProviderKind[];
+  profiles: ProviderProfile[];
+  default_profile_id?: string;
+  fallback_profile_ids: string[];
   ollama: OllamaConfig;
   openai: ProviderModelConfig;
   anthropic: ProviderModelConfig;
-  codex: ProviderModelConfig;
+  openai_codex: ProviderModelConfig;
   gateway: GatewayConfig;
   allowed_chat_ids: number[];
   security: SecurityConfig;
+  execution: ExecutionConfig;
   [key: string]: unknown;
+}
+
+export interface ProfileSecrets {
+  api_key?: string;
+  access_token?: string;
+  refresh_token?: string;
+  token_expires_at?: number;
 }
 
 /** All credential fields are optional strings. */
 export interface CredentialsView {
+  profiles: Record<string, ProfileSecrets>;
   openai_api_key?: string;
   anthropic_api_key?: string;
   brave_api_key?: string;
@@ -85,6 +170,9 @@ export interface CredentialsView {
   discord_bot_token?: string;
   slack_bot_token?: string;
   slack_app_token?: string;
+  codex_access_token?: string;
+  codex_refresh_token?: string;
+  codex_token_expires_at?: number;
 }
 
 export interface RuntimeLogRecord {
@@ -101,6 +189,315 @@ export interface FetchLogsResponse {
   nextCursor?: string;
 }
 
+export interface ChannelStatusSummary {
+  id: string;
+  label: string;
+  enabled: boolean;
+  configured: boolean;
+  status: 'healthy' | 'needs_attention' | 'disabled' | string;
+  issue?: string | null;
+}
+
+export interface PendingApprovalSummary {
+  requestId: string;
+  sessionId: string;
+  conversationId: string;
+  runId?: string | null;
+  tool: string;
+  args?: Record<string, unknown>;
+}
+
+export interface ChannelPairingPendingRequest {
+  id: string;
+  channelId: string;
+  senderId: string;
+  senderDisplay?: string | null;
+  replyTarget: string;
+  code: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+}
+
+export interface ChannelPairedUser {
+  id: string;
+  channelId: string;
+  senderId: string;
+  senderDisplay?: string | null;
+  approvedAt: string;
+  lastSeenAt: string;
+}
+
+export interface ChannelPairingState {
+  channelId: string;
+  pending: ChannelPairingPendingRequest[];
+  paired: ChannelPairedUser[];
+}
+
+export interface ApprovalAuditRecord {
+  id: string;
+  status: string;
+  tool?: string | null;
+  requestId?: string | null;
+  runId?: string | null;
+  sessionId?: string | null;
+  createdAt: string;
+}
+
+export interface ApprovalsResponse {
+  pending: PendingApprovalSummary[];
+  recent: ApprovalAuditRecord[];
+}
+
+export interface SystemIncidentRecord {
+  id: string;
+  level: string;
+  target: string;
+  message: string;
+  createdAt: string;
+}
+
+export interface SystemSummaryResponse {
+  generatedAt: string;
+  status: 'healthy' | 'degraded' | string;
+  uptimeSecs: number;
+  activeProvider: string;
+  effectiveProfileId?: string | null;
+  defaultProfileId?: string | null;
+  runtimeUnavailableError?: string | null;
+  profilesCount: number;
+  fallbackProfileIds: string[];
+  channels: ChannelStatusSummary[];
+  approvals: {
+    pendingCount: number;
+    pending: PendingApprovalSummary[];
+  };
+  runs: {
+    totalCount: number;
+    activeCount: number;
+    queuedCount: number;
+    blockedCount: number;
+    failedCount: number;
+    mostRecentId?: string | null;
+  };
+  conversations: {
+    totalCount: number;
+    updatedLastHour: number;
+    mostRecentId?: string | null;
+    mostRecentTitle?: string | null;
+  };
+  security: {
+    hmacAuthEnabled: boolean;
+    allowedOriginsCount: number;
+    sandboxEnabled: boolean;
+    sandboxAllowNetwork: boolean;
+    sandboxWorkspaceRoot: string;
+  };
+  incidents: SystemIncidentRecord[];
+}
+
+export interface DoctorFinding {
+  code: string;
+  severity: 'error' | 'warn' | 'info' | string;
+  title: string;
+  detail: string;
+  action: string;
+  fixable: boolean;
+}
+
+export interface DoctorReportResponse {
+  generatedAt: string;
+  status: 'healthy' | 'attention' | 'degraded' | string;
+  summary: {
+    errorCount: number;
+    warnCount: number;
+    infoCount: number;
+  };
+  findings: DoctorFinding[];
+}
+
+export interface SoulMemoryFile {
+  name: string;
+  path: string;
+  exists: boolean;
+  updatedAt?: string | null;
+  sizeBytes: number;
+  lineCount: number;
+  content: string;
+}
+
+export interface SoulMemoryStateResponse {
+  dataDir: string;
+  soul: SoulMemoryFile;
+  memory: SoulMemoryFile;
+  identityFiles: SoulMemoryFile[];
+  dailyFiles: SoulMemoryFile[];
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  status: 'active' | 'idle' | 'awaiting_approval' | 'blocked' | string;
+  messageCount: number;
+  lastRole?: string | null;
+  lastMessagePreview?: string | null;
+  pendingApprovalCount: number;
+  activeRunCount: number;
+  queuedRunCount: number;
+  lastRunId?: string | null;
+}
+
+export type GatewayAdapterStatus =
+  | 'disabled'
+  | 'starting'
+  | 'connected'
+  | 'degraded'
+  | 'disconnected';
+
+export type GatewayRichDeliveryMode = 'native' | 'degraded' | 'unsupported';
+
+export interface GatewayAdapterCapabilities {
+  plainText: boolean;
+  markdown: boolean;
+  codeBlocks: boolean;
+  images: GatewayRichDeliveryMode;
+  linkButtons: GatewayRichDeliveryMode;
+}
+
+export interface GatewayAdapterState {
+  channelId: string;
+  status: GatewayAdapterStatus;
+  lastEventAt?: string | null;
+  lastError?: string | null;
+  reconnectCount: number;
+  capabilities: GatewayAdapterCapabilities;
+}
+
+export interface GatewaySessionSummary {
+  id: string;
+  channelId: string;
+  senderId: string;
+  conversationId: string;
+  lastActive: string;
+  lastRunId?: string | null;
+  lastDeliveryAt?: string | null;
+  lastError?: string | null;
+  status: string;
+  pendingApprovalCount: number;
+  activeRunCount: number;
+  queuedRunCount: number;
+  lastRunState?: RunState | null;
+}
+
+export interface GatewayChannelActivity {
+  channelId: string;
+  sessionCount: number;
+  recentRunCount: number;
+  activeRunCount: number;
+  blockedRunCount: number;
+}
+
+export interface GatewayFailureRecord {
+  kind: string;
+  channelId?: string | null;
+  sessionId?: string | null;
+  runId?: string | null;
+  message: string;
+  createdAt: string;
+}
+
+export interface GatewaySummaryResponse {
+  generatedAt: string;
+  adapters: GatewayAdapterState[];
+  sessions: {
+    totalCount: number;
+    activeLastHour: number;
+    mostRecentId?: string | null;
+    mostRecentAt?: string | null;
+  };
+  runs: {
+    totalCount: number;
+    activeCount: number;
+    blockedCount: number;
+    failedCount: number;
+    mostRecentId?: string | null;
+  };
+  channelActivity: GatewayChannelActivity[];
+  recentFailures: GatewayFailureRecord[];
+}
+
+export interface SkillRecord {
+  name: string;
+  description: string;
+  instructions: string;
+  path: string;
+  tools: string[];
+}
+
+export type RunKind = 'assistant' | 'workflow';
+export type RunState =
+  | 'queued'
+  | 'running'
+  | 'awaiting_approval'
+  | 'blocked'
+  | 'completed'
+  | 'failed'
+  | 'aborted';
+
+export interface RunPolicySnapshot {
+  decision: string;
+  approvalState: string;
+  sandboxState: string;
+  effectiveScope: string;
+  reason?: string | null;
+}
+
+export interface RunSnapshot {
+  id: string;
+  kind: RunKind;
+  state: RunState;
+  source?: string | null;
+  channelId?: string | null;
+  senderId?: string | null;
+  gatewaySessionId?: string | null;
+  sessionId?: string | null;
+  conversationId?: string | null;
+  workflowId?: string | null;
+  title: string;
+  inputText?: string | null;
+  outputText?: string | null;
+  provider: string;
+  model: string;
+  fallbackProfileId?: string | null;
+  queuePosition?: number | null;
+  activeTool?: string | null;
+  abortRequested: boolean;
+  policy: RunPolicySnapshot;
+  error?: string | null;
+  createdAt: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  updatedAt: string;
+}
+
+export interface RunEventRecord {
+  id: string;
+  runId: string;
+  eventType: string;
+  state?: RunState | null;
+  toolName?: string | null;
+  message?: string | null;
+  policy: RunPolicySnapshot;
+  createdAt: string;
+}
+
+export interface RunDetail {
+  snapshot: RunSnapshot;
+  events: RunEventRecord[];
+}
+
 export interface UsageMetricRow {
   id: string;
   conversationId: string;
@@ -109,6 +506,9 @@ export interface UsageMetricRow {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
   createdAt: string;
 }
 
@@ -116,6 +516,9 @@ export interface UsageTotals {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
   rowCount: number;
 }
 
@@ -137,4 +540,141 @@ export interface UsageMetricsResponse {
     byModel: UsageAggregateKey[];
   };
   daily: DailyUsageEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Workspace conversation types — richer than flat Message[]
+// ---------------------------------------------------------------------------
+
+export type WsEventType =
+  | 'chat_chunk'
+  | 'assistant_reset'
+  | 'assistant_message'
+  | 'tool_start'
+  | 'tool_end'
+  | 'approval_request'
+  | 'approval_result'
+  | 'user_message'
+  | 'runtime_log_error'
+  | 'error';
+
+export interface WsChatChunkEvent {
+  type: 'chat_chunk';
+  run_id?: string;
+  conversation_id: string;
+  delta: string;
+  tool_calls: ToolCall[];
+  done: boolean;
+}
+export interface WsAssistantResetEvent {
+  type: 'assistant_reset';
+  run_id?: string;
+  conversation_id: string;
+}
+export interface WsAssistantMessageEvent {
+  type: 'assistant_message';
+  run_id?: string | null;
+  conversation_id: string;
+  content: string;
+  rich_content?: RichContent | null;
+}
+export interface WsToolStartEvent {
+  type: 'tool_start';
+  run_id?: string;
+  conversation_id?: string;
+  tool_name: string;
+  args: Record<string, unknown>;
+}
+export interface WsToolEndEvent {
+  type: 'tool_end';
+  run_id?: string;
+  conversation_id?: string;
+  tool_name: string;
+  result: string;
+  is_error: boolean;
+}
+export interface WsApprovalRequestEvent {
+  type: 'approval_request';
+  request_id: string;
+  run_id?: string | null;
+  conversation_id: string;
+  tool: string;
+  args: Record<string, unknown>;
+}
+export interface WsApprovalResultEvent {
+  type: 'approval_result';
+  request_id: string;
+  run_id?: string | null;
+  approved: boolean;
+  error?: string;
+}
+export interface WsErrorEvent {
+  type: 'error';
+  run_id?: string;
+  conversation_id?: string;
+  message: string;
+}
+
+export interface WsRuntimeLogErrorEvent {
+  type: 'runtime_log_error';
+  id: string;
+  level: 'error' | 'fatal' | string;
+  target: string;
+  message: string;
+  fields?: Record<string, unknown> | null;
+  created_at: string;
+}
+
+/** Emitted by the gateway router when a channel (Telegram, Discord, etc.)
+ *  receives a user message — lets the workspace UI show it in real-time. */
+export interface WsUserMessageEvent {
+  type: 'user_message';
+  conversation_id: string;
+  content: string;
+  channel: string;
+}
+
+export type WsEvent =
+  | WsChatChunkEvent
+  | WsAssistantResetEvent
+  | WsAssistantMessageEvent
+  | WsToolStartEvent
+  | WsToolEndEvent
+  | WsApprovalRequestEvent
+  | WsApprovalResultEvent
+  | WsErrorEvent
+  | WsRuntimeLogErrorEvent
+  | WsUserMessageEvent;
+
+export type ConversationItem =
+  | { kind: 'user'; id: string; content: string }
+  | {
+      kind: 'assistant';
+      id: string;
+      content: string;
+      richContent?: RichContent | null;
+      runId?: string | null;
+    }
+  | { kind: 'thinking'; id: string }
+  | {
+      kind: 'tool_use';
+      id: string;
+      tool_name: string;
+      args: Record<string, unknown>;
+      result?: string;
+      is_error?: boolean;
+      status: 'running' | 'done' | 'error';
+    }
+  | {
+      kind: 'approval';
+      id: string;
+      request_id: string;
+      tool: string;
+      args: Record<string, unknown>;
+    }
+  | { kind: 'error'; id: string; message: string };
+
+export interface ActiveAgent {
+  name: string;
+  role: 'orchestrator' | 'delegate';
 }

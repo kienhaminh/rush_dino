@@ -1,0 +1,7 @@
+host = "127.0.0.1"
+port = 28847
+log_level = "info"
+default_profile_id = ""
+data_dir = "{home_path}"
+db_path = "{db_path}"
+brave_search_endpoint = "https://api.search.brave.com/res/v1/web/search"

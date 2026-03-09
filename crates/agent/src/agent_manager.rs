@@ -11,6 +11,9 @@ pub struct AgentTemplate {
     pub description: String,
     pub system_prompt: String,
     pub icon: Option<String>,
+    /// Optional preferred model ID for workflow steps using this agent.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// Manages agent templates stored as TOML files in a directory.
@@ -27,7 +30,9 @@ impl AgentManager {
     /// Rejects names that could escape the agents directory via path traversal.
     fn validate_name(name: &str) -> Result<()> {
         if name.is_empty() || name.contains('/') || name.contains('\\') || name.starts_with('.') {
-            return Err(AppError::Validation(format!("invalid agent name: {name:?}")));
+            return Err(AppError::Validation(format!(
+                "invalid agent name: {name:?}"
+            )));
         }
         Ok(())
     }
@@ -71,10 +76,26 @@ impl AgentManager {
         Self::validate_name(&template.name)?;
         fs::create_dir_all(&self.agents_dir)?;
         let path = self.agents_dir.join(format!("{}.toml", template.name));
-        let content = toml::to_string_pretty(template)
-            .map_err(|e| AppError::Validation(format!("failed to serialize agent template: {e}")))?;
+        let content = toml::to_string_pretty(template).map_err(|e| {
+            AppError::Validation(format!("failed to serialize agent template: {e}"))
+        })?;
         fs::write(&path, content)?;
         Ok(path)
+    }
+
+    pub fn delete(&self, name: &str) -> Result<()> {
+        Self::validate_name(name)?;
+        let template_path = self.agents_dir.join(format!("{name}.toml"));
+        if template_path.exists() {
+            fs::remove_file(&template_path)?;
+        }
+
+        let workspace_dir = self.agents_dir.join(name);
+        if workspace_dir.exists() {
+            fs::remove_dir_all(&workspace_dir)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -96,6 +117,7 @@ mod tests {
             description: "A test agent".to_owned(),
             system_prompt: "You are a helpful assistant.".to_owned(),
             icon: None,
+            model: None,
         }
     }
 
@@ -150,6 +172,24 @@ mod tests {
         let manager = AgentManager::new(dir.clone());
         let templates = manager.list();
         assert!(templates.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delete_removes_template_and_workspace() {
+        let dir = temp_dir();
+        let manager = AgentManager::new(dir.clone());
+        let template = sample_template("delete-me");
+
+        manager.save(&template).expect("save should succeed");
+        fs::create_dir_all(dir.join("delete-me")).unwrap();
+        fs::write(dir.join("delete-me").join("AGENTS.md"), "hello").unwrap();
+
+        manager.delete("delete-me").expect("delete should succeed");
+
+        assert!(!dir.join("delete-me.toml").exists());
+        assert!(!dir.join("delete-me").exists());
 
         let _ = fs::remove_dir_all(&dir);
     }

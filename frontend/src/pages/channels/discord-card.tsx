@@ -59,6 +59,14 @@ export function DiscordCard({
               {discord?.lastProbeAt ? formatTime(discord.lastProbeAt) : 'n/a'}
             </span>
           </div>
+          <div className="flex justify-between items-center text-muted-foreground pt-2 border-t border-border/50 col-span-2">
+            <span>Paired users</span>
+            <span className="font-medium text-foreground">{discord?.pairedCount ?? 0}</span>
+          </div>
+          <div className="flex justify-between items-center text-muted-foreground col-span-2 mt-1">
+            <span>Pending pairing</span>
+            <span className="font-medium text-foreground">{discord?.pendingPairingCount ?? 0}</span>
+          </div>
         </div>
 
         {discord?.lastError && (

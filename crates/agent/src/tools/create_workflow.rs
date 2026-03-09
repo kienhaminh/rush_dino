@@ -95,16 +95,15 @@ impl Tool for CreateWorkflowTool {
                 .get("name")
                 .and_then(Value::as_str)
                 .ok_or_else(|| AppError::Validation(format!("steps[{index}].name is required")))?;
-            let instructions = raw
-                .get("instructions")
-                .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    AppError::Validation(format!("steps[{index}].instructions is required"))
-                })?;
-            let agent_id = raw
-                .get("agent_id")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation(format!("steps[{index}].agent_id is required")))?;
+            let instructions =
+                raw.get("instructions")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        AppError::Validation(format!("steps[{index}].instructions is required"))
+                    })?;
+            let agent_id = raw.get("agent_id").and_then(Value::as_str).ok_or_else(|| {
+                AppError::Validation(format!("steps[{index}].agent_id is required"))
+            })?;
 
             if self.agent_manager.get(agent_id).is_none() {
                 return Err(AppError::Validation(format!(
@@ -160,7 +159,10 @@ mod tests {
             if sql.is_empty() {
                 continue;
             }
-            sqlx::query(sql).execute(&pool).await.expect("run statement");
+            sqlx::query(sql)
+                .execute(&pool)
+                .await
+                .expect("run statement");
         }
 
         let dir = std::env::temp_dir().join(format!("workflow-tool-{}", Uuid::new_v4()));
@@ -173,6 +175,7 @@ mod tests {
                 description: "default".to_owned(),
                 system_prompt: "You are helpful".to_owned(),
                 icon: None,
+                model: None,
             })
             .expect("save template");
 

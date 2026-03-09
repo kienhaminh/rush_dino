@@ -116,7 +116,10 @@ pub async fn build_lanes_from_conversation_store(
     let conversations = conversation.list_conversations().await?;
     let mut events = Vec::new();
 
-    for record in conversations.into_iter().filter(|item| item.updated_at >= cutoff) {
+    for record in conversations
+        .into_iter()
+        .filter(|item| item.updated_at >= cutoff)
+    {
         let messages = conversation.get_messages(&record.id).await?;
         events.extend(extract_delegate_events(&record, &messages));
     }
@@ -158,18 +161,19 @@ pub fn build_lanes_from_events(
 
     for event in events {
         let status = classify_event(&event, active_window_seconds, now);
-        let builder = lane_map
-            .entry(event.agent_id.clone())
-            .or_insert_with(|| AgentProgressLaneBuilder {
-                identity: AgentProgressAgentIdentity {
-                    id: event.agent_id.clone(),
-                    name: humanize_agent_name(&event.agent_id),
-                    emoji: "❔".to_owned(),
-                },
-                now: Vec::new(),
-                recent: Vec::new(),
-                blocked: Vec::new(),
-            });
+        let builder =
+            lane_map
+                .entry(event.agent_id.clone())
+                .or_insert_with(|| AgentProgressLaneBuilder {
+                    identity: AgentProgressAgentIdentity {
+                        id: event.agent_id.clone(),
+                        name: humanize_agent_name(&event.agent_id),
+                        emoji: "❔".to_owned(),
+                    },
+                    now: Vec::new(),
+                    recent: Vec::new(),
+                    blocked: Vec::new(),
+                });
 
         match status {
             AgentProgressCardStatus::Now => builder.now.push(event),
@@ -195,7 +199,11 @@ pub fn build_lanes_from_events(
             builder.recent.truncate(per_column);
             builder.blocked.truncate(per_column);
 
-            let now_cards = builder.now.into_iter().map(event_to_card_now).collect::<Vec<_>>();
+            let now_cards = builder
+                .now
+                .into_iter()
+                .map(event_to_card_now)
+                .collect::<Vec<_>>();
             let recent_cards = builder
                 .recent
                 .into_iter()
@@ -293,7 +301,10 @@ fn event_to_card_blocked(event: AgentProgressEvent) -> AgentProgressCard {
     }
 }
 
-fn extract_delegate_events(conversation: &Conversation, messages: &[Message]) -> Vec<AgentProgressEvent> {
+fn extract_delegate_events(
+    conversation: &Conversation,
+    messages: &[Message],
+) -> Vec<AgentProgressEvent> {
     let mut pending = VecDeque::<PendingToolCall>::new();
     let mut events = Vec::new();
 
@@ -318,7 +329,8 @@ fn extract_delegate_events(conversation: &Conversation, messages: &[Message]) ->
                 }
                 events.push(AgentProgressEvent {
                     id: format!("{}:{}:{}", conversation.id, call.call.id, message.id),
-                    agent_id: delegate_agent_name(&call.call).unwrap_or_else(|| "unknown-agent".to_owned()),
+                    agent_id: delegate_agent_name(&call.call)
+                        .unwrap_or_else(|| "unknown-agent".to_owned()),
                     title: delegate_title(&call.call),
                     source_tool: call.call.name.clone(),
                     conversation_id: conversation.id.clone(),

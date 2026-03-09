@@ -12,7 +12,11 @@ pub async fn run() -> Result<()> {
         return Ok(());
     }
 
-    println!("{} {}", "⏳".yellow(), "Fetching health from the running gateway...");
+    println!(
+        "{} {}",
+        "⏳".yellow(),
+        "Fetching health from the running gateway..."
+    );
 
     let config = AppConfig::load()?;
     let url = format!("http://{}:{}/healthz", config.host, config.port);

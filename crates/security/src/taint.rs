@@ -23,11 +23,17 @@ pub struct TaintedString {
 
 impl TaintedString {
     pub fn clean(value: impl Into<String>) -> Self {
-        Self { value: value.into(), taint: TaintLevel::Clean }
+        Self {
+            value: value.into(),
+            taint: TaintLevel::Clean,
+        }
     }
 
     pub fn user_input(value: impl Into<String>) -> Self {
-        Self { value: value.into(), taint: TaintLevel::UserInput }
+        Self {
+            value: value.into(),
+            taint: TaintLevel::UserInput,
+        }
     }
 
     /// Upgrade taint to at least the given level, returning a new `TaintedString`.
@@ -39,8 +45,13 @@ impl TaintedString {
     }
 
     /// Combine taint from multiple sources, keeping the maximum.
-    pub fn propagate_max<'a>(base: TaintLevel, sources: impl IntoIterator<Item = &'a TaintLevel>) -> TaintLevel {
-        sources.into_iter().fold(base, |acc, t| if t > &acc { t.clone() } else { acc })
+    pub fn propagate_max<'a>(
+        base: TaintLevel,
+        sources: impl IntoIterator<Item = &'a TaintLevel>,
+    ) -> TaintLevel {
+        sources
+            .into_iter()
+            .fold(base, |acc, t| if t > &acc { t.clone() } else { acc })
     }
 }
 
@@ -59,7 +70,11 @@ mod tests {
     fn propagate_max_keeps_highest() {
         let max = TaintedString::propagate_max(
             TaintLevel::Clean,
-            &[TaintLevel::UserInput, TaintLevel::Suspicious, TaintLevel::Clean],
+            &[
+                TaintLevel::UserInput,
+                TaintLevel::Suspicious,
+                TaintLevel::Clean,
+            ],
         );
         assert_eq!(max, TaintLevel::Suspicious);
     }

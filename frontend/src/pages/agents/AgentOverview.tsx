@@ -1,8 +1,16 @@
 import React from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { BrainIcon, FolderIcon, UserIcon } from 'lucide-react';
 
 export function AgentOverview({ agent }: { agent: any }) {
@@ -52,6 +60,22 @@ export function AgentOverview({ agent }: { agent: any }) {
         </div>
       )}
 
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-2">
+          Shared Runtime State
+        </p>
+        <p className="text-sm text-foreground/80">
+          Soul and memory are shared across every agent. Selecting an agent changes its identity,
+          tools, and workspace context, but these two panels reflect the same shared state for the
+          whole runtime.
+        </p>
+        <div className="mt-3">
+          <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+            <RouterLink to="/soul-memory">Open soul and memory</RouterLink>
+          </Button>
+        </div>
+      </div>
+
       {/* Model Configuration */}
       <Card className="bg-card border-border/50">
         <CardHeader className="pb-4">
@@ -66,11 +90,16 @@ export function AgentOverview({ agent }: { agent: any }) {
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
                 Primary Model
               </label>
-              <select className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="claude-3">Claude 3 Opus</option>
-                <option value="claude-3.5">Claude 3.5 Sonnet</option>
-              </select>
+              <Select defaultValue="gpt-4o">
+                <SelectTrigger className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                  <SelectValue placeholder="Select primary model" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                  <SelectItem value="claude-3">Claude 3 Opus</SelectItem>
+                  <SelectItem value="claude-3.5">Claude 3.5 Sonnet</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">

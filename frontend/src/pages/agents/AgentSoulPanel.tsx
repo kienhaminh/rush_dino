@@ -84,6 +84,16 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
 
   return (
     <div className="space-y-6">
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Shared Soul</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            This soul definition is shared by every agent. Changes here affect the full agent
+            runtime, not only the selected agent.
+          </p>
+        </CardHeader>
+      </Card>
+
       {/* Persona + Tone */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="bg-card border-border/50">
@@ -93,7 +103,7 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
               Persona
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Short description of who this agent is at its core.
+              Short description of the shared agent soul at its core.
             </p>
           </CardHeader>
           <CardContent>
@@ -113,7 +123,7 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
               Tone & Style
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              How this agent communicates — voice, register, and style.
+              How every agent communicates from the shared soul layer.
             </p>
           </CardHeader>
           <CardContent>
@@ -136,7 +146,7 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
               Core Values
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Guiding principles this agent prioritizes in every decision.
+              Guiding principles shared by all agents in every decision.
             </p>
           </div>
           <Badge variant="outline" className="font-mono border-border/50 bg-muted/40 h-6 text-xs">
@@ -190,7 +200,7 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
               Behavioral Traits
             </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Consistent habits and tendencies that define this agent's conduct.
+              Consistent habits and tendencies shared across all agents.
             </p>
           </div>
           <Button
@@ -276,7 +286,7 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">System Prompt</CardTitle>
           <p className="text-xs text-muted-foreground">
-            The raw directive injected before every agent turn.
+            The raw shared directive injected before every agent turn.
           </p>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -300,7 +310,7 @@ export function AgentSoulPanel({ runtime }: AgentSoulPanelProps) {
               Reset
             </Button>
             <Button size="sm" className="h-8 text-xs" disabled={!dirty}>
-              Save Soul
+              Save Shared Soul
             </Button>
           </div>
         </CardContent>

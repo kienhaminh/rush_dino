@@ -1,309 +1,322 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { useEffect, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import {
-  ActivityIcon,
-  ServerIcon,
-  MonitorIcon,
-  ShieldIcon,
-  ClockIcon,
-  KeyIcon,
-  RefreshCwIcon,
-  GlobeIcon,
-  WifiIcon,
-  UsersIcon,
-  CalendarIcon,
-  AlertCircleIcon,
-  InfoIcon,
+  AlertTriangle,
+  ArrowRight,
+  Clock3,
+  KeyRound,
+  Link2,
+  RefreshCw,
+  ShieldCheck,
+  TerminalSquare,
 } from 'lucide-react';
 
-export type OverviewProps = {
-  connected?: boolean;
-  hello?: any | null;
-  settings?: any;
-  password?: string;
-  lastError?: string | null;
-  lastErrorCode?: string | null;
-  presenceCount?: number;
-  sessionsCount?: number | null;
-  cronEnabled?: boolean | null;
-  cronNext?: number | null;
-  lastChannelsRefresh?: number | null;
-  onSettingsChange?: (next: any) => void;
-  onPasswordChange?: (next: string) => void;
-  onSessionKeyChange?: (next: string) => void;
-  onConnect?: () => void;
-  onRefresh?: () => void;
-};
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { fetchSystemSummary } from '@/lib/api';
+import { formatProviderLabel } from '@/lib/provider-display';
+import type { SystemSummaryResponse } from '@/lib/types';
 
-export function OverviewPage(props: OverviewProps) {
-  // Use props with fallbacks for development/mocking
-  const connected = props.connected ?? true;
-  const snapshot = props.hello?.snapshot || {
-    uptimeMs: 124560000,
-    policy: { tickIntervalMs: 1000 },
-    authMode: 'token',
+function formatUptime(uptimeSecs: number) {
+  const hours = Math.floor(uptimeSecs / 3600);
+  const minutes = Math.floor((uptimeSecs % 3600) / 60);
+  if (hours === 0) return `${minutes}m`;
+  return `${hours}h ${minutes}m`;
+}
+
+function toneForStatus(status: string) {
+  switch (status) {
+    case 'healthy':
+      return 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400';
+    case 'degraded':
+      return 'bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400';
+    default:
+      return 'bg-muted/40 text-muted-foreground border-border/50';
+  }
+}
+
+export function OverviewPage() {
+  const [summary, setSummary] = useState<SystemSummaryResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadSummary = async () => {
+    setLoading(true);
+    try {
+      const next = await fetchSystemSummary();
+      setSummary(next);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load operations summary.');
+    } finally {
+      setLoading(false);
+    }
   };
-  const uptime = snapshot?.uptimeMs
-    ? `${Math.floor(snapshot.uptimeMs / (1000 * 60 * 60))}h ${Math.floor((snapshot.uptimeMs / (1000 * 60)) % 60)}m`
-    : 'N/A';
-  const tick = snapshot?.policy?.tickIntervalMs ? `${snapshot.policy.tickIntervalMs}ms` : 'N/A';
 
-  const [localSettings, setLocalSettings] = useState(
-    props.settings || {
-      gatewayUrl: 'ws://127.0.0.1:18789',
-      token: '',
-      sessionKey: '',
-      locale: 'en-US',
-    },
-  );
+  useEffect(() => {
+    void loadSummary();
+  }, []);
 
-  const [localPassword, setLocalPassword] = useState(props.password || '');
+  const channels = summary?.channels ?? [];
+  const needsAttention = channels.filter((channel) => channel.status === 'needs_attention');
 
   return (
-    <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
-      <div className="w-full space-y-8 pb-12">
-        <div className="flex justify-end items-center pb-2">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              className="bg-background border-border hover:bg-secondary transition-colors h-9"
-              onClick={() => props.onRefresh?.()}
-            >
-              <RefreshCwIcon className="w-4 h-4 mr-2" />
-              Refresh
-            </Button>
-          </div>
-        </div>
+    <div className="flex-1 min-w-0 h-full overflow-y-auto bg-background px-6 py-6 md:px-8 md:py-8 flex flex-col gap-6 w-full">
+        <section className="rounded-[28px] border border-border/60 bg-card/70 p-6 shadow-[0_20px_80px_-50px_rgba(0,0,0,0.7)] backdrop-blur-sm">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-4">
+              <Badge className={`border text-[10px] uppercase tracking-[0.28em] ${toneForStatus(summary?.status ?? 'healthy')}`}>
+                {summary?.status ?? 'loading'}
+              </Badge>
+              <div className="space-y-2">
+                <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+                  Normal administration lives here now: approvals, channel health, policy posture,
+                  and runtime incidents are all visible without dropping to CLI.
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span>Provider: {summary ? formatProviderLabel(summary.activeProvider) : '...'}</span>
+                  <span>Uptime: {summary ? formatUptime(summary.uptimeSecs) : '...'}</span>
+                  <span>Profiles: {summary?.profilesCount ?? 0}</span>
+                </div>
+              </div>
+            </div>
 
-        {props.lastError && (
-          <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-md text-sm mb-6 flex items-start gap-3">
-            <AlertCircleIcon className="w-5 h-5 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">Connection Error</p>
-              <p>{props.lastError}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild variant="outline" className="border-border/60 bg-background/60">
+                <RouterLink to="/approvals">Open approvals</RouterLink>
+              </Button>
+              <Button asChild variant="outline" className="border-border/60 bg-background/60">
+                <RouterLink to="/runs">Open runs</RouterLink>
+              </Button>
+              <Button asChild variant="outline" className="border-border/60 bg-background/60">
+                <RouterLink to="/gateway">Open gateway</RouterLink>
+              </Button>
+              <Button asChild variant="outline" className="border-border/60 bg-background/60">
+                <RouterLink to="/diagnostics">Open diagnostics</RouterLink>
+              </Button>
+              <Button onClick={() => void loadSummary()} disabled={loading}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
           </div>
-        )}
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Access Settings Card */}
-          <Card className="bg-card border-border flex flex-col">
-            <CardHeader className="border-b border-border/40 pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ShieldIcon className="w-5 h-5 text-primary" />
-                Access Configuration
-              </CardTitle>
-              <CardDescription>Configure how the UI connects to the gateway.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-5 flex-1">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <GlobeIcon className="w-4 h-4 text-muted-foreground" />
-                  Gateway URL
-                </label>
-                <Input
-                  value={localSettings.gatewayUrl}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, gatewayUrl: e.target.value })
-                  }
-                  className="bg-muted/50 border-border font-mono text-sm"
-                  placeholder="ws://127.0.0.1:18789"
-                />
+        {error ? (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {error}
+          </div>
+        ) : null}
+
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <Card className="border-border/60 bg-card/80">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+                <ShieldCheck className="h-5 w-5" />
               </div>
-
-              {snapshot?.authMode !== 'trusted-proxy' && (
-                <>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      <KeyIcon className="w-4 h-4 text-muted-foreground" />
-                      Gateway Token
-                    </label>
-                    <Input
-                      value={localSettings.token}
-                      onChange={(e) =>
-                        setLocalSettings({ ...localSettings, token: e.target.value })
-                      }
-                      className="bg-muted/50 border-border font-mono text-sm"
-                      placeholder="OPENCLAW_GATEWAY_TOKEN"
-                      type="password"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-foreground flex items-center gap-2">
-                      <MonitorIcon className="w-4 h-4 text-muted-foreground" />
-                      System Password
-                    </label>
-                    <Input
-                      type="password"
-                      value={localPassword}
-                      onChange={(e) => setLocalPassword(e.target.value)}
-                      className="bg-muted/50 border-border"
-                      placeholder="system or shared password"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div className="pt-4 mt-auto">
-                <Button
-                  className="w-full"
-                  onClick={() => {
-                    props.onSettingsChange?.(localSettings);
-                    props.onPasswordChange?.(localPassword);
-                    props.onConnect?.();
-                  }}
-                >
-                  <WifiIcon className="w-4 h-4 mr-2" />
-                  Connect
-                </Button>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Pending approvals</p>
+                <p className="mt-1 text-3xl font-semibold">{summary?.approvals.pendingCount ?? 0}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* System Snapshot Card */}
-          <Card className="bg-card border-border flex flex-col">
-            <CardHeader className="border-b border-border/40 pb-4">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <ServerIcon className="w-5 h-5 text-primary" />
-                Gateway Snapshot
-              </CardTitle>
-              <CardDescription>Real-time status of the connected gateway.</CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm text-muted-foreground mb-1">Status</div>
-                  <div className="flex items-center gap-2 font-medium">
-                    {connected ? (
-                      <>
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div> Connected
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-2 h-2 rounded-full bg-destructive"></div> Offline
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm text-muted-foreground mb-1">Uptime</div>
-                  <div className="font-mono text-sm font-medium">{uptime}</div>
-                </div>
-
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm text-muted-foreground mb-1">Tick Interval</div>
-                  <div className="font-mono text-sm font-medium">{tick}</div>
-                </div>
-
-                <div className="bg-muted/30 p-4 rounded-lg border border-border/50">
-                  <div className="text-sm text-muted-foreground mb-1">Channels Refresh</div>
-                  <div className="font-mono text-sm font-medium">
-                    {props.lastChannelsRefresh
-                      ? new Date(props.lastChannelsRefresh).toLocaleTimeString()
-                      : 'N/A'}
-                  </div>
-                </div>
+          <Card className="border-border/60 bg-card/80">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-500">
+                <Link2 className="h-5 w-5" />
               </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Channels needing attention</p>
+                <p className="mt-1 text-3xl font-semibold">{needsAttention.length}</p>
+              </div>
+            </CardContent>
+          </Card>
 
-              {!props.lastError && (
-                <div className="mt-6 bg-primary/10 text-primary p-3 rounded-md text-sm border border-primary/20 flex items-start gap-3">
-                  <InfoIcon className="w-4 h-4 shrink-0 mt-0.5" />
-                  <p>
-                    Ensure your gateway is fully configured to receive periodic channel status
-                    updates.
+          <Card className="border-border/60 bg-card/80">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-500">
+                <Clock3 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Active runs</p>
+                <p className="mt-1 text-3xl font-semibold">{summary?.runs.activeCount ?? 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card/80">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-2xl bg-rose-500/10 p-3 text-rose-500">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Recent incidents</p>
+                <p className="mt-1 text-3xl font-semibold">{summary?.incidents.length ?? 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card/80">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-2xl bg-slate-500/10 p-3 text-slate-500">
+                <Clock3 className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Queued runs</p>
+                <p className="mt-1 text-3xl font-semibold">{summary?.runs.queuedCount ?? 0}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <Card className="border-border/60 bg-card/80">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Connectivity posture</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {channels.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No channel status available.</p>
+              ) : (
+                channels.map((channel) => (
+                  <div
+                    key={channel.id}
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-border/50 bg-background/50 px-4 py-3"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{channel.label}</p>
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                          {channel.enabled ? channel.status.replace('_', ' ') : 'disabled'}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {channel.issue ?? (channel.enabled ? 'Configured and available for UI-managed operations.' : 'Disabled in config.')}
+                      </p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground">
+                      <p>{channel.enabled ? 'Enabled' : 'Off'}</p>
+                      <p>{channel.configured ? 'Configured' : 'Missing creds'}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4">
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Runtime queue preview</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {summary?.runs.mostRecentId ? (
+                  <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium">Live runtime activity</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {summary.runs.activeCount} active · {summary.runs.queuedCount} queued · {summary.runs.blockedCount} blocked
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                        <RouterLink to="/runs">
+                          Review
+                          <ArrowRight className="ml-1 h-3 w-3" />
+                        </RouterLink>
+                      </Button>
+                    </div>
+                  </div>
+                ) : summary?.approvals.pending.length ? (
+                  summary.approvals.pending.slice(0, 4).map((request) => (
+                    <div key={request.requestId} className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium">{request.tool}</p>
+                        <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
+                          <RouterLink to="/approvals">
+                            Review
+                            <ArrowRight className="ml-1 h-3 w-3" />
+                          </RouterLink>
+                        </Button>
+                      </div>
+                      <p className="mt-1 font-mono text-[11px] text-muted-foreground">
+                        session {request.sessionId}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-background/40 px-4 py-8 text-sm text-muted-foreground">
+                    No runs or approvals are waiting on operator action.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-card/80">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Policy and recovery signals</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm text-muted-foreground">
+                <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3">
+                  <div className="flex items-center gap-2 text-foreground">
+                    <TerminalSquare className="h-4 w-4 text-primary" />
+                    <span className="font-medium">Shell sandbox</span>
+                  </div>
+                  <p className="mt-1">
+                    {summary?.security.sandboxEnabled ? 'Enabled' : 'Disabled'} · network{' '}
+                    {summary?.security.sandboxAllowNetwork ? 'allowed' : 'blocked'}
+                  </p>
+                  <p className="mt-1 font-mono text-[11px]">{summary?.security.sandboxWorkspaceRoot}</p>
+                </div>
+                <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3">
+                  <div className="flex items-center gap-2 text-foreground">
+                    <KeyRound className="h-4 w-4 text-primary" />
+                    <span className="font-medium">API auth posture</span>
+                  </div>
+                  <p className="mt-1">
+                    HMAC auth {summary?.security.hmacAuthEnabled ? 'enabled' : 'disabled'} · allowed origins{' '}
+                    {summary?.security.allowedOriginsCount ?? 0}
                   </p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-card border-border">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="bg-primary/10 p-3 rounded-full text-primary shrink-0">
-                <MonitorIcon className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Connected Instances</p>
-                <div className="text-2xl font-bold">{props.presenceCount ?? 0}</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="bg-blue-500/10 p-3 rounded-full text-blue-500 shrink-0">
-                <UsersIcon className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Active Sessions</p>
-                <div className="text-2xl font-bold">{props.sessionsCount ?? 'N/A'}</div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-card border-border">
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className="bg-amber-500/10 p-3 rounded-full text-amber-500 shrink-0">
-                <CalendarIcon className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Cron Enabled</p>
-                <div className="text-2xl font-bold">
-                  {props.cronEnabled == null ? 'N/A' : props.cronEnabled ? 'Yes' : 'No'}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Notes Section */}
-        <Card className="bg-card border-border">
-          <CardHeader className="border-b border-border/40 pb-4">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <InfoIcon className="w-5 h-5 text-primary" />
-              Administrative Notes
-            </CardTitle>
-            <CardDescription>
-              Important information about system features and requirements.
-            </CardDescription>
+        <Card className="border-border/60 bg-card/80">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Recent incidents</CardTitle>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <h4 className="font-semibold text-sm mb-2 text-foreground">Tailscale Serving</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  When accessing your gateway via a shared domain or IP, consider running behind
-                  Tailscale Serve for end-to-end encryption.
-                </p>
+          <CardContent className="space-y-3">
+            {summary?.incidents.length ? (
+              summary.incidents.map((incident) => (
+                <div
+                  key={incident.id}
+                  className="flex flex-col gap-2 rounded-2xl border border-border/50 bg-background/50 px-4 py-3 md:flex-row md:items-start md:justify-between"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                        {incident.level}
+                      </Badge>
+                      <p className="text-sm font-medium">{incident.target}</p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">{incident.message}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(incident.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/60 bg-background/40 px-4 py-8 text-sm text-muted-foreground">
+                No recent warnings or errors recorded in the runtime log.
               </div>
-              <div>
-                <h4 className="font-semibold text-sm mb-2 text-foreground">Session Keys</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Use session keys to persist active workflow states across multiple browser tabs
-                  and windows securely.
-                </p>
-              </div>
-              <div>
-                <h4 className="font-semibold text-sm mb-2 text-foreground">Cron Jobs</h4>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Background cron jobs handle automated workflows. Ensure the gateway has the
-                  correct policy setup to allow background tasks.
-                </p>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
-      </div>
     </div>
   );
 }
-
-export default OverviewPage;

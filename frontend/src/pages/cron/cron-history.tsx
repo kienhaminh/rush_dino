@@ -2,6 +2,13 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   ClockIcon,
   CalendarIcon,
   ArchiveIcon,
@@ -95,22 +102,30 @@ export function CronHistory({
       {/* Filters & Sorting */}
       <div className="flex flex-col md:flex-row gap-4 items-center justify-end">
         <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto scrollbar-none">
-          <select
-            className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm"
+          <Select
             value={filters.scope}
-            onChange={(e) => onFilterChange({ scope: e.target.value as CronRunScope })}
+            onValueChange={(value) => onFilterChange({ scope: value as CronRunScope })}
           >
-            <option value="all">Global Scope</option>
-            <option value="job">Selected Job</option>
-          </select>
-          <select
-            className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm"
+            <SelectTrigger className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Global Scope</SelectItem>
+              <SelectItem value="job">Selected Job</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
             value={filters.sortDir}
-            onChange={(e) => onFilterChange({ sortDir: e.target.value as CronSortDir })}
+            onValueChange={(value) => onFilterChange({ sortDir: value as CronSortDir })}
           >
-            <option value="desc">Newest First</option>
-            <option value="asc">Oldest First</option>
-          </select>
+            <SelectTrigger className="bg-card border border-border/40 text-foreground px-3 py-2 rounded-xl text-[12px] outline-none transition-all cursor-pointer hover:bg-muted/50 shadow-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Newest First</SelectItem>
+              <SelectItem value="asc">Oldest First</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

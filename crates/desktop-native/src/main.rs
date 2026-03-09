@@ -91,7 +91,8 @@ mod macos_app {
         DesktopTab::Nodes,
         DesktopTab::KnowledgeGraph,
     ];
-    const GROUP_SETTINGS: &[DesktopTab] = &[DesktopTab::Config, DesktopTab::Debug, DesktopTab::Logs];
+    const GROUP_SETTINGS: &[DesktopTab] =
+        &[DesktopTab::Config, DesktopTab::Debug, DesktopTab::Logs];
 
     struct BackendProcess {
         child: Option<Child>,
@@ -255,7 +256,8 @@ mod macos_app {
         fn fetch_graph_facts(&mut self) {
             let url = format!(
                 "{BASE_URL}/api/graph/facts?q={}&limit=30",
-                url::form_urlencoded::byte_serialize(self.graph_query.as_bytes()).collect::<String>()
+                url::form_urlencoded::byte_serialize(self.graph_query.as_bytes())
+                    .collect::<String>()
             );
             let response = reqwest::blocking::get(url);
             match response {
@@ -321,25 +323,26 @@ mod macos_app {
                         self.graph_stats = Some(json);
                         self.graph_error = None;
                     }
-                    Err(err) => self.graph_error = Some(format!("invalid backfill response: {err}")),
+                    Err(err) => {
+                        self.graph_error = Some(format!("invalid backfill response: {err}"))
+                    }
                 },
                 Err(err) => self.graph_error = Some(format!("backfill request failed: {err}")),
             }
         }
 
-        fn tab_group(
-            ui: &mut egui::Ui,
-            title: &str,
-            tabs: &[DesktopTab],
-            active: &mut DesktopTab,
-        ) {
+        fn tab_group(ui: &mut egui::Ui, title: &str, tabs: &[DesktopTab], active: &mut DesktopTab) {
             ui.add_space(6.0);
             ui.colored_label(MUTED, title.to_ascii_uppercase());
             ui.add_space(4.0);
             for tab in tabs {
                 let selected = *active == *tab;
                 let button = egui::Button::new(egui::RichText::new(tab.label()).size(17.0))
-                    .fill(if selected { egui::Color32::from_rgb(34, 61, 92) } else { SURFACE })
+                    .fill(if selected {
+                        egui::Color32::from_rgb(34, 61, 92)
+                    } else {
+                        SURFACE
+                    })
                     .stroke(egui::Stroke::new(
                         1.0,
                         if selected { ACCENT } else { BORDER },
@@ -366,19 +369,26 @@ mod macos_app {
             ui.add_space(8.0);
             Self::card(ui, |ui| {
                 ui.label(
-                    egui::RichText::new("This screen is scaffolded with the new desktop design language.")
-                        .size(16.0),
+                    egui::RichText::new(
+                        "This screen is scaffolded with the new desktop design language.",
+                    )
+                    .size(16.0),
                 );
                 ui.label(
-                    egui::RichText::new("Next pass will port the full interaction model from the web app.")
-                        .color(MUTED),
+                    egui::RichText::new(
+                        "Next pass will port the full interaction model from the web app.",
+                    )
+                    .color(MUTED),
                 );
             });
         }
 
         fn render_config_tab(ui: &mut egui::Ui) {
             ui.heading(egui::RichText::new("Config & Auth").size(34.0));
-            ui.colored_label(MUTED, "Provider/method auth catalog shared by CLI and Desktop");
+            ui.colored_label(
+                MUTED,
+                "Provider/method auth catalog shared by CLI and Desktop",
+            );
             ui.add_space(8.0);
 
             for provider in [
@@ -391,7 +401,9 @@ mod macos_app {
                 Self::card(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.label(
-                            egui::RichText::new(format!("{:?}", provider)).size(20.0).strong(),
+                            egui::RichText::new(format!("{:?}", provider))
+                                .size(20.0)
+                                .strong(),
                         );
                     });
                     for option in auth_options_for_provider(provider.clone()) {
@@ -471,7 +483,10 @@ mod macos_app {
                 Self::card(&mut columns[1], |ui| {
                     ui.label(egui::RichText::new("Result Summary").size(20.0).strong());
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(egui::RichText::new(format!("Facts: {}", self.graph_facts.len())).strong());
+                        ui.label(
+                            egui::RichText::new(format!("Facts: {}", self.graph_facts.len()))
+                                .strong(),
+                        );
                         if self.backend.healthy {
                             ui.colored_label(SUCCESS, "Backend healthy");
                         } else {
@@ -487,35 +502,49 @@ mod macos_app {
                 ui.label(egui::RichText::new("Facts").size(22.0).strong());
                 ui.add_space(4.0);
                 if self.graph_facts.is_empty() {
-                    ui.colored_label(MUTED, "No facts yet. Run a query or backfill to populate the graph.");
+                    ui.colored_label(
+                        MUTED,
+                        "No facts yet. Run a query or backfill to populate the graph.",
+                    );
                     return;
                 }
 
-                egui::ScrollArea::vertical().max_height(460.0).show(ui, |ui| {
-                    for fact in &self.graph_facts {
-                        egui::Frame::none()
-                            .fill(SURFACE_ALT)
-                            .stroke(egui::Stroke::new(1.0, BORDER))
-                            .rounding(egui::Rounding::same(10.0))
-                            .inner_margin(egui::Margin::same(10.0))
-                            .show(ui, |ui| {
-                                ui.horizontal_wrapped(|ui| {
-                                    ui.label(egui::RichText::new(&fact.subject).strong());
-                                    ui.colored_label(ACCENT, format!("--{}-->", fact.predicate));
-                                    ui.label(egui::RichText::new(&fact.object).strong());
+                egui::ScrollArea::vertical()
+                    .max_height(460.0)
+                    .show(ui, |ui| {
+                        for fact in &self.graph_facts {
+                            egui::Frame::none()
+                                .fill(SURFACE_ALT)
+                                .stroke(egui::Stroke::new(1.0, BORDER))
+                                .rounding(egui::Rounding::same(10.0))
+                                .inner_margin(egui::Margin::same(10.0))
+                                .show(ui, |ui| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        ui.label(egui::RichText::new(&fact.subject).strong());
+                                        ui.colored_label(
+                                            ACCENT,
+                                            format!("--{}-->", fact.predicate),
+                                        );
+                                        ui.label(egui::RichText::new(&fact.object).strong());
+                                    });
+                                    ui.horizontal(|ui| {
+                                        ui.colored_label(
+                                            MUTED,
+                                            format!("confidence {:.2}", fact.confidence),
+                                        );
+                                        ui.separator();
+                                        ui.colored_label(
+                                            MUTED,
+                                            format!("support {}", fact.support_count),
+                                        );
+                                    });
+                                    if let Some(evidence) = &fact.evidence {
+                                        ui.colored_label(MUTED, evidence);
+                                    }
                                 });
-                                ui.horizontal(|ui| {
-                                    ui.colored_label(MUTED, format!("confidence {:.2}", fact.confidence));
-                                    ui.separator();
-                                    ui.colored_label(MUTED, format!("support {}", fact.support_count));
-                                });
-                                if let Some(evidence) = &fact.evidence {
-                                    ui.colored_label(MUTED, evidence);
-                                }
-                            });
-                        ui.add_space(6.0);
-                    }
-                });
+                            ui.add_space(6.0);
+                        }
+                    });
             });
         }
     }
@@ -551,10 +580,7 @@ mod macos_app {
                         };
                         ui.add(
                             egui::Label::new(
-                                egui::RichText::new(text)
-                                    .color(color)
-                                    .strong()
-                                    .size(16.0),
+                                egui::RichText::new(text).color(color).strong().size(16.0),
                             )
                             .selectable(false),
                         );
@@ -582,7 +608,11 @@ mod macos_app {
                 });
 
             egui::CentralPanel::default()
-                .frame(egui::Frame::none().fill(BG).inner_margin(egui::Margin::same(16.0)))
+                .frame(
+                    egui::Frame::none()
+                        .fill(BG)
+                        .inner_margin(egui::Margin::same(16.0)),
+                )
                 .show(ctx, |ui| match self.active_tab {
                     DesktopTab::Chat => Self::render_tab_placeholder(ui, "Chat"),
                     DesktopTab::Overview => Self::render_tab_placeholder(ui, "Overview"),

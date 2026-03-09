@@ -1,4 +1,7 @@
-use std::{path::{Path, PathBuf}, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -41,7 +44,12 @@ impl KnowledgeGraphService {
         &self.config
     }
 
-    pub async fn ingest_text(&self, source_type: &str, source_ref: &str, text: &str) -> Result<IngestStats> {
+    pub async fn ingest_text(
+        &self,
+        source_type: &str,
+        source_ref: &str,
+        text: &str,
+    ) -> Result<IngestStats> {
         let mut stats = IngestStats {
             scanned: 1,
             ingested: 0,
@@ -73,7 +81,12 @@ impl KnowledgeGraphService {
             return Ok(stats);
         }
 
-        let triples = extract_triples(&self.provider, &clipped, self.config.max_extraction_chars as usize).await;
+        let triples = extract_triples(
+            &self.provider,
+            &clipped,
+            self.config.max_extraction_chars as usize,
+        )
+        .await;
         match triples {
             Ok(triples) if triples.is_empty() => {
                 stats.skipped = 1;
@@ -97,7 +110,8 @@ impl KnowledgeGraphService {
 
     pub async fn ingest_document_file(&self, path: &Path) -> Result<IngestStats> {
         let text = tokio::fs::read_to_string(path).await?;
-        self.ingest_text("document", &path.display().to_string(), &text).await
+        self.ingest_text("document", &path.display().to_string(), &text)
+            .await
     }
 
     pub async fn search(&self, query: &str, limit: usize) -> Result<Vec<GraphEntity>> {
@@ -133,7 +147,11 @@ impl KnowledgeGraphService {
                 if fact.evidence.is_empty() {
                     format!(
                         "{} --{}--> {} (confidence {:.2}, support {})",
-                        fact.subject, fact.predicate, fact.object, fact.confidence, fact.support_count
+                        fact.subject,
+                        fact.predicate,
+                        fact.object,
+                        fact.confidence,
+                        fact.support_count
                     )
                 } else {
                     format!(
@@ -174,7 +192,9 @@ impl KnowledgeGraphService {
             for row in rows {
                 let id: String = row.try_get("id")?;
                 let content: String = row.try_get("content")?;
-                let res = self.ingest_text("conversation_message", &id, &content).await?;
+                let res = self
+                    .ingest_text("conversation_message", &id, &content)
+                    .await?;
                 accumulate(&mut stats, &res);
             }
         }
@@ -184,11 +204,16 @@ impl KnowledgeGraphService {
                 stats.scanned = stats.scanned.saturating_add(1);
                 match tokio::fs::read_to_string(&path).await {
                     Ok(content) => {
-                        let res = self.ingest_text("memory", &path.display().to_string(), &content).await?;
+                        let res = self
+                            .ingest_text("memory", &path.display().to_string(), &content)
+                            .await?;
                         accumulate(&mut stats, &res);
                     }
                     Err(err) => {
-                        tracing::warn!("knowledge graph memory backfill read failed {}: {err}", path.display());
+                        tracing::warn!(
+                            "knowledge graph memory backfill read failed {}: {err}",
+                            path.display()
+                        );
                         stats.failed = stats.failed.saturating_add(1);
                     }
                 }
@@ -197,7 +222,10 @@ impl KnowledgeGraphService {
 
         if self.config.extract_from_documents {
             let docs_root = self.data_dir.join("documents");
-            for entry in WalkDir::new(docs_root).into_iter().filter_map(std::result::Result::ok) {
+            for entry in WalkDir::new(docs_root)
+                .into_iter()
+                .filter_map(std::result::Result::ok)
+            {
                 if !entry.file_type().is_file() {
                     continue;
                 }
@@ -209,7 +237,10 @@ impl KnowledgeGraphService {
                 match res {
                     Ok(res) => accumulate(&mut stats, &res),
                     Err(err) => {
-                        tracing::warn!("knowledge graph document backfill failed {}: {err}", path.display());
+                        tracing::warn!(
+                            "knowledge graph document backfill failed {}: {err}",
+                            path.display()
+                        );
                         stats.failed = stats.failed.saturating_add(1);
                     }
                 }
@@ -222,15 +253,15 @@ impl KnowledgeGraphService {
 
 fn list_memory_files(data_dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    for relative in [
-        "memory/MEMORY.md",
-        "memory/TOOL.md",
-        "SOUL.md",
-        "USER.md",
-        "AGENTS.md",
-        "TOOLS.md",
-        "IDENTITY.md",
-    ] {
+    let root_memory = data_dir.join("MEMORY.md");
+    let legacy_memory = data_dir.join("memory").join("MEMORY.md");
+    if root_memory.exists() {
+        files.push(root_memory);
+    } else if legacy_memory.exists() {
+        files.push(legacy_memory);
+    }
+
+    for relative in ["SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md", "IDENTITY.md"] {
         let path = data_dir.join(relative);
         if path.exists() {
             files.push(path);
@@ -238,8 +269,14 @@ fn list_memory_files(data_dir: &Path) -> Vec<PathBuf> {
     }
 
     let daily = data_dir.join("memory/daily");
-    for entry in WalkDir::new(daily).into_iter().filter_map(std::result::Result::ok) {
-        if entry.file_type().is_file() && entry.path().extension().and_then(|s| s.to_str()) == Some("md") {
+    for entry in WalkDir::new(daily)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+    {
+        if entry.file_type().is_file()
+            && entry.path().extension().and_then(|s| s.to_str()) == Some("md")
+            && entry.file_name() != "MEMORY.md"
+        {
             files.push(entry.path().to_path_buf());
         }
     }
@@ -249,9 +286,9 @@ fn list_memory_files(data_dir: &Path) -> Vec<PathBuf> {
 
 pub fn is_supported_text_file(path: &Path) -> bool {
     const EXTENSIONS: &[&str] = &[
-        "txt", "md", "markdown", "json", "jsonl", "yaml", "yml", "toml", "ini", "log",
-        "rs", "ts", "tsx", "js", "jsx", "py", "go", "java", "kt", "swift", "c", "cpp",
-        "h", "hpp", "sh", "zsh", "bash", "sql", "html", "css", "scss", "xml", "csv",
+        "txt", "md", "markdown", "json", "jsonl", "yaml", "yml", "toml", "ini", "log", "rs", "ts",
+        "tsx", "js", "jsx", "py", "go", "java", "kt", "swift", "c", "cpp", "h", "hpp", "sh", "zsh",
+        "bash", "sql", "html", "css", "scss", "xml", "csv",
     ];
 
     path.extension()

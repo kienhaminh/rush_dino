@@ -2,6 +2,13 @@
 
 Local-first AI agent platform written in Rust.
 
+## Product Docs
+
+- [Vision](./VISION.md)
+- [Security](./SECURITY.md)
+- [Architecture](./ARCHITECTURE.md)
+- [Detailed system architecture](./docs/system-architecture.md)
+
 ## Architecture
 
 ```text

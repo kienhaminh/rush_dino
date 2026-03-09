@@ -24,6 +24,7 @@ pub async fn ws_chat(ws: WebSocketUpgrade, State(state): State<AppState>) -> imp
 async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
     let session_id = Uuid::new_v4().to_string();
     let mut approval_rx = state.gate.register_session(&session_id).await;
+    let mut broadcast_rx = state.chat_broadcast.subscribe();
     let (mut ws_sink, mut ws_recv) = socket.split();
 
     let (outbound_tx, mut outbound_rx) = mpsc::channel::<serde_json::Value>(256);
@@ -42,6 +43,7 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                     let payload = serde_json::json!({
                         "type": "approval_request",
                         "request_id": request.request_id,
+                        "run_id": request.run_id,
                         "conversation_id": request.conversation_id,
                         "tool": request.tool,
                         "args": request.args,
@@ -50,12 +52,21 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                         break;
                     }
                 }
+                broadcast = broadcast_rx.recv() => {
+                    let Ok(payload) = broadcast else {
+                        continue;
+                    };
+                    if ws_sink.send(Message::Text(payload.to_string())).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
     });
 
-    let engine = state.engine.clone();
+    let runtime = state.runtime.clone();
     let gate = state.gate.clone();
+    let runtime_logs = state.runtime_logs.clone();
     let session_id_clone = session_id.clone();
     let mut recv_task = tokio::spawn(async move {
         let mut active_conversation: Option<String> = None;
@@ -67,11 +78,26 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
 
             if let Some((request_id, approved)) = parse_approval_response(&text) {
                 match gate.resolve(&session_id_clone, &request_id, approved).await {
-                    Ok(()) => {
+                    Ok(request) => {
+                        let _ = runtime_logs
+                            .insert(
+                                "info",
+                                "approval",
+                                "approval decision recorded",
+                                Some(serde_json::json!({
+                                    "requestId": request_id,
+                                    "runId": request.run_id,
+                                    "sessionId": session_id_clone,
+                                    "tool": request.tool,
+                                    "status": if approved { "approved" } else { "denied" },
+                                })),
+                            )
+                            .await;
                         let _ = outbound_tx
                             .send(serde_json::json!({
                                 "type": "approval_result",
-                                "request_id": request_id,
+                                "request_id": request.request_id,
+                                "run_id": request.run_id,
                                 "approved": approved,
                             }))
                             .await;
@@ -98,26 +124,98 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
 
             let (event_tx, mut event_rx) = mpsc::channel::<WsStreamEvent>(128);
             let outbound_tx_clone = outbound_tx.clone();
-            let conversation_id_for_events = conversation_id.clone();
             tokio::spawn(async move {
                 while let Some(event) = event_rx.recv().await {
                     match event {
-                        WsStreamEvent::ChatChunk(chunk) => {
+                        WsStreamEvent::ChatChunk {
+                            run_id,
+                            conversation_id,
+                            chunk,
+                        } => {
                             let _ = outbound_tx_clone
                                 .send(serde_json::json!({
                                     "type": "chat_chunk",
-                                    "conversation_id": conversation_id_for_events,
+                                    "run_id": run_id,
+                                    "conversation_id": conversation_id,
                                     "delta": chunk.delta,
                                     "tool_calls": chunk.tool_calls,
                                     "done": chunk.done,
                                 }))
                                 .await;
                         }
-                        WsStreamEvent::AssistantReset => {
+                        WsStreamEvent::AssistantReset {
+                            run_id,
+                            conversation_id,
+                        } => {
                             let _ = outbound_tx_clone
                                 .send(serde_json::json!({
                                     "type": "assistant_reset",
-                                    "conversation_id": conversation_id_for_events,
+                                    "run_id": run_id,
+                                    "conversation_id": conversation_id,
+                                }))
+                                .await;
+                        }
+                        WsStreamEvent::ToolStart {
+                            run_id,
+                            conversation_id,
+                            tool_name,
+                            args,
+                        } => {
+                            let _ = outbound_tx_clone
+                                .send(serde_json::json!({
+                                    "type": "tool_start",
+                                    "run_id": run_id,
+                                    "conversation_id": conversation_id,
+                                    "tool_name": tool_name,
+                                    "args": args,
+                                }))
+                                .await;
+                        }
+                        WsStreamEvent::ToolEnd {
+                            run_id,
+                            conversation_id,
+                            tool_name,
+                            result,
+                            is_error,
+                        } => {
+                            let _ = outbound_tx_clone
+                                .send(serde_json::json!({
+                                    "type": "tool_end",
+                                    "run_id": run_id,
+                                    "conversation_id": conversation_id,
+                                    "tool_name": tool_name,
+                                    "result": result,
+                                    "is_error": is_error,
+                                }))
+                                .await;
+                        }
+                        WsStreamEvent::AssistantMessage {
+                            run_id,
+                            conversation_id,
+                            content,
+                            rich_content,
+                        } => {
+                            let _ = outbound_tx_clone
+                                .send(serde_json::json!({
+                                    "type": "assistant_message",
+                                    "run_id": run_id,
+                                    "conversation_id": conversation_id,
+                                    "content": content,
+                                    "rich_content": rich_content,
+                                }))
+                                .await;
+                        }
+                        WsStreamEvent::Error {
+                            run_id,
+                            conversation_id,
+                            message,
+                        } => {
+                            let _ = outbound_tx_clone
+                                .send(serde_json::json!({
+                                    "type": "error",
+                                    "run_id": run_id,
+                                    "conversation_id": conversation_id,
+                                    "message": message,
                                 }))
                                 .await;
                         }
@@ -125,8 +223,21 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                 }
             });
 
+            let engine = match runtime.engine() {
+                Ok(engine) => engine,
+                Err(err) => {
+                    let _ = outbound_tx
+                        .send(serde_json::json!({
+                            "type": "error",
+                            "message": err.to_string(),
+                        }))
+                        .await;
+                    continue;
+                }
+            };
+
             match engine
-                .stream_chat_via_ws(
+                .submit_ws_run(
                     &session_id_clone,
                     Some(conversation_id.clone()),
                     &user_text,
@@ -134,8 +245,8 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                 )
                 .await
             {
-                Ok(conv_id) => {
-                    active_conversation = Some(conv_id);
+                Ok(run) => {
+                    active_conversation = run.conversation_id.or(Some(conversation_id));
                 }
                 Err(err) => {
                     let _ = outbound_tx

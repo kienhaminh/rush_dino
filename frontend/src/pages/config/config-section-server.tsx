@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import type { AppConfigView } from '@/lib/types';
 
 interface Props {
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export function ConfigSectionServer({ config, onChange }: Props) {
+  const sandbox = config.execution?.shell_exec_sandbox;
+
   return (
     <div className="space-y-4">
       <div className="space-y-1">
@@ -46,6 +49,103 @@ export function ConfigSectionServer({ config, onChange }: Props) {
           }
         />
       </div>
+
+      {sandbox ? (
+        <div className="space-y-4 rounded-md border border-border/50 p-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Shell Sandbox Broker</Label>
+              <p className="text-xs text-muted-foreground">
+                Route `shell_exec` through the mirrored workspace broker under `~/.rushdino/workspaces`.
+              </p>
+            </div>
+            <Switch
+              checked={sandbox.enabled}
+              onCheckedChange={(checked) =>
+                onChange({
+                  execution: {
+                    ...config.execution,
+                    shell_exec_sandbox: {
+                      ...sandbox,
+                      enabled: checked,
+                    },
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="sandbox-workspace-root" className="text-xs">Workspace Root</Label>
+            <Input
+              id="sandbox-workspace-root"
+              value={sandbox.workspace_root}
+              onChange={(e) =>
+                onChange({
+                  execution: {
+                    ...config.execution,
+                    shell_exec_sandbox: {
+                      ...sandbox,
+                      workspace_root: e.target.value,
+                    },
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md border border-border/40 p-3">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Allow Network</Label>
+              <p className="text-xs text-muted-foreground">
+                Permit outbound network access for sandboxed shell commands.
+              </p>
+            </div>
+            <Switch
+              checked={sandbox.allow_network}
+              onCheckedChange={(checked) =>
+                onChange({
+                  execution: {
+                    ...config.execution,
+                    shell_exec_sandbox: {
+                      ...sandbox,
+                      allow_network: checked,
+                    },
+                  },
+                })
+              }
+            />
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="sandbox-extra-write-roots" className="text-xs">
+              Extra Write Roots
+            </Label>
+            <Textarea
+              id="sandbox-extra-write-roots"
+              className="min-h-24 font-mono text-xs"
+              value={sandbox.extra_write_roots.join('\n')}
+              onChange={(e) =>
+                onChange({
+                  execution: {
+                    ...config.execution,
+                    shell_exec_sandbox: {
+                      ...sandbox,
+                      extra_write_roots: e.target.value
+                        .split('\n')
+                        .map((line) => line.trim())
+                        .filter(Boolean),
+                    },
+                  },
+                })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              One absolute or RushDino-home-relative path per line.
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

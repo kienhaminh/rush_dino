@@ -330,6 +330,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9f3647c145568cec02c42054e07bdf9a5a698e15b466fb2341bfc393cd24aa5"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "argon2"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2319,6 +2328,15 @@ checksum = "1bd49230192a3797a9a4d6abe9b3eed6f7fa4c8a8a4947977c6f80025f92cbd8"
 dependencies = [
  "rustix 1.1.4",
  "windows-link",
+]
+
+[[package]]
+name = "getopts"
+version = "0.2.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe4fbac503b8d1f88e6676011885f34b7174f46e59956bba534ba83abded4df"
+dependencies = [
+ "unicode-width 0.2.2",
 ]
 
 [[package]]
@@ -4401,6 +4419,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pulldown-cmark"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83c41efbf8f90ac44de7f3a868f0867851d261b56291732d0cbf7cceaaeb55a6"
+dependencies = [
+ "bitflags 2.11.0",
+ "getopts",
+ "memchr",
+ "pulldown-cmark-escape",
+ "unicase",
+]
+
+[[package]]
+name = "pulldown-cmark-escape"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
+
+[[package]]
 name = "pxfm"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4850,6 +4887,7 @@ name = "rushdino-agent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "async-trait",
  "chrono",
  "futures",
@@ -4920,6 +4958,7 @@ dependencies = [
  "chrono",
  "dirs",
  "figment",
+ "pulldown-cmark",
  "serde",
  "serde_json",
  "sqlx",
@@ -4959,11 +4998,14 @@ dependencies = [
 name = "rushdino-gateway"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "async-trait",
  "chrono",
+ "pulldown-cmark",
  "rushdino-agent",
  "rushdino-common",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
@@ -4995,6 +5037,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "base64 0.22.1",
  "chrono",
  "futures",
  "reqwest 0.12.28",
@@ -5038,12 +5081,14 @@ dependencies = [
 name = "rushdino-server"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
  "async-trait",
  "axum",
  "chrono",
  "futures",
  "hex",
  "rushdino-agent",
+ "rushdino-auth",
  "rushdino-common",
  "rushdino-discord",
  "rushdino-gateway",
@@ -5088,12 +5133,16 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "pulldown-cmark",
+ "reqwest 0.12.28",
  "rushdino-agent",
  "rushdino-common",
  "rushdino-gateway",
+ "serde_json",
  "teloxide",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

@@ -1,16 +1,20 @@
 pub mod agent_manager;
 pub mod agent_progress;
+pub mod agent_task_memory;
 pub mod context;
 pub mod conversation;
 mod conversation_mapper;
-mod engine_bootstrap;
 pub mod engine;
+mod engine_bootstrap;
 pub mod job_manager;
 pub mod knowledge_graph;
 pub mod memory;
 pub mod orchestrator;
 pub mod react_loop;
+pub mod router;
+pub mod runtime;
 pub mod skill_manager;
+pub mod system_broker;
 pub mod tool_registry;
 pub mod tools;
 pub mod usage_metrics_store;
@@ -26,11 +30,16 @@ pub use agent_progress::{
 pub use engine::{AgentConfig, AgentEngine};
 pub use job_manager::JobResult;
 pub use knowledge_graph::KnowledgeGraphAccess;
+pub use runtime::{
+    AbortRunOutcome, AgentRuntime, RunCounts, RunDetail, RunEventRecord, RunKind, RunListFilter,
+    RunOriginMetadata, RunPolicySnapshot, RunSnapshot, RunState,
+};
 pub use skill_manager::{Skill, SkillManager};
+pub use system_broker::{SharedSystemBroker, ShellExecRequest, ShellExecResult, SystemBroker};
 pub use tool_registry::{Tool, ToolRegistry};
-pub use tools::shell_exec::{ToolApproval, ToolApprovalRequest};
 pub use usage_metrics_store::{UsageMetricRow, UsageMetricsStore};
 pub use workflow_types::{
     CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem, WorkflowRunDetail,
-    WorkflowRunListItem, WorkflowRunStartResponse, WorkflowSource, WorkflowStatus, WorkflowStepInput,
+    WorkflowRunListItem, WorkflowRunStartResponse, WorkflowSource, WorkflowStatus,
+    WorkflowStepInput,
 };

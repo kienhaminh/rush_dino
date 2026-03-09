@@ -19,7 +19,8 @@ pub async fn ingest_documents(
     State(state): State<AppState>,
     Json(request): Json<IngestRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let default_root = state.config.data_dir.join("documents");
+    let config = state.config();
+    let default_root = config.data_dir.join("documents");
 
     let root = request
         .path
@@ -28,9 +29,9 @@ pub async fn ingest_documents(
         .unwrap_or_else(|| default_root.clone());
 
     // Build the list of allowed roots from config, plus the default documents dir.
-    let mut allowed_roots = state.config.security.allowed_read_roots.clone();
+    let mut allowed_roots = config.security.allowed_read_roots.clone();
     if allowed_roots.is_empty() {
-        allowed_roots.push(state.config.data_dir.clone());
+        allowed_roots.push(config.data_dir.clone());
     }
 
     // Validate the requested path to prevent path traversal attacks.
@@ -52,7 +53,7 @@ pub async fn ingest_documents(
                     continue;
                 }
 
-                if let Some(kg) = &state.knowledge_graph {
+                if let Some(kg) = state.knowledge_graph() {
                     match kg.ingest_document_file(e.path()).await {
                         Ok(result) => {
                             ingested = ingested.saturating_add(result.ingested);

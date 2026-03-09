@@ -62,9 +62,7 @@ impl Tool for FileEditTool {
             .ok_or_else(|| AppError::Validation("newText is required".to_owned()))?;
 
         // Read the file
-        let content = fs::read_to_string(path)
-            .await
-            .map_err(AppError::Io)?;
+        let content = fs::read_to_string(path).await.map_err(AppError::Io)?;
 
         // Check if old_text exists in content
         if !content.contains(old_text) {
@@ -87,9 +85,7 @@ impl Tool for FileEditTool {
         let new_content = content.replace(old_text, new_text);
 
         // Write back
-        fs::write(path, new_content)
-            .await
-            .map_err(AppError::Io)?;
+        fs::write(path, new_content).await.map_err(AppError::Io)?;
 
         Ok(format!(
             "Successfully edited file '{}'. Replaced {} occurrence(s).",

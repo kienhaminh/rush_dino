@@ -1,83 +1,94 @@
-/// Subprocess and plugin execution isolation.
-///
-/// Platform-specific isolation is gated behind cfg attributes.
-/// On Linux, seccomp-bpf syscall filtering is applied.
-/// On macOS, Seatbelt sandbox_init is used.
-/// On other platforms, only basic process isolation is provided.
+use std::{
+    ffi::{CStr, CString},
+    path::PathBuf,
+};
 
 use thiserror::Error;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SandboxPolicy {
+    pub writable_roots: Vec<PathBuf>,
+    pub allow_network: bool,
+}
+
+impl SandboxPolicy {
+    pub fn new(writable_roots: Vec<PathBuf>, allow_network: bool) -> Self {
+        Self {
+            writable_roots,
+            allow_network,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum SandboxError {
-    #[error("failed to apply seccomp filter: {0}")]
-    SeccompFailed(String),
     #[error("failed to apply seatbelt profile: {0}")]
     SeatbeltFailed(String),
     #[error("sandbox operation not supported on this platform")]
     Unsupported,
 }
 
-/// Apply process-level isolation to the current process (or a subprocess).
-///
-/// This should be called from the child side of a `fork()` / `Command::pre_exec`
-/// closure, before `exec`.
-///
-/// On Linux: installs a seccomp-bpf allowlist.
-/// On macOS: applies a Seatbelt sandbox profile restricting filesystem writes
-///           and network access.
-/// On other platforms: no-op (returns `Ok`).
-pub fn apply_subprocess_isolation() -> Result<(), SandboxError> {
-    #[cfg(target_os = "linux")]
-    {
-        apply_seccomp()
-    }
+pub fn platform_supports_sandbox() -> bool {
+    cfg!(target_os = "macos")
+}
+
+pub fn apply_subprocess_isolation(policy: &SandboxPolicy) -> Result<(), SandboxError> {
     #[cfg(target_os = "macos")]
     {
-        apply_seatbelt()
+        apply_seatbelt(policy)
     }
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    #[cfg(not(target_os = "macos"))]
     {
-        Ok(())
+        let _ = policy;
+        Err(SandboxError::Unsupported)
     }
 }
 
-#[cfg(target_os = "linux")]
-fn apply_seccomp() -> Result<(), SandboxError> {
-    // In the full implementation this would use the `seccompiler` crate
-    // (enabled via the `seccomp` feature flag) to install a BPF program
-    // that allows only a minimal syscall set (read, write, exit, getpid, etc.)
-    // and kills the process on any other syscall.
-    //
-    // Since seccompiler is an optional dependency, we guard the actual
-    // implementation behind the feature flag.
-    #[cfg(feature = "seccomp")]
-    {
-        use seccompiler::{BpfProgram, SeccompAction, SeccompFilter, SyscallRuleSet};
-        // Build allow-list filter — abbreviated for clarity
-        let _filter = SeccompFilter::new(
-            Default::default(), // syscall rules
-            SeccompAction::KillProcess,
-            SeccompAction::Allow,
-            std::env::consts::ARCH.try_into().map_err(|e| SandboxError::SeccompFailed(format!("{e}")))?,
-        )
-        .map_err(|e| SandboxError::SeccompFailed(e.to_string()))?;
-        tracing::debug!("seccomp filter applied");
+pub fn render_macos_seatbelt_profile(policy: &SandboxPolicy) -> String {
+    let mut profile =
+        String::from("(version 1)\n(deny default)\n(allow process*)\n(allow file-read*)\n");
+    for root in normalize_writable_roots(&policy.writable_roots) {
+        profile.push_str(&format!(
+            "(allow file-write* (subpath \"{}\"))\n",
+            escape_seatbelt_string(&root)
+        ));
     }
-    #[cfg(not(feature = "seccomp"))]
-    {
-        tracing::warn!("seccomp isolation requested but crate compiled without 'seccomp' feature");
+    if policy.allow_network {
+        profile.push_str("(allow network*)\n");
     }
-    Ok(())
+    profile.push_str("(allow signal)\n(allow sysctl-read)");
+    profile
+}
+
+fn normalize_writable_roots(roots: &[PathBuf]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for root in roots {
+        let display = root.to_string_lossy().to_string();
+        if !display.is_empty() && !normalized.contains(&display) {
+            normalized.push(display.clone());
+        }
+
+        if let Ok(canonical) = root.canonicalize() {
+            let display = canonical.to_string_lossy().to_string();
+            if !display.is_empty() && !normalized.contains(&display) {
+                normalized.push(display);
+            }
+        }
+    }
+    normalized
+}
+
+fn escape_seatbelt_string(path: &str) -> String {
+    path.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 #[cfg(target_os = "macos")]
-fn apply_seatbelt() -> Result<(), SandboxError> {
-    // macOS Seatbelt via sandbox_init(3).
-    // We apply a restrictive profile that denies filesystem writes
-    // outside temp directories and blocks outbound network.
-    const PROFILE: &std::ffi::CStr = c"(version 1)\n(deny default)\n(allow process*)\n(allow file-read*)\n(allow file-write* (subpath \"/tmp\"))\n(allow file-write* (subpath \"/var/folders\"))\n(allow signal)\n(allow sysctl-read)";
+fn apply_seatbelt(policy: &SandboxPolicy) -> Result<(), SandboxError> {
+    let profile = render_macos_seatbelt_profile(policy);
+    let profile =
+        CString::new(profile).map_err(|err| SandboxError::SeatbeltFailed(err.to_string()))?;
 
-    extern "C" {
+    unsafe extern "C" {
         fn sandbox_init(
             profile: *const std::ffi::c_char,
             flags: u64,
@@ -87,20 +98,53 @@ fn apply_seatbelt() -> Result<(), SandboxError> {
     }
 
     let mut err_buf: *mut std::ffi::c_char = std::ptr::null_mut();
-    // SAFETY: sandbox_init is a stable macOS syscall; profile is a valid C string.
-    let rc = unsafe { sandbox_init(PROFILE.as_ptr().cast(), 0, &mut err_buf) };
-
+    let rc = unsafe { sandbox_init(profile.as_ptr(), 0, &mut err_buf) };
     if rc != 0 {
         let msg = if err_buf.is_null() {
             "unknown error".to_owned()
         } else {
-            let s = unsafe { std::ffi::CStr::from_ptr(err_buf).to_string_lossy().into_owned() };
+            let value = unsafe { CStr::from_ptr(err_buf) }
+                .to_string_lossy()
+                .into_owned();
             unsafe { sandbox_free_error(err_buf) };
-            s
+            value
         };
         return Err(SandboxError::SeatbeltFailed(msg));
     }
 
-    tracing::debug!("seatbelt sandbox profile applied");
+    tracing::debug!(
+        writable_roots = ?policy.writable_roots,
+        allow_network = policy.allow_network,
+        "seatbelt sandbox profile applied"
+    );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{render_macos_seatbelt_profile, SandboxPolicy};
+
+    #[test]
+    fn render_profile_includes_writable_roots_and_network_policy() {
+        let profile = render_macos_seatbelt_profile(&SandboxPolicy::new(
+            vec![
+                PathBuf::from("/tmp/workspace"),
+                PathBuf::from("/var/folders/cache"),
+            ],
+            false,
+        ));
+
+        assert!(profile.contains("(deny default)"));
+        assert!(profile.contains("(allow file-write* (subpath \"/tmp/workspace\"))"));
+        assert!(profile.contains("(allow file-write* (subpath \"/var/folders/cache\"))"));
+        assert!(!profile.contains("(allow network*)"));
+    }
+
+    #[test]
+    fn render_profile_allows_network_when_requested() {
+        let profile = render_macos_seatbelt_profile(&SandboxPolicy::new(Vec::new(), true));
+        assert!(profile.contains("(allow network*)"));
+    }
 }

@@ -64,7 +64,13 @@ pub fn parse_hmac_header(header_value: &str) -> Result<HmacToken, AuthError> {
 
 /// Build the canonical message that the client signs:
 /// `"<timestamp>:<nonce>:<METHOD>:<path>:<sha256_body_hex>"`
-pub fn canonical_message(timestamp: u64, nonce: &str, method: &str, path: &str, body: &[u8]) -> String {
+pub fn canonical_message(
+    timestamp: u64,
+    nonce: &str,
+    method: &str,
+    path: &str,
+    body: &[u8],
+) -> String {
     let body_hash = hex::encode(Sha256::digest(body));
     format!("{timestamp}:{nonce}:{method}:{path}:{body_hash}")
 }
@@ -86,7 +92,9 @@ pub struct NonceCache {
 
 impl NonceCache {
     pub fn new() -> Self {
-        Self { inner: Mutex::new(HashMap::new()) }
+        Self {
+            inner: Mutex::new(HashMap::new()),
+        }
     }
 
     /// Returns `true` if the nonce is fresh (not yet seen), and inserts it.
@@ -141,7 +149,10 @@ pub fn verify_request(
     }
 
     // Signature check (constant-time compare)
-    let expected = compute_hmac(secret, &canonical_message(token.timestamp, &token.nonce, method, path, body));
+    let expected = compute_hmac(
+        secret,
+        &canonical_message(token.timestamp, &token.nonce, method, path, body),
+    );
     let sig_bytes = URL_SAFE_NO_PAD
         .decode(&token.signature)
         .map_err(|_| AuthError::InvalidSignature)?;
@@ -197,9 +208,20 @@ mod tests {
         // Second request with same nonce — different timestamp but same nonce string
         let header2 = make_token(now + 1, "POST", "/api/chat", b"{}");
         // Make the nonce the same by constructing manually
-        let sig = compute_hmac(secret(), &canonical_message(now + 1, "abc123", "POST", "/api/chat", b"{}"));
+        let sig = compute_hmac(
+            secret(),
+            &canonical_message(now + 1, "abc123", "POST", "/api/chat", b"{}"),
+        );
         let header2 = format!("HMAC-SHA256 {}.abc123.{sig}", now + 1);
-        let result = verify_request(&header2, now + 1, "POST", "/api/chat", b"{}", secret(), &cache);
+        let result = verify_request(
+            &header2,
+            now + 1,
+            "POST",
+            "/api/chat",
+            b"{}",
+            secret(),
+            &cache,
+        );
         assert!(matches!(result, Err(AuthError::ReplayedNonce)));
     }
 
@@ -207,7 +229,8 @@ mod tests {
     fn wrong_signature_rejected() {
         let cache = NonceCache::new();
         let now = 1_700_000_000u64;
-        let header = format!("HMAC-SHA256 {now}.nonce1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        let header =
+            format!("HMAC-SHA256 {now}.nonce1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
         let result = verify_request(&header, now, "POST", "/api/chat", b"{}", secret(), &cache);
         assert!(matches!(result, Err(AuthError::InvalidSignature)));
     }

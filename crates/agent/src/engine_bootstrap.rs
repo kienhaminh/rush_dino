@@ -10,29 +10,24 @@ use rushdino_providers::Provider;
 
 use crate::{
     agent_manager::AgentManager,
+    agent_task_memory::AgentTaskMemory,
     conversation::ConversationManager,
     engine::AgentConfig,
-    knowledge_graph::KnowledgeGraphAccess,
     job_manager::{JobManager, JobResult},
+    knowledge_graph::KnowledgeGraphAccess,
     memory::MemoryManager,
     orchestrator::Orchestrator,
     skill_manager::SkillManager,
+    system_broker::SharedSystemBroker,
     tool_registry::ToolRegistry,
     tools::{
-        create_job::CreateJobTool,
-        create_skill::CreateSkillTool,
-        create_workflow::CreateWorkflowTool,
-        delegate_to_agent::DelegateToAgentTool,
-        file_edit::FileEditTool,
-        file_read::FileReadTool,
-        knowledge_graph_query::KnowledgeGraphQueryTool,
-        list_skills::ListSkillsTool,
-        memory_read::MemoryReadTool,
-        memory_write::MemoryWriteTool,
-        shell_exec::ShellExecTool,
-        spawn_agent::SpawnAgentTool,
-        spawn_sub_agent::SpawnSubAgentTool,
-        web_search::WebSearchTool,
+        create_job::CreateJobTool, create_skill::CreateSkillTool,
+        create_workflow::CreateWorkflowTool, delegate_to_agent::DelegateToAgentTool,
+        file_edit::FileEditTool, file_read::FileReadTool,
+        knowledge_graph_query::KnowledgeGraphQueryTool, list_skills::ListSkillsTool,
+        memory_read::MemoryReadTool, memory_write::MemoryWriteTool,
+        present_message::PresentMessageTool, shell_exec::ShellExecTool,
+        spawn_agent::SpawnAgentTool, spawn_sub_agent::SpawnSubAgentTool, web_search::WebSearchTool,
     },
     workflow_manager::WorkflowManager,
 };
@@ -44,9 +39,11 @@ pub struct EngineDeps {
     pub job_manager: Arc<JobManager>,
     pub orchestrator: Arc<Orchestrator>,
     pub memory: Arc<MemoryManager>,
+    pub skill_manager: Arc<SkillManager>,
     pub agent_manager: Arc<AgentManager>,
     pub workflow_manager: Arc<WorkflowManager>,
     pub inbox_rx: mpsc::Receiver<JobResult>,
+    pub task_memory: Arc<AgentTaskMemory>,
 }
 
 pub fn build_engine_deps(
@@ -55,12 +52,13 @@ pub fn build_engine_deps(
     home_dir: PathBuf,
     brave_api_key: Option<String>,
     config: &AgentConfig,
-    approval: Option<Arc<dyn crate::tools::shell_exec::ToolApproval>>,
+    system_broker: SharedSystemBroker,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
 ) -> Result<EngineDeps> {
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
     let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
+    let task_memory = Arc::new(AgentTaskMemory::new(home_dir.clone()));
 
     let (inbox_tx, inbox_rx) = mpsc::channel(256);
     let jobs = Arc::new(JobManager::new(pool.clone(), inbox_tx.clone()));
@@ -75,6 +73,7 @@ pub fn build_engine_deps(
 
     // Clone all variables needed inside the Arc::new_cyclic closure before it
     // captures them. The closure is SYNC so all construction inside must be sync.
+    let task_memory_c = task_memory.clone();
     let provider_c = provider.clone();
     let agent_manager_c = agent_manager.clone();
     let agent_manager_c2 = agent_manager.clone();
@@ -87,7 +86,7 @@ pub fn build_engine_deps(
     let workflow_manager_c = workflow_manager.clone();
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
-    let approval_c = approval.clone();
+    let system_broker_c = system_broker.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
 
@@ -99,13 +98,10 @@ pub fn build_engine_deps(
             provider_c,
             config_c,
             weak_registry.clone(),
+            task_memory_c,
         );
 
-        let shell_exec = if let Some(gate) = approval_c {
-            ShellExecTool::new(tool_timeout).with_approval(gate)
-        } else {
-            ShellExecTool::new(tool_timeout)
-        };
+        let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
 
         let mut r = ToolRegistry::new();
         r.register(WebSearchTool::new(
@@ -115,6 +111,7 @@ pub fn build_engine_deps(
         r.register(FileReadTool::new(home_c.join("documents")));
         r.register(FileEditTool::new());
         r.register(shell_exec);
+        r.register(PresentMessageTool::new());
         r.register(MemoryReadTool::new(memory_c.clone()));
         r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
         r.register(CreateJobTool::new(jobs_c));
@@ -133,9 +130,6 @@ pub fn build_engine_deps(
         r
     });
 
-    // render_tool_doc must run after the registry Arc is fully constructed.
-    memory.render_tool_doc(&registry.names())?;
-
     Ok(EngineDeps {
         pool: pool.clone(),
         conversation: Arc::new(ConversationManager::new(pool)),
@@ -143,9 +137,11 @@ pub fn build_engine_deps(
         job_manager: jobs,
         orchestrator,
         memory,
+        skill_manager: skills,
         agent_manager,
         workflow_manager,
         inbox_rx,
+        task_memory,
     })
 }
 
@@ -190,18 +186,30 @@ mod tests {
     }
 }
 
-pub fn system_message(config: &AgentConfig, memory: &MemoryManager, agent_manager: &AgentManager) -> Message {
+pub fn system_message(
+    config: &AgentConfig,
+    memory: &MemoryManager,
+    agent_manager: &AgentManager,
+) -> Message {
     // Use general-assistant system prompt; fall back to config.system_prompt
     let agent_prompt = agent_manager
         .get("general-assistant")
         .map(|a| a.system_prompt)
         .unwrap_or_else(|| config.system_prompt.clone());
 
+    let runtime_capabilities = "Runtime rules for this RushDino session:\n- You can use the registered RushDino tools when needed.\n- Do not claim generic sandbox or policy restrictions such as not being able to read files, run shell commands, or inspect the local environment unless a specific tool call actually fails.\n- When a task requires local inspection or modification, prefer using the available tools over asking the user to do manual terminal work.\n- Use `present_message` only when buttons, images, or explicit layout materially improve the answer. Keep `fallbackText` concise and complete.\n- If a tool is unavailable or blocked, state the concrete tool failure and adapt from there.";
+
     Message {
         id: Uuid::new_v4().to_string(),
         role: Role::System,
-        content: format!("{}\n\n{}", agent_prompt, memory.load_context().unwrap_or_default()),
+        content: format!(
+            "{}\n\n{}\n\n{}",
+            agent_prompt,
+            runtime_capabilities,
+            memory.load_context().unwrap_or_default()
+        ),
         tool_calls: None,
+        rich_content: None,
         created_at: Utc::now(),
     }
 }
@@ -212,6 +220,7 @@ pub fn user_message(input: &str) -> Message {
         role: Role::User,
         content: input.to_owned(),
         tool_calls: None,
+        rich_content: None,
         created_at: Utc::now(),
     }
 }

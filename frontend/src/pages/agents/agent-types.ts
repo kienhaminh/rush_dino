@@ -1,8 +1,6 @@
 export type AgentPanel =
   | 'overview'
   | 'progress'
-  | 'soul'
-  | 'memory'
   | 'files'
   | 'tools'
   | 'skills'

@@ -19,7 +19,10 @@ impl KnowledgeGraphBridge {
 #[async_trait]
 impl KnowledgeGraphAccess for KnowledgeGraphBridge {
     async fn ingest_text(&self, source_type: &str, source_ref: &str, text: &str) -> Result<()> {
-        let _ = self.service.ingest_text(source_type, source_ref, text).await?;
+        let _ = self
+            .service
+            .ingest_text(source_type, source_ref, text)
+            .await?;
         Ok(())
     }
 
@@ -31,7 +34,9 @@ impl KnowledgeGraphAccess for KnowledgeGraphBridge {
     ) -> Result<Vec<String>> {
         let configured = self.service.config().max_context_facts as usize;
         let limit = max_facts.min(configured).max(1);
-        self.service.facts_for_prompt(query, conversation_id, limit).await
+        self.service
+            .facts_for_prompt(query, conversation_id, limit)
+            .await
     }
 
     async fn facts_as_json(&self, query: &str, limit: usize) -> Result<serde_json::Value> {

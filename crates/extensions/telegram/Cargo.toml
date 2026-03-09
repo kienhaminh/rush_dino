@@ -7,9 +7,13 @@ license.workspace = true
 [dependencies]
 async-trait.workspace = true
 chrono.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
 teloxide.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+url.workspace = true
 rushdino-common = { path = "../../common" }
 rushdino-agent = { path = "../../agent" }
 rushdino-gateway = { path = "../../gateway" }
+pulldown-cmark = "0.13.1"

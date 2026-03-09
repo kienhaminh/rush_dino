@@ -5,6 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   BrainIcon,
   SearchIcon,
   PlusIcon,
@@ -148,6 +155,16 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
 
   return (
     <div className="space-y-6">
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Shared Memory</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Memory entries are shared across every agent. Adding, removing, or disabling entries
+            updates the runtime memory used by all agents.
+          </p>
+        </CardHeader>
+      </Card>
+
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="sm:col-span-1 rounded-lg border border-border/50 bg-card p-3 flex flex-col gap-1">
@@ -186,7 +203,7 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search memories…"
+            placeholder="Search shared memory…"
             className="pl-8 h-9 bg-background/50 border-border/40 text-sm"
           />
         </div>
@@ -224,7 +241,7 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
           onClick={() => setShowNew((v) => !v)}
         >
           <PlusIcon className="w-3.5 h-3.5" />
-          Add Memory
+          Add Shared Memory
         </Button>
       </div>
 
@@ -232,13 +249,13 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
       {showNew && (
         <Card className="bg-card border-primary/20 shadow-lg shadow-primary/5">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">New Memory Entry</CardTitle>
+            <CardTitle className="text-base">New Shared Memory Entry</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Textarea
               value={newDraft.content}
               onChange={(e) => setNewDraft((d) => ({ ...d, content: e.target.value }))}
-              placeholder="What should the agent remember?"
+              placeholder="What should every agent remember?"
               className="min-h-[80px] text-sm bg-background/50 border-border/40 resize-none"
               autoFocus
             />
@@ -247,40 +264,48 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
                 <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
                   Type
                 </label>
-                <select
+                <Select
                   value={newDraft.type}
-                  onChange={(e) =>
-                    setNewDraft((d) => ({ ...d, type: e.target.value as MemoryEntryType }))
+                  onValueChange={(val) =>
+                    setNewDraft((d) => ({ ...d, type: val as MemoryEntryType }))
                   }
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
-                  {ALL_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {TYPE_META[t].label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ALL_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {TYPE_META[t].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-col gap-1.5 flex-1 min-w-[120px]">
                 <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
                   Importance
                 </label>
-                <select
+                <Select
                   value={newDraft.importance}
-                  onChange={(e) =>
+                  onValueChange={(val) =>
                     setNewDraft((d) => ({
                       ...d,
-                      importance: e.target.value as MemoryImportance,
+                      importance: val as MemoryImportance,
                     }))
                   }
-                  className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
-                  {ALL_IMPORTANCE.map((imp) => (
-                    <option key={imp} value={imp}>
-                      {IMPORTANCE_META[imp].label}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger className="h-8 rounded-md border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ALL_IMPORTANCE.map((imp) => (
+                      <SelectItem key={imp} value={imp}>
+                        {IMPORTANCE_META[imp].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="flex flex-col gap-1.5 flex-1 min-w-[140px]">
                 <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
@@ -312,7 +337,7 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
                 disabled={!newDraft.content.trim()}
                 onClick={addEntry}
               >
-                Save Memory
+                Save Shared Memory
               </Button>
             </div>
           </CardContent>
@@ -326,8 +351,8 @@ export function AgentMemoryPanel({ runtime }: AgentMemoryPanelProps) {
             <BrainIcon className="w-8 h-8 text-muted-foreground/40 mb-3" />
             <p className="text-sm text-muted-foreground">
               {entries.length === 0
-                ? 'No memories yet. Add the first one.'
-                : 'No memories match your filters.'}
+                ? 'No shared memories yet. Add the first one.'
+                : 'No shared memories match your filters.'}
             </p>
           </div>
         ) : (

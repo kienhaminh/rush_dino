@@ -1,14 +1,19 @@
 pub mod approval_gate;
+pub mod channel_pairing;
+mod chat_broadcast;
 mod knowledge_graph_bridge;
 pub mod middleware;
-mod runtime_log_store;
+mod provider_runtime;
 pub mod routes;
+mod runtime_log_store;
+mod runtime_state;
 pub mod state;
 pub mod static_files;
+mod system_broker;
 pub mod webchat;
 pub mod ws;
 
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     middleware as axum_middleware,
@@ -19,18 +24,22 @@ use state::AppState;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
-use rushdino_agent::{AgentConfig, AgentEngine, ToolApproval};
-use rushdino_common::{config::ProviderKind, db, init, AppConfig, AppError, CredentialsConfig, Result};
-use rushdino_gateway::Gateway;
-use rushdino_knowledge_graph::KnowledgeGraphService;
-use rushdino_providers::{codex_refresh, types::ProviderConfig, Provider};
+use rushdino_agent::AgentRuntime;
+use rushdino_common::{db, init, AppConfig, AppError, CredentialsConfig, Result};
+use rushdino_gateway::{
+    Gateway, GatewayAdapterCapabilities, GatewayRichDeliveryMode, GatewayStateStore, SessionManager,
+};
 use rushdino_security::rate_limit::EndpointLimiters;
 
 use crate::{
     approval_gate::ApprovalGate,
-    knowledge_graph_bridge::KnowledgeGraphBridge,
+    channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
+    chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
     middleware::{cors_layer, hmac_auth_middleware, rate_limit_middleware, HmacAuthState},
+    provider_runtime::refresh_runtime_from_disk,
     runtime_log_store::RuntimeLogStore,
+    runtime_state::RuntimeState,
+    system_broker::LocalSystemBroker,
     webchat::WebChatAdapter,
 };
 
@@ -40,22 +49,16 @@ pub async fn run_server() -> Result<()> {
     let config_path = home.join("config.toml");
     let credentials_path = home.join("credentials.toml");
     let config = Arc::new(AppConfig::load_and_reconcile()?);
-    let mut credentials = CredentialsConfig::load()?;
-
-    let effective_provider = resolve_effective_provider(config.as_ref(), &mut credentials).await?;
-    let provider_config = select_provider_config(config.as_ref(), &credentials, effective_provider.clone())?;
-    if effective_provider != config.active_provider {
-        tracing::warn!(
-            "provider: falling back from {:?} to {:?}",
-            config.active_provider,
-            effective_provider
-        );
-    }
+    let credentials = Arc::new(CredentialsConfig::load()?);
 
     let pool = db::init_pool(&config.db_path).await?;
     db::run_migrations(&pool).await?;
     let pool = Arc::new(pool);
-    let runtime_logs = Arc::new(RuntimeLogStore::new(pool.clone()));
+    let chat_broadcast = Arc::new(ChatBroadcastHub::new());
+    let runtime_logs = Arc::new(RuntimeLogStore::new(
+        pool.clone(),
+        Some(chat_broadcast.clone()),
+    ));
     let _ = log_runtime(
         &runtime_logs,
         "info",
@@ -67,59 +70,93 @@ pub async fn run_server() -> Result<()> {
         })),
     )
     .await;
-    if effective_provider != config.active_provider {
+    let gate = ApprovalGate::new();
+    let runtime = Arc::new(AgentRuntime::new(pool.clone()));
+    runtime.reconcile_incomplete_runs().await?;
+    let system_broker = Arc::new(LocalSystemBroker::new(
+        config_path.clone(),
+        gate.clone(),
+        runtime.clone(),
+    )) as rushdino_agent::SharedSystemBroker;
+    let runtime_state = Arc::new(RuntimeState::new(
+        config.clone(),
+        pool.clone(),
+        runtime.clone(),
+        system_broker.clone(),
+        config_path.clone(),
+        credentials_path.clone(),
+    ));
+    refresh_runtime_from_disk(runtime_state.as_ref()).await?;
+
+    if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
         let _ = log_runtime(
             &runtime_logs,
             "warn",
             "provider",
-            "provider fallback engaged",
-            Some(serde_json::json!({
-                "from": format!("{:?}", config.active_provider),
-                "to": format!("{:?}", effective_provider),
-            })),
+            "default profile runtime unavailable",
+            Some(serde_json::json!({ "error": unavailable_error })),
         )
         .await;
     }
 
-    let provider = Arc::new(Provider::from_config(&provider_config)?);
-    let knowledge_graph_service = if config.knowledge_graph.enabled {
-        Some(Arc::new(KnowledgeGraphService::new(
-            (*pool).clone(),
-            provider.clone(),
-            config.knowledge_graph.clone(),
-            config.data_dir.clone(),
-        )))
-    } else {
-        None
-    };
+    if let Some(engine) = runtime_state.engine_opt() {
+        // Seed example workflows on first startup (skipped if any workflows already exist).
+        engine.seed_initial_workflows().await;
+    }
 
-    let knowledge_graph_bridge = knowledge_graph_service
-        .as_ref()
-        .map(|service| Arc::new(KnowledgeGraphBridge::new(service.clone())) as Arc<dyn rushdino_agent::KnowledgeGraphAccess>);
-    let gate = ApprovalGate::new();
-    let engine = Arc::new(AgentEngine::new(
-        provider,
-        pool.clone(),
-        config.data_dir.clone(),
-        credentials.brave_api_key.clone(),
-        provider_kind_label(&effective_provider).to_owned(),
-        AgentConfig::default(),
-        Some(gate.clone() as Arc<dyn ToolApproval>),
-        knowledge_graph_bridge,
-    )?);
-
-    let credentials = Arc::new(credentials);
+    let gateway_state = Arc::new(GatewayStateStore::new());
+    let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
+    let ingress_policy = Arc::new(ChannelPairingIngressPolicy::new(
+        config_path.clone(),
+        channel_pairing.clone(),
+        runtime_logs.clone(),
+    ));
+    gateway_state
+        .seed_channel(
+            "telegram",
+            config.gateway.telegram.enabled,
+            gateway_adapter_capabilities("telegram"),
+        )
+        .await;
+    gateway_state
+        .seed_channel(
+            "discord",
+            config.gateway.discord.enabled,
+            gateway_adapter_capabilities("discord"),
+        )
+        .await;
+    gateway_state
+        .seed_channel(
+            "slack",
+            config.gateway.slack.enabled,
+            gateway_adapter_capabilities("slack"),
+        )
+        .await;
+    gateway_state
+        .seed_channel(
+            "webchat",
+            config.gateway.webchat.enabled,
+            gateway_adapter_capabilities("webchat"),
+        )
+        .await;
+    let gateway_sessions = Arc::new(SessionManager::new((*pool).clone()));
 
     // Build gateway and register all enabled channel adapters.
-    let mut gateway = Gateway::new(engine.clone(), (*pool).clone());
+    let mut gateway = Gateway::new(
+        runtime_state.engine_handle(),
+        gateway_sessions.clone(),
+        gateway_state.clone(),
+        Some(Arc::new(GatewayChatObserver::new(chat_broadcast.clone()))),
+        Some(ingress_policy),
+    );
 
     // Telegram
     if config.gateway.telegram.enabled {
-        if let Some(token) = credentials
-            .telegram_bot_token
-            .as_deref()
-            .filter(|t| !t.is_empty())
-        {
+        if should_register_gateway_adapter("telegram", config.as_ref(), credentials.as_ref()) {
+            let token = credentials
+                .telegram_bot_token
+                .as_deref()
+                .expect("telegram token checked by should_register_gateway_adapter");
             gateway.register(rushdino_telegram::TelegramAdapter::new(
                 token.to_owned(),
                 config.clone(),
@@ -135,6 +172,10 @@ pub async fn run_server() -> Result<()> {
             .await;
         } else {
             tracing::warn!("gateway: telegram enabled but token missing");
+            gateway_state
+                .reporter("telegram")
+                .degraded("telegram enabled but token missing")
+                .await;
             let _ = log_runtime(
                 &runtime_logs,
                 "warn",
@@ -148,11 +189,11 @@ pub async fn run_server() -> Result<()> {
 
     // Discord
     if config.gateway.discord.enabled {
-        if let Some(token) = credentials
-            .discord_bot_token
-            .as_deref()
-            .filter(|t| !t.is_empty())
-        {
+        if should_register_gateway_adapter("discord", config.as_ref(), credentials.as_ref()) {
+            let token = credentials
+                .discord_bot_token
+                .as_deref()
+                .expect("discord token checked by should_register_gateway_adapter");
             gateway.register(rushdino_discord::DiscordAdapter::new(token));
             tracing::info!("gateway: discord adapter registered");
             let _ = log_runtime(
@@ -165,6 +206,10 @@ pub async fn run_server() -> Result<()> {
             .await;
         } else {
             tracing::warn!("gateway: discord enabled but token missing");
+            gateway_state
+                .reporter("discord")
+                .degraded("discord enabled but token missing")
+                .await;
             let _ = log_runtime(
                 &runtime_logs,
                 "warn",
@@ -178,9 +223,17 @@ pub async fn run_server() -> Result<()> {
 
     // Slack
     if config.gateway.slack.enabled {
-        let bot = credentials.slack_bot_token.as_deref().unwrap_or("").to_owned();
-        let app = credentials.slack_app_token.as_deref().unwrap_or("").to_owned();
-        if !bot.is_empty() && !app.is_empty() {
+        if should_register_gateway_adapter("slack", config.as_ref(), credentials.as_ref()) {
+            let bot = credentials
+                .slack_bot_token
+                .as_deref()
+                .expect("slack bot token checked by should_register_gateway_adapter")
+                .to_owned();
+            let app = credentials
+                .slack_app_token
+                .as_deref()
+                .expect("slack app token checked by should_register_gateway_adapter")
+                .to_owned();
             gateway.register(rushdino_slack::SlackAdapter::new(bot, app));
             tracing::info!("gateway: slack adapter registered");
             let _ = log_runtime(
@@ -193,6 +246,10 @@ pub async fn run_server() -> Result<()> {
             .await;
         } else {
             tracing::warn!("gateway: slack enabled but tokens missing");
+            gateway_state
+                .reporter("slack")
+                .degraded("slack enabled but tokens missing")
+                .await;
             let _ = log_runtime(
                 &runtime_logs,
                 "warn",
@@ -219,21 +276,7 @@ pub async fn run_server() -> Result<()> {
         .await;
     }
 
-    // Spawn the gateway in a background task.
-    let runtime_logs_c = runtime_logs.clone();
-    tokio::spawn(async move {
-        if let Err(err) = gateway.start().await {
-            tracing::error!("gateway exited with error: {err}");
-            let _ = runtime_logs_c
-                .insert(
-                    "error",
-                    "gateway",
-                    "gateway exited with error",
-                    Some(serde_json::json!({ "error": err.to_string() })),
-                )
-                .await;
-        }
-    });
+    let gateway_control = gateway.start().await?;
 
     // Build optional HMAC auth state from CredentialsConfig
     let hmac_auth = if config.security.hmac_auth_enabled {
@@ -242,7 +285,9 @@ pub async fn run_server() -> Result<()> {
             tracing::info!("security: HMAC-SHA256 authentication enabled");
             Some(Arc::new(HmacAuthState::new(secret_bytes)))
         } else {
-            tracing::warn!("security: hmac_auth_enabled=true but no api_secret configured; auth disabled");
+            tracing::warn!(
+                "security: hmac_auth_enabled=true but no api_secret configured; auth disabled"
+            );
             None
         }
     } else {
@@ -252,9 +297,8 @@ pub async fn run_server() -> Result<()> {
     // Always enable rate limiting
     let rate_limiters = Some(Arc::new(EndpointLimiters::new()));
 
-    if let Some(kg) = &knowledge_graph_service {
-        if config.knowledge_graph.backfill_on_startup {
-            let kg = kg.clone();
+    if config.knowledge_graph.backfill_on_startup {
+        if let Some(kg) = runtime_state.knowledge_graph() {
             tokio::spawn(async move {
                 if let Err(err) = kg.run_backfill().await {
                     tracing::warn!("knowledge graph startup backfill failed: {err}");
@@ -264,28 +308,102 @@ pub async fn run_server() -> Result<()> {
     }
 
     let state = AppState::new(
-        engine,
-        config.clone(),
+        runtime_state.clone(),
         config_path,
         credentials_path,
         webchat,
         gate,
+        gateway_state,
+        gateway_sessions,
+        gateway_control,
         hmac_auth,
         rate_limiters,
-        knowledge_graph_service.clone(),
         runtime_logs.clone(),
+        chat_broadcast,
+        channel_pairing,
     );
 
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
-        .route("/api/conversations", get(routes::conversations::list_conversations))
+        .route(
+            "/api/conversations",
+            get(routes::conversations::list_conversations),
+        )
+        .route("/api/sessions", get(routes::sessions::list_sessions))
+        .route(
+            "/api/sessions/:id/runs",
+            get(routes::runs::list_session_runs),
+        )
         .route("/api/logs", get(routes::logs::get_logs))
-        .route("/api/usage/metrics", get(routes::usage_metrics::get_usage_metrics))
+        .route("/api/approvals", get(routes::approval::list_approvals))
+        .route(
+            "/api/channels/:channel/pairing",
+            get(routes::channel_pairing::get_channel_pairing),
+        )
+        .route(
+            "/api/channels/:channel/pairing/:request_id/decision",
+            post(routes::channel_pairing::resolve_channel_pairing_request),
+        )
+        .route(
+            "/api/channels/:channel/pairing/paired/:sender_id",
+            axum::routing::delete(routes::channel_pairing::revoke_paired_sender),
+        )
+        .route(
+            "/api/gateway/summary",
+            get(routes::gateway::get_gateway_summary),
+        )
+        .route(
+            "/api/gateway/adapters",
+            get(routes::gateway::list_gateway_adapters),
+        )
+        .route(
+            "/api/gateway/sessions",
+            get(routes::gateway::list_gateway_sessions),
+        )
+        .route(
+            "/api/gateway/adapters/:channel/restart",
+            post(routes::gateway::restart_gateway_adapter),
+        )
+        .route(
+            "/api/gateway/sessions/:id/reset",
+            post(routes::gateway::reset_gateway_session),
+        )
+        .route("/api/files", post(routes::files::mutate_file))
+        .route(
+            "/api/runs",
+            get(routes::runs::list_runs).post(routes::runs::create_run),
+        )
+        .route("/api/runs/:id", get(routes::runs::get_run))
+        .route("/api/runs/:id/abort", post(routes::runs::abort_run))
+        .route("/api/runs/:id/wait", get(routes::runs::wait_for_run))
+        .route(
+            "/api/system/summary",
+            get(routes::system::get_system_summary),
+        )
+        .route("/api/system/doctor", get(routes::system::get_doctor_report))
+        .route(
+            "/api/system/soul-memory",
+            get(routes::soul_memory::get_soul_memory_state),
+        )
+        .route(
+            "/api/usage/metrics",
+            get(routes::usage_metrics::get_usage_metrics),
+        )
         .route("/api/agents", get(routes::agents::list_agents))
-        .route("/api/agents/progress", get(routes::agent_progress::get_agent_progress))
-        .route("/api/agents/:id/runtime", get(routes::agents::get_agent_runtime))
+        .route(
+            "/api/agents/progress",
+            get(routes::agent_progress::get_agent_progress),
+        )
+        .route(
+            "/api/agents/:id",
+            axum::routing::delete(routes::agents::delete_agent),
+        )
+        .route(
+            "/api/agents/:id/runtime",
+            get(routes::agents::get_agent_runtime),
+        )
         .route(
             "/api/agents/:id/files/:filename",
             patch(routes::agents::update_agent_file),
@@ -313,14 +431,23 @@ pub async fn run_server() -> Result<()> {
             get(routes::conversations::get_conversation)
                 .delete(routes::conversations::delete_conversation),
         )
-        .route("/api/documents/ingest", post(routes::documents::ingest_documents))
+        .route(
+            "/api/documents/ingest",
+            post(routes::documents::ingest_documents),
+        )
         .route("/api/graph/search", get(routes::graph::search))
         .route("/api/graph/facts", get(routes::graph::facts))
         .route("/api/graph/node/:id", get(routes::graph::node))
         .route("/api/graph/stats", get(routes::graph::stats))
         .route("/api/graph/backfill", post(routes::graph::backfill))
-        .route("/api/approval/:request_id", get(routes::approval::get_approval_status))
-        .route("/api/approval/:request_id", post(routes::approval::resolve_approval))
+        .route(
+            "/api/approval/:request_id",
+            get(routes::approval::get_approval_status),
+        )
+        .route(
+            "/api/approval/:request_id",
+            post(routes::approval::resolve_approval),
+        )
         .route(
             "/api/config",
             get(routes::config::get_config).patch(routes::config::patch_config),
@@ -329,9 +456,40 @@ pub async fn run_server() -> Result<()> {
             "/api/credentials",
             get(routes::config::get_credentials).patch(routes::config::patch_credentials),
         )
+        .route(
+            "/api/profiles",
+            get(routes::providers::list_profiles).post(routes::providers::create_profile),
+        )
+        .route(
+            "/api/skills",
+            get(routes::skills::list_skills).post(routes::skills::upsert_skill),
+        )
+        .route(
+            "/api/skills/:name",
+            axum::routing::delete(routes::skills::delete_skill),
+        )
+        .route(
+            "/api/profiles/:id",
+            axum::routing::put(routes::providers::update_profile)
+                .delete(routes::providers::delete_profile),
+        )
+        .route(
+            "/api/providers/:profile_id/models",
+            get(routes::providers::list_provider_models),
+        )
+        .route(
+            "/api/providers/:profile_id/connect-oauth",
+            post(routes::providers::connect_codex),
+        )
         .fallback(get(static_files::serve_static))
-        .layer(axum_middleware::from_fn_with_state(state.clone(), rate_limit_middleware))
-        .layer(axum_middleware::from_fn_with_state(state.clone(), hmac_auth_middleware))
+        .layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit_middleware,
+        ))
+        .layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            hmac_auth_middleware,
+        ))
         .layer(cors_layer(&config))
         .layer(TraceLayer::new_for_http())
         .with_state(state);
@@ -363,144 +521,64 @@ async fn log_runtime(
     store.insert(level, target, message, fields).await
 }
 
-fn provider_kind_label(kind: &ProviderKind) -> &'static str {
-    match kind {
-        ProviderKind::Ollama => "ollama",
-        ProviderKind::Openai => "openai",
-        ProviderKind::Anthropic => "anthropic",
-        ProviderKind::Codex => "codex",
-        ProviderKind::Plugin => "plugin",
+fn gateway_adapter_capabilities(channel_id: &str) -> GatewayAdapterCapabilities {
+    match channel_id {
+        "telegram" | "discord" | "slack" => GatewayAdapterCapabilities {
+            plain_text: true,
+            markdown: true,
+            code_blocks: true,
+            images: GatewayRichDeliveryMode::Native,
+            link_buttons: GatewayRichDeliveryMode::Native,
+        },
+        "webchat" => GatewayAdapterCapabilities {
+            plain_text: true,
+            markdown: true,
+            code_blocks: true,
+            images: GatewayRichDeliveryMode::Degraded,
+            link_buttons: GatewayRichDeliveryMode::Degraded,
+        },
+        _ => GatewayAdapterCapabilities::plain_text_only(),
     }
 }
 
-async fn resolve_effective_provider(
-    config: &AppConfig,
-    credentials: &mut CredentialsConfig,
-) -> Result<ProviderKind> {
-    if config.active_provider != ProviderKind::Codex {
-        return Ok(config.active_provider.clone());
-    }
-
-    let access_token = credentials.codex_access_token.as_deref().unwrap_or("");
-    let refresh_token = credentials.codex_refresh_token.as_deref().unwrap_or("");
-    let needs_refresh =
-        access_token.is_empty() || codex_refresh::token_needs_refresh(credentials.codex_token_expires_at);
-
-    if !needs_refresh {
-        return Ok(ProviderKind::Codex);
-    }
-
-    if refresh_token.is_empty() {
-        tracing::warn!("codex: refresh token missing while token is stale");
-        return fallback_provider_on_codex_failure(config, credentials, "refresh token missing");
-    }
-
-    tracing::info!("codex: access token stale, refreshing");
-    match codex_refresh::refresh_codex_token(refresh_token).await {
-        Ok((new_access, new_refresh, new_expires_at)) => {
-            let credentials_path = init::default_home_dir().join("credentials.toml");
-            persist_refreshed_codex_tokens(
-                credentials,
-                &credentials_path,
-                new_access,
-                new_refresh,
-                new_expires_at,
-            )?;
-            tracing::info!("codex: token refresh succeeded");
-            Ok(ProviderKind::Codex)
-        }
-        Err(err) => {
-            tracing::warn!("codex: token refresh failed: {err}");
-            fallback_provider_on_codex_failure(config, credentials, "refresh failed")
-        }
-    }
-}
-
-fn persist_refreshed_codex_tokens(
-    credentials: &mut CredentialsConfig,
-    path: &Path,
-    access_token: String,
-    refresh_token: String,
-    expires_at: i64,
-) -> Result<()> {
-    credentials.codex_access_token = Some(access_token);
-    credentials.codex_refresh_token = Some(refresh_token);
-    credentials.codex_token_expires_at = Some(expires_at);
-    credentials.save_to_path(path)?;
-    Ok(())
-}
-
-fn fallback_provider_on_codex_failure(
+fn should_register_gateway_adapter(
+    channel_id: &str,
     config: &AppConfig,
     credentials: &CredentialsConfig,
-    reason: &str,
-) -> Result<ProviderKind> {
-    let fallback = config.codex_fallback_provider.clone().ok_or_else(|| {
-        AppError::Provider(format!(
-            "codex provider cannot start ({reason}) and codex_fallback_provider is not configured"
-        ))
-    })?;
-    if fallback == ProviderKind::Codex {
-        return Err(AppError::Provider(
-            "codex_fallback_provider cannot be codex".to_owned(),
-        ));
+) -> bool {
+    match channel_id {
+        "telegram" => {
+            config.gateway.telegram.enabled
+                && credentials
+                    .telegram_bot_token
+                    .as_deref()
+                    .is_some_and(|token| !token.trim().is_empty())
+        }
+        "discord" => {
+            config.gateway.discord.enabled
+                && credentials
+                    .discord_bot_token
+                    .as_deref()
+                    .is_some_and(|token| !token.trim().is_empty())
+        }
+        "slack" => {
+            config.gateway.slack.enabled
+                && credentials
+                    .slack_bot_token
+                    .as_deref()
+                    .is_some_and(|token| !token.trim().is_empty())
+                && credentials
+                    .slack_app_token
+                    .as_deref()
+                    .is_some_and(|token| !token.trim().is_empty())
+        }
+        "webchat" => config.gateway.webchat.enabled,
+        _ => false,
     }
-    // Validation: fallback must be fully configured before we switch.
-    let _ = select_provider_config(config, credentials, fallback.clone())?;
-    Ok(fallback)
 }
 
-fn select_provider_config(
-    config: &AppConfig,
-    credentials: &CredentialsConfig,
-    provider: ProviderKind,
-) -> Result<ProviderConfig> {
-    match provider {
-        ProviderKind::Ollama => {
-            if config.ollama.base_url.trim().is_empty() || config.ollama.model.trim().is_empty() {
-                return Err(AppError::Provider(
-                    "ollama fallback requires non-empty base_url and model".to_owned(),
-                ));
-            }
-            Ok(ProviderConfig::Ollama {
-                base_url: config.ollama.base_url.clone(),
-                model: config.ollama.model.clone(),
-                api_key: None,
-            })
-        }
-        ProviderKind::Openai => {
-            let api_key = credentials.openai_api_key.clone().unwrap_or_default();
-            Ok(ProviderConfig::OpenAI {
-                api_key,
-                model: config.openai.model.clone(),
-                base_url: None,
-            })
-        }
-        ProviderKind::Anthropic => {
-            let api_key = credentials.anthropic_api_key.clone().unwrap_or_default();
-            Ok(ProviderConfig::Anthropic {
-                api_key,
-                model: config.anthropic.model.clone(),
-            })
-        }
-        ProviderKind::Plugin => {
-            let manifest_path = config.data_dir.join("plugins/default.toml");
-            if !manifest_path.exists() {
-                return Err(AppError::Provider(format!(
-                    "plugin provider requires manifest at {}",
-                    manifest_path.display()
-                )));
-            }
-            Ok(ProviderConfig::Plugin { manifest_path })
-        }
-        ProviderKind::Codex => {
-            let access_token = credentials.codex_access_token.clone().unwrap_or_default();
-            Ok(ProviderConfig::Codex {
-                access_token,
-                model: config.codex.model.clone(),
-            })
-        }
-    }
+pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
+    refresh_runtime_from_disk(state.runtime.as_ref()).await
 }
 
 async fn shutdown_signal() {
@@ -527,94 +605,43 @@ async fn shutdown_signal() {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use rushdino_common::CredentialsConfig;
 
-    use rushdino_common::{init, ProviderKind};
-
-    use super::{
-        fallback_provider_on_codex_failure, persist_refreshed_codex_tokens, select_provider_config,
-    };
+    use super::should_register_gateway_adapter;
 
     #[test]
-    fn fallback_requires_configuration() {
+    fn telegram_adapter_registration_requires_token_at_startup() {
         let mut config = rushdino_common::AppConfig::default();
-        config.active_provider = ProviderKind::Codex;
-        config.codex_fallback_provider = None;
-        let credentials = rushdino_common::CredentialsConfig::default();
+        config.gateway.telegram.enabled = true;
 
-        assert!(fallback_provider_on_codex_failure(&config, &credentials, "refresh failed").is_err());
+        assert!(!should_register_gateway_adapter(
+            "telegram",
+            &config,
+            &CredentialsConfig::default(),
+        ));
+
+        assert!(should_register_gateway_adapter(
+            "telegram",
+            &config,
+            &CredentialsConfig {
+                telegram_bot_token: Some("123456:abc".to_owned()),
+                ..CredentialsConfig::default()
+            },
+        ));
     }
 
     #[test]
-    fn fallback_cannot_be_codex() {
+    fn telegram_adapter_registration_rejects_blank_token() {
         let mut config = rushdino_common::AppConfig::default();
-        config.active_provider = ProviderKind::Codex;
-        config.codex_fallback_provider = Some(ProviderKind::Codex);
-        let credentials = rushdino_common::CredentialsConfig::default();
+        config.gateway.telegram.enabled = true;
 
-        assert!(fallback_provider_on_codex_failure(&config, &credentials, "refresh failed").is_err());
-    }
-
-    #[test]
-    fn fallback_to_openai_works_without_key() {
-        let mut config = rushdino_common::AppConfig::default();
-        config.active_provider = ProviderKind::Codex;
-        config.codex_fallback_provider = Some(ProviderKind::Openai);
-        let credentials = rushdino_common::CredentialsConfig::default();
-
-        let selected =
-            fallback_provider_on_codex_failure(&config, &credentials, "refresh failed")
-                .expect("fallback should be selected");
-        assert_eq!(selected, ProviderKind::Openai);
-    }
-
-    #[test]
-    fn fallback_to_openai_selects_provider_when_valid() {
-        let mut config = rushdino_common::AppConfig::default();
-        config.active_provider = ProviderKind::Codex;
-        config.codex_fallback_provider = Some(ProviderKind::Openai);
-        let credentials = rushdino_common::CredentialsConfig {
-            openai_api_key: Some("sk-test".to_owned()),
-            ..rushdino_common::CredentialsConfig::default()
-        };
-
-        let selected =
-            fallback_provider_on_codex_failure(&config, &credentials, "refresh failed")
-                .expect("fallback should be selected");
-        assert_eq!(selected, ProviderKind::Openai);
-    }
-
-    #[test]
-    fn codex_refresh_persistence_updates_memory_and_disk() {
-        let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
-        init::ensure_rushdino_dir_at(&root).expect("init test root");
-        let path = root.join("credentials.toml");
-        let mut credentials = rushdino_common::CredentialsConfig::default();
-
-        persist_refreshed_codex_tokens(
-            &mut credentials,
-            &path,
-            "access-new".to_owned(),
-            "refresh-new".to_owned(),
-            1_760_000_000,
-        )
-        .expect("refresh persistence should succeed");
-
-        let reloaded =
-            rushdino_common::CredentialsConfig::load_from_path(&path).expect("reload credentials");
-        assert_eq!(credentials.codex_access_token, Some("access-new".to_owned()));
-        assert_eq!(reloaded.codex_access_token, Some("access-new".to_owned()));
-        assert_eq!(reloaded.codex_refresh_token, Some("refresh-new".to_owned()));
-        assert_eq!(reloaded.codex_token_expires_at, Some(1_760_000_000));
-
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn select_provider_rejects_missing_plugin_manifest() {
-        let mut config = rushdino_common::AppConfig::default();
-        config.data_dir = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
-        let credentials = rushdino_common::CredentialsConfig::default();
-        assert!(select_provider_config(&config, &credentials, ProviderKind::Plugin).is_err());
+        assert!(!should_register_gateway_adapter(
+            "telegram",
+            &config,
+            &CredentialsConfig {
+                telegram_bot_token: Some("   ".to_owned()),
+                ..CredentialsConfig::default()
+            },
+        ));
     }
 }

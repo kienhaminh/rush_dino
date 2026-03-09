@@ -84,7 +84,10 @@ impl Tool for WebSearchTool {
                     .iter()
                     .take(5)
                     .map(|item| {
-                        let title = item.get("title").and_then(Value::as_str).unwrap_or_default();
+                        let title = item
+                            .get("title")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
                         let url = item.get("url").and_then(Value::as_str).unwrap_or_default();
                         format!("- {title}: {url}")
                     })

@@ -1,7 +1,6 @@
 import {
   MessageSquare,
   BarChart,
-  Link,
   Radio,
   FileText,
   Zap,
@@ -13,49 +12,61 @@ import {
   Loader,
   LayoutGrid,
   GitBranch,
+  ShieldCheck,
+  Stethoscope,
+  Activity,
+  Waypoints,
 } from 'lucide-react';
 
 export const TAB_GROUPS = [
-  { label: 'chat', tabs: ['chat'] },
+  { label: 'assistant', tabs: ['chat', 'runs', 'agents', 'agent-board', 'workflows', 'skills'] },
   {
-    label: 'control',
-    tabs: ['overview', 'channels', 'instances', 'sessions', 'usage', 'cron'],
+    label: 'operations',
+    tabs: ['overview', 'soul-memory', 'gateway', 'approvals', 'sessions', 'logs', 'metrics', 'cron'],
   },
-  { label: 'agent', tabs: ['agent-board', 'agents', 'workflows', 'skills', 'nodes'] },
-  { label: 'settings', tabs: ['config', 'debug', 'logs'] },
+  { label: 'connectivity', tabs: ['instances'] },
+  { label: 'system', tabs: ['config', 'diagnostics', 'nodes', 'debug'] },
 ] as const;
 
 export type Tab =
   | 'agent-board'
   | 'agents'
+  | 'runs'
   | 'workflows'
   | 'overview'
-  | 'channels'
+  | 'soul-memory'
+  | 'gateway'
+  | 'approvals'
   | 'instances'
   | 'sessions'
-  | 'usage'
+  | 'metrics'
   | 'cron'
   | 'skills'
   | 'nodes'
   | 'chat'
   | 'config'
+  | 'diagnostics'
   | 'debug'
   | 'logs';
 
 export const TAB_ICONS: Record<Tab, any> = {
   'agent-board': LayoutGrid,
   agents: Folder,
+  runs: Activity,
   workflows: GitBranch,
   chat: MessageSquare,
   overview: BarChart,
-  channels: Link,
+  'soul-memory': Settings,
+  gateway: Waypoints,
+  approvals: ShieldCheck,
   instances: Radio,
   sessions: FileText,
-  usage: BarChart,
+  metrics: BarChart,
   cron: Loader,
   skills: Zap,
   nodes: Monitor,
   config: Settings,
+  diagnostics: Stethoscope,
   debug: Bug,
   logs: ScrollText,
 };
@@ -63,17 +74,21 @@ export const TAB_ICONS: Record<Tab, any> = {
 export const TAB_LABELS: Record<Tab, string> = {
   'agent-board': 'Board',
   agents: 'Agents',
+  runs: 'Runs',
   workflows: 'Workflows',
   chat: 'Workspace',
-  overview: 'Overview',
-  channels: 'Channels',
+  overview: 'Operations',
+  'soul-memory': 'Soul & Memory',
+  gateway: 'Gateway',
+  approvals: 'Approvals',
   instances: 'Instances',
   sessions: 'Sessions',
-  usage: 'Metrics',
+  metrics: 'Metrics',
   cron: 'Cron',
   skills: 'Skills',
   nodes: 'Nodes',
   config: 'Config',
+  diagnostics: 'Diagnostics',
   debug: 'Debug',
   logs: 'Logs',
 };
@@ -81,17 +96,21 @@ export const TAB_LABELS: Record<Tab, string> = {
 export const TAB_DESCRIPTIONS: Record<Tab, string> = {
   'agent-board': 'Overview status board for all agents',
   agents: 'Manage AI agents',
+  runs: 'Track active, queued, blocked, and completed runs',
   workflows: 'Manage end-to-end workflows and step assignments',
-  chat: 'Interact with AI assistant',
-  overview: 'System status, connection settings, and general statistics.',
-  channels: 'Channel status snapshots from the gateway',
-  instances: 'Manage system instances',
-  sessions: 'View and manage active sessions',
-  usage: 'Token usage, cost analytics, and AI provider configuration',
+  chat: 'Interact with the assistant and channel conversations',
+  overview: 'Health, approvals, channels, and recent incidents',
+  'soul-memory': 'Configure and monitor the shared soul and memory used by all agents',
+  gateway: 'Unified channel operations, setup, and detailed settings',
+  approvals: 'Review pending approvals and recent decisions',
+  instances: 'Inspect infrastructure and instance-level surfaces',
+  sessions: 'View conversation sessions and pending intervention',
+  metrics: 'Usage, cost, and activity analytics',
   cron: 'Manage scheduled tasks',
-  skills: 'Manage AI skills and capabilities',
+  skills: 'Manage workspace skills and local capabilities',
   nodes: 'System nodes and infrastructure',
-  config: 'System configuration settings',
+  config: 'Provider profiles, credentials, models, and server policy',
+  diagnostics: 'Doctor findings, recovery signals, and repair guidance',
   debug: 'System debugging tools',
-  logs: 'System operation logs',
+  logs: 'System operation logs and audit trail',
 };

@@ -12,6 +12,7 @@ use crate::{
     engine::AgentConfig,
     memory::MemoryManager,
     react_loop::run_react_loop,
+    runtime::AgentRuntime,
     tool_registry::ToolRegistry,
     tools::shell_exec::{with_tool_execution_context, ToolExecutionContext},
     workflow_manager::WorkflowManager,
@@ -25,6 +26,7 @@ pub struct WorkflowRunner {
     memory: Arc<MemoryManager>,
     agent_manager: Arc<AgentManager>,
     manager: Arc<WorkflowManager>,
+    runtime: Arc<AgentRuntime>,
     config: AgentConfig,
 }
 
@@ -36,6 +38,7 @@ impl WorkflowRunner {
         memory: Arc<MemoryManager>,
         agent_manager: Arc<AgentManager>,
         manager: Arc<WorkflowManager>,
+        runtime: Arc<AgentRuntime>,
         config: AgentConfig,
     ) -> Self {
         Self {
@@ -45,6 +48,7 @@ impl WorkflowRunner {
             memory,
             agent_manager,
             manager,
+            runtime,
             config,
         }
     }
@@ -58,6 +62,10 @@ impl WorkflowRunner {
                     .manager
                     .mark_run_failed(&run_id, &format!("workflow execution error: {err}"))
                     .await;
+                let _ = this
+                    .runtime
+                    .mark_failed(&run_id, &format!("workflow execution error: {err}"))
+                    .await;
             }
         });
     }
@@ -65,14 +73,31 @@ impl WorkflowRunner {
     async fn execute_run(&self, run_id: &str) -> Result<()> {
         let context = self.manager.load_execution_context(run_id).await?;
         self.manager.mark_run_running(run_id).await?;
+        let _ = self
+            .runtime
+            .mark_running(run_id, "Workflow run entered active execution.")
+            .await;
 
         let mut previous_outputs: Vec<(String, String)> = Vec::new();
 
         for step in context.steps {
-            let step_input = build_step_input(&context.run_input, &previous_outputs, &step.step_name, &step.instructions);
+            let step_input = build_step_input(
+                &context.run_input,
+                &previous_outputs,
+                &step.step_name,
+                &step.instructions,
+            );
             self.manager
                 .mark_run_step_running(&step.run_step_id, &step_input)
                 .await?;
+            let _ = self
+                .runtime
+                .record_event(
+                    run_id,
+                    "workflow_step_running",
+                    format!("Step {} ({}) is running.", step.position, step.step_name),
+                )
+                .await;
 
             let conversation_id = format!(
                 "workflow:{}:run:{}:step:{}",
@@ -81,6 +106,7 @@ impl WorkflowRunner {
 
             let result = self
                 .execute_step(
+                    run_id,
                     &step.agent_id,
                     &step_input,
                     &conversation_id,
@@ -94,6 +120,14 @@ impl WorkflowRunner {
                     self.manager
                         .mark_run_step_succeeded(&step.run_step_id, &output, &conversation_id)
                         .await?;
+                    let _ = self
+                        .runtime
+                        .record_event(
+                            run_id,
+                            "workflow_step_completed",
+                            format!("Step {} ({}) completed.", step.position, step.step_name),
+                        )
+                        .await;
                     previous_outputs.push((step.step_name, output));
                 }
                 Err(err) => {
@@ -107,16 +141,35 @@ impl WorkflowRunner {
                             &format!("step {} failed: {}", step.position, error_text),
                         )
                         .await?;
+                    let _ = self
+                        .runtime
+                        .mark_failed(
+                            run_id,
+                            &format!("step {} failed: {}", step.position, error_text),
+                        )
+                        .await;
                     return Ok(());
                 }
             }
         }
 
-        self.manager.mark_run_succeeded(run_id).await
+        self.manager.mark_run_succeeded(run_id).await?;
+        let output = if previous_outputs.is_empty() {
+            "Workflow completed without step output.".to_owned()
+        } else {
+            previous_outputs
+                .iter()
+                .map(|(name, output)| format!("{name}:\n{output}"))
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        };
+        let _ = self.runtime.mark_completed(run_id, &output).await;
+        Ok(())
     }
 
     async fn execute_step(
         &self,
+        run_id: &str,
         agent_id: &str,
         step_input: &str,
         conversation_id: &str,
@@ -141,6 +194,7 @@ impl WorkflowRunner {
                 role: Role::System,
                 content: system_content,
                 tool_calls: None,
+                rich_content: None,
                 created_at: Utc::now(),
             },
             Message {
@@ -148,6 +202,7 @@ impl WorkflowRunner {
                 role: Role::User,
                 content: step_input.to_owned(),
                 tool_calls: None,
+                rich_content: None,
                 created_at: Utc::now(),
             },
         ];
@@ -155,7 +210,13 @@ impl WorkflowRunner {
         let tool_context = ToolExecutionContext {
             session_id: None,
             conversation_id: Some(conversation_id.to_owned()),
+            run_id: Some(run_id.to_owned()),
             delegation_depth: 0,
+        };
+
+        let step_config = AgentConfig {
+            model_override: template.model.clone(),
+            ..self.config.clone()
         };
 
         let (response, all_messages) = with_tool_execution_context(
@@ -164,7 +225,8 @@ impl WorkflowRunner {
                 self.provider.clone(),
                 self.tool_registry.clone(),
                 messages,
-                &self.config,
+                &step_config,
+                None,
             ),
         )
         .await?;
@@ -175,7 +237,9 @@ impl WorkflowRunner {
             .await?;
 
         for message in &all_messages {
-            self.conversation.save_message(conversation_id, message).await?;
+            self.conversation
+                .save_message(conversation_id, message)
+                .await?;
         }
 
         Ok(response.content)
@@ -189,7 +253,14 @@ fn build_step_input(
     instructions: &str,
 ) -> String {
     let mut lines = vec![
-        format!("Workflow run input:\n{}", if run_input.is_empty() { "(none)" } else { run_input }),
+        format!(
+            "Workflow run input:\n{}",
+            if run_input.is_empty() {
+                "(none)"
+            } else {
+                run_input
+            }
+        ),
         "".to_owned(),
         format!("Current step: {step_name}"),
         format!("Step instructions:\n{instructions}"),

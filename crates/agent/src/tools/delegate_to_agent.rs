@@ -13,6 +13,7 @@ use rushdino_providers::Provider;
 
 use crate::{
     agent_manager::AgentManager,
+    agent_task_memory::AgentTaskMemory,
     engine::AgentConfig,
     react_loop::run_react_loop,
     tool_registry::{Tool, ToolRegistry},
@@ -37,6 +38,7 @@ pub struct DelegateToAgentTool {
     config: AgentConfig,
     /// Weak reference prevents a retain-cycle with the registry that owns this tool.
     registry: Weak<ToolRegistry>,
+    task_memory: Arc<AgentTaskMemory>,
 }
 
 impl DelegateToAgentTool {
@@ -45,12 +47,14 @@ impl DelegateToAgentTool {
         provider: Arc<Provider>,
         config: AgentConfig,
         registry: Weak<ToolRegistry>,
+        task_memory: Arc<AgentTaskMemory>,
     ) -> Self {
         Self {
             agent_manager,
             provider,
             config,
             registry,
+            task_memory,
         }
     }
 }
@@ -103,6 +107,7 @@ impl Tool for DelegateToAgentTool {
         let parent_ctx = current_tool_execution_context().unwrap_or(ToolExecutionContext {
             session_id: None,
             conversation_id: None,
+            run_id: None,
             delegation_depth: 0,
         });
         let current_depth = parent_ctx.delegation_depth;
@@ -126,13 +131,23 @@ impl Tool for DelegateToAgentTool {
             .upgrade()
             .ok_or_else(|| AppError::Agent("tool registry unavailable".to_owned()))?;
 
+        // Inject the agent's task history into the system prompt if available.
+        let system_content = match self.task_memory.load_task_log(agent_name) {
+            Some(log) => format!(
+                "{}\n\n## Your Task History\n\n{}",
+                template.system_prompt, log
+            ),
+            None => template.system_prompt,
+        };
+
         // Build the initial message list: target system prompt followed by the task.
         let messages = vec![
             Message {
                 id: Uuid::new_v4().to_string(),
                 role: Role::System,
-                content: template.system_prompt,
+                content: system_content,
                 tool_calls: None,
+                rich_content: None,
                 created_at: Utc::now(),
             },
             Message {
@@ -140,6 +155,7 @@ impl Tool for DelegateToAgentTool {
                 role: Role::User,
                 content: task.to_owned(),
                 tool_calls: None,
+                rich_content: None,
                 created_at: Utc::now(),
             },
         ];
@@ -153,9 +169,23 @@ impl Tool for DelegateToAgentTool {
 
         let (response, _) = with_tool_execution_context(
             child_ctx,
-            run_react_loop(self.provider.clone(), registry, messages, &self.config),
+            run_react_loop(
+                self.provider.clone(),
+                registry,
+                messages,
+                &self.config,
+                None,
+            ),
         )
         .await?;
+
+        // Persist the task + outcome to the agent's memory log. Best-effort only.
+        if let Err(e) = self
+            .task_memory
+            .append_task(agent_name, task, &response.content)
+        {
+            tracing::warn!(agent = agent_name, error = %e, "failed to write agent task log");
+        }
 
         Ok(response.content)
     }
@@ -183,12 +213,14 @@ mod tests {
     }
 
     fn make_tool_with_manager(dir: &std::path::Path) -> DelegateToAgentTool {
+        use crate::agent_task_memory::AgentTaskMemory;
         DelegateToAgentTool {
             agent_manager: Arc::new(AgentManager::new(dir.to_owned())),
             provider: make_dummy_provider(),
             config: AgentConfig::default(),
             // Dead weak reference — tests do not reach run_react_loop.
             registry: Weak::new(),
+            task_memory: Arc::new(AgentTaskMemory::new(dir.to_owned())),
         }
     }
 
@@ -223,6 +255,7 @@ mod tests {
                 description: "Researcher".to_owned(),
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
+                model: None,
             })
             .unwrap();
 
@@ -231,6 +264,7 @@ mod tests {
             provider: make_dummy_provider(),
             config: AgentConfig::default(),
             registry: Weak::new(),
+            task_memory: Arc::new(crate::agent_task_memory::AgentTaskMemory::new(dir.clone())),
         };
 
         // Set the context to the maximum depth already reached.
@@ -238,6 +272,7 @@ mod tests {
             session_id: None,
             conversation_id: None,
             delegation_depth: MAX_DELEGATION_DEPTH,
+            run_id: None,
         };
 
         let result = with_tool_execution_context(

@@ -52,8 +52,16 @@ impl AnthropicProvider {
                 }
                 if item.get("type").and_then(Value::as_str) == Some("tool_use") {
                     tool_calls.push(ToolCall {
-                        id: item.get("id").and_then(Value::as_str).unwrap_or_default().to_owned(),
-                        name: item.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
+                        id: item
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
+                        name: item
+                            .get("name")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned(),
                         arguments: item.get("input").cloned().unwrap_or_else(|| json!({})),
                     });
                 }
@@ -63,6 +71,7 @@ impl AnthropicProvider {
         Ok(ChatResponse {
             content,
             tool_calls,
+            rich_content: None,
             usage: None,
             finish_reason: payload
                 .get("stop_reason")

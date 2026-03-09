@@ -4,6 +4,10 @@ use rushdino_common::Result;
 pub async fn run() -> Result<()> {
     println!("{} {}", "⚡".bold(), "Agent CLI".blue().bold());
     println!("{}", "========================================".dimmed());
-    println!("{} {}", "i".yellow(), "Command not yet implemented. Will run one agent turn via the Gateway.");
+    println!(
+        "{} {}",
+        "i".yellow(),
+        "Daily agent management is UI-first. Use the web control UI for agent work; keep CLI for bootstrap and recovery."
+    );
     Ok(())
 }

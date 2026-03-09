@@ -46,7 +46,11 @@ pub async fn refresh_codex_token(refresh_token: &str) -> Result<(String, String,
         .map_err(|e| AppError::Provider(format!("codex refresh parse error: {e}")))?;
     let now = now_unix();
 
-    Ok((token.access_token, token.refresh_token, now + token.expires_in))
+    Ok((
+        token.access_token,
+        token.refresh_token,
+        now + token.expires_in,
+    ))
 }
 
 pub fn token_needs_refresh(expires_at: Option<i64>) -> bool {

@@ -66,7 +66,11 @@ impl KnowledgeGraphRepository {
         Ok((id, true))
     }
 
-    pub async fn upsert_triples(&self, source_id: &str, triples: &[ExtractedTriple]) -> Result<u32> {
+    pub async fn upsert_triples(
+        &self,
+        source_id: &str,
+        triples: &[ExtractedTriple],
+    ) -> Result<u32> {
         let mut count = 0_u32;
         for triple in triples {
             let subject_id = self
@@ -199,7 +203,11 @@ impl KnowledgeGraphRepository {
         })
     }
 
-    async fn upsert_entity(&self, canonical_name: &str, entity_type: Option<&str>) -> Result<String> {
+    async fn upsert_entity(
+        &self,
+        canonical_name: &str,
+        entity_type: Option<&str>,
+    ) -> Result<String> {
         let normalized = normalize_name(canonical_name);
         let now = Utc::now().to_rfc3339();
 
@@ -303,7 +311,12 @@ impl KnowledgeGraphRepository {
         Ok(id)
     }
 
-    async fn insert_evidence(&self, relation_id: &str, source_id: &str, snippet: Option<&str>) -> Result<()> {
+    async fn insert_evidence(
+        &self,
+        relation_id: &str,
+        source_id: &str,
+        snippet: Option<&str>,
+    ) -> Result<()> {
         sqlx::query(
             "INSERT INTO kg_relation_evidence (id, relation_id, source_id, snippet, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -338,7 +351,12 @@ impl KnowledgeGraphRepository {
         Ok(out)
     }
 
-    async fn load_node_relations(&self, entity_id: &str, outgoing: bool, limit: usize) -> Result<Vec<GraphFact>> {
+    async fn load_node_relations(
+        &self,
+        entity_id: &str,
+        outgoing: bool,
+        limit: usize,
+    ) -> Result<Vec<GraphFact>> {
         let filter_col = if outgoing {
             "r.subject_entity_id"
         } else {

@@ -50,13 +50,15 @@ impl JobManager {
             tokio::time::sleep(Duration::from_secs(1)).await;
 
             let result = format!("job completed: {instructions}");
-            let _ = sqlx::query("UPDATE jobs SET status = ?1, result = ?2, completed_at = ?3 WHERE id = ?4")
-                .bind("done")
-                .bind(&result)
-                .bind(Utc::now().to_rfc3339())
-                .bind(&job_id)
-                .execute(pool.as_ref())
-                .await;
+            let _ = sqlx::query(
+                "UPDATE jobs SET status = ?1, result = ?2, completed_at = ?3 WHERE id = ?4",
+            )
+            .bind("done")
+            .bind(&result)
+            .bind(Utc::now().to_rfc3339())
+            .bind(&job_id)
+            .execute(pool.as_ref())
+            .await;
 
             let _ = inbox
                 .send(JobResult {

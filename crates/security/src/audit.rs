@@ -4,7 +4,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum AuditError {
     #[error("hash chain broken at sequence {seq}: expected {expected}, got {actual}")]
-    ChainBroken { seq: i64, expected: String, actual: String },
+    ChainBroken {
+        seq: i64,
+        expected: String,
+        actual: String,
+    },
     #[error("row hash mismatch at sequence {seq}")]
     RowHashMismatch { seq: i64 },
 }
@@ -95,8 +99,7 @@ pub mod signing {
     pub fn sign_manifest(signing_key_bytes: &[u8; 32], manifest: &[u8]) -> String {
         let key = SigningKey::from_bytes(signing_key_bytes);
         let sig: Signature = key.sign(manifest);
-        base64::engine::general_purpose::URL_SAFE_NO_PAD
-            .encode(sig.to_bytes())
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sig.to_bytes())
     }
 
     /// Verify a manifest signature.
@@ -114,8 +117,8 @@ pub mod signing {
             .try_into()
             .map_err(|_| SigningError::InvalidSignature)?;
 
-        let verifying_key = VerifyingKey::from_bytes(verifying_key_bytes)
-            .map_err(|_| SigningError::InvalidKey)?;
+        let verifying_key =
+            VerifyingKey::from_bytes(verifying_key_bytes).map_err(|_| SigningError::InvalidKey)?;
         let sig = Signature::from_bytes(&sig_array);
 
         verifying_key

@@ -3,7 +3,7 @@
 # dependencies
 node_modules/
 openclaw/
-docs/
+pi-mono/
 .pnp
 .pnp.*
 .yarn/*

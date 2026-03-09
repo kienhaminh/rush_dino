@@ -38,10 +38,7 @@ pub async fn get_logs(
     State(state): State<AppState>,
     Query(query): Query<LogsQuery>,
 ) -> Result<Json<LogsResponse>> {
-    let limit = query
-        .limit
-        .unwrap_or(DEFAULT_LIMIT)
-        .clamp(1, MAX_LIMIT);
+    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let requested = i64::try_from(limit + 1).unwrap_or((MAX_LIMIT + 1) as i64);
 
     let (cursor_ts, cursor_id) = parse_cursor(query.cursor.as_deref());
@@ -57,7 +54,11 @@ pub async fn get_logs(
         .await?;
 
     let has_more = rows.len() > limit;
-    let page_rows = if has_more { &rows[..limit] } else { rows.as_slice() };
+    let page_rows = if has_more {
+        &rows[..limit]
+    } else {
+        rows.as_slice()
+    };
     let next_cursor = page_rows
         .last()
         .and_then(|last| has_more.then(|| format!("{}|{}", last.created_at, last.id)));

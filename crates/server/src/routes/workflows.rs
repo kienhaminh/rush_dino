@@ -39,7 +39,8 @@ pub struct RunsQuery {
 }
 
 pub async fn list_workflows(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
-    let items = state.engine.list_workflows().await?;
+    let engine = state.engine()?;
+    let items = engine.list_workflows().await?;
     Ok(Json(serde_json::json!({ "items": items })))
 }
 
@@ -47,7 +48,8 @@ pub async fn get_workflow(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<rushdino_agent::WorkflowDetail>> {
-    let workflow = state.engine.get_workflow(&id).await?;
+    let engine = state.engine()?;
+    let workflow = engine.get_workflow(&id).await?;
     Ok(Json(workflow))
 }
 
@@ -55,8 +57,8 @@ pub async fn create_workflow(
     State(state): State<AppState>,
     Json(payload): Json<CreateWorkflowRequest>,
 ) -> Result<Json<rushdino_agent::WorkflowDetail>> {
-    let workflow = state
-        .engine
+    let engine = state.engine()?;
+    let workflow = engine
         .create_workflow(
             CreateWorkflowInput {
                 name: payload.name,
@@ -77,8 +79,8 @@ pub async fn update_workflow(
     State(state): State<AppState>,
     Json(payload): Json<UpdateWorkflowRequest>,
 ) -> Result<Json<rushdino_agent::WorkflowDetail>> {
-    let workflow = state
-        .engine
+    let engine = state.engine()?;
+    let workflow = engine
         .update_workflow(
             &id,
             UpdateWorkflowInput {
@@ -97,7 +99,8 @@ pub async fn delete_workflow(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>> {
-    state.engine.delete_workflow(&id).await?;
+    let engine = state.engine()?;
+    engine.delete_workflow(&id).await?;
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -106,8 +109,8 @@ pub async fn start_workflow_run(
     State(state): State<AppState>,
     Json(payload): Json<StartWorkflowRunRequest>,
 ) -> Result<Json<rushdino_agent::WorkflowRunStartResponse>> {
-    let response = state
-        .engine
+    let engine = state.engine()?;
+    let response = engine
         .start_workflow_run(
             &id,
             payload.triggered_by.as_deref().unwrap_or("user"),
@@ -122,8 +125,8 @@ pub async fn list_workflow_runs(
     Query(query): Query<RunsQuery>,
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>> {
-    let items = state
-        .engine
+    let engine = state.engine()?;
+    let items = engine
         .list_workflow_runs(&id, query.limit.unwrap_or(20))
         .await?;
     Ok(Json(serde_json::json!({ "items": items })))
@@ -133,6 +136,7 @@ pub async fn get_workflow_run(
     Path(run_id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<rushdino_agent::WorkflowRunDetail>> {
-    let run = state.engine.get_workflow_run(&run_id).await?;
+    let engine = state.engine()?;
+    let run = engine.get_workflow_run(&run_id).await?;
     Ok(Json(run))
 }

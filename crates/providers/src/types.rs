@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use rushdino_common::models::{Message, ToolCall};
+use rushdino_common::{
+    models::{Message, ToolCall},
+    RichContent,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDefinition {
@@ -30,6 +33,7 @@ pub struct ChatRequest {
 pub struct ChatResponse {
     pub content: String,
     pub tool_calls: Vec<ToolCall>,
+    pub rich_content: Option<RichContent>,
     pub usage: Option<Usage>,
     pub finish_reason: String,
 }
@@ -39,6 +43,15 @@ pub struct ChatChunk {
     pub delta: String,
     pub tool_calls: Vec<ToolCall>,
     pub done: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub context_window: Option<u32>,
+    pub is_reasoning: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

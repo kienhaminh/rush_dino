@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { fetchConfig, fetchCredentials, patchConfig, patchCredentials } from '@/lib/api';
-import type { AppConfigView, CredentialsView } from '@/lib/types';
+import {
+  fetchChannelPairing,
+  fetchConfig,
+  fetchCredentials,
+  patchConfig,
+  patchCredentials,
+  resolveChannelPairingRequest,
+  revokeChannelPairedUser,
+} from '@/lib/api';
+import type { AppConfigView, ChannelPairingState, CredentialsView } from '@/lib/types';
 import {
   ChannelsPage,
   type ChannelConfigAction,
@@ -18,6 +26,8 @@ const CHANNEL_ENABLED_OVERRIDES_KEY = 'rushdino.channels.enabled-overrides.v1';
 
 type ChannelSettingsState = Partial<Record<ChannelKey, ChannelUiSettings>>;
 type ChannelEnabledOverrides = Partial<Record<ChannelKey, boolean>>;
+type PairingChannel = Extract<ChannelKey, 'telegram' | 'discord'>;
+type ChannelPairingStateMap = Partial<Record<PairingChannel, ChannelPairingState>>;
 
 function hasCredential(value: string | undefined): boolean {
   return Boolean(value && value.trim().length > 0);
@@ -43,6 +53,7 @@ function buildSnapshot(
   config: AppConfigView | null,
   credentials: CredentialsView | null,
   overrides: ChannelEnabledOverrides,
+  pairing: ChannelPairingStateMap,
 ): ChannelsStatusSnapshot | null {
   if (!config || !credentials) return null;
 
@@ -73,8 +84,14 @@ function buildSnapshot(
       telegram: {
         ...status(gateway.telegram.enabled, telegramConfigured),
         mode: 'polling',
+        pairedCount: pairing.telegram?.paired.length ?? 0,
+        pendingPairingCount: pairing.telegram?.pending.length ?? 0,
       },
-      discord: status(gateway.discord.enabled, discordConfigured),
+      discord: {
+        ...status(gateway.discord.enabled, discordConfigured),
+        pairedCount: pairing.discord?.paired.length ?? 0,
+        pendingPairingCount: pairing.discord?.pending.length ?? 0,
+      },
       slack: status(gateway.slack.enabled, slackConfigured),
       whatsapp: virtualStatus('whatsapp'),
       googlechat: virtualStatus('googlechat'),
@@ -89,6 +106,10 @@ function isPersistedGatewayChannel(
   channel: ChannelKey,
 ): channel is 'telegram' | 'discord' | 'slack' {
   return channel === 'telegram' || channel === 'discord' || channel === 'slack';
+}
+
+function supportsPairing(channel: ChannelKey): channel is PairingChannel {
+  return channel === 'telegram' || channel === 'discord';
 }
 
 function isChannelKey(value: string | undefined): value is ChannelKey {
@@ -122,11 +143,12 @@ export function ChannelsRoute() {
   const [channelEnabledOverrides, setChannelEnabledOverrides] = useState<ChannelEnabledOverrides>(
     () => loadJsonRecord<ChannelEnabledOverrides>(CHANNEL_ENABLED_OVERRIDES_KEY),
   );
+  const [channelPairing, setChannelPairing] = useState<ChannelPairingStateMap>({});
   const hasLoadedInitialDataRef = useRef(false);
 
   const snapshot = useMemo(
-    () => buildSnapshot(config, credentials, channelEnabledOverrides),
-    [config, credentials, channelEnabledOverrides],
+    () => buildSnapshot(config, credentials, channelEnabledOverrides, channelPairing),
+    [config, credentials, channelEnabledOverrides, channelPairing],
   );
 
   useEffect(() => {
@@ -140,9 +162,18 @@ export function ChannelsRoute() {
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
-      const [nextConfig, nextCredentials] = await Promise.all([fetchConfig(), fetchCredentials()]);
+      const [nextConfig, nextCredentials, telegramPairing, discordPairing] = await Promise.all([
+        fetchConfig(),
+        fetchCredentials(),
+        fetchChannelPairing('telegram'),
+        fetchChannelPairing('discord'),
+      ]);
       setConfig(nextConfig);
       setCredentials(nextCredentials);
+      setChannelPairing({
+        telegram: telegramPairing,
+        discord: discordPairing,
+      });
       setLastError(null);
       setLastSuccessAt(Date.now());
     } catch (err) {
@@ -173,7 +204,10 @@ export function ChannelsRoute() {
         const nextConfig = await patchConfig({
           gateway: {
             ...config.gateway,
-            [channel]: { enabled },
+            [channel]: {
+              ...config.gateway[channel],
+              enabled,
+            },
           },
         });
         setConfig(nextConfig);
@@ -246,7 +280,30 @@ export function ChannelsRoute() {
       if (typeof requestedEnabled === 'boolean') {
         configPatch.gateway = {
           ...config.gateway,
-          [channel]: { enabled: requestedEnabled },
+          [channel]: {
+            ...config.gateway[channel],
+            enabled: requestedEnabled,
+          },
+        };
+      }
+      if (patch.gatewayAccess && (channel === 'telegram' || channel === 'discord')) {
+        configPatch.gateway = {
+          ...(configPatch.gateway ?? config.gateway),
+          [channel]: {
+            ...config.gateway[channel],
+            enabled: typeof requestedEnabled === 'boolean' ? requestedEnabled : config.gateway[channel].enabled,
+            access: patch.gatewayAccess,
+          },
+        };
+      }
+      if (channel === 'telegram' && typeof patch.telegramNativeStreaming === 'boolean') {
+        const baseGateway = configPatch.gateway ?? config.gateway;
+        configPatch.gateway = {
+          ...baseGateway,
+          telegram: {
+            ...baseGateway.telegram,
+            native_streaming: patch.telegramNativeStreaming,
+          },
         };
       }
       if (patch.telegramBotToken != null) {
@@ -313,6 +370,43 @@ export function ChannelsRoute() {
     navigate('/channels');
   }, [navigate]);
 
+  const refreshPairingChannel = useCallback(async (channel: PairingChannel) => {
+    const next = await fetchChannelPairing(channel);
+    setChannelPairing((prev) => ({ ...prev, [channel]: next }));
+  }, []);
+
+  const handlePairingDecision = useCallback(
+    async (channel: PairingChannel, requestId: string, approved: boolean) => {
+      try {
+        setChannelConfigSaving(true);
+        await resolveChannelPairingRequest(channel, requestId, approved);
+        await refreshPairingChannel(channel);
+        toast.success(approved ? 'Pairing approved.' : 'Pairing denied.');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to resolve pairing request.');
+      } finally {
+        setChannelConfigSaving(false);
+      }
+    },
+    [refreshPairingChannel],
+  );
+
+  const handlePairingRevoke = useCallback(
+    async (channel: PairingChannel, senderId: string) => {
+      try {
+        setChannelConfigSaving(true);
+        await revokeChannelPairedUser(channel, senderId);
+        await refreshPairingChannel(channel);
+        toast.success('Paired user revoked.');
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to revoke paired user.');
+      } finally {
+        setChannelConfigSaving(false);
+      }
+    },
+    [refreshPairingChannel],
+  );
+
   if (routeChannel && !isChannelKey(routeChannel)) {
     return <Navigate to="/channels" replace />;
   }
@@ -330,7 +424,11 @@ export function ChannelsRoute() {
         saving={channelConfigSaving}
         loading={loading}
         lastError={lastError}
+        pairing={supportsPairing(routeChannel) ? channelPairing[routeChannel] ?? null : null}
         onAction={handleChannelConfigAction}
+        onPairingRefresh={supportsPairing(routeChannel) ? refreshPairingChannel : undefined}
+        onPairingDecision={supportsPairing(routeChannel) ? handlePairingDecision : undefined}
+        onPairingRevoke={supportsPairing(routeChannel) ? handlePairingRevoke : undefined}
         onBack={closeChannelConfig}
       />
     );

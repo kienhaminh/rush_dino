@@ -1,8 +1,4 @@
-use std::{
-    net::IpAddr,
-    num::NonZeroU32,
-    sync::Arc,
-};
+use std::{net::IpAddr, num::NonZeroU32, sync::Arc};
 
 use dashmap::DashMap;
 use governor::{
@@ -26,7 +22,9 @@ pub struct IpRateLimiter {
     /// Permitted burst size (requests per burst window).
     quota: Quota,
     /// Map from IP address to its individual rate limiter.
-    limiters: Arc<DashMap<IpAddr, Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>>,
+    limiters: Arc<
+        DashMap<IpAddr, Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>,
+    >,
 }
 
 impl IpRateLimiter {
@@ -35,7 +33,10 @@ impl IpRateLimiter {
         let rps = NonZeroU32::new(requests_per_second).unwrap_or(NonZeroU32::new(1).unwrap());
         let burst = NonZeroU32::new(burst).unwrap_or(rps);
         let quota = Quota::per_second(rps).allow_burst(burst);
-        Self { quota, limiters: Arc::new(DashMap::new()) }
+        Self {
+            quota,
+            limiters: Arc::new(DashMap::new()),
+        }
     }
 
     /// Check whether the given IP is within the rate limit.
@@ -51,8 +52,12 @@ impl IpRateLimiter {
         limiter.check().map_err(|not_until| {
             // `wait_time_from` requires the clock's native instant type.
             // `DefaultClock` is `QuantaClock`; use its `now()` as the reference.
-            let wait = not_until.wait_time_from(governor::clock::Clock::now(&governor::clock::DefaultClock::default()));
-            RateLimitError::Exceeded { retry_after_secs: wait.as_secs().max(1) }
+            let wait = not_until.wait_time_from(governor::clock::Clock::now(
+                &governor::clock::DefaultClock::default(),
+            ));
+            RateLimitError::Exceeded {
+                retry_after_secs: wait.as_secs().max(1),
+            }
         })
     }
 

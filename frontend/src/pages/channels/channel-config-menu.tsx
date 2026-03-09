@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -12,14 +9,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { AppConfigView, CredentialsView } from '@/lib/types';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import type { AppConfigView, ChannelAccessConfig, CredentialsView, DmPolicy } from '@/lib/types';
 import type {
   ChannelConfigAction,
   ChannelDetailConfigPatch,
   ChannelKey,
   ChannelUiSettings,
 } from './ChannelsPage';
-import { getOpenClawChannelFields, type ChannelSettingField } from './channel-openclaw-settings';
+import {
+  defaultDmPolicyForChannel,
+  getOpenClawChannelFields,
+  type ChannelSettingField,
+} from './channel-openclaw-settings';
 
 type ChannelConfigMenuProps = {
   channel: ChannelKey;
@@ -33,14 +36,14 @@ type ChannelConfigMenuProps = {
     patch: ChannelDetailConfigPatch,
     action: ChannelConfigAction,
   ) => void;
-  onClose: () => void;
 };
 
-const CREDENTIAL_FIELD_KEYS = ['telegramBotToken', 'discordBotToken', 'slackBotToken', 'slackAppToken'];
-
-function supportsGatewayPersistence(channel: ChannelKey): boolean {
-  return channel === 'telegram' || channel === 'discord' || channel === 'slack';
-}
+const CREDENTIAL_FIELD_KEYS = [
+  'telegramBotToken',
+  'discordBotToken',
+  'slackBotToken',
+  'slackAppToken',
+];
 
 function getPathValue(record: Record<string, unknown>, path: string): unknown {
   const keys = path.split('.');
@@ -195,6 +198,10 @@ function tokenValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function toDmPolicy(value: unknown): DmPolicy {
+  return value === 'pairing' || value === 'allowlist' || value === 'disabled' ? value : 'open';
+}
+
 function groupedFields(fields: ChannelSettingField[]): Array<[string, ChannelSettingField[]]> {
   const bySection = new Map<string, ChannelSettingField[]>();
 
@@ -206,6 +213,16 @@ function groupedFields(fields: ChannelSettingField[]): Array<[string, ChannelSet
   return Array.from(bySection.entries());
 }
 
+function sectionDescription(section: string): string {
+  if (section === 'Connection') {
+    return 'Store the credentials and transport settings this gateway needs.';
+  }
+  if (section === 'Access Control') {
+    return 'Define who can reach the agent through this channel.';
+  }
+  return 'Tune the core reply and history behavior for this channel.';
+}
+
 export function ChannelConfigMenu({
   channel,
   config,
@@ -214,7 +231,6 @@ export function ChannelConfigMenu({
   settings,
   saving,
   onAction,
-  onClose,
 }: ChannelConfigMenuProps) {
   const initialValues = useMemo(() => {
     let nextValues = normalizeLegacySettings(settings);
@@ -231,6 +247,21 @@ export function ChannelConfigMenu({
         nextValues,
         'telegramBotToken',
         credentials?.telegram_bot_token ?? '',
+      );
+      nextValues = setPathValue(
+        nextValues,
+        'dmPolicy',
+        config?.gateway.telegram.access?.dm_policy ?? defaultDmPolicyForChannel(channel),
+      );
+      nextValues = setPathValue(
+        nextValues,
+        'allowFrom',
+        config?.gateway.telegram.access?.allow_from ?? [],
+      );
+      nextValues = setPathValue(
+        nextValues,
+        'nativeStreaming',
+        Boolean(config?.gateway.telegram.native_streaming ?? false),
       );
 
       if (getPathValue(nextValues, 'permissions.readMessages') == null) {
@@ -258,6 +289,16 @@ export function ChannelConfigMenu({
         'discordBotToken',
         credentials?.discord_bot_token ?? '',
       );
+      nextValues = setPathValue(
+        nextValues,
+        'dmPolicy',
+        config?.gateway.discord.access?.dm_policy ?? defaultDmPolicyForChannel(channel),
+      );
+      nextValues = setPathValue(
+        nextValues,
+        'allowFrom',
+        config?.gateway.discord.access?.allow_from ?? [],
+      );
     }
 
     if (channel === 'slack') {
@@ -279,8 +320,6 @@ export function ChannelConfigMenu({
   const fields = useMemo(() => getOpenClawChannelFields(channel), [channel]);
   const sections = useMemo(() => groupedFields(fields), [fields]);
 
-  // Only reset form when we've just finished saving — avoid wiping user input when
-  // credentials/config load asynchronously after the user has typed (e.g. bot token).
   useEffect(() => {
     if (prevSavingRef.current && !saving) {
       setFormValues(initialValues);
@@ -313,10 +352,25 @@ export function ChannelConfigMenu({
 
     if (channel === 'telegram') {
       patch.telegramBotToken = tokenValue(getPathValue(formValues, 'telegramBotToken'));
+      patch.telegramNativeStreaming = Boolean(getPathValue(formValues, 'nativeStreaming'));
     }
 
     if (channel === 'discord') {
       patch.discordBotToken = tokenValue(getPathValue(formValues, 'discordBotToken'));
+    }
+
+    if (channel === 'telegram' || channel === 'discord') {
+      patch.gatewayAccess = {
+        dm_policy: toDmPolicy(getPathValue(formValues, 'dmPolicy')),
+        allow_from: Array.isArray(getPathValue(formValues, 'allowFrom'))
+          ? (getPathValue(formValues, 'allowFrom') as string[])
+          : typeof getPathValue(formValues, 'allowFrom') === 'string'
+            ? (normalizeValueForStorage(
+                { key: 'allowFrom', label: '', section: '', type: 'list' },
+                getPathValue(formValues, 'allowFrom'),
+              ) as string[] | undefined) ?? []
+            : [],
+      } satisfies ChannelAccessConfig;
     }
 
     if (channel === 'slack') {
@@ -332,11 +386,11 @@ export function ChannelConfigMenu({
 
     if (field.type === 'boolean') {
       return (
-        <div className="flex items-center justify-between rounded-md border border-border/50 p-3 h-full">
+        <div className="flex h-full items-center justify-between rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
           <div>
-            <Label className="text-xs">{field.label}</Label>
+            <Label className="text-xs font-medium">{field.label}</Label>
             {field.description && (
-              <p className="text-[11px] text-muted-foreground mt-1">{field.description}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{field.description}</p>
             )}
           </div>
           <Switch
@@ -353,7 +407,7 @@ export function ChannelConfigMenu({
       const selectValue = typeof value === 'string' ? value : '';
       return (
         <div className="space-y-1">
-          <Label className="text-xs">{field.label}</Label>
+          <Label className="text-xs font-medium">{field.label}</Label>
           <Select
             value={selectValue || unsetValue}
             onValueChange={(next) => setFieldValue(field.key, next === unsetValue ? '' : next)}
@@ -371,9 +425,7 @@ export function ChannelConfigMenu({
               ))}
             </SelectContent>
           </Select>
-          {field.description && (
-            <p className="text-[11px] text-muted-foreground">{field.description}</p>
-          )}
+          {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
         </div>
       );
     }
@@ -383,7 +435,7 @@ export function ChannelConfigMenu({
     if (field.type === 'textarea' || field.type === 'list') {
       return (
         <div className="space-y-1">
-          <Label className="text-xs">{field.label}</Label>
+          <Label className="text-xs font-medium">{field.label}</Label>
           <Textarea
             className="min-h-[90px] text-xs"
             value={inputValue}
@@ -391,16 +443,14 @@ export function ChannelConfigMenu({
             onChange={(event) => setFieldValue(field.key, event.target.value)}
             disabled={saving}
           />
-          {field.description && (
-            <p className="text-[11px] text-muted-foreground">{field.description}</p>
-          )}
+          {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
         </div>
       );
     }
 
     return (
       <div className="space-y-1">
-        <Label className="text-xs">{field.label}</Label>
+        <Label className="text-xs font-medium">{field.label}</Label>
         <Input
           type={field.type === 'number' ? 'number' : field.type === 'secret' ? 'password' : 'text'}
           autoComplete="off"
@@ -410,80 +460,61 @@ export function ChannelConfigMenu({
           disabled={saving}
           className="text-xs"
         />
-        {field.description && (
-          <p className="text-[11px] text-muted-foreground">{field.description}</p>
-        )}
+        {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
       </div>
     );
   };
 
   return (
-    <Card className="bg-card border-border/70">
-      <CardContent className="pt-4 space-y-4">
-        <div className="flex items-center justify-between rounded-md border border-border/50 p-3">
-          <div>
-            <Label className="text-sm font-medium">Enable Channel</Label>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              {supportsGatewayPersistence(channel)
-                ? 'Saved to gateway config.'
-                : 'Applied as UI override in this frontend.'}
-            </p>
-          </div>
-          <Switch
-            checked={Boolean(getPathValue(formValues, 'enabled'))}
-            onCheckedChange={(checked) => setFieldValue('enabled', checked)}
-            disabled={saving}
-          />
-        </div>
-
-        {sections.map(([section, sectionFields]) => (
-          <div key={section} className="rounded-md border border-border/50 p-4 space-y-3">
+    <div className="space-y-6">
+      {sections.map(([section, sectionFields], index) => (
+        <section
+          key={section}
+          className={index === 0 ? 'space-y-3' : 'space-y-3 border-t border-border/50 pt-6'}
+        >
+          <div className="space-y-1">
             <h3 className="text-sm font-semibold">{section}</h3>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-y-4 lg:gap-x-8">
-              {sectionFields.map((field) => {
-                const spanTwoColumns = field.type === 'textarea' || field.type === 'list';
-                return (
-                  <div key={field.key} className={spanTwoColumns ? 'lg:col-span-2' : undefined}>
-                    {renderField(field)}
-                  </div>
-                );
-              })}
-            </div>
+            <p className="text-xs text-muted-foreground">{sectionDescription(section)}</p>
           </div>
-        ))}
+          <div className="grid grid-cols-1 gap-y-4 lg:grid-cols-2 lg:gap-x-8">
+            {sectionFields.map((field) => {
+              const spanTwoColumns = field.type === 'textarea' || field.type === 'list';
+              return (
+                <div key={field.key} className={spanTwoColumns ? 'lg:col-span-2' : undefined}>
+                  {renderField(field)}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ))}
 
-        <div className="flex items-center justify-between border-t border-border/50 pt-4 gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
-            Back
-          </Button>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onAction(channel, buildPatch(), 'test')}
-              disabled={saving}
-            >
-              Test Connection
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onAction(channel, buildPatch(), 'connect')}
-              disabled={saving}
-            >
-              Connect
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => onAction(channel, buildPatch(), 'save')}
-              disabled={saving}
-              className="min-w-[80px]"
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/50 pt-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onAction(channel, buildPatch(), 'test')}
+          disabled={saving}
+        >
+          Test Connection
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onAction(channel, buildPatch(), 'connect')}
+          disabled={saving}
+        >
+          Connect
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => onAction(channel, buildPatch(), 'save')}
+          disabled={saving}
+          className="min-w-[80px]"
+        >
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
+      </div>
+    </div>
   );
 }

@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 use rushdino_common::Result;
 
+use crate::chat_broadcast::ChatBroadcastHub;
+
 #[derive(Debug, Clone)]
 pub struct RuntimeLogRow {
     pub id: String,
@@ -19,11 +21,12 @@ pub struct RuntimeLogRow {
 
 pub struct RuntimeLogStore {
     pool: Arc<SqlitePool>,
+    broadcaster: Option<Arc<ChatBroadcastHub>>,
 }
 
 impl RuntimeLogStore {
-    pub fn new(pool: Arc<SqlitePool>) -> Self {
-        Self { pool }
+    pub fn new(pool: Arc<SqlitePool>, broadcaster: Option<Arc<ChatBroadcastHub>>) -> Self {
+        Self { pool, broadcaster }
     }
 
     pub async fn insert(
@@ -35,19 +38,32 @@ impl RuntimeLogStore {
     ) -> Result<()> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
-        let fields_json = fields.map(|value| value.to_string());
+        let fields_json = fields.as_ref().map(|value| value.to_string());
         sqlx::query(
             "INSERT INTO runtime_logs (id, level, target, message, fields, created_at) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
-        .bind(id)
+        .bind(&id)
         .bind(level)
         .bind(target)
         .bind(message)
         .bind(fields_json)
-        .bind(now)
+        .bind(&now)
         .execute(self.pool.as_ref())
         .await?;
+
+        if matches!(level, "error" | "fatal") {
+            if let Some(broadcaster) = &self.broadcaster {
+                broadcaster.broadcast_runtime_log_error(
+                    &id,
+                    level,
+                    target,
+                    message,
+                    fields.as_ref(),
+                    &now,
+                );
+            }
+        }
         Ok(())
     }
 

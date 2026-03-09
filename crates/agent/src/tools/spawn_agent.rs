@@ -70,16 +70,14 @@ impl Tool for SpawnAgentTool {
             .get("system_prompt")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("system_prompt is required".to_owned()))?;
-        let icon = args
-            .get("icon")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
+        let icon = args.get("icon").and_then(Value::as_str).map(str::to_owned);
 
         let template = AgentTemplate {
             name: name.to_owned(),
             description: description.to_owned(),
             system_prompt: system_prompt.to_owned(),
             icon,
+            model: None,
         };
 
         let path = self.agent_manager.save(&template)?;
@@ -94,8 +92,7 @@ mod tests {
 
     #[tokio::test]
     async fn creates_agent_toml_file() {
-        let dir = std::env::temp_dir()
-            .join(format!("test-spawn-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("test-spawn-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let mgr = Arc::new(AgentManager::new(dir.clone()));
         let tool = SpawnAgentTool::new(mgr.clone());
@@ -121,8 +118,7 @@ mod tests {
 
     #[tokio::test]
     async fn returns_error_when_name_missing() {
-        let dir = std::env::temp_dir()
-            .join(format!("test-spawn-err-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("test-spawn-err-{}", uuid::Uuid::new_v4()));
         let mgr = Arc::new(AgentManager::new(dir.clone()));
         let tool = SpawnAgentTool::new(mgr);
 

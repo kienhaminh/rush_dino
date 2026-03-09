@@ -9,9 +9,9 @@ use rushdino_common::{AppError, Result};
 
 use crate::workflow_types::{
     CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem, WorkflowRunDetail,
-    WorkflowRunExecutionContext, WorkflowRunExecutionStep, WorkflowRunListItem, WorkflowRunStartResponse,
-    WorkflowRunStatus, WorkflowRunStepDetail, WorkflowRunStepStatus, WorkflowSource, WorkflowStatus,
-    WorkflowStep,
+    WorkflowRunExecutionContext, WorkflowRunExecutionStep, WorkflowRunListItem,
+    WorkflowRunStartResponse, WorkflowRunStatus, WorkflowRunStepDetail, WorkflowRunStepStatus,
+    WorkflowSource, WorkflowStatus, WorkflowStep,
 };
 
 #[derive(Clone)]
@@ -91,7 +91,10 @@ impl WorkflowManager {
             created_by: workflow_row.get::<String, _>("created_by"),
             created_at: workflow_row.get::<String, _>("created_at"),
             updated_at: workflow_row.get::<String, _>("updated_at"),
-            steps: step_rows.into_iter().map(map_workflow_step).collect::<Result<_>>()?,
+            steps: step_rows
+                .into_iter()
+                .map(map_workflow_step)
+                .collect::<Result<_>>()?,
         })
     }
 
@@ -151,7 +154,11 @@ impl WorkflowManager {
         self.get_workflow(&id).await
     }
 
-    pub async fn update_workflow(&self, id: &str, payload: UpdateWorkflowInput) -> Result<WorkflowDetail> {
+    pub async fn update_workflow(
+        &self,
+        id: &str,
+        payload: UpdateWorkflowInput,
+    ) -> Result<WorkflowDetail> {
         self.ensure_schema().await?;
 
         let existing = self.get_workflow(id).await?;
@@ -330,7 +337,11 @@ impl WorkflowManager {
         })
     }
 
-    pub async fn list_runs(&self, workflow_id: &str, limit: i64) -> Result<Vec<WorkflowRunListItem>> {
+    pub async fn list_runs(
+        &self,
+        workflow_id: &str,
+        limit: i64,
+    ) -> Result<Vec<WorkflowRunListItem>> {
         self.ensure_schema().await?;
 
         let bounded_limit = limit.clamp(1, 100);
@@ -395,16 +406,17 @@ impl WorkflowManager {
         })
     }
 
-    pub async fn load_execution_context(&self, run_id: &str) -> Result<WorkflowRunExecutionContext> {
+    pub async fn load_execution_context(
+        &self,
+        run_id: &str,
+    ) -> Result<WorkflowRunExecutionContext> {
         self.ensure_schema().await?;
 
-        let run_row = sqlx::query(
-            "SELECT id, workflow_id, input FROM workflow_runs WHERE id = ?1",
-        )
-        .bind(run_id)
-        .fetch_optional(self.pool.as_ref())
-        .await?
-        .ok_or_else(|| AppError::NotFound(format!("workflow run {run_id} not found")))?;
+        let run_row = sqlx::query("SELECT id, workflow_id, input FROM workflow_runs WHERE id = ?1")
+            .bind(run_id)
+            .fetch_optional(self.pool.as_ref())
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("workflow run {run_id} not found")))?;
 
         let rows = sqlx::query(
             r#"
@@ -429,7 +441,9 @@ impl WorkflowManager {
         for row in rows {
             let instructions = row
                 .get::<Option<String>, _>("instructions")
-                .ok_or_else(|| AppError::Validation("run step is missing source instructions".to_owned()))?;
+                .ok_or_else(|| {
+                    AppError::Validation("run step is missing source instructions".to_owned())
+                })?;
             steps.push(WorkflowRunExecutionStep {
                 run_step_id: row.get::<String, _>("run_step_id"),
                 step_id: row.get::<String, _>("step_id"),
@@ -476,13 +490,15 @@ impl WorkflowManager {
         self.ensure_schema().await?;
 
         let now = Utc::now().to_rfc3339();
-        sqlx::query("UPDATE workflow_runs SET status = ?1, error = ?2, completed_at = ?3 WHERE id = ?4")
-            .bind(WorkflowRunStatus::Failed.as_str())
-            .bind(error)
-            .bind(&now)
-            .bind(run_id)
-            .execute(self.pool.as_ref())
-            .await?;
+        sqlx::query(
+            "UPDATE workflow_runs SET status = ?1, error = ?2, completed_at = ?3 WHERE id = ?4",
+        )
+        .bind(WorkflowRunStatus::Failed.as_str())
+        .bind(error)
+        .bind(&now)
+        .bind(run_id)
+        .execute(self.pool.as_ref())
+        .await?;
         Ok(())
     }
 
@@ -557,7 +573,9 @@ impl WorkflowManager {
     async fn ensure_schema(&self) -> Result<()> {
         self.schema_ready
             .get_or_try_init(|| async {
-                for statement in include_str!("../../common/migrations/004_workflows.sql").split(';') {
+                for statement in
+                    include_str!("../../common/migrations/004_workflows.sql").split(';')
+                {
                     let sql = statement.trim();
                     if sql.is_empty() {
                         continue;
@@ -691,7 +709,9 @@ mod tests {
     use crate::workflow_types::{CreateWorkflowInput, WorkflowStatus, WorkflowStepInput};
 
     async fn create_manager() -> WorkflowManager {
-        let pool = SqlitePool::connect(":memory:").await.expect("memory sqlite");
+        let pool = SqlitePool::connect(":memory:")
+            .await
+            .expect("memory sqlite");
         for statement in include_str!("../../common/migrations/004_workflows.sql").split(';') {
             let sql = statement.trim();
             if sql.is_empty() {
@@ -827,7 +847,10 @@ mod tests {
             .await
             .expect("delete workflow");
 
-        let missing_workflow = manager.get_workflow(&workflow.id).await.expect_err("workflow should be deleted");
+        let missing_workflow = manager
+            .get_workflow(&workflow.id)
+            .await
+            .expect_err("workflow should be deleted");
         assert!(missing_workflow.to_string().contains("not found"));
 
         let missing_run = manager

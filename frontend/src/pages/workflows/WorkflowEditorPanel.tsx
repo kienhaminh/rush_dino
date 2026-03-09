@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { PlusIcon, Trash2Icon, PlayIcon, GripVerticalIcon } from 'lucide-react';
 import type { AgentRecord } from '@/pages/agents/agent-types';
 
@@ -93,7 +100,10 @@ export function WorkflowEditorPanel({
               <Badge variant="outline" className="text-[10px] uppercase">
                 {value.source}
               </Badge>
-              <Badge variant={value.status === 'active' ? 'secondary' : 'outline'} className="text-[10px] uppercase">
+              <Badge
+                variant={value.status === 'active' ? 'secondary' : 'outline'}
+                className="text-[10px] uppercase"
+              >
                 {value.status}
               </Badge>
             </div>
@@ -136,16 +146,20 @@ export function WorkflowEditorPanel({
           </label>
           <label className="space-y-1.5">
             <span className="text-xs text-muted-foreground">Status</span>
-            <select
+            <Select
               value={value.status}
-              onChange={(event) =>
-                onChange({ ...value, status: event.target.value as WorkflowDraft['status'] })
+              onValueChange={(val) =>
+                onChange({ ...value, status: val as WorkflowDraft['status'] })
               }
-              className="w-full h-9 px-3 rounded-md border border-border bg-background text-sm"
             >
-              <option value="draft">draft</option>
-              <option value="active">active</option>
-            </select>
+              <SelectTrigger className="w-full h-9 px-3 rounded-md border border-border bg-background text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">draft</SelectItem>
+                <SelectItem value="active">active</SelectItem>
+              </SelectContent>
+            </Select>
           </label>
         </div>
 
@@ -222,17 +236,21 @@ export function WorkflowEditorPanel({
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-xs text-muted-foreground">Assigned agent</span>
-                  <select
+                  <Select
                     value={step.agentId}
-                    onChange={(event) => updateStep(step.key, { agentId: event.target.value })}
-                    className="w-full h-8 px-2.5 rounded-md border border-border bg-background text-sm"
+                    onValueChange={(val) => updateStep(step.key, { agentId: val })}
                   >
-                    {agentOptions.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
-                        {agent.label}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger className="w-full h-8 px-2.5 rounded-md border border-border bg-background text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agentOptions.map((agent) => (
+                        <SelectItem key={agent.id} value={agent.id}>
+                          {agent.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </label>
               </div>
 

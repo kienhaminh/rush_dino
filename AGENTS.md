@@ -87,5 +87,18 @@ Keep all important docs in `./docs` folder:
 ├── code-standards.md
 ├── codebase-summary.md
 ├── design-guidelines.md
-└── system-architecture.md
+├── system-architecture.md
+└── references/
+    └── architecture/
+        ├── index.md
+        ├── hubs.md
+        ├── concepts/
+        ├── tools/
+        ├── reference/
+        ├── diagnostics/
+        ├── help/
+        └── gaps/
 ```
+
+When doing architecture, tooling, CRUD, or self-repair work, read `./docs/references/architecture/index.md` first.
+When you need workspace/bootstrap templates, use `./docs/references/templates/`.

@@ -4,6 +4,10 @@ use rushdino_common::Result;
 pub async fn run() -> Result<()> {
     println!("{} {}", "🧠".bold(), "Agent Memory CLI".blue().bold());
     println!("{}", "========================================".dimmed());
-    println!("{} {}", "i".yellow(), "Command not yet implemented. Will allow managing vector embeddings and indexes.");
+    println!(
+        "{} {}",
+        "i".yellow(),
+        "Memory administration is expected to move through the web control UI. Keep CLI for offline inspection and recovery-only workflows."
+    );
     Ok(())
 }

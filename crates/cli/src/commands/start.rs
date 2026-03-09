@@ -16,8 +16,8 @@ pub async fn run(foreground: bool) -> Result<()> {
     println!("🌐 API Endpoint: http://{}:{}", config.host, config.port);
     println!("🧠 Provider: {:?}", config.active_provider);
 
-    let binary = std::env::current_exe()
-        .map_err(|e| AppError::Agent(format!("cannot find binary: {e}")))?;
+    let binary =
+        std::env::current_exe().map_err(|e| AppError::Agent(format!("cannot find binary: {e}")))?;
 
     let manager = crate::service::detect()?;
     manager.install_and_start(

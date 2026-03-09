@@ -51,4 +51,8 @@ pub const BUNDLED_AGENTS: &[(&str, &str)] = &[
         include_str!("agents/social-network-assistant.toml"),
     ),
     ("spawn-agent", include_str!("agents/spawn-agent.toml")),
+    (
+        "workflow-generator",
+        include_str!("agents/workflow-generator.toml"),
+    ),
 ];

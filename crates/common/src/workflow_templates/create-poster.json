@@ -1,0 +1,32 @@
+{
+  "id": "create-poster",
+  "name": "Poster Design Pipeline",
+  "description": "Generate a complete poster design package: creative brief with 3 concepts, headline copywriting, visual direction guide, and Midjourney/DALL-E image generation prompts.",
+  "tags": ["design", "creative", "marketing"],
+  "steps": [
+    {
+      "position": 1,
+      "name": "Creative Brief",
+      "agent_id": "brainstormer",
+      "instructions": "Based on the poster topic or event in the workflow input, create a creative brief. Include: the core message (what the poster must communicate), target audience, desired emotional response, and 3 distinct creative directions (each with a concept name, mood description, and visual metaphor). Be bold and specific."
+    },
+    {
+      "position": 2,
+      "name": "Headline Copywriting",
+      "agent_id": "writer",
+      "instructions": "Using the creative brief from step 1, write poster copy. Provide: 5 headline options (vary from bold/punchy to elegant/subtle), 2-3 subheadline options that complement the headlines, body copy (30-50 words) for the most promising direction, and a call-to-action text. Label which creative direction each option aligns with."
+    },
+    {
+      "position": 3,
+      "name": "Visual Direction",
+      "agent_id": "artist-designer",
+      "instructions": "Using the creative brief (step 1) and chosen headline direction (step 2), provide visual design direction. Specify: typography recommendations (2 font pairings with rationale), color palette (primary, secondary, accent with hex codes and mood rationale), layout principles (hierarchy, whitespace, focal point), and any photography or illustration style guidance."
+    },
+    {
+      "position": 4,
+      "name": "Image Generation Prompts",
+      "agent_id": "artist-designer",
+      "instructions": "Using the visual direction from step 3, write 3 Midjourney or DALL-E image generation prompts (50-80 words each). Each prompt should: describe the main visual subject, specify style (photorealistic, illustration, abstract, etc.), include lighting and mood descriptors, reference the color palette, and end with technical parameters (aspect ratio suggestion, quality keywords). Label each prompt by creative direction."
+    }
+  ]
+}

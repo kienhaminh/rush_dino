@@ -7,8 +7,10 @@ interface Props {
   onChange: (patch: Partial<CredentialsView>) => void;
 }
 
+type CredentialKey = Exclude<keyof CredentialsView, 'profiles'>;
+
 /** Fields in display order with labels. */
-const FIELDS: { key: keyof CredentialsView; label: string; placeholder: string }[] = [
+const FIELDS: { key: CredentialKey; label: string; placeholder: string }[] = [
   { key: 'openai_api_key', label: 'OpenAI API Key', placeholder: 'sk-...' },
   { key: 'anthropic_api_key', label: 'Anthropic API Key', placeholder: 'sk-ant-...' },
   { key: 'brave_api_key', label: 'Brave Search API Key', placeholder: 'BSA...' },
@@ -27,7 +29,9 @@ export function ConfigSectionCredentials({ credentials, onChange }: Props) {
       </p>
       {FIELDS.map(({ key, label, placeholder }) => (
         <div key={key} className="space-y-1">
-          <Label htmlFor={key} className="text-xs">{label}</Label>
+          <Label htmlFor={key} className="text-xs">
+            {label}
+          </Label>
           <Input
             id={key}
             type="password"

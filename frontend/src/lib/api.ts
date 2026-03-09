@@ -1,9 +1,23 @@
 import type {
+  ApprovalsResponse,
   AppConfigView,
+  ChannelPairingState,
   Conversation,
   CredentialsView,
+  DoctorReportResponse,
   FetchLogsResponse,
+  GatewayAdapterState,
+  GatewaySessionSummary,
+  GatewaySummaryResponse,
   Message,
+  RunDetail,
+  RunKind,
+  RunSnapshot,
+  RunState,
+  SessionSummary,
+  SoulMemoryStateResponse,
+  SkillRecord,
+  SystemSummaryResponse,
   UsageMetricsResponse,
 } from './types';
 import type {
@@ -28,6 +42,24 @@ async function parseJsonOrThrow(response: Response, endpoint: string) {
   const raw = await response.text();
 
   if (!response.ok) {
+    if (contentType.includes('application/json')) {
+      try {
+        const data = JSON.parse(raw);
+        const errorMessage =
+          typeof data?.error === 'string'
+            ? data.error
+            : typeof data?.message === 'string'
+              ? data.message
+              : null;
+        if (errorMessage) {
+          throw new Error(errorMessage);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message) {
+          throw error;
+        }
+      }
+    }
     throw new Error(`Request failed for ${endpoint} (${response.status})`);
   }
 
@@ -111,6 +143,12 @@ export async function fetchAgentProgressBoard(params?: {
     query.set('active_window_seconds', String(params.activeWindowSeconds));
   }
   const endpoint = `/api/agents/progress${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchSoulMemoryState(): Promise<SoulMemoryStateResponse> {
+  const endpoint = '/api/system/soul-memory';
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
 }
@@ -255,6 +293,221 @@ export async function fetchLogs(params?: {
   return parseJsonOrThrow(response, endpoint);
 }
 
+export async function fetchApprovals(): Promise<ApprovalsResponse> {
+  const endpoint = '/api/approvals';
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchChannelPairing(channel: string): Promise<ChannelPairingState> {
+  const endpoint = `/api/channels/${encodeURIComponent(channel)}/pairing`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function resolveChannelPairingRequest(
+  channel: string,
+  requestId: string,
+  approved: boolean,
+): Promise<{ requestId: string; status: string }> {
+  const endpoint = `/api/channels/${encodeURIComponent(channel)}/pairing/${encodeURIComponent(requestId)}/decision`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ approved }),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function revokeChannelPairedUser(
+  channel: string,
+  senderId: string,
+): Promise<{ channelId: string; senderId: string; revoked: boolean }> {
+  const endpoint = `/api/channels/${encodeURIComponent(channel)}/pairing/paired/${encodeURIComponent(senderId)}`;
+  const response = await fetch(endpoint, {
+    method: 'DELETE',
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function resolveApproval(
+  requestId: string,
+  payload: { approved: boolean; sessionId: string },
+): Promise<{ request_id: string; status: string }> {
+  const endpoint = `/api/approval/${encodeURIComponent(requestId)}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      approved: payload.approved,
+      session_id: payload.sessionId,
+    }),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchSystemSummary(): Promise<SystemSummaryResponse> {
+  const endpoint = '/api/system/summary';
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchDoctorReport(): Promise<DoctorReportResponse> {
+  const endpoint = '/api/system/doctor';
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchSessions(): Promise<SessionSummary[]> {
+  const endpoint = '/api/sessions';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function fetchGatewaySummary(): Promise<GatewaySummaryResponse> {
+  const endpoint = '/api/gateway/summary';
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchGatewayAdapters(): Promise<GatewayAdapterState[]> {
+  const endpoint = '/api/gateway/adapters';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function fetchGatewaySessions(): Promise<GatewaySessionSummary[]> {
+  const endpoint = '/api/gateway/sessions';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function resetGatewaySession(sessionId: string): Promise<void> {
+  const endpoint = `/api/gateway/sessions/${encodeURIComponent(sessionId)}/reset`;
+  const response = await fetch(endpoint, { method: 'POST' });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+export async function restartGatewayAdapter(channelId: string): Promise<void> {
+  const endpoint = `/api/gateway/adapters/${encodeURIComponent(channelId)}/restart`;
+  const response = await fetch(endpoint, { method: 'POST' });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchSessionRuns(sessionId: string, limit = 20): Promise<RunSnapshot[]> {
+  const endpoint = `/api/sessions/${encodeURIComponent(sessionId)}/runs?limit=${limit}`;
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function fetchRuns(params?: {
+  kind?: RunKind;
+  state?: RunState;
+  source?: string;
+  channelId?: string;
+  gatewaySessionId?: string;
+  sessionId?: string;
+  conversationId?: string;
+  limit?: number;
+}): Promise<RunSnapshot[]> {
+  const query = new URLSearchParams();
+  if (params?.kind) query.set('kind', params.kind);
+  if (params?.state) query.set('state', params.state);
+  if (params?.source) query.set('source', params.source);
+  if (params?.channelId) query.set('channelId', params.channelId);
+  if (params?.gatewaySessionId) query.set('gatewaySessionId', params.gatewaySessionId);
+  if (params?.sessionId) query.set('sessionId', params.sessionId);
+  if (params?.conversationId) query.set('conversationId', params.conversationId);
+  if (params?.limit != null) query.set('limit', String(params.limit));
+  const endpoint = `/api/runs${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function fetchRun(runId: string): Promise<RunDetail> {
+  const endpoint = `/api/runs/${encodeURIComponent(runId)}`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function abortRun(runId: string): Promise<RunSnapshot> {
+  const endpoint = `/api/runs/${encodeURIComponent(runId)}/abort`;
+  const response = await fetch(endpoint, { method: 'POST' });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function waitForRun(
+  runId: string,
+  params?: { timeoutMs?: number; requireTerminal?: boolean },
+): Promise<RunSnapshot> {
+  const query = new URLSearchParams();
+  if (params?.timeoutMs != null) query.set('timeoutMs', String(params.timeoutMs));
+  if (params?.requireTerminal != null) {
+    query.set('requireTerminal', String(params.requireTerminal));
+  }
+  const endpoint = `/api/runs/${encodeURIComponent(runId)}/wait${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export interface UpsertSkillRequest {
+  name: string;
+  description: string;
+  instructions: string;
+  tools?: string[];
+}
+
+export async function fetchSkills(): Promise<SkillRecord[]> {
+  const endpoint = '/api/skills';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function upsertSkill(payload: UpsertSkillRequest): Promise<SkillRecord> {
+  const endpoint = '/api/skills';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function deleteSkill(name: string): Promise<void> {
+  const endpoint = `/api/skills/${encodeURIComponent(name)}`;
+  const response = await fetch(endpoint, { method: 'DELETE' });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+export async function mutateManagedFile(payload: {
+  action: 'create' | 'delete' | 'move';
+  relative_path?: string;
+  content?: string;
+  from_path?: string;
+  to_path?: string;
+  dry_run?: boolean;
+}): Promise<{
+  action: string;
+  dryRun: boolean;
+  sourcePath: string;
+  targetPath?: string | null;
+  allowedRoot: string;
+}> {
+  const endpoint = '/api/files';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
 export async function fetchUsageMetrics(params?: {
   start?: string;
   end?: string;
@@ -273,4 +526,81 @@ export async function fetchUsageMetrics(params?: {
   const endpoint = `/api/usage/metrics${query.size ? `?${query.toString()}` : ''}`;
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
+}
+
+export interface ModelInfo {
+  id: string;
+  name?: string;
+  description?: string;
+}
+
+export async function fetchProviderModels(profileId: string): Promise<ModelInfo[]> {
+  const endpoint = `/api/providers/${encodeURIComponent(profileId)}/models`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export interface CreateProfileRequest {
+  name: string;
+  provider_kind: 'ollama' | 'openai' | 'anthropic' | 'openai_codex' | 'plugin';
+  auth_method: 'apikey' | 'oauth' | 'none';
+  default_model: string;
+  base_url?: string;
+  api_key?: string;
+}
+
+export interface UpdateProfileRequest {
+  name: string;
+  auth_method: 'apikey' | 'oauth' | 'none';
+  default_model: string;
+  base_url?: string;
+  api_key?: string;
+}
+
+import type { ProviderProfile } from './types';
+
+export async function fetchProfiles(): Promise<ProviderProfile[]> {
+  const response = await fetch('/api/profiles');
+  return parseJsonOrThrow(response, '/api/profiles');
+}
+
+export async function createProfile(payload: CreateProfileRequest): Promise<ProviderProfile> {
+  const endpoint = '/api/profiles';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function updateProfile(
+  id: string,
+  payload: UpdateProfileRequest,
+): Promise<ProviderProfile> {
+  const endpoint = `/api/profiles/${encodeURIComponent(id)}`;
+  const response = await fetch(endpoint, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function deleteProfile(id: string): Promise<void> {
+  const endpoint = `/api/profiles/${encodeURIComponent(id)}`;
+  const response = await fetch(endpoint, { method: 'DELETE' });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+export async function connectCodex(profileId: string): Promise<{ status: string }> {
+  const endpoint = `/api/providers/${encodeURIComponent(profileId)}/connect-oauth`;
+  const response = await fetch(endpoint, { method: 'POST' });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function deleteAgent(id: string): Promise<void> {
+  const endpoint = `/api/agents/${encodeURIComponent(id)}`;
+  const response = await fetch(endpoint, { method: 'DELETE' });
+  await parseJsonOrThrow(response, endpoint);
 }

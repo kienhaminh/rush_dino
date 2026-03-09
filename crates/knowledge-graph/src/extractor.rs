@@ -34,6 +34,7 @@ pub async fn extract_triples(
                 role: Role::System,
                 content: "Extract factual triples from user text. Return strict JSON only with shape {\"triples\":[{\"subject\":string,\"predicate\":string,\"object\":string,\"subject_type\":string|null,\"object_type\":string|null,\"confidence\":number|null,\"evidence_snippet\":string|null}]}. Use lowercase snake_case predicates. Omit uncertain claims.".to_owned(),
                 tool_calls: None,
+                rich_content: None,
                 created_at: Utc::now(),
             },
             Message {
@@ -41,6 +42,7 @@ pub async fn extract_triples(
                 role: Role::User,
                 content: clipped_owned,
                 tool_calls: None,
+                rich_content: None,
                 created_at: Utc::now(),
             },
         ],
@@ -74,7 +76,11 @@ fn parse_triples_payload(raw: &str) -> Result<Vec<ExtractedTriple>> {
 fn filter_triples(input: Vec<ExtractedTriple>) -> Vec<ExtractedTriple> {
     input
         .into_iter()
-        .filter(|t| !t.subject.trim().is_empty() && !t.predicate.trim().is_empty() && !t.object.trim().is_empty())
+        .filter(|t| {
+            !t.subject.trim().is_empty()
+                && !t.predicate.trim().is_empty()
+                && !t.object.trim().is_empty()
+        })
         .collect()
 }
 
