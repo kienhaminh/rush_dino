@@ -26,16 +26,16 @@ type RunsPageProps = {
 function toneForState(state: string) {
   switch (state) {
     case 'running':
-      return 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400';
+      return 'border-primary/30 text-primary';
     case 'queued':
-      return 'border-blue-500/30 text-blue-600 dark:text-blue-400';
+      return 'border-warning/30 text-warning';
     case 'awaiting_approval':
-      return 'border-amber-500/30 text-amber-600 dark:text-amber-400';
+      return 'border-warning/30 text-warning';
     case 'blocked':
     case 'failed':
-      return 'border-rose-500/30 text-rose-600 dark:text-rose-400';
+      return 'border-destructive/30 text-destructive';
     case 'completed':
-      return 'border-border/50 text-muted-foreground';
+      return 'border-success/30 text-success';
     default:
       return 'border-border/50 text-muted-foreground';
   }
