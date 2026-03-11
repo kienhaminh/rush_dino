@@ -168,7 +168,7 @@ function StatusBadge({ status }: { status: OverviewAgentStatus }) {
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] h-5 border-border/50 bg-muted/40">
+    <Badge variant="secondary" className="text-[10px] h-5">
       Idle
     </Badge>
   );

@@ -63,7 +63,7 @@ export function NodesPage() {
                   {node.hostname}
                 </CardTitle>
                 <Badge
-                  variant={node.status === 'online' ? 'default' : 'destructive'}
+                  variant={node.status === 'online' ? 'default' : 'secondary'}
                   className="capitalize text-[10px] h-5"
                 >
                   {node.status}

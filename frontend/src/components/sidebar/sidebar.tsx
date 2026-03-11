@@ -28,7 +28,7 @@ export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps
   return (
     <aside
       className={cn(
-        'flex flex-col bg-background border-r border-border/40 transition-all duration-300 ease-in-out h-full shrink-0',
+        'flex flex-col bg-card border-r border-border transition-all duration-300 ease-in-out h-full shrink-0',
         collapsed ? 'w-[70px]' : 'w-[260px]',
       )}
     >
@@ -68,7 +68,7 @@ export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps
               {!collapsed && (
                 <button
                   onClick={() => toggleGroup(group.label)}
-                  className="flex items-center justify-between w-full px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 hover:text-foreground transition-colors group"
+                  className="flex items-center justify-between w-full px-2 py-1.5 text-[9px] tracking-[0.15em] text-muted-foreground/60 uppercase hover:text-foreground transition-colors group"
                 >
                   <span>{group.label}</span>
                   {isCollapsed && !hasActiveTab ? (
@@ -110,8 +110,8 @@ export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps
                         className={cn(
                           'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative',
                           active
-                            ? 'bg-primary/5 text-primary shadow-[inset_0_0_0_1px_rgba(var(--primary),0.05)]'
-                            : 'text-muted-foreground hover:bg-muted/30 hover:text-foreground',
+                            ? 'border-l-2 border-primary text-primary bg-primary/[0.06]'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-white/5',
                         )}
                       >
                         <Icon
@@ -124,9 +124,6 @@ export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps
                           )}
                         />
                         <span className="truncate">{TAB_LABELS[tab as Tab]}</span>
-                        {active && (
-                          <div className="absolute left-0 w-1 h-5 bg-primary rounded-r-full" />
-                        )}
                       </button>
                     );
                   })}
