@@ -56,7 +56,7 @@ export function CronHistory({
   const getStatusIcon = (status: CronRunLogEntry['status']) => {
     switch (status) {
       case 'ok':
-        return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+        return <CheckCircle2 className="w-4 h-4 text-success" />;
       case 'error':
         return <XCircle className="w-4 h-4 text-destructive" />;
       case 'skipped':
@@ -142,7 +142,7 @@ export function CronHistory({
                 className={cn(
                   'w-10 h-10 rounded-xl flex items-center justify-center shadow-sm',
                   run.status === 'ok'
-                    ? 'bg-emerald-500/10'
+                    ? 'bg-success/10'
                     : run.status === 'error'
                       ? 'bg-destructive/10 text-destructive'
                       : 'bg-amber-500/10 text-amber-500',

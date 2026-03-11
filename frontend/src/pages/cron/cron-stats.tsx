@@ -29,7 +29,7 @@ export function CronStats({ status }: CronStatsProps) {
         </span>
         <div className="flex items-center gap-2.5">
           <div
-            className={`w-2 h-2 rounded-full ${status?.enabled ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`}
+            className={`w-2 h-2 rounded-full ${status?.enabled ? 'bg-success shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.4)]'}`}
           />
           <span className="text-lg font-bold">{status?.enabled ? 'Active' : 'Paused'}</span>
         </div>

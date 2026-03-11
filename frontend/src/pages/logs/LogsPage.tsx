@@ -126,7 +126,7 @@ export function LogsPage() {
       />
 
       {error ? (
-        <div className="px-6 py-3 text-sm text-rose-500 border-b border-border/40">{error}</div>
+        <div className="px-6 py-3 text-sm text-destructive border-b border-border/40">{error}</div>
       ) : null}
 
       <div className="flex-1 overflow-hidden relative flex flex-col">
@@ -144,7 +144,7 @@ export function LogsPage() {
               </TabsTrigger>
               <TabsTrigger
                 value="errors"
-                className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-rose-400 data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-rose-400 data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
+                className="relative py-3 px-1 mr-6 text-sm font-medium transition-colors whitespace-nowrap text-muted-foreground hover:text-foreground data-[state=active]:text-primary data-[state=active]:after:absolute data-[state=active]:after:bottom-0 data-[state=active]:after:left-0 data-[state=active]:after:right-0 data-[state=active]:after:h-0.5 data-[state=active]:after:bg-primary data-[state=active]:after:rounded-t bg-transparent border-none rounded-none shadow-none data-[state=active]:shadow-none"
               >
                 <div className="flex items-center gap-2">
                   <ShieldAlert size={16} />
@@ -202,7 +202,7 @@ export function LogsPage() {
       <div className="px-6 py-2 border-t border-border/40 bg-muted/20 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
             Connected to Gateway
           </div>
           <div className="flex items-center gap-1.5">SQLite source</div>

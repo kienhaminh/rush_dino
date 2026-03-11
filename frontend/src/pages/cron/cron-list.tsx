@@ -112,7 +112,7 @@ export function CronList({
                       className={cn(
                         'w-1.5 h-1.5 rounded-full',
                         job.enabled
-                          ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                          ? 'bg-success shadow-[0_0_8px_rgba(16,185,129,0.4)]'
                           : 'bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.4)]',
                       )}
                     />
@@ -124,7 +124,7 @@ export function CronList({
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => onRun(job)}
-                    className="p-1.5 hover:bg-emerald-500/10 hover:text-emerald-500 rounded-lg transition-colors"
+                    className="p-1.5 hover:bg-success/10 hover:text-success rounded-lg transition-colors"
                   >
                     <Play size={14} />
                   </button>
@@ -164,7 +164,7 @@ export function CronList({
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all border shadow-sm active:scale-95',
                     job.enabled
-                      ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20'
+                      ? 'bg-success/10 text-success border-success/20 hover:bg-success/20'
                       : 'bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20',
                   )}
                 >
