@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Send, RefreshCw } from 'lucide-react';
 
 import { ConversationTimeline } from '@/components/workspace/conversation-timeline';
 import { AgentBadge } from '@/components/workspace/agent-badge';
@@ -8,11 +8,15 @@ import { fetchConversations, fetchConversation } from '@/lib/api';
 import { messagesToItems, formatConversationTime } from '@/lib/message-converter';
 import type { Conversation } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 export function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Ref so the onChannelMessage callback can always read the latest selectedConvId
   const selectedConvIdRef = useRef<string | null>(null);
   selectedConvIdRef.current = selectedConvId;
@@ -21,21 +25,20 @@ export function ChatPage() {
    * Called when the gateway broadcasts a user_message from an external channel.
    * If we're not already viewing that conversation, switch to it.
    */
-  const handleChannelMessage = useCallback(
-    async (conversationId: string, _channel: string) => {
-      try {
-        const convs = await fetchConversations();
-        setConversations(convs);
-      } catch { /* ignore */ }
+  const handleChannelMessage = useCallback(async (conversationId: string, _channel: string) => {
+    try {
+      const convs = await fetchConversations();
+      setConversations(convs);
+    } catch {
+      /* ignore */
+    }
 
-      if (selectedConvIdRef.current !== conversationId) {
-        setSelectedConvId(conversationId);
-      }
-    },
-    [],
-  );
+    if (selectedConvIdRef.current !== conversationId) {
+      setSelectedConvId(conversationId);
+    }
+  }, []);
 
-  const { items, activeAgent, resetWithItems, isConnected, isStreaming } =
+  const { items, activeAgent, sendMessage, resetWithItems, isConnected, isStreaming } =
     useWebSocket(selectedConvId, handleChannelMessage);
 
   const prevIsStreamingRef = useRef(false);
@@ -47,7 +50,9 @@ export function ChatPage() {
       if (convs.length > 0 && selectedConvId === null) {
         selectConversation(convs[0].id, true);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -79,6 +84,31 @@ export function ChatPage() {
     [selectedConvId, resetWithItems],
   );
 
+  const handleSendMessage = useCallback(() => {
+    if (!inputValue.trim() || isStreaming) return;
+    sendMessage(inputValue);
+    setInputValue('');
+  }, [inputValue, sendMessage, isStreaming]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = '44px';
+      const scrollHeight = textarea.scrollHeight;
+      if (scrollHeight > 44) {
+        textarea.style.height = `${Math.min(scrollHeight, 200)}px`;
+      }
+    }
+  }, [inputValue]);
+
   return (
     <div className="flex flex-1 min-w-0 h-full overflow-hidden bg-background">
       {/* Conversation list sidebar */}
@@ -104,7 +134,7 @@ export function ChatPage() {
               className={cn(
                 'w-full flex flex-col gap-0.5 px-3 py-2.5 text-left transition-colors border-b border-border/10 last:border-0',
                 selectedConvId === conv.id
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary/[0.08] border-l-2 border-primary text-primary'
                   : 'hover:bg-muted/40 text-foreground/80',
               )}
             >
@@ -146,12 +176,41 @@ export function ChatPage() {
           <ConversationTimeline items={items} />
         )}
 
-        {/* Read-only status bar — no input */}
-        {!isConnected && (
-          <div className="px-6 py-2 border-t border-border/10 text-[11px] text-muted-foreground/40 text-center">
-            Disconnected — reconnecting…
+        {/* Chat Input */}
+        <div className="border-t border-border/10 bg-background/50 backdrop-blur-md p-4">
+          <div className="max-w-3xl mx-auto flex gap-3 relative">
+            <Textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message..."
+              className="min-h-[44px] h-[44px] py-2.5 pr-12 resize-none rounded-xl bg-muted/30 border-border/20 focus-visible:ring-primary/20 overflow-hidden"
+            />
+            <Button
+              size="icon"
+              variant="default"
+              className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-lg shadow-sm"
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || isStreaming || !isConnected}
+            >
+              <Send size={16} />
+            </Button>
           </div>
-        )}
+          <div className="max-w-3xl mx-auto flex justify-center mt-2">
+            {!isConnected ? (
+              <span className="text-[10px] text-muted-foreground/40 italic">
+                Disconnected — reconnecting…
+              </span>
+            ) : isStreaming ? (
+              <span className="text-[10px] text-primary animate-pulse italic">Agent is thinking...</span>
+            ) : (
+              <span className="text-[10px] text-muted-foreground/30">
+                Press Enter to send, Shift+Enter for new line
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

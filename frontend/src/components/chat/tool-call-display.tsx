@@ -35,7 +35,7 @@ export function ToolCallDisplay({ calls, onSelectContent }: ToolCallDisplayProps
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-[12px] font-bold truncate leading-none">{call.name}</span>
-                <CheckCircle2 size={12} className="text-emerald-500/70" />
+                <CheckCircle2 size={12} className="text-primary/70" />
               </div>
               <p className="text-[10px] text-muted-foreground truncate mt-1 opacity-70">
                 Action executed successfully

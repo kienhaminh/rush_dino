@@ -36,35 +36,35 @@ const TYPE_META: Record<
 > = {
   fact: {
     label: 'Fact',
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/30',
+    color: 'text-info',
+    bg: 'bg-info/10',
+    border: 'border-info/30',
   },
   instruction: {
     label: 'Instruction',
-    color: 'text-violet-400',
-    bg: 'bg-violet-500/10',
-    border: 'border-violet-500/30',
+    color: 'text-primary',
+    bg: 'bg-primary/10',
+    border: 'border-primary/30',
   },
   preference: {
     label: 'Preference',
-    color: 'text-amber-400',
-    bg: 'bg-amber-500/10',
-    border: 'border-amber-500/30',
+    color: 'text-warning',
+    bg: 'bg-warning/10',
+    border: 'border-warning/30',
   },
   context: {
     label: 'Context',
-    color: 'text-emerald-400',
-    bg: 'bg-emerald-500/10',
-    border: 'border-emerald-500/30',
+    color: 'text-success',
+    bg: 'bg-success/10',
+    border: 'border-success/30',
   },
 };
 
 const IMPORTANCE_META: Record<MemoryImportance, { label: string; dot: string }> = {
-  critical: { label: 'Critical', dot: 'bg-red-500' },
-  high: { label: 'High', dot: 'bg-orange-400' },
-  medium: { label: 'Medium', dot: 'bg-yellow-400' },
-  low: { label: 'Low', dot: 'bg-slate-400' },
+  critical: { label: 'Critical', dot: 'bg-destructive' },
+  high: { label: 'High', dot: 'bg-warning' },
+  medium: { label: 'Medium', dot: 'bg-warning/60' },
+  low: { label: 'Low', dot: 'bg-muted-foreground' },
 };
 
 const ALL_TYPES: MemoryEntryType[] = ['fact', 'instruction', 'preference', 'context'];

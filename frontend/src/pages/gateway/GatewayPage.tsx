@@ -79,11 +79,11 @@ function channelIcon(channel: ChannelKey) {
 function toneForAdapter(status: string) {
   switch (status) {
     case 'connected':
-      return 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400';
+      return 'border-success/30 text-success';
     case 'starting':
-      return 'border-blue-500/30 text-blue-600 dark:text-blue-400';
+      return 'border-primary/30 text-primary';
     case 'degraded':
-      return 'border-amber-500/30 text-amber-600 dark:text-amber-400';
+      return 'border-warning/30 text-warning';
     case 'disabled':
     case 'disconnected':
       return 'border-border/50 text-muted-foreground';
@@ -318,7 +318,7 @@ export function GatewayPage({
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Card className="border-border/60 bg-card/80">
               <CardContent className="flex items-center gap-4 p-5">
-                <div className="rounded-2xl bg-sky-500/10 p-3 text-sky-500">
+                <div className="rounded-2xl bg-success/10 p-3 text-success">
                   <Radio className="h-5 w-5" />
                 </div>
                 <div>
@@ -344,7 +344,7 @@ export function GatewayPage({
 
             <Card className="border-border/60 bg-card/80">
               <CardContent className="flex items-center gap-4 p-5">
-                <div className="rounded-2xl bg-amber-500/10 p-3 text-amber-500">
+                <div className="rounded-2xl bg-warning/10 p-3 text-warning">
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div>
@@ -358,7 +358,7 @@ export function GatewayPage({
 
             <Card className="border-border/60 bg-card/80">
               <CardContent className="flex items-center gap-4 p-5">
-                <div className="rounded-2xl bg-emerald-500/10 p-3 text-emerald-500">
+                <div className="rounded-2xl bg-success/10 p-3 text-success">
                   <Waypoints className="h-5 w-5" />
                 </div>
                 <div>
@@ -413,10 +413,10 @@ export function GatewayPage({
                   recentFailures.map((failure) => (
                     <div
                       key={`${failure.kind}-${failure.createdAt}-${failure.runId ?? failure.sessionId ?? failure.channelId ?? 'signal'}`}
-                      className="rounded-2xl border border-rose-500/20 bg-rose-500/5 px-4 py-3"
+                      className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <Badge variant="outline" className="border-rose-500/30 text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                        <Badge variant="outline" className="border-destructive/30 text-[10px] uppercase tracking-wider text-destructive">
                           {failure.kind}
                         </Badge>
                         <span className="text-[11px] text-muted-foreground">
@@ -471,7 +471,7 @@ export function GatewayPage({
                             {session.status.replace('_', ' ')}
                           </Badge>
                           {session.pendingApprovalCount > 0 ? (
-                            <Badge variant="outline" className="border-amber-500/30 text-[10px] uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                            <Badge variant="outline" className="border-warning/30 text-[10px] uppercase tracking-wider text-warning">
                               {session.pendingApprovalCount} waiting
                             </Badge>
                           ) : null}
@@ -514,7 +514,7 @@ export function GatewayPage({
                     </div>
 
                     {session.lastError ? (
-                      <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/5 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+                      <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                         {session.lastError}
                       </div>
                     ) : null}

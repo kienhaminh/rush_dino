@@ -60,7 +60,7 @@ export function AgentCronPanel({ runtime }: AgentCronPanelProps) {
               >
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-semibold">{job.name}</p>
-                  <Badge variant={job.enabled ? 'default' : 'secondary'}>
+                  <Badge variant={job.enabled ? 'success' : 'secondary'}>
                     {job.enabled ? 'Enabled' : 'Disabled'}
                   </Badge>
                 </div>

@@ -45,7 +45,7 @@ export function AgentChannelsPanel({ runtime }: AgentChannelsPanelProps) {
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium">{account.name}</p>
                       <div className="flex gap-1">
-                        <Badge variant={account.connected ? 'default' : 'secondary'}>
+                        <Badge variant={account.connected ? 'success' : 'secondary'}>
                           {account.connected ? 'Connected' : 'Offline'}
                         </Badge>
                         {account.enabled ? (

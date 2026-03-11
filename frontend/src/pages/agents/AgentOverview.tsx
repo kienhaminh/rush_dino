@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -59,22 +59,6 @@ export function AgentOverview({ agent }: { agent: any }) {
           <p className="text-sm text-foreground/80">{agent.description}</p>
         </div>
       )}
-
-      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-        <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-2">
-          Shared Runtime State
-        </p>
-        <p className="text-sm text-foreground/80">
-          Soul and memory are shared across every agent. Selecting an agent changes its identity,
-          tools, and workspace context, but these two panels reflect the same shared state for the
-          whole runtime.
-        </p>
-        <div className="mt-3">
-          <Button asChild size="sm" variant="outline" className="h-8 text-xs">
-            <RouterLink to="/soul-memory">Open soul and memory</RouterLink>
-          </Button>
-        </div>
-      </div>
 
       {/* Model Configuration */}
       <Card className="bg-card border-border/50">
