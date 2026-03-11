@@ -196,8 +196,8 @@ export function UsageInsights({
               errorRatePct > 5
                 ? 'text-destructive'
                 : errorRatePct > 1
-                  ? 'text-yellow-500'
-                  : 'text-emerald-500'
+                  ? 'text-primary/60'
+                  : 'text-primary'
             }
           />
           <SummaryCard
@@ -207,9 +207,9 @@ export function UsageInsights({
             hint="Cache read / (input + cache read). Higher is better."
             valueClass={
               cacheHitRate > 0.6
-                ? 'text-emerald-500'
+                ? 'text-primary'
                 : cacheHitRate > 0.3
-                  ? 'text-yellow-500'
+                  ? 'text-primary/60'
                   : 'text-destructive'
             }
           />

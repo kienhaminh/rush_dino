@@ -83,7 +83,7 @@ function UsageTable({
                   <td className="px-3 py-2 text-right tabular-nums font-medium text-foreground">
                     {formatTokens(row.totals.totalTokens)}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400">
+                  <td className="px-3 py-2 text-right tabular-nums font-medium text-primary">
                     {cost > 0 ? formatCost(cost) : <span className="text-muted-foreground">—</span>}
                   </td>
                   <td className="px-3 py-2 text-right">

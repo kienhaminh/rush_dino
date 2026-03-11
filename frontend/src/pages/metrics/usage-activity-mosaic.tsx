@@ -77,10 +77,10 @@ export function UsageActivityMosaic({
                       className="w-full rounded"
                       style={{
                         height: 40,
-                        background: opacity > 0 ? `rgba(124, 58, 237, ${opacity})` : 'transparent',
+                        background: opacity > 0 ? `rgba(34, 211, 200, ${opacity})` : 'transparent',
                         border: '1px solid',
                         borderColor:
-                          opacity > 0 ? `rgba(124, 58, 237, 0.3)` : 'rgba(255,255,255,0.05)',
+                          opacity > 0 ? `rgba(34, 211, 200, 0.3)` : 'rgba(255,255,255,0.05)',
                       }}
                     />
                     <span className="text-[9px] text-muted-foreground">{part.label}</span>
@@ -118,8 +118,8 @@ export function UsageActivityMosaic({
                     } ${selectedHours.length > 0 && !isSelected ? 'opacity-50' : ''}`}
                     style={{
                       background:
-                        opacity > 0 ? `rgba(124, 58, 237, ${opacity})` : 'rgba(255,255,255,0.03)',
-                      border: `1px solid rgba(124, 58, 237, ${borderOpacity})`,
+                        opacity > 0 ? `rgba(34, 211, 200, ${opacity})` : 'rgba(255,255,255,0.03)',
+                      border: `1px solid rgba(34, 211, 200, ${borderOpacity})`,
                     }}
                     title={`${hour}:00 — ${hour + 1}:00\n${formatTokens(value)} tokens`}
                   />
@@ -138,16 +138,16 @@ export function UsageActivityMosaic({
               <div
                 className="w-3 h-3 rounded-sm"
                 style={{
-                  background: 'rgba(124, 58, 237, 0.08)',
-                  border: '1px solid rgba(124,58,237,0.2)',
+                  background: 'rgba(34, 211, 200, 0.08)',
+                  border: '1px solid rgba(34, 211, 200, 0.2)',
                 }}
               />
               <span className="text-[9px] text-muted-foreground">Low</span>
               <div
                 className="w-3 h-3 rounded-sm ml-1"
                 style={{
-                  background: 'rgba(124, 58, 237, 0.78)',
-                  border: '1px solid rgba(124,58,237,0.6)',
+                  background: 'rgba(34, 211, 200, 0.78)',
+                  border: '1px solid rgba(34, 211, 200, 0.6)',
                 }}
               />
               <span className="text-[9px] text-muted-foreground">High token density</span>

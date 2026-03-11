@@ -139,16 +139,16 @@ export function UsageDailyChart({
                     {(() => {
                       const segs = isTokenMode
                         ? [
-                            { value: d.output, cls: 'bg-violet-500' },
-                            { value: d.input, cls: 'bg-blue-500' },
-                            { value: d.cacheWrite, cls: 'bg-amber-500' },
-                            { value: d.cacheRead, cls: 'bg-emerald-500' },
+                            { value: d.output, cls: 'bg-primary' },
+                            { value: d.input, cls: 'bg-secondary' },
+                            { value: d.cacheWrite, cls: 'bg-primary/50' },
+                            { value: d.cacheRead, cls: 'bg-secondary/60' },
                           ]
                         : [
-                            { value: d.outputCost ?? 0, cls: 'bg-violet-500' },
-                            { value: d.inputCost ?? 0, cls: 'bg-blue-500' },
-                            { value: d.cacheWriteCost ?? 0, cls: 'bg-amber-500' },
-                            { value: d.cacheReadCost ?? 0, cls: 'bg-emerald-500' },
+                            { value: d.outputCost ?? 0, cls: 'bg-primary' },
+                            { value: d.inputCost ?? 0, cls: 'bg-secondary' },
+                            { value: d.cacheWriteCost ?? 0, cls: 'bg-primary/50' },
+                            { value: d.cacheReadCost ?? 0, cls: 'bg-secondary/60' },
                           ];
                       const total = segs.reduce((s, seg) => s + seg.value, 0) || 1;
                       return segs.map((seg, si) => (
@@ -187,16 +187,16 @@ export function UsageDailyChart({
         {dailyChartMode === 'by-type' && (
           <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm bg-violet-500" /> Output
+              <span className="w-2 h-2 rounded-sm bg-primary" /> Output
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm bg-blue-500" /> Input
+              <span className="w-2 h-2 rounded-sm bg-secondary" /> Input
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm bg-amber-500" /> Cache Write
+              <span className="w-2 h-2 rounded-sm bg-primary/50" /> Cache Write
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-sm bg-emerald-500" /> Cache Read
+              <span className="w-2 h-2 rounded-sm bg-secondary/60" /> Cache Read
             </span>
           </div>
         )}

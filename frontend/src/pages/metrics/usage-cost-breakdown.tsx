@@ -28,25 +28,25 @@ export function UsageCostBreakdown({ totals, chartMode }: UsageCostBreakdownProp
           label: 'Output',
           pct: tokenPcts.output,
           value: formatTokens(totals.output),
-          cls: 'bg-violet-500',
+          cls: 'bg-primary',
         },
         {
           label: 'Input',
           pct: tokenPcts.input,
           value: formatTokens(totals.input),
-          cls: 'bg-blue-500',
+          cls: 'bg-secondary',
         },
         {
           label: 'Cache Write',
           pct: tokenPcts.cacheWrite,
           value: formatTokens(totals.cacheWrite),
-          cls: 'bg-amber-500',
+          cls: 'bg-primary/50',
         },
         {
           label: 'Cache Read',
           pct: tokenPcts.cacheRead,
           value: formatTokens(totals.cacheRead),
-          cls: 'bg-emerald-500',
+          cls: 'bg-secondary/60',
         },
       ]
     : [
@@ -54,25 +54,25 @@ export function UsageCostBreakdown({ totals, chartMode }: UsageCostBreakdownProp
           label: 'Output',
           pct: breakdown.output.pct,
           value: formatCost(breakdown.output.cost),
-          cls: 'bg-violet-500',
+          cls: 'bg-primary',
         },
         {
           label: 'Input',
           pct: breakdown.input.pct,
           value: formatCost(breakdown.input.cost),
-          cls: 'bg-blue-500',
+          cls: 'bg-secondary',
         },
         {
           label: 'Cache Write',
           pct: breakdown.cacheWrite.pct,
           value: formatCost(breakdown.cacheWrite.cost),
-          cls: 'bg-amber-500',
+          cls: 'bg-primary/50',
         },
         {
           label: 'Cache Read',
           pct: breakdown.cacheRead.pct,
           value: formatCost(breakdown.cacheRead.cost),
-          cls: 'bg-emerald-500',
+          cls: 'bg-secondary/60',
         },
       ];
 
