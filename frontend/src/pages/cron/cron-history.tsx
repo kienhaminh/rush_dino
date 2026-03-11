@@ -60,7 +60,7 @@ export function CronHistory({
       case 'error':
         return <XCircle className="w-4 h-4 text-destructive" />;
       case 'skipped':
-        return <SkipForward className="w-4 h-4 text-amber-500" />;
+        return <SkipForward className="w-4 h-4 text-warning" />;
       default:
         return <AlertCircle className="w-4 h-4 text-muted-foreground" />;
     }
@@ -145,7 +145,7 @@ export function CronHistory({
                     ? 'bg-success/10'
                     : run.status === 'error'
                       ? 'bg-destructive/10 text-destructive'
-                      : 'bg-amber-500/10 text-amber-500',
+                      : 'bg-warning/10 text-warning',
                 )}
               >
                 {getStatusIcon(run.status)}

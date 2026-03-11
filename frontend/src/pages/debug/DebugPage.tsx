@@ -153,8 +153,8 @@ export function DebugPage() {
     securitySummary.critical > 0
       ? 'bg-destructive/10 text-destructive border-destructive/30'
       : securitySummary.warn > 0
-        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
-        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30';
+        ? 'bg-warning/10 text-warning border-warning/30'
+        : 'bg-success/10 text-success border-success/30';
 
   return (
     <div className="flex-1 w-full min-w-0 flex flex-col h-full bg-background p-6 md:p-8 overflow-y-auto space-y-6">

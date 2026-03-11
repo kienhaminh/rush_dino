@@ -150,7 +150,7 @@ export function InstancesPage({
 
                       <div className="flex flex-col gap-3 md:w-48 shrink-0 text-sm">
                         <div className="flex items-center gap-2 text-foreground font-medium">
-                          <ActivityIcon className="w-4 h-4 text-emerald-500" />
+                          <ActivityIcon className="w-4 h-4 text-success" />
                           {formatPresenceAge(entry)}
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
