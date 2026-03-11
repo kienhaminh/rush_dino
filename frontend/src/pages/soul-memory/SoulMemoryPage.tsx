@@ -116,36 +116,39 @@ export function SoulMemoryPage() {
 
   return (
     <div className="flex-1 min-w-0 h-full overflow-y-auto bg-background px-6 py-6 md:px-8 md:py-8 flex flex-col gap-6 w-full">
-      <section className="rounded-[28px] border border-border/60 bg-card/70 p-6 shadow-[0_20px_80px_-50px_rgba(0,0,0,0.7)] backdrop-blur-sm">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-4">
-            <Badge variant="outline" className="text-[10px] uppercase tracking-[0.28em]">
-              Shared runtime state
-            </Badge>
-            <div className="space-y-2">
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
-                Monitor the live soul and memory files loaded from the current RushDino data
-                directory. This view reflects the current on-disk state in `.rushdino`, not the old
-                mock agent metadata.
-              </p>
-              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span>Data dir: {state.dataDir || 'n/a'}</span>
-                <span>Soul lines: {stats.soulLines}</span>
-                <span>Memory lines: {stats.memoryLines}</span>
-                <span>Identity files: {stats.identityFiles}</span>
-                <span>Daily files: {stats.dailyFiles}</span>
-              </div>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-end">
+        <div className="flex items-center gap-3">
+          <div className="hidden lg:flex flex-wrap gap-4 text-[11px] text-muted-foreground/60 uppercase tracking-wider mr-4">
+            <div className="flex flex-col">
+              <span className="font-medium text-muted-foreground">{stats.soulLines}</span>
+              <span>Soul Lines</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-muted-foreground">{stats.memoryLines}</span>
+              <span>Memory Lines</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-muted-foreground">{stats.identityFiles}</span>
+              <span>Identity</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-muted-foreground">{stats.dailyFiles}</span>
+              <span>Daily</span>
             </div>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void load('refresh')} disabled={loading || refreshing}>
-              <RefreshCwIcon className={`mr-2 h-4 w-4 ${(loading || refreshing) ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+          <Button
+            onClick={() => void load('refresh')}
+            disabled={loading || refreshing}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCwIcon
+              className={`mr-2 h-4 w-4 ${loading || refreshing ? 'animate-spin' : ''}`}
+            />
+            Refresh
+          </Button>
         </div>
-      </section>
+      </div>
 
       {error ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -167,15 +170,25 @@ export function SoulMemoryPage() {
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-4">
               <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Soul file</p>
-                <p className="mt-2 text-sm text-foreground/80">{formatTimestamp(state.soul.updatedAt)}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Soul file
+                </p>
+                <p className="mt-2 text-sm text-foreground/80">
+                  {formatTimestamp(state.soul.updatedAt)}
+                </p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Memory file</p>
-                <p className="mt-2 text-sm text-foreground/80">{formatTimestamp(state.memory.updatedAt)}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Memory file
+                </p>
+                <p className="mt-2 text-sm text-foreground/80">
+                  {formatTimestamp(state.memory.updatedAt)}
+                </p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Tools notes</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Tools notes
+                </p>
                 <p className="mt-2 text-sm text-foreground/80">
                   {state.identityFiles.find((file) => file.name === 'TOOLS.md')?.exists
                     ? 'TOOLS.md present'
@@ -183,7 +196,9 @@ export function SoulMemoryPage() {
                 </p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Daily memory files</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                  Daily memory files
+                </p>
                 <p className="mt-2 text-sm text-foreground/80">{state.dailyFiles.length}</p>
               </div>
             </CardContent>

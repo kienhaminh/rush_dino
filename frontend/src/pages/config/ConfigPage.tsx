@@ -177,7 +177,7 @@ export function ConfigPage() {
                     </Badge>
                   )}
                   {status.kind === 'success' && (
-                    <Badge variant="secondary" className="text-xs text-green-600">
+                    <Badge variant="secondary" className="text-xs text-success">
                       Saved
                     </Badge>
                   )}

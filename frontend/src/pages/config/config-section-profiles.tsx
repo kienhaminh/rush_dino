@@ -57,11 +57,11 @@ import { Badge } from '@/components/ui/badge';
 const REDACTED = '***';
 
 const PROVIDER_ICONS: Record<string, React.ReactNode> = {
-  openai: <Sparkles className="w-5 h-5 text-emerald-400" />,
-  anthropic: <Brain className="w-5 h-5 text-amber-400" />,
-  ollama: <Server className="w-5 h-5 text-blue-400" />,
-  openai_codex: <Sparkles className="w-5 h-5 text-emerald-400" />,
-  plugin: <Server className="w-5 h-5 text-gray-400" />,
+  openai: <Sparkles className="w-5 h-5 text-success" />,
+  anthropic: <Brain className="w-5 h-5 text-warning" />,
+  ollama: <Server className="w-5 h-5 text-primary" />,
+  openai_codex: <Sparkles className="w-5 h-5 text-success" />,
+  plugin: <Server className="w-5 h-5 text-muted-foreground" />,
 };
 
 function SecretInput({
@@ -217,7 +217,7 @@ function ProfileCard({
           className="flex-1 flex items-center gap-4 px-5 py-4 text-left min-w-0"
         >
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-background/50 border border-border/40 shrink-0">
-            {PROVIDER_ICONS[profile.provider_kind] || <Server className="w-5 h-5 text-gray-400" />}
+            {PROVIDER_ICONS[profile.provider_kind] || <Server className="w-5 h-5 text-muted-foreground" />}
           </div>
           <div className="flex-1 min-w-0">
             <span className="font-semibold text-sm text-foreground block truncate">
@@ -231,9 +231,9 @@ function ProfileCard({
             {isConnected && (
               <Badge
                 variant="outline"
-                className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/20 gap-1 px-1.5 py-0"
+                className="text-[10px] bg-success/10 text-success border-success/20 gap-1 px-1.5 py-0"
               >
-                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="w-1 h-1 rounded-full bg-success animate-pulse" />
                 Connected
               </Badge>
             )}
@@ -300,8 +300,8 @@ function ProfileCard({
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 OAuth Connection
                 {isConnected && (
-                  <span className="text-[10px] text-emerald-500 flex items-center gap-1 normal-case font-normal">
-                    <div className="w-1 h-1 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] text-success flex items-center gap-1 normal-case font-normal">
+                    <div className="w-1 h-1 rounded-full bg-success" />
                     Connected
                   </span>
                 )}
