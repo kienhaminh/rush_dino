@@ -12,7 +12,7 @@ function severityTone(severity: string) {
     case 'error':
       return 'border-destructive/30 bg-destructive/10 text-destructive';
     case 'warn':
-      return 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400';
+      return 'border-warning/30 bg-warning/10 text-warning';
     default:
       return 'border-border/50 bg-muted/20 text-muted-foreground';
   }
