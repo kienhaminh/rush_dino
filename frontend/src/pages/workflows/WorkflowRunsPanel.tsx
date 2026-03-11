@@ -29,6 +29,14 @@ export function WorkflowRunsPanel({
         ) : (
           runs.map((run) => {
             const active = run.id === selectedRunId;
+            const statusClass =
+              run.status === 'running'
+                ? 'text-primary bg-primary/10'
+                : run.status === 'succeeded'
+                  ? 'text-success bg-success/10'
+                  : run.status === 'failed'
+                    ? 'text-destructive bg-destructive/10'
+                    : 'text-warning bg-warning/10';
             return (
               <button
                 key={run.id}
@@ -40,14 +48,8 @@ export function WorkflowRunsPanel({
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium truncate">{run.id.slice(0, 8)}</span>
                   <Badge
-                    variant={
-                      run.status === 'failed'
-                        ? 'destructive'
-                        : run.status === 'succeeded'
-                          ? 'secondary'
-                          : 'outline'
-                    }
-                    className="text-[10px] uppercase"
+                    variant="outline"
+                    className={`text-[10px] uppercase border-0 ${statusClass}`}
                   >
                     {run.status}
                   </Badge>

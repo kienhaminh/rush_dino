@@ -19,14 +19,16 @@ export function WorkflowRunDetailPanel({ run, loading }: WorkflowRunDetailPanelP
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Badge
-                variant={
-                  run.status === 'failed'
-                    ? 'destructive'
+                variant="outline"
+                className={`text-[10px] uppercase border-0 ${
+                  run.status === 'running'
+                    ? 'text-primary bg-primary/10'
                     : run.status === 'succeeded'
-                      ? 'secondary'
-                      : 'outline'
-                }
-                className="text-[10px] uppercase"
+                      ? 'text-success bg-success/10'
+                      : run.status === 'failed'
+                        ? 'text-destructive bg-destructive/10'
+                        : 'text-warning bg-warning/10'
+                }`}
               >
                 {run.status}
               </Badge>
@@ -45,14 +47,16 @@ export function WorkflowRunDetailPanel({ run, loading }: WorkflowRunDetailPanelP
                     {step.position}. {step.stepName}
                   </p>
                   <Badge
-                    variant={
-                      step.status === 'failed'
-                        ? 'destructive'
+                    variant="outline"
+                    className={`text-[10px] uppercase border-0 ${
+                      step.status === 'running'
+                        ? 'text-primary bg-primary/10'
                         : step.status === 'succeeded'
-                          ? 'secondary'
-                          : 'outline'
-                    }
-                    className="text-[10px] uppercase"
+                          ? 'text-success bg-success/10'
+                          : step.status === 'failed'
+                            ? 'text-destructive bg-destructive/10'
+                            : 'text-warning bg-warning/10'
+                    }`}
                   >
                     {step.status}
                   </Badge>
