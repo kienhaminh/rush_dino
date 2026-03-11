@@ -12,6 +12,9 @@ pub fn map_openai_message(message: &rushdino_common::models::Message) -> Value {
         rushdino_common::models::Role::Tool => "tool",
     };
     let mut base = json!({ "role": role, "content": message.content });
+    if message.role == rushdino_common::models::Role::Tool {
+        base["tool_call_id"] = Value::String(message.id.clone());
+    }
     if let Some(calls) = &message.tool_calls {
         base["tool_calls"] = Value::Array(
             calls

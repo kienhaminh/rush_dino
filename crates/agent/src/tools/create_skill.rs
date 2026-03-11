@@ -24,7 +24,8 @@ impl Tool for CreateSkillTool {
     }
 
     fn description(&self) -> &str {
-        "Create or update a TOML skill in ~/.rushdino/skills"
+        "Create or update a skill in ~/.rushdino/skills. \
+         Use read_skill with name='skill-creator' to load methodology guidelines if needed."
     }
 
     fn parameters(&self) -> Value {

@@ -12,7 +12,6 @@ use uuid::Uuid;
 use crate::{
     agent_manager::{AgentManager, AgentTemplate},
     agent_progress::{build_lanes_from_conversation_store, AgentProgressLane},
-    agent_task_memory::AgentTaskMemory,
     conversation::ConversationManager,
     engine_bootstrap::{build_engine_deps, system_message, title_from, user_message},
     job_manager::{JobManager, JobResult},
@@ -20,7 +19,6 @@ use crate::{
     memory::MemoryManager,
     orchestrator::Orchestrator,
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
-    router::AgentRouter,
     runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
     skill_manager::Skill,
     system_broker::SharedSystemBroker,
@@ -50,7 +48,7 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             max_iterations: 10,
-            max_context_tokens: 4096,
+            max_context_tokens: 8192,
             tool_timeout_secs: 30,
             model_override: None,
             system_prompt: "You are RushDino, a local-first AI agent.".to_owned(),
@@ -76,8 +74,6 @@ pub struct AgentEngine {
     inbox_rx: Arc<Mutex<mpsc::Receiver<JobResult>>>,
     runtime: Arc<AgentRuntime>,
     pending_assistant_runs: Arc<Mutex<HashMap<String, AssistantRunJob>>>,
-    router: AgentRouter,
-    task_memory: Arc<AgentTaskMemory>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,12 +129,14 @@ pub struct GatewayRunHandle {
     pub stream_rx: Option<mpsc::Receiver<StreamingEvent>>,
 }
 
-/// Builds the system prompt for a specialist agent, optionally appending the
-/// agent's task history for continuity across invocations.
-fn build_agent_system_content(base_prompt: &str, task_log: Option<&str>) -> String {
-    match task_log {
-        Some(log) => format!("{base_prompt}\n\n## Your Task History\n\n{log}"),
-        None => base_prompt.to_owned(),
+#[cfg(test)]
+mod config_tests {
+    use super::AgentConfig;
+
+    #[test]
+    fn default_context_budget_is_large_enough_for_longer_conversations() {
+        let config = AgentConfig::default();
+        assert_eq!(config.max_context_tokens, 8192);
     }
 }
 
@@ -175,8 +173,6 @@ impl AgentEngine {
             config.clone(),
         ));
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
-        let router = AgentRouter::new(provider.clone(), deps.agent_manager.clone());
-        let task_memory = deps.task_memory;
 
         Ok(Self {
             provider,
@@ -196,8 +192,6 @@ impl AgentEngine {
             inbox_rx: Arc::new(Mutex::new(deps.inbox_rx)),
             runtime,
             pending_assistant_runs: Arc::new(Mutex::new(HashMap::new())),
-            router,
-            task_memory,
         })
     }
 
@@ -231,13 +225,13 @@ impl AgentEngine {
                 .await?;
         }
 
-        if messages.is_empty() {
-            messages.push(system_message(
-                &self.config,
-                self.memory.as_ref(),
-                self.agent_manager.as_ref(),
-            ));
-        }
+        // Always prepend the system message at position 0. It is never stored in
+        // the DB (dynamic memory/soul files can change between turns), so it must
+        // be reconstructed and injected fresh on every request.
+        messages.insert(
+            0,
+            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref()),
+        );
 
         let old_len = messages.len();
         let user_msg = user_message(user_input);
@@ -264,70 +258,6 @@ impl AgentEngine {
             delegation_depth: 0,
         };
 
-        // Pre-route: try a single cheap LLM call to pick a specialist agent.
-        // On any failure or no confident match, fall through to the orchestrator.
-        if let Some(agent_name) = self.router.route(user_input).await {
-            if let Some(template) = self.agent_manager.get(&agent_name) {
-                let sys_content = build_agent_system_content(
-                    &template.system_prompt,
-                    self.task_memory.load_task_log(&agent_name).as_deref(),
-                );
-                let sub_messages = vec![
-                    Message {
-                        id: Uuid::new_v4().to_string(),
-                        role: Role::System,
-                        content: sys_content,
-                        tool_calls: None,
-                        rich_content: None,
-                        created_at: Utc::now(),
-                    },
-                    Message {
-                        id: Uuid::new_v4().to_string(),
-                        role: Role::User,
-                        content: user_input.to_owned(),
-                        tool_calls: None,
-                        rich_content: None,
-                        created_at: Utc::now(),
-                    },
-                ];
-                let child_ctx = ToolExecutionContext {
-                    delegation_depth: 1,
-                    ..context
-                };
-                let (response, all_sub_messages) = with_tool_execution_context(
-                    child_ctx,
-                    run_react_loop(
-                        self.provider.clone(),
-                        self.tool_registry.clone(),
-                        sub_messages,
-                        &self.config,
-                        None,
-                    ),
-                )
-                .await?;
-
-                // Persist agent messages (skip specialist system prompt + user msg
-                // which was already saved above).
-                for message in all_sub_messages.iter().skip(2) {
-                    self.conversation
-                        .save_message(conversation_id, message)
-                        .await?;
-                    self.maybe_ingest_message("conversation_message", message)
-                        .await;
-                }
-                self.persist_usage_metric(conversation_id, &response).await;
-
-                if let Err(e) =
-                    self.task_memory
-                        .append_task(&agent_name, user_input, &response.content)
-                {
-                    tracing::warn!(agent = %agent_name, error = %e, "failed to write agent task log");
-                }
-
-                return Ok(response);
-            }
-        }
-
         let (response, all_messages) = with_tool_execution_context(
             context,
             run_react_loop(
@@ -339,6 +269,14 @@ impl AgentEngine {
             ),
         )
         .await?;
+
+        // Delete BOOTSTRAP.md once onboarding is complete, indicated by the presence
+        // of IDENTITY.md (written by the agent during the onboarding ritual).
+        // This keeps BOOTSTRAP.md injected across the full multi-turn onboarding
+        // conversation rather than removing it after just the first response.
+        if self.memory.read_named("IDENTITY.md").is_ok() {
+            self.memory.delete_named("BOOTSTRAP.md");
+        }
 
         let persist_offset = old_len + 1 + usize::from(injected_graph_context);
         for message in all_messages.iter().skip(persist_offset) {
@@ -407,13 +345,13 @@ impl AgentEngine {
                 .await?;
         }
 
-        if messages.is_empty() {
-            messages.push(system_message(
-                &self.config,
-                self.memory.as_ref(),
-                self.agent_manager.as_ref(),
-            ));
-        }
+        // Always prepend the system message at position 0. It is never stored in
+        // the DB (dynamic memory/soul files can change between turns), so it must
+        // be reconstructed and injected fresh on every request.
+        messages.insert(
+            0,
+            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref()),
+        );
 
         let old_len = messages.len();
         let user_msg = user_message(user_input);
@@ -478,78 +416,6 @@ impl AgentEngine {
             delegation_depth: 0,
         };
 
-        // Pre-route: try a single cheap LLM call to pick a specialist agent.
-        // On any failure or no confident match, fall through to the orchestrator.
-        if let Some(agent_name) = self.router.route(user_input).await {
-            if let Some(template) = self.agent_manager.get(&agent_name) {
-                let sys_content = build_agent_system_content(
-                    &template.system_prompt,
-                    self.task_memory.load_task_log(&agent_name).as_deref(),
-                );
-                let sub_messages = vec![
-                    Message {
-                        id: Uuid::new_v4().to_string(),
-                        role: Role::System,
-                        content: sys_content,
-                        tool_calls: None,
-                        rich_content: None,
-                        created_at: Utc::now(),
-                    },
-                    Message {
-                        id: Uuid::new_v4().to_string(),
-                        role: Role::User,
-                        content: user_input.to_owned(),
-                        tool_calls: None,
-                        rich_content: None,
-                        created_at: Utc::now(),
-                    },
-                ];
-                let child_ctx = ToolExecutionContext {
-                    delegation_depth: 1,
-                    ..context
-                };
-                let (response, all_sub_messages) = with_tool_execution_context(
-                    child_ctx,
-                    run_react_loop(
-                        self.provider.clone(),
-                        self.tool_registry.clone(),
-                        sub_messages,
-                        &self.config,
-                        None,
-                    ),
-                )
-                .await?;
-
-                for message in all_sub_messages.iter().skip(2) {
-                    self.conversation
-                        .save_message(&conversation_id, message)
-                        .await?;
-                    self.maybe_ingest_message("conversation_message", message)
-                        .await;
-                }
-                self.persist_usage_metric(&conversation_id, &response).await;
-
-                if let Err(e) =
-                    self.task_memory
-                        .append_task(&agent_name, user_input, &response.content)
-                {
-                    tracing::warn!(agent = %agent_name, error = %e, "failed to write agent task log");
-                }
-
-                // Emit a final AssistantMessage event so the WebSocket client sees the response.
-                let _ = event_tx
-                    .send(WsStreamEvent::AssistantMessage {
-                        run_id: "legacy-ws".to_owned(),
-                        conversation_id: conversation_id.clone(),
-                        content: response.content,
-                        rich_content: response.rich_content,
-                    })
-                    .await;
-
-                return Ok(conversation_id);
-            }
-        }
-
         let (response, all_messages) = with_tool_execution_context(
             context,
             run_react_loop_streaming(
@@ -561,6 +427,14 @@ impl AgentEngine {
             ),
         )
         .await?;
+
+        // Delete BOOTSTRAP.md once onboarding is complete, indicated by the presence
+        // of IDENTITY.md (written by the agent during the onboarding ritual).
+        // This keeps BOOTSTRAP.md injected across the full multi-turn onboarding
+        // conversation rather than removing it after just the first response.
+        if self.memory.read_named("IDENTITY.md").is_ok() {
+            self.memory.delete_named("BOOTSTRAP.md");
+        }
 
         let persist_offset = old_len + 1 + usize::from(injected_graph_context);
         for message in all_messages.iter().skip(persist_offset) {
@@ -1026,13 +900,13 @@ impl AgentEngine {
                 .await?;
         }
 
-        if messages.is_empty() {
-            messages.push(system_message(
-                &self.config,
-                self.memory.as_ref(),
-                self.agent_manager.as_ref(),
-            ));
-        }
+        // Always prepend the system message at position 0. It is never stored in
+        // the DB (dynamic memory/soul files can change between turns), so it must
+        // be reconstructed and injected fresh on every request.
+        messages.insert(
+            0,
+            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref()),
+        );
 
         let old_len = messages.len();
         let user_msg = user_message(user_input);
@@ -1096,12 +970,37 @@ impl AgentEngine {
             .await
     }
 
+    pub async fn latest_usage_metric(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Option<crate::usage_metrics_store::UsageMetricSnapshot>> {
+        self.usage_metrics
+            .latest_usage_for_conversation(conversation_id)
+            .await
+    }
+
     pub async fn get_conversation_messages(&self, id: &str) -> Result<Vec<Message>> {
         self.conversation.get_messages(id).await
     }
 
     pub async fn delete_conversation(&self, id: &str) -> Result<()> {
         self.conversation.delete_conversation(id).await
+    }
+
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    pub fn memory(&self) -> &MemoryManager {
+        &self.memory
+    }
+
+    pub fn agent_manager(&self) -> &AgentManager {
+        &self.agent_manager
+    }
+
+    pub fn skill_manager(&self) -> &crate::skill_manager::SkillManager {
+        &self.skill_manager
     }
 
     pub fn list_agent_templates(&self) -> Vec<AgentTemplate> {

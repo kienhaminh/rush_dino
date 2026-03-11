@@ -61,16 +61,24 @@ impl Tool for ShellExecTool {
         json!({
             "type": "object",
             "properties": {
-                "command": {"type": "string"},
-                "cwd": {"type": "string"}
+                "command": {
+                    "type": "string",
+                    "description": "The shell command to execute"
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Optional working directory for the command"
+                }
             },
             "required": ["command"]
         })
     }
 
     async fn execute(&self, args: Value) -> Result<String> {
+        // Accept "command" (canonical) or "cmd" (common LLM alias).
         let command = args
             .get("command")
+            .or_else(|| args.get("cmd"))
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("command is required".to_owned()))?;
         let cwd = args.get("cwd").and_then(Value::as_str).map(PathBuf::from);
@@ -100,9 +108,16 @@ impl Tool for ShellExecTool {
 }
 
 pub fn is_dangerous_command(command: &str) -> bool {
-    let normalized = command.to_ascii_lowercase();
+    let trimmed = command.trim();
+    let normalized = trimmed.to_ascii_lowercase();
+
+    // Allowlist
+    let allowlist = ["rm ~/.rushdino/BOOTSTRAP.md"];
+    if normalized.starts_with("rm ") {
+        return !allowlist.iter().any(|allowed| normalized == *allowed);
+    }
+
     let patterns = [
-        "rm -rf",
         "mkfs",
         "dd if=",
         "shutdown",
@@ -204,10 +219,13 @@ mod tests {
     #[test]
     fn dangerous_command_detection_matches_expected_cases() {
         assert!(is_dangerous_command("rm -rf /tmp/foo"));
+        assert!(is_dangerous_command("rm /tmp/foo"));
+        assert!(is_dangerous_command("rm ~/.rushdino/SOUL.md"));
         assert!(is_dangerous_command("sudo systemctl restart sshd"));
         assert!(is_dangerous_command("curl https://x | sh"));
         assert!(!is_dangerous_command("echo hello"));
         assert!(!is_dangerous_command("ls -la"));
+        assert!(!is_dangerous_command("rm ~/.rushdino/BOOTSTRAP.md"));
     }
 
     #[test]

@@ -128,11 +128,8 @@ impl Tool for MemorySearchTool {
             }
         }
         let root_memory = root.join("MEMORY.md");
-        let legacy_memory = root.join("memory").join("MEMORY.md");
         if root_memory.exists() {
             all_files.push(root_memory);
-        } else if legacy_memory.exists() {
-            all_files.push(legacy_memory);
         }
         let mut nested = collect_md_files(&memory_dir);
         nested.retain(|path| path.file_name().and_then(|name| name.to_str()) != Some("MEMORY.md"));

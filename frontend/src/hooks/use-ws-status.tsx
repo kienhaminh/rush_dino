@@ -63,7 +63,9 @@ export function WsStatusProvider({ children }: { children: ReactNode }) {
       }
 
       const title = message.level === 'fatal' ? 'Fatal backend error' : 'Backend error detected';
-      const description = message.target ? `[${message.target}] ${message.message}` : message.message;
+      const description = message.target
+        ? `[${message.target}] ${message.message}`
+        : message.message;
       toast.error(title, {
         description,
         duration: 10_000,
@@ -71,6 +73,7 @@ export function WsStatusProvider({ children }: { children: ReactNode }) {
     };
 
     socket.onclose = () => {
+      if (socketRef.current !== socket) return;
       setIsConnected(false);
       const wait = Math.min(1000 * 2 ** reconnectRef.current, 30_000);
       reconnectRef.current += 1;

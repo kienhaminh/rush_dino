@@ -5,12 +5,40 @@ use crate::{
     init,
 };
 
-#[derive(serde::Deserialize)]
+/// Parses the frontmatter fields from a markdown agent file for validation.
 struct BundledAgentTemplate {
     name: String,
     description: String,
     system_prompt: String,
     icon: Option<String>,
+}
+
+fn parse_bundled_md(content: &str) -> Option<BundledAgentTemplate> {
+    let content = content.strip_prefix("---\n")?;
+    let close = content.find("\n---")?;
+    let frontmatter = &content[..close];
+    let body = content[close + 4..].trim().to_owned(); // skip "\n---"
+
+    let mut name = None;
+    let mut description = None;
+    let mut icon = None;
+    for line in frontmatter.lines() {
+        if let Some((k, v)) = line.split_once(':') {
+            match k.trim() {
+                "name" => name = Some(v.trim().to_owned()),
+                "description" => description = Some(v.trim().to_owned()),
+                "icon" => icon = Some(v.trim().to_owned()),
+                _ => {}
+            }
+        }
+    }
+
+    Some(BundledAgentTemplate {
+        name: name?,
+        description: description?,
+        system_prompt: body,
+        icon,
+    })
 }
 
 #[test]
@@ -42,32 +70,27 @@ fn ensure_dir_creates_expected_structure() {
     assert!(root.join("skills").exists());
     assert!(root.join("MEMORY.md").exists());
     assert!(root.join("agents").exists());
-    assert!(root.join("agents/general-assistant.toml").exists());
-    assert!(root.join("agents/spawn-agent.toml").exists());
+    assert!(root.join("agents/general-assistant.md").exists());
+    assert!(root.join("agents/spawn-agent.md").exists());
+    assert!(root.join("skills/skill-creator/SKILL.md").exists());
+    assert!(root.join("skills/skill-creator/scripts/run_eval.py").exists());
 
     let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn ensure_dir_migrates_legacy_memory_file_to_root() {
-    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
-    fs::create_dir_all(root.join("memory")).expect("legacy memory dir");
-    fs::write(root.join("memory/MEMORY.md"), "# MEMORY\n\nlegacy\n").expect("legacy memory");
-
-    init::ensure_rushdino_dir_at(&root).expect("dir init should work");
-
-    let root_memory = fs::read_to_string(root.join("MEMORY.md")).expect("root memory should exist");
-    assert!(root_memory.contains("legacy"));
-
-    let _ = fs::remove_dir_all(root);
+fn bundled_skill_files_are_non_empty() {
+    for (path, content) in crate::skills::BUNDLED_SKILL_FILES {
+        assert!(!content.is_empty(), "bundled skill file {} is empty", path);
+    }
 }
 
 #[test]
 fn bundled_agents_are_valid_and_named_consistently() {
     let mut names = std::collections::HashSet::new();
     for (key, content) in crate::agents::BUNDLED_AGENTS {
-        let template: BundledAgentTemplate =
-            toml::from_str(content).unwrap_or_else(|e| panic!("invalid bundled agent {key}: {e}"));
+        let template = parse_bundled_md(content)
+            .unwrap_or_else(|| panic!("invalid bundled agent {key}: failed to parse markdown"));
         assert_eq!(&template.name, key, "template name must match bundle key");
         assert!(
             names.insert(template.name.clone()),

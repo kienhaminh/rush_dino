@@ -163,6 +163,15 @@ impl ChannelAdapter for TelegramAdapter {
         Ok(())
     }
 
+    async fn set_typing(&self, recipient: &str) -> Result<()> {
+        let chat_id = parse_chat_id(recipient)?;
+        let bot = self.bot.clone();
+        let _ = bot
+            .send_chat_action(chat_id, teloxide::types::ChatAction::Typing)
+            .await;
+        Ok(())
+    }
+
     fn preview_delivery(&self, msg: &OutgoingMessage) -> DeliveryPreview {
         match plan_delivery(msg, &self.capabilities()) {
             TelegramDeliveryPlan::Degraded { reason, .. } => DeliveryPreview {

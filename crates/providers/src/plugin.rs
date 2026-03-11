@@ -27,8 +27,10 @@ pub struct PluginProvider {
 impl PluginProvider {
     pub fn from_manifest(path: &Path) -> Result<Self> {
         let raw = fs::read_to_string(path)?;
-        let manifest: PluginManifest = toml::from_str(&raw)
+        let mut manifest: PluginManifest = toml::from_str(&raw)
             .map_err(|e| AppError::Provider(format!("invalid plugin manifest: {e}")))?;
+        manifest.name = manifest.name.trim().to_owned();
+        manifest.url = manifest.url.trim().to_owned();
 
         Ok(Self {
             name: manifest.name.clone(),

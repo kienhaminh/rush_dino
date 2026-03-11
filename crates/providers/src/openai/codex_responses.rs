@@ -20,6 +20,20 @@ const JWT_CLAIM_PATH: &str = "https://api.openai.com/auth";
 const MAX_RETRIES: u32 = 3;
 const BASE_DELAY_MS: u64 = 1000;
 
+fn split_tool_call_id(id: &str) -> (&str, Option<&str>) {
+    let mut parts = id.splitn(2, '|');
+    let call_id = parts.next().unwrap_or("");
+    let item_id = parts.next().filter(|value| !value.is_empty());
+    (call_id, item_id)
+}
+
+fn compose_tool_call_id(call_id: &str, item_id: Option<&str>) -> String {
+    match item_id.filter(|value| !value.is_empty()) {
+        Some(item_id) => format!("{call_id}|{item_id}"),
+        None => call_id.to_owned(),
+    }
+}
+
 #[derive(Clone)]
 pub struct CodexResponsesProvider {
     client: Client,
@@ -43,7 +57,8 @@ impl CodexResponsesProvider {
         let raw = self
             .base_url
             .as_deref()
-            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .unwrap_or(DEFAULT_CODEX_BASE_URL)
             .trim_end_matches('/');
         if raw.ends_with("/codex/responses") {
@@ -207,12 +222,17 @@ impl CodexResponsesProvider {
                             }));
                         }
                         for call in calls {
-                            input.push(json!({
+                            let (call_id, item_id) = split_tool_call_id(&call.id);
+                            let mut function_call = json!({
                                 "type": "function_call",
-                                "call_id": call.id,
+                                "call_id": call_id,
                                 "name": call.name,
                                 "arguments": call.arguments.to_string()
-                            }));
+                            });
+                            if let Some(item_id) = item_id {
+                                function_call["id"] = json!(item_id);
+                            }
+                            input.push(function_call);
                         }
                     } else {
                         input.push(json!({
@@ -222,9 +242,10 @@ impl CodexResponsesProvider {
                     }
                 }
                 Role::Tool => {
+                    let (call_id, _) = split_tool_call_id(&msg.id);
                     input.push(json!({
                         "type": "function_call_output",
-                        "call_id": msg.id,
+                        "call_id": call_id,
                         "output": msg.content
                     }));
                 }
@@ -292,6 +313,8 @@ impl CodexResponsesProvider {
         if let Some(tools) = request.tools {
             full_body["tools"] = json!(Self::map_tools(tools));
         }
+
+        tracing::debug!(body = %serde_json::to_string_pretty(&full_body).unwrap_or_default(), "codex stream_chat request");
 
         let client = self.client.clone();
         let headers = self.build_headers()?;
@@ -421,7 +444,16 @@ impl CodexResponsesProvider {
                                             .and_then(Value::as_str)
                                             .unwrap_or_default()
                                             .to_owned();
-                                        pending_calls.insert(call_id, (name, String::new()));
+                                        if call_id.is_empty() || name.is_empty() {
+                                            tracing::warn!(
+                                                call_id = %call_id,
+                                                name = %name,
+                                                item = ?item,
+                                                "skipping malformed function_call item: missing call_id or name"
+                                            );
+                                        } else {
+                                            pending_calls.insert(call_id, (name, String::new()));
+                                        }
                                     }
                                 }
                             }
@@ -448,13 +480,21 @@ impl CodexResponsesProvider {
                                             .and_then(Value::as_str)
                                             .unwrap_or_default()
                                             .to_owned();
+                                        let item_id = item
+                                            .get("id")
+                                            .and_then(Value::as_str)
+                                            .filter(|value| !value.is_empty())
+                                            .map(str::to_owned);
                                         if let Some((name, args_str)) =
                                             pending_calls.remove(&call_id)
                                         {
                                             let arguments = serde_json::from_str(&args_str)
                                                 .unwrap_or_else(|_| json!({}));
                                             let tool_call = ToolCall {
-                                                id: call_id,
+                                                id: compose_tool_call_id(
+                                                    &call_id,
+                                                    item_id.as_deref(),
+                                                ),
                                                 name,
                                                 arguments,
                                             };
@@ -528,5 +568,66 @@ impl CodexResponsesProvider {
                 is_reasoning: Some(false),
             },
         ])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use rushdino_common::models::{Message, Role, ToolCall};
+
+    use super::CodexResponsesProvider;
+
+    #[test]
+    fn map_input_preserves_responses_function_call_item_id() {
+        let messages = vec![
+            Message {
+                id: "assistant-1".to_owned(),
+                role: Role::Assistant,
+                content: String::new(),
+                tool_calls: Some(vec![ToolCall {
+                    id: "call_123|fc_456".to_owned(),
+                    name: "shell_exec".to_owned(),
+                    arguments: json!({ "command": "pwd" }),
+                }]),
+                rich_content: None,
+                created_at: chrono::Utc::now(),
+            },
+            Message {
+                id: "call_123|fc_456".to_owned(),
+                role: Role::Tool,
+                content: "ok".to_owned(),
+                tool_calls: None,
+                rich_content: None,
+                created_at: chrono::Utc::now(),
+            },
+        ];
+
+        let input = CodexResponsesProvider::map_input(&messages);
+
+        assert_eq!(input[0]["type"], "function_call");
+        assert_eq!(input[0]["call_id"], "call_123");
+        assert_eq!(input[0]["id"], "fc_456");
+        assert_eq!(input[1]["type"], "function_call_output");
+        assert_eq!(input[1]["call_id"], "call_123");
+        assert_eq!(input[1]["output"], "ok");
+    }
+
+    #[test]
+    fn map_input_keeps_plain_tool_call_ids_unchanged() {
+        let messages = vec![Message {
+            id: "call_plain".to_owned(),
+            role: Role::Tool,
+            content: "ok".to_owned(),
+            tool_calls: None,
+            rich_content: None,
+            created_at: chrono::Utc::now(),
+        }];
+
+        let input = CodexResponsesProvider::map_input(&messages);
+
+        assert_eq!(input[0]["call_id"], "call_plain");
+        assert!(input[0].get("id").is_none());
     }
 }

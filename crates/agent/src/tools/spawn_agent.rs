@@ -27,7 +27,7 @@ impl Tool for SpawnAgentTool {
     }
 
     fn description(&self) -> &str {
-        "Create a new custom agent template. The agent will be saved as a TOML file \
+        "Create a new custom agent template. The agent will be saved as a Markdown file \
          and immediately available for delegation. Use this when no existing agent \
          fits the user's specialized need."
     }
@@ -78,6 +78,8 @@ impl Tool for SpawnAgentTool {
             system_prompt: system_prompt.to_owned(),
             icon,
             model: None,
+            tools: None,
+            color: None,
         };
 
         let path = self.agent_manager.save(&template)?;
@@ -91,7 +93,7 @@ mod tests {
     use std::fs;
 
     #[tokio::test]
-    async fn creates_agent_toml_file() {
+    async fn creates_agent_md_file() {
         let dir = std::env::temp_dir().join(format!("test-spawn-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
         let mgr = Arc::new(AgentManager::new(dir.clone()));

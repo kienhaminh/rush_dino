@@ -347,6 +347,16 @@ export interface SessionSummary {
   activeRunCount: number;
   queuedRunCount: number;
   lastRunId?: string | null;
+  contextWindow?: {
+    provider?: string | null;
+    model?: string | null;
+    limitTokens?: number | null;
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+    totalTokens?: number | null;
+    usageRatio?: number | null;
+    measuredAt?: string | null;
+  };
 }
 
 export type GatewayAdapterStatus =

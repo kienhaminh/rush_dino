@@ -1,5 +1,4 @@
 use rushdino_common::{AppConfig, CredentialsConfig};
-use std::path::PathBuf;
 
 fn main() {
     let home = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".rushdino");

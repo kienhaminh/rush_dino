@@ -254,11 +254,8 @@ impl KnowledgeGraphService {
 fn list_memory_files(data_dir: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let root_memory = data_dir.join("MEMORY.md");
-    let legacy_memory = data_dir.join("memory").join("MEMORY.md");
     if root_memory.exists() {
         files.push(root_memory);
-    } else if legacy_memory.exists() {
-        files.push(legacy_memory);
     }
 
     for relative in ["SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md", "IDENTITY.md"] {
@@ -315,4 +312,34 @@ fn accumulate(total: &mut IngestStats, add: &IngestStats) {
     total.ingested = total.ingested.saturating_add(add.ingested);
     total.skipped = total.skipped.saturating_add(add.skipped);
     total.failed = total.failed.saturating_add(add.failed);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_data_dir() -> PathBuf {
+        std::env::temp_dir().join(format!("rushdino-kg-memory-{}", uuid::Uuid::new_v4()))
+    }
+
+    #[test]
+    fn list_memory_files_uses_root_memory_and_daily_files() {
+        let data_dir = temp_data_dir();
+        std::fs::create_dir_all(data_dir.join("memory").join("daily")).expect("daily dir");
+        std::fs::write(data_dir.join("MEMORY.md"), "# MEMORY\n\nroot\n").expect("root memory");
+        std::fs::write(data_dir.join("SOUL.md"), "# SOUL\n").expect("soul");
+        std::fs::write(
+            data_dir.join("memory").join("daily").join("2026-03-09.md"),
+            "# Daily\n",
+        )
+        .expect("daily memory");
+
+        let files = list_memory_files(&data_dir);
+
+        assert!(files.contains(&data_dir.join("MEMORY.md")));
+        assert!(files.contains(&data_dir.join("SOUL.md")));
+        assert!(files.contains(&data_dir.join("memory").join("daily").join("2026-03-09.md")));
+
+        let _ = std::fs::remove_dir_all(data_dir);
+    }
 }

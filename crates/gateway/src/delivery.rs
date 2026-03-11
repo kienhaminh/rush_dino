@@ -48,6 +48,11 @@ pub enum DeliveryJob {
         gateway_session_id: String,
         run_id: String,
     },
+    SetTyping {
+        channel_id: String,
+        recipient: String,
+        gateway_session_id: String,
+    },
 }
 
 impl DeliveryJob {
@@ -56,7 +61,8 @@ impl DeliveryJob {
             Self::Final { channel_id, .. }
             | Self::PreviewUpdate { channel_id, .. }
             | Self::PreviewFinalize { channel_id, .. }
-            | Self::PreviewClear { channel_id, .. } => channel_id,
+            | Self::PreviewClear { channel_id, .. }
+            | Self::SetTyping { channel_id, .. } => channel_id,
         }
     }
 }
@@ -218,6 +224,9 @@ impl DeliveryWorker {
             } => {
                 self.process_preview_clear(lifecycle, last_sent_at, &recipient, &run_id)
                     .await;
+            }
+            DeliveryJob::SetTyping { recipient, .. } => {
+                let _ = self.adapter.set_typing(&recipient).await;
             }
         }
     }

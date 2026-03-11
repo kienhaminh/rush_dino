@@ -158,6 +158,16 @@ impl Router {
         };
 
         let streaming_enabled = should_stream_preview(&msg);
+
+        let _ = self
+            .delivery
+            .enqueue(DeliveryJob::SetTyping {
+                channel_id: msg.channel_id.clone(),
+                recipient: msg.sender_id.clone(),
+                gateway_session_id: gateway_session.id.clone(),
+            })
+            .await;
+
         let run_handle = match engine
             .submit_gateway_run(
                 &gateway_session.id,

@@ -16,8 +16,8 @@ pub struct WebSearchTool {
 impl WebSearchTool {
     pub fn new(endpoint: String, api_key: Option<String>) -> Self {
         Self {
-            endpoint,
-            api_key,
+            endpoint: endpoint.trim().to_owned(),
+            api_key: api_key.map(|k| k.trim().to_owned()),
             allowed_external_hosts: Vec::new(),
         }
     }

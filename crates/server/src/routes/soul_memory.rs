@@ -4,6 +4,7 @@ use axum::{extract::State, Json};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
+use rushdino_agent::engine_bootstrap::system_message;
 use rushdino_common::Result;
 
 use crate::state::AppState;
@@ -38,10 +39,16 @@ pub async fn get_soul_memory_state(
     let soul = read_file_snapshot(&data_dir.join("SOUL.md"), "SOUL.md")?;
     let memory = read_memory_snapshot(&data_dir)?;
 
-    let identity_files = ["IDENTITY.md", "USER.md", "AGENTS.md", "TOOLS.md", "HEARTBEAT.md"]
-        .into_iter()
-        .map(|name| read_file_snapshot(&data_dir.join(name), name))
-        .collect::<Result<Vec<_>>>()?;
+    let identity_files = [
+        "IDENTITY.md",
+        "USER.md",
+        "AGENTS.md",
+        "TOOLS.md",
+        "HEARTBEAT.md",
+    ]
+    .into_iter()
+    .map(|name| read_file_snapshot(&data_dir.join(name), name))
+    .collect::<Result<Vec<_>>>()?;
 
     let mut daily_files = fs::read_dir(data_dir.join("memory").join("daily"))?
         .filter_map(|entry| entry.ok())
@@ -102,10 +109,51 @@ fn read_file_snapshot(path: &Path, label: &str) -> Result<SoulMemoryFile> {
 }
 
 fn read_memory_snapshot(data_dir: &Path) -> Result<SoulMemoryFile> {
-    let canonical = data_dir.join("MEMORY.md");
-    if canonical.exists() {
-        return read_file_snapshot(&canonical, "MEMORY.md");
+    read_file_snapshot(&data_dir.join("MEMORY.md"), "MEMORY.md")
+}
+
+/// Returns the effective system prompt that is sent to the provider on every
+/// request but never persisted to the conversation store.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemPromptResponse {
+    pub content: String,
+    pub token_estimate: usize,
+}
+
+pub async fn get_system_prompt(
+    State(state): State<AppState>,
+) -> Result<Json<SystemPromptResponse>> {
+    let engine = state.runtime.engine()?;
+    let msg = system_message(engine.config(), engine.memory(), engine.agent_manager(), engine.skill_manager());
+    let content = msg.content.clone();
+    let token_estimate = content.len() / 4;
+    Ok(Json(SystemPromptResponse {
+        content,
+        token_estimate,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_data_dir() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("rushdino-soul-memory-{}", uuid::Uuid::new_v4()))
     }
 
-    read_file_snapshot(&data_dir.join("memory").join("MEMORY.md"), "MEMORY.md")
+    #[test]
+    fn reads_root_memory_snapshot() {
+        let data_dir = temp_data_dir();
+        fs::create_dir_all(&data_dir).expect("data dir");
+        fs::write(data_dir.join("MEMORY.md"), "# MEMORY\n\nroot\n").expect("root memory");
+
+        let snapshot = read_memory_snapshot(&data_dir).expect("memory snapshot");
+
+        assert!(snapshot.exists);
+        assert_eq!(snapshot.name, "MEMORY.md");
+        assert!(snapshot.content.contains("root"));
+
+        let _ = fs::remove_dir_all(data_dir);
+    }
 }

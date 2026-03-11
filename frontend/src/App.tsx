@@ -22,8 +22,10 @@ import { CronPage } from './pages/cron/CronPage';
 import { ConfigPage } from './pages/config/ConfigPage';
 import { DiagnosticsPage } from './pages/diagnostics/DiagnosticsPage';
 import { DebugPage } from './pages/debug/DebugPage';
+import { ContextDebugRoute } from './pages/context-debug/ContextDebugRoute';
 import { LogsPage } from './pages/logs/LogsPage';
 import { NotFoundPage } from './pages/not-found/NotFoundPage';
+import { DesignSystemPage } from './pages/design-system/DesignSystemPage';
 
 export default function App() {
   return (
@@ -57,7 +59,11 @@ export default function App() {
           <Route path="config" element={<ConfigPage />} />
           <Route path="diagnostics" element={<DiagnosticsPage />} />
           <Route path="debug" element={<DebugPage />} />
+          <Route path="context-debug" element={<ContextDebugRoute />} />
           <Route path="logs" element={<LogsPage />} />
+
+          {/* Design system */}
+          <Route path="design-system" element={<DesignSystemPage />} />
 
           {/* Catch-all */}
           <Route path="*" element={<NotFoundPage />} />

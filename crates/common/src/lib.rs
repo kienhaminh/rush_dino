@@ -5,6 +5,7 @@ pub mod error;
 pub mod init;
 pub mod models;
 pub mod rich_content;
+pub mod skills;
 pub mod templates;
 pub mod workflow_templates;
 

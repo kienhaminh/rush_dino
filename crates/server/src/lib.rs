@@ -388,6 +388,10 @@ pub async fn run_server() -> Result<()> {
             get(routes::soul_memory::get_soul_memory_state),
         )
         .route(
+            "/api/system/prompt",
+            get(routes::soul_memory::get_system_prompt),
+        )
+        .route(
             "/api/usage/metrics",
             get(routes::usage_metrics::get_usage_metrics),
         )

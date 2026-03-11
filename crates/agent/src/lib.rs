@@ -5,13 +5,12 @@ pub mod context;
 pub mod conversation;
 mod conversation_mapper;
 pub mod engine;
-mod engine_bootstrap;
+pub mod engine_bootstrap;
 pub mod job_manager;
 pub mod knowledge_graph;
 pub mod memory;
 pub mod orchestrator;
 pub mod react_loop;
-pub mod router;
 pub mod runtime;
 pub mod skill_manager;
 pub mod system_broker;
@@ -37,7 +36,7 @@ pub use runtime::{
 pub use skill_manager::{Skill, SkillManager};
 pub use system_broker::{SharedSystemBroker, ShellExecRequest, ShellExecResult, SystemBroker};
 pub use tool_registry::{Tool, ToolRegistry};
-pub use usage_metrics_store::{UsageMetricRow, UsageMetricsStore};
+pub use usage_metrics_store::{UsageMetricRow, UsageMetricSnapshot, UsageMetricsStore};
 pub use workflow_types::{
     CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem, WorkflowRunDetail,
     WorkflowRunListItem, WorkflowRunStartResponse, WorkflowSource, WorkflowStatus,

@@ -17,6 +17,7 @@ Guidelines for good agent design:
 - description should be one sentence summarizing the domain
 - Include explicit instructions on when to delegate to other agents
 - Keep system prompts focused — one agent, one domain
+- Always use English when writing or updating agent system prompts and descriptions
 
 After creating the agent, you can immediately delegate tasks to it via delegate_to_agent.
 """

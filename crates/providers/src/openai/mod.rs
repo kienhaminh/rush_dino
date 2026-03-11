@@ -8,7 +8,7 @@ use rushdino_common::{AppError, Result};
 use crate::types::{ChatChunk, ChatRequest, ChatResponse};
 
 use self::mapping::{
-    map_openai_message, map_openai_tools, parse_openai_response, parse_tool_calls,
+    map_openai_message, map_openai_tools, parse_openai_response,
 };
 
 pub mod codex_refresh;
@@ -27,9 +27,9 @@ impl OpenAIProvider {
     pub fn new(base_url: String, model: String, api_key: Option<String>) -> Self {
         Self {
             client: Client::new(),
-            base_url,
-            model,
-            api_key,
+            base_url: base_url.trim().to_owned(),
+            model: model.trim().to_owned(),
+            api_key: api_key.map(|k| k.trim().to_owned()),
         }
     }
 
@@ -83,6 +83,8 @@ impl OpenAIProvider {
             "stream": true,
         });
 
+        tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "openai stream_chat request");
+
         let mut req = self
             .client
             .post(format!(
@@ -108,6 +110,11 @@ impl OpenAIProvider {
         tokio::spawn(async move {
             let mut stream = response.bytes_stream();
             let mut buffer = String::new();
+            // Accumulate streaming tool call deltas by index.
+            // OpenAI sends the id+name in the first delta and argument fragments
+            // in subsequent deltas — each with the same index but no name.
+            let mut pending: std::collections::HashMap<usize, (String, String, String)> =
+                std::collections::HashMap::new();
 
             while let Some(item) = stream.next().await {
                 let Ok(chunk) = item else {
@@ -124,10 +131,24 @@ impl OpenAIProvider {
                     }
                     let data = line.trim_start_matches("data:").trim();
                     if data == "[DONE]" {
+                        // Emit all completed tool calls before signalling done.
+                        let mut completed: Vec<_> = pending.drain().collect();
+                        completed.sort_by_key(|(index, _)| *index);
+                        let tool_calls = completed
+                            .into_iter()
+                            .filter_map(|(_, (id, name, args_str))| {
+                                if name.is_empty() {
+                                    return None;
+                                }
+                                let arguments =
+                                    serde_json::from_str(&args_str).unwrap_or_else(|_| json!({}));
+                                Some(rushdino_common::models::ToolCall { id, name, arguments })
+                            })
+                            .collect::<Vec<_>>();
                         let _ = tx
                             .send(ChatChunk {
                                 delta: String::new(),
-                                tool_calls: Vec::new(),
+                                tool_calls,
                                 done: true,
                             })
                             .await;
@@ -140,15 +161,47 @@ impl OpenAIProvider {
                             .and_then(Value::as_str)
                             .unwrap_or_default()
                             .to_owned();
-                        let tool_calls =
-                            parse_tool_calls(value.pointer("/choices/0/delta/tool_calls"));
-                        let _ = tx
-                            .send(ChatChunk {
-                                delta,
-                                tool_calls,
-                                done: false,
-                            })
-                            .await;
+
+                        // Merge streaming tool call deltas into pending map.
+                        if let Some(Value::Array(calls)) =
+                            value.pointer("/choices/0/delta/tool_calls")
+                        {
+                            for call in calls {
+                                let Some(index) = call.get("index").and_then(Value::as_u64) else {
+                                    continue;
+                                };
+                                let index = index as usize;
+                                let entry = pending.entry(index).or_insert_with(|| {
+                                    let id = call
+                                        .get("id")
+                                        .and_then(Value::as_str)
+                                        .unwrap_or_default()
+                                        .to_owned();
+                                    let name = call
+                                        .pointer("/function/name")
+                                        .and_then(Value::as_str)
+                                        .unwrap_or_default()
+                                        .to_owned();
+                                    (id, name, String::new())
+                                });
+                                if let Some(args_delta) = call
+                                    .pointer("/function/arguments")
+                                    .and_then(Value::as_str)
+                                {
+                                    entry.2.push_str(args_delta);
+                                }
+                            }
+                        }
+
+                        if !delta.is_empty() {
+                            let _ = tx
+                                .send(ChatChunk {
+                                    delta,
+                                    tool_calls: Vec::new(),
+                                    done: false,
+                                })
+                                .await;
+                        }
                     }
                 }
             }

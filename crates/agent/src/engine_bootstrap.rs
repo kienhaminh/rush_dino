@@ -25,9 +25,10 @@ use crate::{
         create_workflow::CreateWorkflowTool, delegate_to_agent::DelegateToAgentTool,
         file_edit::FileEditTool, file_read::FileReadTool,
         knowledge_graph_query::KnowledgeGraphQueryTool, list_skills::ListSkillsTool,
-        memory_read::MemoryReadTool, memory_write::MemoryWriteTool,
-        present_message::PresentMessageTool, shell_exec::ShellExecTool,
-        spawn_agent::SpawnAgentTool, spawn_sub_agent::SpawnSubAgentTool, web_search::WebSearchTool,
+        memory_search::MemorySearchTool,
+        memory_write::MemoryWriteTool, present_message::PresentMessageTool,
+        read_skill::ReadSkillTool, shell_exec::ShellExecTool, spawn_agent::SpawnAgentTool,
+        spawn_sub_agent::SpawnSubAgentTool, web_search::WebSearchTool,
     },
     workflow_manager::WorkflowManager,
 };
@@ -71,6 +72,10 @@ pub fn build_engine_deps(
 
     let agent_manager = Arc::new(AgentManager::new(home_dir.join("agents")));
 
+    // ConversationManager is constructed before the cyclic closure because
+    // DelegateToAgentTool needs it to create isolated sub-conversations.
+    let conversation = Arc::new(ConversationManager::new(pool.clone()));
+
     // Clone all variables needed inside the Arc::new_cyclic closure before it
     // captures them. The closure is SYNC so all construction inside must be sync.
     let task_memory_c = task_memory.clone();
@@ -89,6 +94,7 @@ pub fn build_engine_deps(
     let system_broker_c = system_broker.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
+    let conversation_c = conversation.clone();
 
     // Arc::new_cyclic allows DelegateToAgentTool to hold a Weak<ToolRegistry>
     // that points back to the registry being constructed, avoiding a retain cycle.
@@ -99,6 +105,7 @@ pub fn build_engine_deps(
             config_c,
             weak_registry.clone(),
             task_memory_c,
+            conversation_c,
         );
 
         let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
@@ -112,7 +119,7 @@ pub fn build_engine_deps(
         r.register(FileEditTool::new());
         r.register(shell_exec);
         r.register(PresentMessageTool::new());
-        r.register(MemoryReadTool::new(memory_c.clone()));
+        r.register(MemorySearchTool::new(memory_c.clone()));
         r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
         r.register(CreateJobTool::new(jobs_c));
         r.register(CreateWorkflowTool::new(
@@ -120,6 +127,7 @@ pub fn build_engine_deps(
             agent_manager_c3,
         ));
         r.register(SpawnSubAgentTool::new(orchestrator_c));
+        r.register(ReadSkillTool::new(skills_c.clone()));
         r.register(CreateSkillTool::new(skills_c.clone()));
         r.register(ListSkillsTool::new(skills_c));
         if let Some(graph) = graph_c {
@@ -132,7 +140,7 @@ pub fn build_engine_deps(
 
     Ok(EngineDeps {
         pool: pool.clone(),
-        conversation: Arc::new(ConversationManager::new(pool)),
+        conversation,
         tool_registry: registry,
         job_manager: jobs,
         orchestrator,
@@ -186,28 +194,99 @@ mod tests {
     }
 }
 
+/// Builds a compact bullet list of all registered agents for injection into the system prompt.
+/// Only reads frontmatter (name, description, icon) — the full system prompt body is not loaded.
+pub fn build_agent_index(agent_manager: &AgentManager) -> String {
+    let agents = agent_manager.list();
+    if agents.is_empty() {
+        return String::new();
+    }
+
+    let mut lines = vec!["## Available Agents".to_owned(), String::new()];
+    for agent in &agents {
+        let icon_part = agent
+            .icon
+            .as_deref()
+            .map(|i| format!(" {i}"))
+            .unwrap_or_default();
+        lines.push(format!(
+            "- **{}**{} — {}",
+            agent.name, icon_part, agent.description
+        ));
+    }
+    lines.push(String::new());
+    lines.push("Use `delegate_to_agent` to assign a task to any agent above.".to_owned());
+    lines.join("\n")
+}
+
+pub fn build_skill_index(skill_manager: &SkillManager) -> String {
+    let skills = skill_manager.list().unwrap_or_default();
+    if skills.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec!["## Available Skills".to_owned(), String::new()];
+    for skill in &skills {
+        lines.push(format!("- **{}** — {}", skill.name, skill.description));
+    }
+    lines.push(String::new());
+    lines.push(
+        "Use `read_skill` to load a skill's full instructions before applying it.".to_owned(),
+    );
+    lines.join("\n")
+}
+
 pub fn system_message(
     config: &AgentConfig,
     memory: &MemoryManager,
     agent_manager: &AgentManager,
+    skill_manager: &SkillManager,
 ) -> Message {
-    // Use general-assistant system prompt; fall back to config.system_prompt
-    let agent_prompt = agent_manager
-        .get("general-assistant")
-        .map(|a| a.system_prompt)
-        .unwrap_or_else(|| config.system_prompt.clone());
+    // AGENTS.md is the primary system prompt — it defines identity and behavior.
+    // Fall back to config.system_prompt if the file does not exist yet.
+    let agent_prompt = memory
+        .read_named("AGENTS.md")
+        .unwrap_or_else(|_| config.system_prompt.clone());
 
-    let runtime_capabilities = "Runtime rules for this RushDino session:\n- You can use the registered RushDino tools when needed.\n- Do not claim generic sandbox or policy restrictions such as not being able to read files, run shell commands, or inspect the local environment unless a specific tool call actually fails.\n- When a task requires local inspection or modification, prefer using the available tools over asking the user to do manual terminal work.\n- Use `present_message` only when buttons, images, or explicit layout materially improve the answer. Keep `fallbackText` concise and complete.\n- If a tool is unavailable or blocked, state the concrete tool failure and adapt from there.";
+    // If BOOTSTRAP.md exists the workspace has never been onboarded.
+    // Use it as the sole system prompt so the agent focuses entirely on the
+    // onboarding ritual. The engine deletes BOOTSTRAP.md automatically once
+    // IDENTITY.md exists — no agent action required.
+    if let Ok(bootstrap) = memory.read_named("BOOTSTRAP.md") {
+        return Message {
+            id: Uuid::new_v4().to_string(),
+            role: Role::System,
+            content: bootstrap,
+            tool_calls: None,
+            rich_content: None,
+            created_at: Utc::now(),
+        };
+    }
+
+    let agent_index = build_agent_index(agent_manager);
+    let skill_index = build_skill_index(skill_manager);
+
+    // Memory files (SOUL.md, USER.md, TOOLS.md, MEMORY.md, etc.) are NOT merged
+    // here — the agent reads them on demand via the `memory_search` / `memory_write` tools.
+    //
+    // Exception: BOOT.md is a persistent startup checklist injected every session.
+    let boot = memory.read_named("BOOT.md").ok();
+
+    let mut parts = vec![agent_prompt];
+    if !agent_index.is_empty() {
+        parts.push(agent_index);
+    }
+    if !skill_index.is_empty() {
+        parts.push(skill_index);
+    }
+    if let Some(b) = boot {
+        parts.push(b);
+    }
+    let content = parts.join("\n\n");
 
     Message {
         id: Uuid::new_v4().to_string(),
         role: Role::System,
-        content: format!(
-            "{}\n\n{}\n\n{}",
-            agent_prompt,
-            runtime_capabilities,
-            memory.load_context().unwrap_or_default()
-        ),
+        content,
         tool_calls: None,
         rich_content: None,
         created_at: Utc::now(),

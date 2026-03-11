@@ -447,6 +447,20 @@ async fn append_tool_outputs(
         let base_taint = base_taint.clone();
         let event_tx = event_tx.cloned();
         async move {
+            if call.name.is_empty() {
+                tracing::warn!(
+                    id = %call.id,
+                    args = %serde_json::to_string(&call.arguments).unwrap_or_default(),
+                    "skipping tool call with empty name — likely a malformed provider response"
+                );
+                return (call, "tool call skipped: empty tool name".to_owned(), true);
+            }
+
+            tracing::info!(
+                tool = %call.name,
+                args = %serde_json::to_string(&call.arguments).unwrap_or_default(),
+                "tool call started"
+            );
             if let Some(event_tx) = event_tx.as_ref() {
                 let _ = event_tx
                     .send(StreamingEvent::ToolStart {
@@ -499,6 +513,12 @@ async fn append_tool_outputs(
                     Ok(value) => (call, value, false),
                     Err(err) => (call, err.to_string(), true),
                 };
+                tracing::info!(
+                    tool = %result.0.name,
+                    is_error = result.2,
+                    result = %result.1.chars().take(200).collect::<String>(),
+                    "tool call finished"
+                );
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
                         .send(StreamingEvent::ToolEnd {
@@ -510,6 +530,7 @@ async fn append_tool_outputs(
                 }
                 result
             } else {
+                tracing::warn!(tool = %call.name, "tool call failed: tool not found");
                 let result = (call, "tool not found".to_owned(), true);
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
@@ -538,7 +559,7 @@ async fn append_tool_outputs(
             output
         };
         messages.push(Message {
-            id: Uuid::new_v4().to_string(),
+            id: call.id.clone(),
             role: Role::Tool,
             content: payload,
             tool_calls: None,

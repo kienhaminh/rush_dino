@@ -62,10 +62,24 @@ pub async fn run_bot(
             }
 
             let conv_id = format!("tg-{}", msg.chat.id.0);
+
+            let action_bot = bot.clone();
+            let action_chat_id = msg.chat.id;
+            let typing_task = tokio::spawn(async move {
+                loop {
+                    let _ = action_bot
+                        .send_chat_action(action_chat_id, teloxide::types::ChatAction::Typing)
+                        .await;
+                    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+                }
+            });
+
             let reply = match engine.chat(&conv_id, text).await {
                 Ok(response) => response.content,
                 Err(err) => format!("Agent error: {err}"),
             };
+
+            typing_task.abort();
 
             for chunk in split_message(&escape_html(&reply), 4096) {
                 let _ = bot

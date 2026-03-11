@@ -19,6 +19,16 @@ pub struct UsageMetricRow {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct UsageMetricSnapshot {
+    pub provider: String,
+    pub model: String,
+    pub prompt_tokens: i64,
+    pub completion_tokens: i64,
+    pub total_tokens: i64,
+    pub created_at: String,
+}
+
 pub struct UsageMetricsStore {
     pool: Arc<SqlitePool>,
 }
@@ -97,5 +107,30 @@ impl UsageMetricsStore {
                 created_at: row.get("created_at"),
             })
             .collect())
+    }
+
+    pub async fn latest_usage_for_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Option<UsageMetricSnapshot>> {
+        let row = sqlx::query(
+            "SELECT provider, model, prompt_tokens, completion_tokens, total_tokens, created_at \
+             FROM usage_metrics \
+             WHERE conversation_id = ?1 \
+             ORDER BY created_at DESC \
+             LIMIT 1",
+        )
+        .bind(conversation_id)
+        .fetch_optional(self.pool.as_ref())
+        .await?;
+
+        Ok(row.map(|row| UsageMetricSnapshot {
+            provider: row.get("provider"),
+            model: row.get("model"),
+            prompt_tokens: row.get("prompt_tokens"),
+            completion_tokens: row.get("completion_tokens"),
+            total_tokens: row.get("total_tokens"),
+            created_at: row.get("created_at"),
+        }))
     }
 }

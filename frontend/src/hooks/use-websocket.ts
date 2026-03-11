@@ -21,11 +21,17 @@ export function useWebSocket(
   onConversationStarted?: OnConversationStarted,
 ) {
   const [items, setItems] = useState<ConversationItem[]>([]);
-  const [activeAgent, setActiveAgent] = useState<ActiveAgent>({ name: 'Orchestrator', role: 'orchestrator' });
+  const [activeAgent, setActiveAgent] = useState<ActiveAgent>({
+    name: 'Orchestrator',
+    role: 'orchestrator',
+  });
   const [isConnected, setIsConnected] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   // Track which conversation is currently streaming so we can ignore cross-conversation events
   const streamingConvIdRef = useRef<string | null>(null);
+  // Holds the conversation_id of the most recently completed stream so that the
+  // AssistantMessage event (sent after the done:true chunk) can still be applied.
+  const lastStreamedConvIdRef = useRef<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
 
@@ -73,6 +79,7 @@ export function useWebSocket(
     };
 
     socket.onclose = () => {
+      if (socketRef.current !== socket) return;
       setIsConnected(false);
       const wait = Math.min(1000 * 2 ** reconnectRef.current, 30_000);
       reconnectRef.current += 1;
@@ -84,6 +91,9 @@ export function useWebSocket(
 
       if (msg.type === 'chat_chunk') {
         if (msg.done) {
+          // Save the conv id before clearing so the subsequent AssistantMessage
+          // event (which arrives after done:true) can still be matched.
+          lastStreamedConvIdRef.current = streamingConvIdRef.current;
           setIsStreaming(false);
           streamingConvIdRef.current = null;
           setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
@@ -104,7 +114,12 @@ export function useWebSocket(
           if (last && last.kind === 'assistant' && last.runId === (msg.run_id ?? null)) {
             return [
               ...prev.slice(0, -1),
-              { ...last, content: last.content + msg.delta, richContent: null, runId: msg.run_id ?? null },
+              {
+                ...last,
+                content: last.content + msg.delta,
+                richContent: null,
+                runId: msg.run_id ?? null,
+              },
             ];
           }
           return [
@@ -129,10 +144,12 @@ export function useWebSocket(
       if (msg.type === 'assistant_message') {
         const shouldApply =
           msg.conversation_id === activeConversationId ||
-          msg.conversation_id === streamingConvIdRef.current;
+          msg.conversation_id === streamingConvIdRef.current ||
+          msg.conversation_id === lastStreamedConvIdRef.current;
         if (!shouldApply) {
           return;
         }
+        lastStreamedConvIdRef.current = null;
         setItems((prev) =>
           replaceAssistantItem(prev, {
             content: msg.content,
@@ -169,9 +186,12 @@ export function useWebSocket(
           setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
         }
         setItems((prev) => {
-          const reversedIdx = [...prev].reverse().findIndex(
-            (it) => it.kind === 'tool_use' && it.tool_name === msg.tool_name && it.status === 'running',
-          );
+          const reversedIdx = [...prev]
+            .reverse()
+            .findIndex(
+              (it) =>
+                it.kind === 'tool_use' && it.tool_name === msg.tool_name && it.status === 'running',
+            );
           if (reversedIdx === -1) return prev;
           const realIdx = prev.length - 1 - reversedIdx;
           const existing = prev[realIdx];
@@ -234,7 +254,10 @@ export function useWebSocket(
   const sendMessage = useCallback(
     (text: string) => {
       if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-      setItems((prev) => [...prev, { kind: 'user' as const, id: crypto.randomUUID(), content: text }]);
+      setItems((prev) => [
+        ...prev,
+        { kind: 'user' as const, id: crypto.randomUUID(), content: text },
+      ]);
       setIsStreaming(true);
       setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
       socketRef.current.send(

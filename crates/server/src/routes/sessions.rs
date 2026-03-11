@@ -3,8 +3,22 @@ use chrono::{Duration, Utc};
 use serde::Serialize;
 
 use rushdino_common::Result;
+use rushdino_providers::catalog::context_window_for_model;
 
 use crate::state::AppState;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionContextWindowSummary {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub limit_tokens: Option<u32>,
+    pub prompt_tokens: Option<i64>,
+    pub completion_tokens: Option<i64>,
+    pub total_tokens: Option<i64>,
+    pub usage_ratio: Option<f64>,
+    pub measured_at: Option<String>,
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +35,7 @@ pub struct SessionSummary {
     pub active_run_count: usize,
     pub queued_run_count: usize,
     pub last_run_id: Option<String>,
+    pub context_window: SessionContextWindowSummary,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,6 +78,28 @@ pub async fn list_sessions(State(state): State<AppState>) -> Result<Json<Session
             .filter(|run| run.state == rushdino_agent::RunState::Queued)
             .count();
         let last_message = messages.last();
+        let latest_usage = engine
+            .latest_usage_metric(&conversation.id)
+            .await
+            .ok()
+            .flatten();
+        let latest_run = runs.first();
+        let model = latest_usage
+            .as_ref()
+            .map(|usage| usage.model.clone())
+            .or_else(|| latest_run.map(|run| run.model.clone()));
+        let provider = latest_usage
+            .as_ref()
+            .map(|usage| usage.provider.clone())
+            .or_else(|| latest_run.map(|run| run.provider.clone()));
+        let limit_tokens = model.as_deref().and_then(context_window_for_model);
+        let prompt_tokens = latest_usage.as_ref().map(|usage| usage.prompt_tokens);
+        let completion_tokens = latest_usage.as_ref().map(|usage| usage.completion_tokens);
+        let total_tokens = latest_usage.as_ref().map(|usage| usage.total_tokens);
+        let usage_ratio = match (prompt_tokens, limit_tokens) {
+            (Some(prompt), Some(limit)) if limit > 0 => Some(prompt as f64 / f64::from(limit)),
+            _ => None,
+        };
         let status = if pending_approval_count > 0 {
             "awaiting_approval"
         } else if runs
@@ -90,7 +127,17 @@ pub async fn list_sessions(State(state): State<AppState>) -> Result<Json<Session
             pending_approval_count,
             active_run_count,
             queued_run_count,
-            last_run_id: runs.first().map(|run| run.id.clone()),
+            last_run_id: latest_run.map(|run| run.id.clone()),
+            context_window: SessionContextWindowSummary {
+                provider,
+                model,
+                limit_tokens,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+                usage_ratio,
+                measured_at: latest_usage.map(|usage| usage.created_at),
+            },
         });
     }
 

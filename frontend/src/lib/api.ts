@@ -85,6 +85,13 @@ export async function fetchConversations(): Promise<Conversation[]> {
   return data.items ?? [];
 }
 
+function normalizeSessionSummary(session: SessionSummary): SessionSummary {
+  return {
+    ...session,
+    contextWindow: session.contextWindow ?? {},
+  };
+}
+
 export async function fetchConversation(id: string): Promise<{ id: string; messages: Message[] }> {
   const response = await fetch(`/api/conversations/${id}`);
   return parseJsonOrThrow(response, `/api/conversations/${id}`);
@@ -143,6 +150,12 @@ export async function fetchAgentProgressBoard(params?: {
     query.set('active_window_seconds', String(params.activeWindowSeconds));
   }
   const endpoint = `/api/agents/progress${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchSystemPrompt(): Promise<{ content: string; tokenEstimate: number }> {
+  const endpoint = '/api/system/prompt';
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
 }
@@ -269,6 +282,13 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunDetail
   return parseJsonOrThrow(response, endpoint);
 }
 
+export async function fetchSessions(): Promise<SessionSummary[]> {
+  const endpoint = '/api/sessions';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return (data.items ?? []).map(normalizeSessionSummary);
+}
+
 export async function fetchLogs(params?: {
   level?: string[];
   q?: string;
@@ -356,13 +376,6 @@ export async function fetchDoctorReport(): Promise<DoctorReportResponse> {
   const endpoint = '/api/system/doctor';
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
-}
-
-export async function fetchSessions(): Promise<SessionSummary[]> {
-  const endpoint = '/api/sessions';
-  const response = await fetch(endpoint);
-  const data = await parseJsonOrThrow(response, endpoint);
-  return data.items ?? [];
 }
 
 export async function fetchGatewaySummary(): Promise<GatewaySummaryResponse> {

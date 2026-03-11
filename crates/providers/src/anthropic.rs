@@ -18,14 +18,16 @@ impl AnthropicProvider {
     pub fn new(model: String, api_key: String) -> Self {
         Self {
             client: Client::new(),
-            model,
-            api_key,
+            model: model.trim().to_owned(),
+            api_key: api_key.trim().to_owned(),
         }
     }
 
     pub async fn chat(&self, mut request: ChatRequest) -> Result<ChatResponse> {
         let model = request.model.take().unwrap_or_else(|| self.model.clone());
         let body = to_anthropic_body(request, model, false);
+
+        tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic chat request");
 
         let payload: Value = self
             .client
@@ -85,6 +87,8 @@ impl AnthropicProvider {
         let (tx, rx) = mpsc::channel(128);
         let model = request.model.clone().unwrap_or_else(|| self.model.clone());
         let body = to_anthropic_body(request, model, true);
+
+        tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic stream_chat request");
 
         let response = self
             .client

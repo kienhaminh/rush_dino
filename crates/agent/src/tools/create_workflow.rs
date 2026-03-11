@@ -176,6 +176,8 @@ mod tests {
                 system_prompt: "You are helpful".to_owned(),
                 icon: None,
                 model: None,
+                tools: None,
+                color: None,
             })
             .expect("save template");
 

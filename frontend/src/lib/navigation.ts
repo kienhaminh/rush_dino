@@ -16,6 +16,7 @@ import {
   Stethoscope,
   Activity,
   Waypoints,
+  ScanSearch,
 } from 'lucide-react';
 
 export const TAB_GROUPS = [
@@ -25,7 +26,7 @@ export const TAB_GROUPS = [
     tabs: ['overview', 'soul-memory', 'gateway', 'approvals', 'sessions', 'logs', 'metrics', 'cron'],
   },
   { label: 'connectivity', tabs: ['instances'] },
-  { label: 'system', tabs: ['config', 'diagnostics', 'nodes', 'debug'] },
+  { label: 'system', tabs: ['config', 'diagnostics', 'nodes', 'debug', 'context-debug'] },
 ] as const;
 
 export type Tab =
@@ -47,6 +48,7 @@ export type Tab =
   | 'config'
   | 'diagnostics'
   | 'debug'
+  | 'context-debug'
   | 'logs';
 
 export const TAB_ICONS: Record<Tab, any> = {
@@ -68,6 +70,7 @@ export const TAB_ICONS: Record<Tab, any> = {
   config: Settings,
   diagnostics: Stethoscope,
   debug: Bug,
+  'context-debug': ScanSearch,
   logs: ScrollText,
 };
 
@@ -90,6 +93,7 @@ export const TAB_LABELS: Record<Tab, string> = {
   config: 'Config',
   diagnostics: 'Diagnostics',
   debug: 'Debug',
+  'context-debug': 'Context Debug',
   logs: 'Logs',
 };
 
@@ -112,5 +116,6 @@ export const TAB_DESCRIPTIONS: Record<Tab, string> = {
   config: 'Provider profiles, credentials, models, and server policy',
   diagnostics: 'Doctor findings, recovery signals, and repair guidance',
   debug: 'System debugging tools',
+  'context-debug': 'Deep-dive into agent context: messages, tool calls, token budget, and memory state',
   logs: 'System operation logs and audit trail',
 };

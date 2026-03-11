@@ -56,6 +56,11 @@ pub trait ChannelAdapter: Send + Sync + 'static {
     /// Deliver a response to `recipient` (platform-specific id) on this channel.
     async fn send_message(&self, recipient: &str, msg: OutgoingMessage) -> Result<()>;
 
+    /// Set typing indicator for a recipient.
+    async fn set_typing(&self, _recipient: &str) -> Result<()> {
+        Ok(())
+    }
+
     /// Deliver and optionally report that a native attempt degraded successfully.
     async fn send_message_with_outcome(
         &self,

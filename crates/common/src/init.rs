@@ -5,6 +5,7 @@ use std::{
 
 use crate::agents::BUNDLED_AGENTS;
 use crate::error::Result;
+use crate::skills::BUNDLED_SKILL_FILES;
 use crate::templates::{self, get_template};
 
 /// Returns the RushDino data directory. Default is always `~/.rushdino`.
@@ -109,9 +110,18 @@ pub fn ensure_rushdino_dir_at(home: &Path) -> Result<()> {
     // Write bundled agent templates (skip if already exist)
     for (name, content) in BUNDLED_AGENTS {
         write_if_missing(
-            &home.join("agents").join(format!("{name}.toml")),
+            &home.join("agents").join(format!("{name}.md")),
             content.as_bytes(),
         )?;
+    }
+
+    // Write bundled skill templates (skip if already exist)
+    for (relative_path, content) in BUNDLED_SKILL_FILES {
+        let full_path = home.join("skills").join(relative_path);
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        write_if_missing(&full_path, content.as_bytes())?;
     }
 
     Ok(())
@@ -126,17 +136,9 @@ fn write_if_missing(path: &Path, content: &[u8]) -> Result<()> {
 
 fn ensure_memory_file(home: &Path) -> Result<()> {
     let canonical = home.join("MEMORY.md");
-    if canonical.exists() {
-        return Ok(());
+    if !canonical.exists() {
+        fs::write(&canonical, b"# MEMORY\n\n")?;
     }
-
-    let legacy = home.join("memory").join("MEMORY.md");
-    if legacy.exists() {
-        fs::copy(&legacy, &canonical)?;
-        return Ok(());
-    }
-
-    fs::write(&canonical, b"# MEMORY\n\n")?;
     Ok(())
 }
 

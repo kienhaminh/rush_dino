@@ -14,7 +14,9 @@ use rushdino_providers::Provider;
 use crate::{
     agent_manager::AgentManager,
     agent_task_memory::AgentTaskMemory,
+    conversation::ConversationManager,
     engine::AgentConfig,
+    engine_bootstrap::title_from,
     react_loop::run_react_loop,
     tool_registry::{Tool, ToolRegistry},
     tools::shell_exec::{
@@ -28,10 +30,10 @@ pub const MAX_DELEGATION_DEPTH: u8 = 3;
 
 /// Allows any agent to hand off a task to a named specialist agent.
 ///
-/// The tool looks up the target agent's system prompt from [`AgentManager`],
-/// builds a fresh message list (system + user task), and runs a nested
-/// [`run_react_loop`]. A [`Weak`] reference to [`ToolRegistry`] is held to
-/// avoid a reference cycle: `ToolRegistry → DelegateToAgentTool → ToolRegistry`.
+/// Each delegation creates an isolated conversation in the database so the
+/// sub-agent's message history is fully persisted and traceable. A [`Weak`]
+/// reference to [`ToolRegistry`] is held to avoid a reference cycle:
+/// `ToolRegistry → DelegateToAgentTool → ToolRegistry`.
 pub struct DelegateToAgentTool {
     agent_manager: Arc<AgentManager>,
     provider: Arc<Provider>,
@@ -39,6 +41,7 @@ pub struct DelegateToAgentTool {
     /// Weak reference prevents a retain-cycle with the registry that owns this tool.
     registry: Weak<ToolRegistry>,
     task_memory: Arc<AgentTaskMemory>,
+    conversation: Arc<ConversationManager>,
 }
 
 impl DelegateToAgentTool {
@@ -48,6 +51,7 @@ impl DelegateToAgentTool {
         config: AgentConfig,
         registry: Weak<ToolRegistry>,
         task_memory: Arc<AgentTaskMemory>,
+        conversation: Arc<ConversationManager>,
     ) -> Self {
         Self {
             agent_manager,
@@ -55,6 +59,7 @@ impl DelegateToAgentTool {
             config,
             registry,
             task_memory,
+            conversation,
         }
     }
 }
@@ -66,13 +71,8 @@ impl Tool for DelegateToAgentTool {
     }
 
     fn description(&self) -> &str {
-        "Delegate the current task to a more suitable specialist agent. \
-         Use this when you determine the task is outside your domain. \
-         Available agents: brainstormer, code-simplifier, general-assistant, code-reviewer, \
-         debugger, docs-manager, fullstack-developer, git-manager, journal-writer, \
-         mcp-manager, project-manager, researcher, tester, ui-ux-designer, writer, \
-         planner, data-analyst, devops-engineer, software-engineer, artist-designer, \
-         content-creator, social-network-assistant, spawn-agent."
+        "Delegate the current task to a specialist agent. \
+         See the Available Agents list in your system prompt."
     }
 
     fn parameters(&self) -> Value {
@@ -103,7 +103,7 @@ impl Tool for DelegateToAgentTool {
             .ok_or_else(|| AppError::Validation("task is required".to_owned()))?;
 
         // Read the task-local context once; used both for the depth guard and
-        // to propagate session/conversation IDs into the child context.
+        // to propagate session IDs into the child context.
         let parent_ctx = current_tool_execution_context().unwrap_or(ToolExecutionContext {
             session_id: None,
             conversation_id: None,
@@ -140,34 +140,54 @@ impl Tool for DelegateToAgentTool {
             None => template.system_prompt,
         };
 
-        // Build the initial message list: target system prompt followed by the task.
-        let messages = vec![
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::System,
-                content: system_content,
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::User,
-                content: task.to_owned(),
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
-        ];
+        // Create an isolated conversation for this delegation so the sub-agent's
+        // message history is persisted and traceable independently.
+        let conv_id = Uuid::new_v4();
+        let conv_id_str = conv_id.to_string();
+        let conv_title = format!("{agent_name}: {}", title_from(task));
+        self.conversation
+            .create_conversation_with_id(&conv_id_str, &conv_title)
+            .await?;
 
-        // Build the child context with an incremented delegation depth so that
-        // any tools called inside the nested loop respect the same depth limit.
-        let child_ctx = ToolExecutionContext {
-            delegation_depth: current_depth + 1,
-            ..parent_ctx
+        // Build the initial message list: target system prompt followed by the task.
+        let sys_msg = Message {
+            id: Uuid::new_v4().to_string(),
+            role: Role::System,
+            content: system_content,
+            tool_calls: None,
+            rich_content: None,
+            created_at: Utc::now(),
+        };
+        let user_msg = Message {
+            id: Uuid::new_v4().to_string(),
+            role: Role::User,
+            content: task.to_owned(),
+            tool_calls: None,
+            rich_content: None,
+            created_at: Utc::now(),
         };
 
-        let (response, _) = with_tool_execution_context(
+        // Persist the opening messages before the loop so they are visible
+        // even if the react loop errors out.
+        self.conversation
+            .save_message(&conv_id_str, &sys_msg)
+            .await?;
+        self.conversation
+            .save_message(&conv_id_str, &user_msg)
+            .await?;
+
+        let messages = vec![sys_msg, user_msg];
+
+        // Build the child context: isolated conversation_id (not the parent's),
+        // incremented delegation depth, and inherited session_id.
+        let child_ctx = ToolExecutionContext {
+            session_id: parent_ctx.session_id,
+            conversation_id: Some(conv_id_str.clone()),
+            run_id: None,
+            delegation_depth: current_depth + 1,
+        };
+
+        let (response, all_messages) = with_tool_execution_context(
             child_ctx,
             run_react_loop(
                 self.provider.clone(),
@@ -178,6 +198,19 @@ impl Tool for DelegateToAgentTool {
             ),
         )
         .await?;
+
+        // Persist all messages produced during the react loop. The first two
+        // (system + user) were already saved above, so skip them.
+        for message in all_messages.iter().skip(2) {
+            if let Err(e) = self.conversation.save_message(&conv_id_str, message).await {
+                tracing::warn!(
+                    agent = agent_name,
+                    conv_id = %conv_id_str,
+                    error = %e,
+                    "failed to persist delegation message"
+                );
+            }
+        }
 
         // Persist the task + outcome to the agent's memory log. Best-effort only.
         if let Err(e) = self
@@ -194,6 +227,10 @@ impl Tool for DelegateToAgentTool {
 #[cfg(test)]
 mod tests {
     use std::{fs, sync::Weak};
+
+    use sqlx::sqlite::SqliteConnectOptions;
+    use sqlx::SqlitePool;
+    use std::str::FromStr;
 
     use super::*;
     use crate::agent_manager::AgentTemplate;
@@ -212,8 +249,17 @@ mod tests {
         )))
     }
 
-    fn make_tool_with_manager(dir: &std::path::Path) -> DelegateToAgentTool {
+    /// Creates an in-memory SQLite pool for tests. Error-path tests never reach
+    /// the conversation layer, so no migrations are needed.
+    async fn make_test_conversation() -> Arc<ConversationManager> {
+        let opts = SqliteConnectOptions::from_str("sqlite::memory:").unwrap();
+        let pool = Arc::new(SqlitePool::connect_with(opts).await.unwrap());
+        Arc::new(ConversationManager::new(pool))
+    }
+
+    async fn make_tool_with_manager(dir: &std::path::Path) -> DelegateToAgentTool {
         use crate::agent_task_memory::AgentTaskMemory;
+
         DelegateToAgentTool {
             agent_manager: Arc::new(AgentManager::new(dir.to_owned())),
             provider: make_dummy_provider(),
@@ -221,6 +267,7 @@ mod tests {
             // Dead weak reference — tests do not reach run_react_loop.
             registry: Weak::new(),
             task_memory: Arc::new(AgentTaskMemory::new(dir.to_owned())),
+            conversation: make_test_conversation().await,
         }
     }
 
@@ -228,7 +275,7 @@ mod tests {
     async fn returns_error_for_unknown_agent() {
         let dir = std::env::temp_dir().join(format!("test-delegate-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&dir).unwrap();
-        let tool = make_tool_with_manager(&dir);
+        let tool = make_tool_with_manager(&dir).await;
 
         let result = tool
             .execute(serde_json::json!({
@@ -256,6 +303,8 @@ mod tests {
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
                 model: None,
+                tools: None,
+                color: None,
             })
             .unwrap();
 
@@ -265,6 +314,7 @@ mod tests {
             config: AgentConfig::default(),
             registry: Weak::new(),
             task_memory: Arc::new(crate::agent_task_memory::AgentTaskMemory::new(dir.clone())),
+            conversation: make_test_conversation().await,
         };
 
         // Set the context to the maximum depth already reached.

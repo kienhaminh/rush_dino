@@ -19,7 +19,7 @@ pub async fn refresh_codex_token(refresh_token: &str) -> Result<(String, String,
     let params = [
         ("grant_type", "refresh_token"),
         ("client_id", CLIENT_ID),
-        ("refresh_token", refresh_token),
+        ("refresh_token", refresh_token.trim()),
     ];
 
     let response = Client::new()

@@ -20,7 +20,7 @@ This playbook is current-state behavior.
 
 ## Memory files
 
-- Create: `memory_write` writes to `memory/MEMORY.md` or daily file (`native`).
+- Create: `memory_write` writes to root `MEMORY.md` or a daily file (`native`).
 - Read: `memory_read` and `memory_search` (`native`).
 - Update: `memory_write` overwrite behavior (`native`).
 - Delete: no first-class delete memory tool (`unsupported` direct, `shell-fallback` possible).
