@@ -72,7 +72,8 @@ impl WorkflowManager {
 
         let step_rows = sqlx::query(
             r#"
-            SELECT id, workflow_id, position, name, instructions, agent_id, created_at, updated_at
+            SELECT id, workflow_id, position, name, instructions, agent_id, created_at, updated_at,
+                   depends_on, max_retries, timeout_secs, condition
             FROM workflow_steps
             WHERE workflow_id = ?1
             ORDER BY position ASC
@@ -132,10 +133,16 @@ impl WorkflowManager {
         .await?;
 
         for (index, step) in payload.steps.iter().enumerate() {
+            let depends_on_json = step
+                .depends_on
+                .as_ref()
+                .map(|ids| serde_json::to_string(ids).unwrap_or_default());
             sqlx::query(
                 r#"
-                INSERT INTO workflow_steps (id, workflow_id, position, name, instructions, agent_id, created_at, updated_at)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                INSERT INTO workflow_steps
+                  (id, workflow_id, position, name, instructions, agent_id, created_at, updated_at,
+                   depends_on, max_retries, timeout_secs, condition)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                 "#,
             )
             .bind(Uuid::new_v4().to_string())
@@ -146,6 +153,10 @@ impl WorkflowManager {
             .bind(step.agent_id.trim())
             .bind(&now)
             .bind(&now)
+            .bind(depends_on_json)
+            .bind(step.max_retries as i64)
+            .bind(step.timeout_secs.map(|t| t as i64))
+            .bind(step.condition.as_deref())
             .execute(&mut *tx)
             .await?;
         }
@@ -203,10 +214,16 @@ impl WorkflowManager {
                 .await?;
 
             for (index, step) in steps.iter().enumerate() {
+                let depends_on_json = step
+                    .depends_on
+                    .as_ref()
+                    .map(|ids| serde_json::to_string(ids).unwrap_or_default());
                 sqlx::query(
                     r#"
-                    INSERT INTO workflow_steps (id, workflow_id, position, name, instructions, agent_id, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+                    INSERT INTO workflow_steps
+                      (id, workflow_id, position, name, instructions, agent_id, created_at, updated_at,
+                       depends_on, max_retries, timeout_secs, condition)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                     "#,
                 )
                 .bind(Uuid::new_v4().to_string())
@@ -217,6 +234,10 @@ impl WorkflowManager {
                 .bind(step.agent_id.trim())
                 .bind(&now)
                 .bind(&now)
+                .bind(depends_on_json)
+                .bind(step.max_retries as i64)
+                .bind(step.timeout_secs.map(|t| t as i64))
+                .bind(step.condition.as_deref())
                 .execute(&mut *tx)
                 .await?;
             }
@@ -380,7 +401,8 @@ impl WorkflowManager {
 
         let step_rows = sqlx::query(
             r#"
-            SELECT id, run_id, step_id, position, step_name, agent_id, status, input, output, error, conversation_id, started_at, completed_at
+            SELECT id, run_id, step_id, position, step_name, agent_id, status, input, output, error,
+                   conversation_id, started_at, completed_at, retry_count
             FROM workflow_run_steps
             WHERE run_id = ?1
             ORDER BY position ASC
@@ -421,12 +443,17 @@ impl WorkflowManager {
         let rows = sqlx::query(
             r#"
             SELECT
-              rs.id AS run_step_id,
-              rs.step_id AS step_id,
-              rs.position AS position,
-              rs.step_name AS step_name,
-              rs.agent_id AS agent_id,
-              ws.instructions AS instructions
+              rs.id          AS run_step_id,
+              rs.step_id     AS step_id,
+              rs.position    AS position,
+              rs.step_name   AS step_name,
+              rs.agent_id    AS agent_id,
+              rs.retry_count AS retry_count,
+              ws.instructions  AS instructions,
+              ws.depends_on    AS depends_on,
+              ws.max_retries   AS max_retries,
+              ws.timeout_secs  AS timeout_secs,
+              ws.condition     AS condition
             FROM workflow_run_steps rs
             LEFT JOIN workflow_steps ws ON ws.id = rs.step_id
             WHERE rs.run_id = ?1
@@ -444,6 +471,10 @@ impl WorkflowManager {
                 .ok_or_else(|| {
                     AppError::Validation("run step is missing source instructions".to_owned())
                 })?;
+            // Deserialize depends_on from stored JSON string
+            let depends_on: Option<Vec<String>> = row
+                .get::<Option<String>, _>("depends_on")
+                .and_then(|json| serde_json::from_str(&json).ok());
             steps.push(WorkflowRunExecutionStep {
                 run_step_id: row.get::<String, _>("run_step_id"),
                 step_id: row.get::<String, _>("step_id"),
@@ -451,6 +482,13 @@ impl WorkflowManager {
                 step_name: row.get::<String, _>("step_name"),
                 instructions,
                 agent_id: row.get::<String, _>("agent_id"),
+                depends_on,
+                max_retries: u8::try_from(row.get::<i64, _>("max_retries")).unwrap_or(0),
+                timeout_secs: row
+                    .get::<Option<i64>, _>("timeout_secs")
+                    .map(|t| t as u64),
+                condition: row.get::<Option<String>, _>("condition"),
+                retry_count: row.get::<i64, _>("retry_count"),
             });
         }
 
@@ -570,17 +608,49 @@ impl WorkflowManager {
         Ok(())
     }
 
+    pub async fn mark_run_step_skipped(&self, run_step_id: &str) -> Result<()> {
+        self.ensure_schema().await?;
+
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "UPDATE workflow_run_steps SET status = ?1, completed_at = ?2 WHERE id = ?3",
+        )
+        .bind(WorkflowRunStepStatus::Skipped.as_str())
+        .bind(&now)
+        .bind(run_step_id)
+        .execute(self.pool.as_ref())
+        .await?;
+        Ok(())
+    }
+
+    pub async fn increment_run_step_retry(&self, run_step_id: &str) -> Result<()> {
+        self.ensure_schema().await?;
+
+        sqlx::query(
+            "UPDATE workflow_run_steps SET retry_count = retry_count + 1, status = ?1 WHERE id = ?2",
+        )
+        .bind(WorkflowRunStepStatus::Pending.as_str())
+        .bind(run_step_id)
+        .execute(self.pool.as_ref())
+        .await?;
+        Ok(())
+    }
+
     async fn ensure_schema(&self) -> Result<()> {
         self.schema_ready
             .get_or_try_init(|| async {
-                for statement in
-                    include_str!("../../common/migrations/004_workflows.sql").split(';')
-                {
-                    let sql = statement.trim();
-                    if sql.is_empty() {
-                        continue;
+                let migrations = [
+                    include_str!("../../common/migrations/004_workflows.sql"),
+                    include_str!("../../common/migrations/010_workflow_step_enhancements.sql"),
+                ];
+                for migration in migrations {
+                    for statement in migration.split(';') {
+                        let sql = statement.trim();
+                        if sql.is_empty() {
+                            continue;
+                        }
+                        sqlx::query(sql).execute(self.pool.as_ref()).await?;
                     }
-                    sqlx::query(sql).execute(self.pool.as_ref()).await?;
                 }
                 Ok::<(), sqlx::Error>(())
             })
@@ -640,6 +710,9 @@ fn map_workflow_list_item(row: sqlx::sqlite::SqliteRow) -> Result<WorkflowListIt
 }
 
 fn map_workflow_step(row: sqlx::sqlite::SqliteRow) -> Result<WorkflowStep> {
+    let depends_on: Option<Vec<String>> = row
+        .get::<Option<String>, _>("depends_on")
+        .and_then(|json| serde_json::from_str(&json).ok());
     Ok(WorkflowStep {
         id: row.get::<String, _>("id"),
         workflow_id: row.get::<String, _>("workflow_id"),
@@ -649,6 +722,10 @@ fn map_workflow_step(row: sqlx::sqlite::SqliteRow) -> Result<WorkflowStep> {
         agent_id: row.get::<String, _>("agent_id"),
         created_at: row.get::<String, _>("created_at"),
         updated_at: row.get::<String, _>("updated_at"),
+        depends_on,
+        max_retries: u8::try_from(row.get::<i64, _>("max_retries")).unwrap_or(0),
+        timeout_secs: row.get::<Option<i64>, _>("timeout_secs").map(|t| t as u64),
+        condition: row.get::<Option<String>, _>("condition"),
     })
 }
 
@@ -680,6 +757,7 @@ fn map_run_step_detail(row: sqlx::sqlite::SqliteRow) -> Result<WorkflowRunStepDe
         conversation_id: row.get::<Option<String>, _>("conversation_id"),
         started_at: row.get::<Option<String>, _>("started_at"),
         completed_at: row.get::<Option<String>, _>("completed_at"),
+        retry_count: row.get::<i64, _>("retry_count"),
     })
 }
 
@@ -738,6 +816,7 @@ mod tests {
                         name: "Classify".to_owned(),
                         instructions: "Classify input".to_owned(),
                         agent_id: "general-assistant".to_owned(),
+                        ..Default::default()
                     }],
                 },
                 WorkflowSource::Manual,
@@ -767,6 +846,7 @@ mod tests {
                         name: "Step".to_owned(),
                         instructions: "Do work".to_owned(),
                         agent_id: "general-assistant".to_owned(),
+                        ..Default::default()
                     }],
                 },
                 WorkflowSource::Manual,
@@ -795,6 +875,7 @@ mod tests {
                         name: "Step 1".to_owned(),
                         instructions: "Do task".to_owned(),
                         agent_id: "general-assistant".to_owned(),
+                        ..Default::default()
                     }],
                 },
                 WorkflowSource::Manual,
@@ -829,6 +910,7 @@ mod tests {
                         name: "Step 1".to_owned(),
                         instructions: "Do task".to_owned(),
                         agent_id: "general-assistant".to_owned(),
+                        ..Default::default()
                     }],
                 },
                 WorkflowSource::Manual,

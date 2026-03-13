@@ -115,6 +115,7 @@ impl Tool for CreateWorkflowTool {
                 name: name.to_owned(),
                 instructions: instructions.to_owned(),
                 agent_id: agent_id.to_owned(),
+                ..Default::default()
             });
         }
 

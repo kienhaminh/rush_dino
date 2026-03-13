@@ -85,6 +85,7 @@ pub enum WorkflowRunStepStatus {
     Running,
     Succeeded,
     Failed,
+    Skipped,
 }
 
 impl WorkflowRunStepStatus {
@@ -94,6 +95,7 @@ impl WorkflowRunStepStatus {
             Self::Running => "running",
             Self::Succeeded => "succeeded",
             Self::Failed => "failed",
+            Self::Skipped => "skipped",
         }
     }
 
@@ -103,17 +105,30 @@ impl WorkflowRunStepStatus {
             "running" => Some(Self::Running),
             "succeeded" => Some(Self::Succeeded),
             "failed" => Some(Self::Failed),
+            "skipped" => Some(Self::Skipped),
             _ => None,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkflowStepInput {
     pub name: String,
     pub instructions: String,
     pub agent_id: String,
+    /// Step IDs this step depends on. NULL = linear (position-based).
+    #[serde(default)]
+    pub depends_on: Option<Vec<String>>,
+    /// Number of times to retry on failure (default 0 = no retry).
+    #[serde(default)]
+    pub max_retries: u8,
+    /// Per-step timeout in seconds. NULL = no timeout.
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+    /// Condition expression, e.g. "step_name.succeeded". NULL = always run.
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,6 +160,14 @@ pub struct WorkflowStep {
     pub agent_id: String,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub depends_on: Option<Vec<String>>,
+    #[serde(default)]
+    pub max_retries: u8,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub condition: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,6 +234,7 @@ pub struct WorkflowRunStepDetail {
     pub conversation_id: Option<String>,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,
+    pub retry_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -235,6 +259,12 @@ pub struct WorkflowRunExecutionStep {
     pub step_name: String,
     pub instructions: String,
     pub agent_id: String,
+    /// Parsed from JSON column; None means linear (position-based).
+    pub depends_on: Option<Vec<String>>,
+    pub max_retries: u8,
+    pub timeout_secs: Option<u64>,
+    pub condition: Option<String>,
+    pub retry_count: i64,
 }
 
 #[derive(Debug, Clone)]

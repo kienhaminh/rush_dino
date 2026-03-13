@@ -114,7 +114,7 @@ pub fn is_dangerous_command(command: &str) -> bool {
     // Allowlist
     let allowlist = ["rm ~/.rushdino/BOOTSTRAP.md"];
     if normalized.starts_with("rm ") {
-        return !allowlist.iter().any(|allowed| normalized == *allowed);
+        return !allowlist.iter().any(|allowed| trimmed == *allowed);
     }
 
     let patterns = [

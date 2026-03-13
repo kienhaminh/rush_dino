@@ -172,6 +172,8 @@ impl AgentEngine {
             runtime.clone(),
             config.clone(),
         ));
+        // Populate the OnceCell so RunWorkflowTool can obtain the runner when invoked.
+        let _ = deps.workflow_runner_cell.set(workflow_runner.clone());
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
 
         Ok(Self {
@@ -1082,6 +1084,7 @@ impl AgentEngine {
                     name: step.name,
                     agent_id: step.agent_id,
                     instructions: step.instructions,
+                    ..Default::default()
                 })
                 .collect();
 

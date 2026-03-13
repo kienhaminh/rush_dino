@@ -32,6 +32,7 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
         include_str!("../migrations/007_gateway_runtime_metadata.sql"),
         include_str!("../migrations/008_messages_rich_content.sql"),
         include_str!("../migrations/009_channel_pairing.sql"),
+        include_str!("../migrations/010_workflow_step_enhancements.sql"),
     );
     sqlx::migrate!("./migrations").run(pool).await?;
     Ok(())

@@ -23,12 +23,13 @@ use crate::{
     tools::{
         create_job::CreateJobTool, create_skill::CreateSkillTool,
         create_workflow::CreateWorkflowTool, delegate_to_agent::DelegateToAgentTool,
-        file_edit::FileEditTool, file_read::FileReadTool,
-        knowledge_graph_query::KnowledgeGraphQueryTool, list_skills::ListSkillsTool,
-        memory_search::MemorySearchTool,
+        delete_workflow::DeleteWorkflowTool, file_edit::FileEditTool, file_read::FileReadTool,
+        inspect_workflow::InspectWorkflowTool, knowledge_graph_query::KnowledgeGraphQueryTool,
+        list_skills::ListSkillsTool, memory_search::MemorySearchTool,
         memory_write::MemoryWriteTool, present_message::PresentMessageTool,
-        read_skill::ReadSkillTool, shell_exec::ShellExecTool, spawn_agent::SpawnAgentTool,
-        spawn_sub_agent::SpawnSubAgentTool, web_search::WebSearchTool,
+        read_skill::ReadSkillTool, run_workflow::RunWorkflowTool, shell_exec::ShellExecTool,
+        spawn_agent::SpawnAgentTool, spawn_sub_agent::SpawnSubAgentTool,
+        update_workflow::UpdateWorkflowTool, web_search::WebSearchTool,
     },
     workflow_manager::WorkflowManager,
 };
@@ -45,6 +46,8 @@ pub struct EngineDeps {
     pub workflow_manager: Arc<WorkflowManager>,
     pub inbox_rx: mpsc::Receiver<JobResult>,
     pub task_memory: Arc<AgentTaskMemory>,
+    /// Shared cell filled after WorkflowRunner construction so RunWorkflowTool can obtain it.
+    pub workflow_runner_cell: std::sync::Arc<tokio::sync::OnceCell<std::sync::Arc<crate::workflow_runner::WorkflowRunner>>>,
 }
 
 pub fn build_engine_deps(
@@ -89,12 +92,22 @@ pub fn build_engine_deps(
     let jobs_c = jobs.clone();
     let orchestrator_c = orchestrator.clone();
     let workflow_manager_c = workflow_manager.clone();
+    let workflow_manager_c2 = workflow_manager.clone();
+    let workflow_manager_c3 = workflow_manager.clone();
+    let workflow_manager_c4 = workflow_manager.clone();
+    let workflow_manager_c5 = workflow_manager.clone();
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
     let system_broker_c = system_broker.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
     let conversation_c = conversation.clone();
+
+    // This cell is filled after WorkflowRunner construction (in engine.rs).
+    // RunWorkflowTool reads it at call time, so it is safe to capture the Arc before the cell is set.
+    let workflow_runner_cell: Arc<tokio::sync::OnceCell<Arc<crate::workflow_runner::WorkflowRunner>>> =
+        Arc::new(tokio::sync::OnceCell::new());
+    let workflow_runner_cell_c = workflow_runner_cell.clone();
 
     // Arc::new_cyclic allows DelegateToAgentTool to hold a Weak<ToolRegistry>
     // that points back to the registry being constructed, avoiding a retain cycle.
@@ -126,6 +139,10 @@ pub fn build_engine_deps(
             workflow_manager_c,
             agent_manager_c3,
         ));
+        r.register(UpdateWorkflowTool::new(workflow_manager_c2));
+        r.register(DeleteWorkflowTool::new(workflow_manager_c3));
+        r.register(RunWorkflowTool::new(workflow_manager_c4, workflow_runner_cell_c));
+        r.register(InspectWorkflowTool::new(workflow_manager_c5));
         r.register(SpawnSubAgentTool::new(orchestrator_c));
         r.register(ReadSkillTool::new(skills_c.clone()));
         r.register(CreateSkillTool::new(skills_c.clone()));
@@ -150,6 +167,7 @@ pub fn build_engine_deps(
         workflow_manager,
         inbox_rx,
         task_memory,
+        workflow_runner_cell,
     })
 }
 
