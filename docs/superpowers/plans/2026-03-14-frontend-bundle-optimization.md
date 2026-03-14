@@ -59,7 +59,6 @@
   const ConfigPage = React.lazy(() => import('./pages/config/ConfigPage').then(m => ({ default: m.ConfigPage })));
   const DiagnosticsPage = React.lazy(() => import('./pages/diagnostics/DiagnosticsPage').then(m => ({ default: m.DiagnosticsPage })));
   const DebugPage = React.lazy(() => import('./pages/debug/DebugPage').then(m => ({ default: m.DebugPage })));
-  const ContextDebugRoute = React.lazy(() => import('./pages/context-debug/ContextDebugRoute').then(m => ({ default: m.ContextDebugRoute })));
   const LogsPage = React.lazy(() => import('./pages/logs/LogsPage').then(m => ({ default: m.LogsPage })));
   const NotFoundPage = React.lazy(() => import('./pages/not-found/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
   const DesignSystemPage = React.lazy(() => import('./pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
@@ -97,7 +96,6 @@
               <Route path="config" element={<ConfigPage />} />
               <Route path="diagnostics" element={<DiagnosticsPage />} />
               <Route path="debug" element={<DebugPage />} />
-              <Route path="context-debug" element={<ContextDebugRoute />} />
               <Route path="logs" element={<LogsPage />} />
 
               {/* Design system */}
@@ -115,6 +113,10 @@
   ```
 
   > **Note on named exports:** Each page uses a named export (e.g., `export const ChatPage`). The `.then(m => ({ default: m.ChatPage }))` adapter is required because `React.lazy` only accepts modules with a `default` export. If TypeScript complains about a specific page name, check what the file actually exports with a quick read.
+
+  > **Note on `context-debug` route:** `ContextDebugRoute.tsx` does not exist on disk (the directory only contains `components/`). It has been omitted from the replacement content. The original `App.tsx` had a broken import for it — this plan cleans that up.
+
+  > **Note on `Suspense fallback={null}`:** This is intentional. Since the app runs on localhost, the loading flash is imperceptible. No spinner is needed.
 
 - [ ] **Step 3: Run TypeScript check**
 
@@ -138,11 +140,11 @@
   ```bash
   cd frontend && npm run dev
   ```
-  Navigate to `http://localhost:5173` and click through 3–4 routes (e.g., Overview, Config, Logs). Expected: pages load without errors, no console errors about lazy loading or Suspense.
+  Navigate to `http://localhost:5173` and click through 3–4 routes (e.g., Overview, Config, Logs). Expected: pages render correctly. Open browser DevTools console and verify no `ChunkLoadError`, no `Element type is invalid` (wrong export name), and no Suspense-related errors.
 
 - [ ] **Step 6: Commit**
 
+  From the repo root:
   ```bash
-  cd frontend && git add src/App.tsx
-  git commit -m "perf: route-based lazy loading — split ~20 page chunks, eliminate 500kB warning"
+  git add frontend/src/App.tsx && git commit -m "perf: route-based lazy loading — split ~20 page chunks, eliminate 500kB warning"
   ```
