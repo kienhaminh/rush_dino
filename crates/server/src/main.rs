@@ -7,7 +7,7 @@ async fn main() {
         .init();
 
     if let Err(err) = rushdino_server::run_server().await {
-        eprintln!("rushdino-server error: {err}");
+        eprintln!("rushdino error: {err}");
         std::process::exit(1);
     }
 }

@@ -324,7 +324,7 @@ fn extract_delegate_events(
                 let Some(call) = pending.pop_front() else {
                     continue;
                 };
-                if call.call.name != "delegate_to_agent" {
+                if call.call.name != "delegate" {
                     continue;
                 }
                 events.push(AgentProgressEvent {

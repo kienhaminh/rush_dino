@@ -2,11 +2,11 @@ use std::{path::Path, sync::Arc};
 
 use rushdino_agent::{AgentConfig, AgentEngine, KnowledgeGraphAccess};
 use rushdino_common::{
-    config::{ProfileSecrets, ProviderKind, ProviderProfile},
+    config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
 use rushdino_knowledge_graph::KnowledgeGraphService;
-use rushdino_providers::{codex_refresh, types::ProviderConfig, Provider};
+use rushdino_providers::{types::ProviderConfig, ProviderService};
 
 use crate::{
     knowledge_graph_bridge::KnowledgeGraphBridge,
@@ -16,7 +16,7 @@ use crate::{
 #[derive(Debug)]
 pub struct ResolvedRuntimeProvider {
     pub profile_id: String,
-    pub provider_kind: ProviderKind,
+    pub provider_kind: Provider,
     pub provider_config: ProviderConfig,
 }
 
@@ -38,20 +38,17 @@ pub fn runtime_status_from_config(config: &AppConfig) -> RuntimeStatus {
 }
 
 pub fn default_profile_model(config: &AppConfig) -> Option<String> {
-    find_default_profile(config).map(|profile| match profile.provider_kind {
-        ProviderKind::Plugin => "plugin".to_owned(),
-        _ => profile.default_model.clone(),
-    })
+    find_default_profile(config).map(|profile| profile.default_model.clone())
 }
 
 pub fn validate_default_profile_execution(
     config: &AppConfig,
     credentials: &CredentialsConfig,
-) -> Result<(String, ProviderKind)> {
+) -> Result<(String, Provider)> {
     let profile = require_default_profile(config)?;
     let secrets = credentials.profiles.get(&profile.id);
 
-    if profile.default_model.trim().is_empty() && profile.provider_kind != ProviderKind::Plugin {
+    if profile.default_model.trim().is_empty() {
         return Err(AppError::Provider(format!(
             "default profile '{}' has an empty default model",
             profile.id
@@ -59,53 +56,30 @@ pub fn validate_default_profile_execution(
     }
 
     match profile.provider_kind {
-        ProviderKind::Ollama => Ok((profile.id.clone(), profile.provider_kind.clone())),
-        ProviderKind::Openai | ProviderKind::Anthropic => {
-            let api_key = secrets
-                .and_then(|secret| secret.api_key.as_deref())
-                .map(str::trim)
-                .unwrap_or("");
-            if api_key.is_empty() {
-                return Err(AppError::Provider(format!(
-                    "default profile '{}' requires an API key",
-                    profile.id
-                )));
-            }
-            Ok((profile.id.clone(), profile.provider_kind.clone()))
-        }
-        ProviderKind::Codex | ProviderKind::OpenaiCodex => {
-            let access_token = secrets
-                .and_then(|secret| secret.access_token.as_deref())
-                .map(str::trim)
-                .unwrap_or("");
-            let refresh_token = secrets
-                .and_then(|secret| secret.refresh_token.as_deref())
-                .map(str::trim)
-                .unwrap_or("");
-            let expires_at = secrets.and_then(|secret| secret.token_expires_at);
-
-            if access_token.is_empty() && refresh_token.is_empty() {
-                return Err(AppError::Provider(format!(
-                    "default profile '{}' requires an OAuth access token",
-                    profile.id
-                )));
-            }
-            if codex_refresh::token_needs_refresh(expires_at) && refresh_token.is_empty() {
-                return Err(AppError::Provider(format!(
-                    "default profile '{}' needs an OAuth refresh token before execution can start",
-                    profile.id
-                )));
-            }
-            Ok((profile.id.clone(), profile.provider_kind.clone()))
-        }
-        ProviderKind::Plugin => {
-            let manifest_path = config.data_dir.join("plugins/default.toml");
-            if !manifest_path.exists() {
-                return Err(AppError::Provider(format!(
-                    "default profile '{}' plugin provider requires manifest at {}",
-                    profile.id,
-                    manifest_path.display()
-                )));
+        Provider::Ollama => Ok((profile.id.clone(), profile.provider_kind.clone())),
+        Provider::OpenAI | Provider::Anthropic => {
+            if profile.auth_method == AuthMethod::OAuth {
+                let token = secrets
+                    .and_then(|s| s.access_token.as_deref())
+                    .map(str::trim)
+                    .unwrap_or("");
+                if token.is_empty() {
+                    return Err(AppError::Provider(format!(
+                        "default profile '{}' requires an OAuth access token",
+                        profile.id
+                    )));
+                }
+            } else {
+                let api_key = secrets
+                    .and_then(|secret| secret.api_key.as_deref())
+                    .map(str::trim)
+                    .unwrap_or("");
+                if api_key.is_empty() {
+                    return Err(AppError::Provider(format!(
+                        "default profile '{}' requires an API key",
+                        profile.id
+                    )));
+                }
             }
             Ok((profile.id.clone(), profile.provider_kind.clone()))
         }
@@ -116,17 +90,18 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
     let config = Arc::new(AppConfig::load_from_path(runtime.config_path())?);
     let mut credentials = CredentialsConfig::load_from_path(runtime.credentials_path())?;
     let mut status = runtime_status_from_config(config.as_ref());
-
-    match resolve_default_profile_provider(
+    let resolve_res = resolve_default_profile_provider(
         config.as_ref(),
         &mut credentials,
         runtime.credentials_path(),
     )
-    .await
-    {
+    .await;
+
+    match resolve_res {
         Ok(resolved) => {
             let pool = runtime.pool();
-            let provider = Arc::new(Provider::from_config(&resolved.provider_config)?);
+            let provider = Arc::new(ProviderService::from_config(&resolved.provider_config)?);
+
             let knowledge_graph_service = if config.knowledge_graph.enabled {
                 Some(Arc::new(KnowledgeGraphService::new(
                     (*pool).clone(),
@@ -147,7 +122,22 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 config.data_dir.clone(),
                 credentials.brave_api_key.clone(),
                 provider_kind_label(&resolved.provider_kind).to_owned(),
-                AgentConfig::default(),
+                {
+                    use rushdino_agent::memory_bootstrap::{
+                        DEFAULT_BOOTSTRAP_MAX_CHARS, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
+                    };
+                    AgentConfig {
+                        bootstrap_max_chars: config
+                            .bootstrap
+                            .max_chars_per_file
+                            .unwrap_or(DEFAULT_BOOTSTRAP_MAX_CHARS),
+                        bootstrap_total_max_chars: config
+                            .bootstrap
+                            .max_total_chars
+                            .unwrap_or(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS),
+                        ..AgentConfig::default()
+                    }
+                },
                 runtime.agent_runtime(),
                 runtime.system_broker(),
                 knowledge_graph_bridge,
@@ -210,12 +200,12 @@ fn require_default_profile(config: &AppConfig) -> Result<&ProviderProfile> {
 }
 
 async fn provider_config_from_profile(
-    config: &AppConfig,
+    _config: &AppConfig,
     credentials: &mut CredentialsConfig,
-    credentials_path: &Path,
+    _credentials_path: &Path,
     profile: &ProviderProfile,
 ) -> Result<ProviderConfig> {
-    if profile.default_model.trim().is_empty() && profile.provider_kind != ProviderKind::Plugin {
+    if profile.default_model.trim().is_empty() {
         return Err(AppError::Provider(format!(
             "default profile '{}' has an empty default model",
             profile.id
@@ -223,53 +213,40 @@ async fn provider_config_from_profile(
     }
 
     match profile.provider_kind {
-        ProviderKind::Ollama => Ok(ProviderConfig::Ollama {
+        Provider::Ollama => Ok(ProviderConfig::Ollama {
             base_url: normalize_ollama_base_url(profile.base_url.as_deref()),
             model: profile.default_model.clone(),
             api_key: None,
         }),
-        ProviderKind::Openai => {
-            let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+        Provider::OpenAI => {
+            let secrets = credentials.profiles.get(&profile.id);
+            let bearer = if profile.auth_method == AuthMethod::OAuth {
+                let token = secrets
+                    .and_then(|s| s.access_token.as_deref())
+                    .map(str::trim)
+                    .unwrap_or("");
+                if token.is_empty() {
+                    return Err(AppError::Provider(format!(
+                        "default profile '{}' requires an OAuth access token",
+                        profile.id
+                    )));
+                }
+                token.to_owned()
+            } else {
+                require_api_key(secrets, &profile.id)?
+            };
             Ok(ProviderConfig::OpenAI {
-                api_key,
+                api_key: bearer,
                 model: profile.default_model.clone(),
                 base_url: profile.base_url.clone(),
             })
         }
-        ProviderKind::Anthropic => {
+        Provider::Anthropic => {
             let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
             Ok(ProviderConfig::Anthropic {
                 api_key,
                 model: profile.default_model.clone(),
             })
-        }
-        ProviderKind::Codex | ProviderKind::OpenaiCodex => {
-            let access_token = resolve_codex_access_token(
-                credentials,
-                credentials_path,
-                &profile.id,
-                credentials
-                    .profiles
-                    .get(&profile.id)
-                    .cloned()
-                    .unwrap_or_default(),
-            )
-            .await?;
-            Ok(ProviderConfig::Codex {
-                access_token,
-                model: profile.default_model.clone(),
-            })
-        }
-        ProviderKind::Plugin => {
-            let manifest_path = config.data_dir.join("plugins/default.toml");
-            if !manifest_path.exists() {
-                return Err(AppError::Provider(format!(
-                    "default profile '{}' plugin provider requires manifest at {}",
-                    profile.id,
-                    manifest_path.display()
-                )));
-            }
-            Ok(ProviderConfig::Plugin { manifest_path })
         }
     }
 }
@@ -288,78 +265,7 @@ fn require_api_key(secrets: Option<&ProfileSecrets>, profile_id: &str) -> Result
     Ok(api_key.to_owned())
 }
 
-async fn resolve_codex_access_token(
-    credentials: &mut CredentialsConfig,
-    credentials_path: &Path,
-    profile_id: &str,
-    secrets: ProfileSecrets,
-) -> Result<String> {
-    let access_token = secrets
-        .access_token
-        .as_deref()
-        .map(str::trim)
-        .unwrap_or("")
-        .to_owned();
-    let refresh_token = secrets
-        .refresh_token
-        .as_deref()
-        .map(str::trim)
-        .unwrap_or("")
-        .to_owned();
-    let needs_refresh =
-        access_token.is_empty() || codex_refresh::token_needs_refresh(secrets.token_expires_at);
 
-    if !needs_refresh {
-        return Ok(access_token);
-    }
-
-    if refresh_token.is_empty() {
-        return Err(AppError::Provider(format!(
-            "default profile '{}' requires an OAuth refresh token before execution can start",
-            profile_id
-        )));
-    }
-
-    let (new_access, new_refresh, new_expires_at) =
-        codex_refresh::refresh_codex_token(&refresh_token)
-            .await
-            .map_err(|err| {
-                AppError::Provider(format!(
-                    "default profile '{}' token refresh failed: {err}",
-                    profile_id
-                ))
-            })?;
-
-    persist_refreshed_profile_tokens(
-        credentials,
-        credentials_path,
-        profile_id,
-        new_access.clone(),
-        new_refresh,
-        new_expires_at,
-    )?;
-
-    Ok(new_access)
-}
-
-fn persist_refreshed_profile_tokens(
-    credentials: &mut CredentialsConfig,
-    path: &Path,
-    profile_id: &str,
-    access_token: String,
-    refresh_token: String,
-    expires_at: i64,
-) -> Result<()> {
-    let profile_secrets = credentials
-        .profiles
-        .entry(profile_id.to_owned())
-        .or_default();
-    profile_secrets.access_token = Some(access_token);
-    profile_secrets.refresh_token = Some(refresh_token);
-    profile_secrets.token_expires_at = Some(expires_at);
-    credentials.save_to_path(path)?;
-    Ok(())
-}
 
 fn normalize_ollama_base_url(base_url: Option<&str>) -> String {
     let raw = base_url
@@ -373,14 +279,11 @@ fn normalize_ollama_base_url(base_url: Option<&str>) -> String {
     }
 }
 
-pub fn provider_kind_label(kind: &ProviderKind) -> &'static str {
+pub fn provider_kind_label(kind: &Provider) -> &'static str {
     match kind {
-        ProviderKind::Ollama => "ollama",
-        ProviderKind::Openai => "openai",
-        ProviderKind::Anthropic => "anthropic",
-        ProviderKind::Codex => "codex",
-        ProviderKind::OpenaiCodex => "openai_codex",
-        ProviderKind::Plugin => "plugin",
+        Provider::Ollama => "ollama",
+        Provider::OpenAI => "openai",
+        Provider::Anthropic => "anthropic",
     }
 }
 
@@ -389,13 +292,13 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     use rushdino_common::{
-        config::{AuthMethod, ProfileSecrets, ProviderKind, ProviderProfile},
+        config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
         AppConfig, CredentialsConfig,
     };
     use rushdino_providers::types::ProviderConfig;
 
     use super::{
-        default_profile_model, persist_refreshed_profile_tokens, resolve_default_profile_provider,
+        default_profile_model, resolve_default_profile_provider,
         validate_default_profile_execution,
     };
 
@@ -410,7 +313,7 @@ mod tests {
         ProviderProfile {
             id: "primary".to_owned(),
             name: "Primary".to_owned(),
-            provider_kind: ProviderKind::Openai,
+            provider_kind: Provider::OpenAI,
             auth_method: AuthMethod::ApiKey,
             default_model: "gpt-4.1-mini".to_owned(),
             base_url: Some("https://api.openai.com/v1".to_owned()),
@@ -422,7 +325,7 @@ mod tests {
         let mut config = AppConfig::default();
         config.default_profile_id = Some("primary".to_owned());
         config.profiles = vec![openai_profile()];
-        config.active_provider = ProviderKind::Ollama;
+        config.active_provider = Provider::Ollama;
 
         let mut credentials = CredentialsConfig::default();
         credentials.profiles.insert(
@@ -453,7 +356,7 @@ mod tests {
             other => panic!("unexpected config: {other:?}"),
         }
         assert_eq!(resolved.profile_id, "primary");
-        assert_eq!(resolved.provider_kind, ProviderKind::Openai);
+        assert_eq!(resolved.provider_kind, Provider::OpenAI);
 
         let _ = fs::remove_file(temp_path);
     }
@@ -461,7 +364,7 @@ mod tests {
     #[test]
     fn rejects_missing_default_profile_without_legacy_fallback() {
         let config = AppConfig {
-            active_provider: ProviderKind::Openai,
+            active_provider: Provider::OpenAI,
             ..AppConfig::default()
         };
         let credentials = CredentialsConfig {
@@ -492,7 +395,7 @@ mod tests {
         let mut config = AppConfig::default();
         config.default_profile_id = Some("primary".to_owned());
         config.profiles = vec![openai_profile()];
-        config.active_provider = ProviderKind::Openai;
+        config.active_provider = Provider::OpenAI;
 
         let mut credentials = CredentialsConfig {
             openai_api_key: Some("sk-legacy".to_owned()),
@@ -508,31 +411,4 @@ mod tests {
         let _ = fs::remove_file(temp_path);
     }
 
-    #[test]
-    fn persists_refreshed_codex_tokens_into_profile_secrets() {
-        let mut credentials = CredentialsConfig::default();
-        let temp_path = temp_credentials_path();
-
-        persist_refreshed_profile_tokens(
-            &mut credentials,
-            temp_path.as_path(),
-            "primary",
-            "access-new".to_owned(),
-            "refresh-new".to_owned(),
-            1_760_000_000,
-        )
-        .expect("profile token persistence should succeed");
-
-        let reloaded =
-            CredentialsConfig::load_from_path(temp_path.as_path()).expect("reload credentials");
-        let secrets = reloaded
-            .profiles
-            .get("primary")
-            .expect("profile secrets persisted");
-        assert_eq!(secrets.access_token.as_deref(), Some("access-new"));
-        assert_eq!(secrets.refresh_token.as_deref(), Some("refresh-new"));
-        assert_eq!(secrets.token_expires_at, Some(1_760_000_000));
-
-        let _ = fs::remove_file(temp_path);
-    }
 }

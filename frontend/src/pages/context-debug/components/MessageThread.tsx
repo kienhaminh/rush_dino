@@ -80,10 +80,11 @@ function MessageCard({ msg, index }: { msg: Message; index: number }) {
 interface Props {
   messages: Message[];
   systemPrompt?: string | null;
+  actualPromptTokens?: number | null;
   onAddTestMessage?: (role: 'user' | 'assistant', content: string) => void;
 }
 
-export function MessageThread({ messages, systemPrompt, onAddTestMessage }: Props) {
+export function MessageThread({ messages, systemPrompt, actualPromptTokens, onAddTestMessage }: Props) {
   const [testMode, setTestMode] = useState(false);
   const [newRole, setNewRole] = useState<'user' | 'assistant'>('user');
   const [newContent, setNewContent] = useState('');
@@ -100,13 +101,16 @@ export function MessageThread({ messages, systemPrompt, onAddTestMessage }: Prop
     : null;
 
   const allMessages = systemMessage ? [systemMessage, ...messages] : messages;
-  const totalTokens = allMessages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
+
+  // Use real server value when available; local estimate is only message text (misses tool defs, formatting)
+  const isEstimated = actualPromptTokens == null;
+  const displayTotal = actualPromptTokens ?? allMessages.reduce((sum, m) => sum + estimateTokens(m.content), 0);
 
   return (
     <div className="flex flex-col gap-4 overflow-y-auto pr-1">
       <div className="flex items-center justify-between">
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Full Context Window ({allMessages.length} msgs · ~{totalTokens.toLocaleString()} tok)
+          Full Context Window ({allMessages.length} msgs · {isEstimated ? '~' : ''}{displayTotal.toLocaleString()} tok)
         </div>
         <button
           onClick={() => setTestMode(!testMode)}

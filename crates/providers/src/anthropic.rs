@@ -106,6 +106,13 @@ impl AnthropicProvider {
         tokio::spawn(async move {
             let mut stream = response.bytes_stream();
             let mut buffer = String::new();
+
+            // Accumulate streaming tool call inputs keyed by index.
+            // Anthropic sends: content_block_start (type=tool_use, id, name)
+            //                  content_block_delta (type=input_json_delta, partial_json)
+            //                  content_block_stop
+            let mut pending_tools: Vec<ToolCall> = Vec::new();
+
             while let Some(item) = stream.next().await {
                 let Ok(chunk) = item else {
                     break;
@@ -123,21 +130,122 @@ impl AnthropicProvider {
                     if data.is_empty() {
                         continue;
                     }
-                    if let Ok(value) = serde_json::from_str::<Value>(data) {
-                        let delta = value
-                            .pointer("/delta/text")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default()
-                            .to_owned();
-                        let _ = tx
-                            .send(ChatChunk {
-                                delta,
-                                tool_calls: Vec::new(),
-                                done: false,
-                            })
-                            .await;
+                    let Ok(value) = serde_json::from_str::<Value>(data) else {
+                        continue;
+                    };
+
+                    let event_type = value.get("type").and_then(Value::as_str).unwrap_or("");
+
+                    match event_type {
+                        "content_block_start" => {
+                            if value.pointer("/content_block/type").and_then(Value::as_str)
+                                == Some("tool_use")
+                            {
+                                let id = value
+                                    .pointer("/content_block/id")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_owned();
+                                let name = value
+                                    .pointer("/content_block/name")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_owned();
+                                pending_tools.push(ToolCall {
+                                    id,
+                                    name,
+                                    arguments: json!({}),
+                                });
+                            }
+                        }
+                        "content_block_delta" => {
+                            let index = value
+                                .get("index")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0) as usize;
+                            // Text delta
+                            if let Some(text) = value.pointer("/delta/text").and_then(Value::as_str) {
+                                let _ = tx
+                                    .send(ChatChunk {
+                                        delta: text.to_owned(),
+                                        tool_calls: Vec::new(),
+                                        done: false,
+                                        usage: None,
+                                        thinking_delta: None,
+                                    })
+                                    .await;
+                            }
+                            // Thinking delta (extended thinking)
+                            if let Some(thinking) = value.pointer("/delta/thinking").and_then(Value::as_str) {
+                                let _ = tx
+                                    .send(ChatChunk {
+                                        delta: String::new(),
+                                        tool_calls: Vec::new(),
+                                        done: false,
+                                        usage: None,
+                                        thinking_delta: Some(thinking.to_owned()),
+                                    })
+                                    .await;
+                            }
+                            // Tool input delta — append partial JSON string
+                            if let Some(partial) =
+                                value.pointer("/delta/partial_json").and_then(Value::as_str)
+                            {
+                                // Find the pending tool whose content_block index matches.
+                                // Anthropic uses a global content block index; tool blocks
+                                // start after any text blocks so we track by insertion order.
+                                if let Some(tool) = pending_tools.last_mut() {
+                                    // Re-use the arguments field as a raw JSON string buffer.
+                                    if let Some(s) = tool.arguments.as_str() {
+                                        tool.arguments = json!(format!("{s}{partial}"));
+                                    } else {
+                                        tool.arguments = json!(partial);
+                                    }
+                                    let _ = index; // index verified via insertion order
+                                }
+                            }
+                        }
+                        "content_block_stop" => {
+                            // Finalize the last pending tool call: parse accumulated JSON string.
+                            if let Some(tool) = pending_tools.last_mut() {
+                                if let Some(raw) = tool.arguments.as_str() {
+                                    if let Ok(parsed) = serde_json::from_str::<Value>(raw) {
+                                        tool.arguments = parsed;
+                                    }
+                                }
+                            }
+                        }
+                        "message_delta" => {
+                            // Emit accumulated tool calls once the message is finishing.
+                            if !pending_tools.is_empty() {
+                                let calls = std::mem::take(&mut pending_tools);
+                                let _ = tx
+                                    .send(ChatChunk {
+                                        delta: String::new(),
+                                        tool_calls: calls,
+                                        done: false,
+                                        usage: None,
+                                        thinking_delta: None,
+                                    })
+                                    .await;
+                            }
+                        }
+                        _ => {}
                     }
                 }
+            }
+
+            // Flush any remaining tool calls in case message_delta was not received.
+            if !pending_tools.is_empty() {
+                let _ = tx
+                    .send(ChatChunk {
+                        delta: String::new(),
+                        tool_calls: pending_tools,
+                        done: false,
+                        usage: None,
+                        thinking_delta: None,
+                    })
+                    .await;
             }
 
             let _ = tx
@@ -145,6 +253,8 @@ impl AnthropicProvider {
                     delta: String::new(),
                     tool_calls: Vec::new(),
                     done: true,
+                    usage: None,
+                    thinking_delta: None,
                 })
                 .await;
         });
@@ -188,13 +298,27 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool) -> Value
             .collect::<Vec<_>>()
     });
 
-    json!({
+    let thinking_budget = request
+        .thinking_level
+        .as_ref()
+        .and_then(|l| l.anthropic_budget_tokens());
+
+    let mut body = json!({
         "model": model,
         "system": system,
         "messages": messages,
         "tools": tools,
-        "temperature": request.temperature,
         "max_tokens": request.max_tokens.unwrap_or(1024),
         "stream": stream,
-    })
+    });
+
+    if let Some(budget) = thinking_budget {
+        // Extended thinking requires temperature=1
+        body["thinking"] = json!({ "type": "enabled", "budget_tokens": budget });
+        body["temperature"] = json!(1);
+    } else {
+        body["temperature"] = json!(request.temperature);
+    }
+
+    body
 }

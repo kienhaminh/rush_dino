@@ -140,6 +140,7 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                                     "delta": chunk.delta,
                                     "tool_calls": chunk.tool_calls,
                                     "done": chunk.done,
+                                    "thinking_delta": chunk.thinking_delta,
                                 }))
                                 .await;
                         }

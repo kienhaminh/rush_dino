@@ -66,7 +66,7 @@ pub async fn run_react_loop(
             .chat(build_chat_request(
                 input.clone(),
                 &registry,
-                config.model_override.clone(),
+                config,
             ))
             .await?;
         let iteration_usage = response.usage.clone().unwrap_or_else(|| {
@@ -139,7 +139,7 @@ pub async fn run_react_loop_streaming(
             .stream_chat(build_chat_request(
                 input.clone(),
                 &registry,
-                config.model_override.clone(),
+                config,
             ))
             .await?;
 
@@ -157,6 +157,19 @@ pub async fn run_react_loop_streaming(
                 tool_calls.extend(chunk.tool_calls);
             }
 
+            // Forward thinking delta before text delta
+            if let Some(thinking) = chunk.thinking_delta {
+                let _ = event_tx
+                    .send(StreamingEvent::ChatChunk(ChatChunk {
+                        delta: String::new(),
+                        tool_calls: Vec::new(),
+                        done: false,
+                        usage: None,
+                        thinking_delta: Some(thinking),
+                    }))
+                    .await;
+            }
+
             if !chunk.delta.is_empty() && tool_calls.is_empty() {
                 emitted_text = true;
                 content.push_str(&chunk.delta);
@@ -165,6 +178,8 @@ pub async fn run_react_loop_streaming(
                         delta: chunk.delta,
                         tool_calls: Vec::new(),
                         done: false,
+                        usage: None,
+                        thinking_delta: None,
                     }))
                     .await;
             }
@@ -199,6 +214,8 @@ pub async fn run_react_loop_streaming(
                     delta: String::new(),
                     tool_calls: Vec::new(),
                     done: true,
+                    usage: None,
+                    thinking_delta: None,
                 }))
                 .await;
             return Ok((final_response, messages));
@@ -243,6 +260,8 @@ pub async fn run_react_loop_streaming(
             delta: String::new(),
             tool_calls: Vec::new(),
             done: true,
+            usage: None,
+            thinking_delta: None,
         }))
         .await;
     Ok((fallback, messages))
@@ -258,14 +277,15 @@ fn finalize_response_content(response: &mut ChatResponse, presented_content: Opt
 fn build_chat_request(
     messages: Vec<Message>,
     registry: &ToolRegistry,
-    model: Option<String>,
+    config: &AgentConfig,
 ) -> ChatRequest {
     ChatRequest {
         messages,
         tools: Some(registry.definitions()),
         temperature: Some(0.2),
-        max_tokens: Some(1200),
-        model,
+        max_tokens: Some(8192),
+        model: config.model_override.clone(),
+        thinking_level: Some(config.thinking_level.clone()),
     }
 }
 
@@ -396,7 +416,7 @@ mod tests {
             vec![
                 ToolCall {
                     id: "call-1".to_owned(),
-                    name: "present_message".to_owned(),
+                    name: "message".to_owned(),
                     arguments: json!({
                         "fallbackText": "First",
                         "blocks": [
@@ -410,7 +430,7 @@ mod tests {
                 },
                 ToolCall {
                     id: "call-2".to_owned(),
-                    name: "present_message".to_owned(),
+                    name: "message".to_owned(),
                     arguments: json!({
                         "fallbackText": "Second",
                         "blocks": [
@@ -548,7 +568,7 @@ async fn append_tool_outputs(
 
     let mut presented_content = None;
     for (call, output, is_error) in join_all(futures).await {
-        if !is_error && call.name == "present_message" {
+        if !is_error && call.name == "message" {
             if let Ok(rich_content) = RichContent::from_tool_value(&call.arguments) {
                 presented_content = Some(rich_content);
             }

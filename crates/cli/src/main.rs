@@ -54,9 +54,12 @@ async fn main() {
 
 async fn run() -> Result<()> {
     let cli = Cli::parse();
+
     match cli.command {
         Command::Init => commands::init::run().await,
-        Command::Start { foreground } => commands::start::run(foreground).await,
+        Command::Start { foreground } => {
+            commands::start::run(foreground).await
+        },
         Command::Stop => commands::stop::run().await,
         Command::Restart => {
             commands::stop::run().await?;

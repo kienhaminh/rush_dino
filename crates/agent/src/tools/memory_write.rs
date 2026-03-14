@@ -25,8 +25,11 @@ impl Tool for MemoryWriteTool {
     }
 
     fn description(&self) -> &str {
-        "Write memory to a named soul file (SOUL.md, IDENTITY.md, USER.md, AGENTS.md, TOOLS.md), \
-         MEMORY.md, or today's daily summary. Use `file` to target a specific soul file."
+        "Write text content to a memory file. \
+         You MUST supply the full text as the 'content' parameter. \
+         Use 'file' to target a specific file (e.g. SOUL.md, IDENTITY.md, USER.md, AGENTS.md, TOOLS.md); \
+         omit 'file' to append to MEMORY.md. \
+         Example: {\"content\": \"# Identity\\n\\nMy name is Aria.\", \"file\": \"IDENTITY.md\"}"
     }
 
     fn parameters(&self) -> Value {
@@ -55,7 +58,10 @@ impl Tool for MemoryWriteTool {
         let content = args
             .get("content")
             .and_then(Value::as_str)
-            .ok_or_else(|| AppError::Validation("content is required".to_owned()))?;
+            .ok_or_else(|| AppError::Validation(
+                "missing required parameter 'content'. \
+                 Call as: memory_write({\"content\": \"<the text to write>\", \"file\": \"SOUL.md\"})".to_owned()
+            ))?;
 
         // If a specific soul file is requested, write there directly.
         if let Some(file) = args.get("file").and_then(Value::as_str) {

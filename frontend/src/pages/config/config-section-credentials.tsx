@@ -9,10 +9,11 @@ interface Props {
 
 type CredentialKey = Exclude<keyof CredentialsView, 'profiles'>;
 
-/** Fields in display order with labels. */
+/** Fields in display order with labels.
+ *  openai_api_key / anthropic_api_key are intentionally excluded — provider API
+ *  keys are managed per-profile in the Model Profiles section instead.
+ */
 const FIELDS: { key: CredentialKey; label: string; placeholder: string }[] = [
-  { key: 'openai_api_key', label: 'OpenAI API Key', placeholder: 'sk-...' },
-  { key: 'anthropic_api_key', label: 'Anthropic API Key', placeholder: 'sk-ant-...' },
   { key: 'brave_api_key', label: 'Brave Search API Key', placeholder: 'BSA...' },
   { key: 'telegram_bot_token', label: 'Telegram Bot Token', placeholder: '123456:ABC...' },
   { key: 'discord_bot_token', label: 'Discord Bot Token', placeholder: 'Bot token' },

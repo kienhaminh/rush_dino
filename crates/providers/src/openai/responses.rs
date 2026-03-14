@@ -1,8 +1,3 @@
-//! OpenAI Responses API streaming provider.
-//!
-//! Translated from `openai_ressponse.ts` (note: intentional typo kept from source).
-//! Uses the `/responses` endpoint (not `/chat/completions`) with server-sent events.
-
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -12,7 +7,7 @@ use tokio::sync::mpsc;
 
 use rushdino_common::Result;
 
-use crate::types::{ChatChunk, ChatRequest, ChatResponse, ModelInfo};
+use crate::types::{ChatChunk, ChatRequest, ChatResponse};
 
 use super::responses_shared::{
     convert_responses_messages, convert_responses_tools, process_responses_stream,
@@ -143,8 +138,17 @@ impl ResponsesProvider {
     // -----------------------------------------------------------------------
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
+        let reasoning_effort = request
+            .thinking_level
+            .as_ref()
+            .and_then(|l| l.openai_reasoning_effort())
+            .map(str::to_owned);
+        let stream_opts = ResponsesStreamOptions {
+            reasoning_effort,
+            ..Default::default()
+        };
         let mut rx = self
-            .stream_chat(request, ResponsesStreamOptions::default())
+            .stream_chat(request, stream_opts)
             .await?;
         let mut content = String::new();
         let mut tool_calls = Vec::new();
@@ -320,6 +324,7 @@ impl ResponsesProvider {
                             tool_calls: vec![],
                             done: true,
                             usage: None,
+                            thinking_delta: None,
                         })
                         .await;
                     return;
@@ -335,6 +340,7 @@ impl ResponsesProvider {
                         tool_calls: vec![],
                         done: true,
                         usage: None,
+                        thinking_delta: None,
                     })
                     .await;
                 return;
@@ -347,37 +353,4 @@ impl ResponsesProvider {
         Ok(rx)
     }
 
-    /// Returns a static list of well-known models for this provider.
-    pub async fn list_models(&self) -> Result<Vec<ModelInfo>> {
-        Ok(vec![
-            ModelInfo {
-                id: "gpt-4o".to_owned(),
-                name: Some("GPT-4o".to_owned()),
-                description: Some("Flagship multimodal model".to_owned()),
-                context_window: Some(128_000),
-                is_reasoning: Some(false),
-            },
-            ModelInfo {
-                id: "gpt-4o-mini".to_owned(),
-                name: Some("GPT-4o Mini".to_owned()),
-                description: Some("Affordable small model".to_owned()),
-                context_window: Some(128_000),
-                is_reasoning: Some(false),
-            },
-            ModelInfo {
-                id: "o3".to_owned(),
-                name: Some("o3".to_owned()),
-                description: Some("Advanced reasoning model".to_owned()),
-                context_window: Some(200_000),
-                is_reasoning: Some(true),
-            },
-            ModelInfo {
-                id: "o4-mini".to_owned(),
-                name: Some("o4-mini".to_owned()),
-                description: Some("Fast reasoning model".to_owned()),
-                context_window: Some(200_000),
-                is_reasoning: Some(true),
-            },
-        ])
-    }
 }

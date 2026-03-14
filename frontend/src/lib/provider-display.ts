@@ -1,6 +1,6 @@
 const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI',
-  openai_codex: 'Codex (ChatGPT)',
+  openai_codex: 'OpenAI',
   anthropic: 'Anthropic',
   ollama: 'Ollama (Local)',
   plugin: 'Plugin',

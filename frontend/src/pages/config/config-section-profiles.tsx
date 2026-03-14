@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import {
   type ModelInfo,
 } from '@/lib/api';
 import { formatProviderLabel } from '@/lib/provider-display';
+import { getCatalogModels, getDefaultModelId, type CatalogModel } from '@/lib/model-catalog';
 import type {
   AppConfigView,
   CredentialsView,
@@ -55,6 +56,13 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
 const REDACTED = '***';
+
+function formatAuthLabel(profile: ProviderProfile): string {
+  if (profile.provider_kind === 'openai_codex') return 'Codex (OAuth)';
+  if (profile.auth_method === 'apikey') return 'API Key';
+  if (profile.auth_method === 'oauth') return 'OAuth';
+  return profile.auth_method;
+}
 
 const PROVIDER_ICONS: Record<string, React.ReactNode> = {
   openai: <Sparkles className="w-5 h-5 text-success" />,
@@ -106,7 +114,7 @@ function ProfileCard({
   onSetDefault,
   onDelete,
   onRefresh,
-  hasSecrets,
+  secret,
   isConnected,
 }: {
   profile: ProviderProfile;
@@ -116,29 +124,50 @@ function ProfileCard({
   onSetDefault: () => void;
   onDelete: () => void;
   onRefresh: () => void;
-  hasSecrets: boolean;
+  secret: import('@/lib/types').ProfileSecrets | undefined;
   isConnected: boolean;
 }) {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [apiKey, setApiKey] = useState(hasSecrets ? REDACTED : '');
+  // Use the real API key value from credentials so "show" reveals the actual key.
+  const [apiKey, setApiKey] = useState(secret?.api_key ?? '');
   const [baseUrl, setBaseUrl] = useState(profile.base_url || '');
+
+  // Re-sync when the parent refreshes credentials (e.g. after save or on load).
+  useEffect(() => {
+    setApiKey(secret?.api_key ?? '');
+  }, [secret?.api_key]);
   const [model, setModel] = useState(profile.default_model || '');
-  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+
+  // Memoised so it stays stable across re-renders (prevents useEffect churn below).
+  const staticModels = useMemo(
+    () => getCatalogModels(profile.provider_kind, profile.auth_method),
+    [profile.provider_kind, profile.auth_method],
+  );
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>(() =>
+    getCatalogModels(profile.provider_kind, profile.auth_method),
+  );
   const [loadingModels, setLoadingModels] = useState(false);
   const [connecting, setConnecting] = useState(false);
 
   const fetchModels = useCallback(async () => {
     setLoadingModels(true);
     try {
-      const models = await fetchProviderModels(profile.id);
-      setAvailableModels(models);
+      const fetched = await fetchProviderModels(profile.id);
+      if (fetched.length > 0) {
+        // Merge: API-fetched first (richer metadata), then static catalog for any
+        // models not returned by the API.
+        const fetchedIds = new Set(fetched.map((m) => m.id));
+        const extras = staticModels.filter((m) => !fetchedIds.has(m.id));
+        setAvailableModels([...fetched, ...extras]);
+      }
     } catch (err) {
       console.warn(`Failed to fetch models for ${profile.id}:`, err);
+      // Keep static catalog as fallback — already set in initial state
     } finally {
       setLoadingModels(false);
     }
-  }, [profile.id]);
+  }, [profile.id, staticModels]);
 
   useEffect(() => {
     if (isExpanded) {
@@ -157,10 +186,10 @@ function ProfileCard({
           ? baseUrl
           : undefined,
       };
-      if (apiKey && apiKey !== REDACTED) {
+      const originalKey = secret?.api_key ?? '';
+      if (apiKey !== originalKey) {
+        // Only send when the value was actually changed (or cleared).
         payload.api_key = apiKey;
-      } else if (!apiKey && hasSecrets) {
-        payload.api_key = ''; // Clear
       }
       await updateProfile(profile.id, payload);
       toast.success(`${profile.name} updated.`);
@@ -223,8 +252,8 @@ function ProfileCard({
             <span className="font-semibold text-sm text-foreground block truncate">
               {profile.name}
             </span>
-            <p className="text-xs text-muted-foreground mt-0.5 capitalize truncate">
-              {formatProviderLabel(profile.provider_kind)} - {profile.auth_method}
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {formatProviderLabel(profile.provider_kind)} — {formatAuthLabel(profile)}
             </p>
           </div>
           <div className="flex items-center gap-2.5 shrink-0">
@@ -361,9 +390,11 @@ function ProfileCard({
                   </SelectContent>
                 </Select>
               ) : (
+                /* Ollama: no static catalog, allow free-text entry */
                 <Input
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
+                  placeholder="e.g. llama3.2:latest"
                   className="h-9 flex-1 font-mono text-sm"
                 />
               )}
@@ -409,32 +440,80 @@ function ProfileCard({
   );
 }
 
+// UI provider choice — OpenAI covers both openai and openai_codex backend kinds
+type UIProvider = 'openai' | 'anthropic' | 'ollama';
+
+// For OpenAI we expose two auth choices; the choice drives the backend provider_kind
+type OpenAIAuthChoice = 'apikey' | 'codex_oauth';
+
+function resolveProviderKindAndAuth(
+  uiProvider: UIProvider,
+  openAIAuthChoice: OpenAIAuthChoice,
+): { provider_kind: ProviderKind; auth_method: AuthMethod } {
+  if (uiProvider === 'openai') {
+    if (openAIAuthChoice === 'codex_oauth') {
+      return { provider_kind: 'openai_codex', auth_method: 'oauth' };
+    }
+    return { provider_kind: 'openai', auth_method: 'apikey' };
+  }
+  if (uiProvider === 'anthropic') {
+    return { provider_kind: 'anthropic', auth_method: 'apikey' };
+  }
+  return { provider_kind: 'ollama', auth_method: 'none' };
+}
+
 function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [providerKind, setProviderKind] = useState<ProviderKind | ''>('');
-  const [authMethod, setAuthMethod] = useState<AuthMethod>('apikey');
+  const [uiProvider, setUIProvider] = useState<UIProvider | ''>('');
+  const [openAIAuthChoice, setOpenAIAuthChoice] = useState<OpenAIAuthChoice>('apikey');
+  const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Derive catalog models and default for the current provider/auth selection
+  const { provider_kind: resolvedKind, auth_method: resolvedAuth } =
+    uiProvider !== ''
+      ? resolveProviderKindAndAuth(uiProvider as UIProvider, openAIAuthChoice)
+      : { provider_kind: '', auth_method: '' };
+  const catalogModels = getCatalogModels(resolvedKind, resolvedAuth);
+
+  const handleProviderChange = (v: string) => {
+    setUIProvider(v as UIProvider);
+    setOpenAIAuthChoice('apikey');
+    // Reset model to the new provider's default
+    const { provider_kind, auth_method } = resolveProviderKindAndAuth(v as UIProvider, 'apikey');
+    setModel(getDefaultModelId(provider_kind, auth_method));
+  };
+
+  const handleAuthChange = (v: OpenAIAuthChoice) => {
+    setOpenAIAuthChoice(v);
+    if (uiProvider === 'openai') {
+      const { provider_kind, auth_method } = resolveProviderKindAndAuth('openai', v);
+      setModel(getDefaultModelId(provider_kind, auth_method));
+    }
+  };
+
   const handleAdd = async () => {
-    if (!name || !providerKind) return;
+    if (!name || !uiProvider) return;
     setSaving(true);
     try {
-      const payload: any = {
-        name,
-        provider_kind: providerKind,
-        auth_method: authMethod,
-        default_model: providerKind === 'ollama' ? 'llama3' : 'gpt-4o-mini',
-      };
-      if (authMethod === 'apikey' && apiKey) {
+      const { provider_kind, auth_method } = resolveProviderKindAndAuth(
+        uiProvider as UIProvider,
+        openAIAuthChoice,
+      );
+      const default_model = model || getDefaultModelId(provider_kind, auth_method);
+      const payload: any = { name, provider_kind, auth_method, default_model };
+      if (auth_method === 'apikey' && apiKey) {
         payload.api_key = apiKey;
       }
       await createProfile(payload);
       toast.success('Profile created successfully.');
       setOpen(false);
       setName('');
-      setProviderKind('');
+      setUIProvider('');
+      setOpenAIAuthChoice('apikey');
+      setModel('');
       setApiKey('');
       onRefresh();
     } catch (err) {
@@ -443,6 +522,11 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
       setSaving(false);
     }
   };
+
+  const showApiKeyInput =
+    uiProvider !== '' &&
+    uiProvider !== 'ollama' &&
+    !(uiProvider === 'openai' && openAIAuthChoice === 'codex_oauth');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -470,47 +554,78 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium">Provider</label>
-            <Select
-              value={providerKind}
-              onValueChange={(v) => {
-                setProviderKind(v as ProviderKind);
-                if (v === 'ollama') setAuthMethod('none');
-                else if (v === 'openai_codex') setAuthMethod('oauth');
-                else setAuthMethod('apikey');
-              }}
-            >
+            <Select value={uiProvider} onValueChange={handleProviderChange}>
               <SelectTrigger className="border-border/40 focus:border-primary/40">
-                <SelectValue placeholder="Select Engine..." />
+                <SelectValue placeholder="Select provider..." />
               </SelectTrigger>
               <SelectContent className="border-border/40 bg-popover/95 backdrop-blur-xl shadow-2xl">
                 <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="openai_codex">Codex (ChatGPT)</SelectItem>
                 <SelectItem value="anthropic">Anthropic</SelectItem>
                 <SelectItem value="ollama">Ollama (Local)</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {providerKind && providerKind !== 'ollama' && (
+          {uiProvider === 'openai' && (
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">Authentication Method</label>
-              <Select value={authMethod} onValueChange={(v) => setAuthMethod(v as AuthMethod)}>
+              <label className="text-xs font-medium">Authentication</label>
+              <Select
+                value={openAIAuthChoice}
+                onValueChange={(v) => handleAuthChange(v as OpenAIAuthChoice)}
+              >
                 <SelectTrigger className="border-border/40 focus:border-primary/40">
-                  <SelectValue placeholder="Method..." />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="border-border/40 bg-popover/95 backdrop-blur-xl shadow-2xl">
-                  {providerKind !== 'openai_codex' && (
-                    <SelectItem value="apikey">API Key</SelectItem>
-                  )}
-                  {['openai', 'openai_codex'].includes(providerKind) && (
-                    <SelectItem value="oauth">OAuth</SelectItem>
-                  )}
+                  <SelectItem value="apikey">API Key</SelectItem>
+                  <SelectItem value="codex_oauth">Codex (OAuth)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           )}
-          {authMethod === 'apikey' && providerKind !== 'ollama' && (
+          {uiProvider !== '' && (
             <div className="space-y-1.5">
-              <label className="text-xs font-medium">API Key (optional now)</label>
+              <label className="text-xs font-medium">Default Model</label>
+              {catalogModels.length > 0 ? (
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger className="border-border/40 focus:border-primary/40">
+                    <SelectValue placeholder="Select model...">
+                      {catalogModels.find((m) => m.id === model)?.name || model || 'Select model...'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[250px] border-border/40 bg-popover/95 backdrop-blur-xl shadow-2xl">
+                    <ScrollArea className="h-full">
+                      {catalogModels.map((m) => (
+                        <SelectItem key={m.id} value={m.id} textValue={m.name}>
+                          <div className="flex flex-col text-left py-0.5 max-w-[300px]">
+                            <span className="font-medium text-sm truncate">{m.name}</span>
+                            {m.description && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                {m.description}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground/70 font-mono truncate">
+                              {m.id}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </ScrollArea>
+                  </SelectContent>
+                </Select>
+              ) : (
+                /* Ollama: free-text model entry */
+                <Input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="e.g. llama3.2:latest"
+                  className="border-border/40 focus:border-primary/40 h-9 font-mono text-sm"
+                />
+              )}
+            </div>
+          )}
+          {showApiKeyInput && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">API Key (optional)</label>
               <SecretInput
                 id="new-profile-api"
                 value={apiKey}
@@ -524,7 +639,7 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleAdd} disabled={!name || !providerKind || saving}>
+          <Button onClick={handleAdd} disabled={!name || !uiProvider || saving}>
             {saving && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Create
           </Button>
         </DialogFooter>
@@ -604,7 +719,6 @@ export function ConfigSectionProfiles() {
       <div className="space-y-3">
         {profiles.map((p) => {
           const secret = credentials?.profiles?.[p.id];
-          const hasSecrets = !!secret && (!!secret.api_key || !!secret.access_token);
           const isConnected =
             !!secret &&
             ((p.auth_method === 'apikey' && !!secret.api_key) ||
@@ -619,7 +733,7 @@ export function ConfigSectionProfiles() {
               onSetDefault={() => handleSetDefault(p.id)}
               onDelete={load}
               onRefresh={load}
-              hasSecrets={hasSecrets}
+              secret={secret}
               isConnected={isConnected}
             />
           );

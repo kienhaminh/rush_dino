@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thinking Bubble Styles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --background: hsl(220, 28%, 7%);
+    --foreground: hsl(0, 0%, 92%);
+    --card: hsl(217, 31%, 10%);
+    --border: hsl(217, 25%, 14%);
+    --muted: hsl(218, 29%, 12%);
+    --muted-fg: hsl(0, 0%, 55%);
+    --primary: hsl(185, 80%, 47%);
+    --primary-fg: hsl(213, 55%, 5%);
+    --brand-amber: hsl(46, 91%, 53%);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #08090f;
+    color: var(--foreground);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
+
+  h1 { font-size: 15px; font-weight: 600; color: var(--foreground); margin-bottom: 6px; }
+  .sub { font-size: 11px; color: var(--muted-fg); margin-bottom: 28px; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .option-card {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .option-card:hover { border-color: hsl(185, 80%, 30%); transform: translateY(-1px); }
+  .option-card.selected { border-color: var(--primary); }
+  .option-card.selected .card-label { color: var(--primary); }
+
+  .chat-preview {
+    background: var(--background);
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 290px;
+  }
+
+  /* ── Shared bubble primitives ── */
+  .bubble-row { display: flex; flex-direction: column; gap: 3px; }
+  .bubble-label {
+    font-size: 8px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: hsla(0,0%,55%,0.5);
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* User bubble (right) */
+  .bubble-user-row { display: flex; justify-content: flex-end; }
+  .bubble-user {
+    background: var(--primary);
+    color: var(--primary-fg);
+    border-radius: 18px 18px 4px 18px;
+    padding: 9px 13px;
+    font-size: 11px;
+    line-height: 1.5;
+    max-width: 78%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* Assistant bubble (left) */
+  .bubble-asst-row { display: flex; justify-content: flex-start; }
+  .bubble-asst {
+    background: var(--card);
+    color: var(--foreground);
+    border: 1px solid hsla(217,25%,14%,1);
+    border-radius: 18px 18px 18px 4px;
+    padding: 9px 13px;
+    font-size: 11px;
+    line-height: 1.5;
+    max-width: 78%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Option A: Cyan-tinted thinking bubble ── */
+  .thinking-a {
+    background: hsla(185, 80%, 47%, 0.07);
+    border: 1px solid hsla(185, 80%, 47%, 0.25);
+    border-radius: 18px 18px 18px 4px;
+    padding: 9px 13px;
+    max-width: 82%;
+    font-size: 10px;
+    color: hsl(185, 40%, 60%);
+    font-style: italic;
+    line-height: 1.55;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .label-a { color: hsl(185, 60%, 45%); }
+
+  /* ── Option B: Collapsible thinking bubble ── */
+  .thinking-b-live {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px 18px 18px 4px;
+    padding: 9px 13px;
+    max-width: 82%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .dots { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+  .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--primary);
+  }
+  .dot:nth-child(1) { opacity: 0.9; }
+  .dot:nth-child(2) { opacity: 0.55; }
+  .dot:nth-child(3) { opacity: 0.25; }
+  .thinking-b-text { font-size: 10px; color: var(--muted-fg); font-style: italic; }
+  .thinking-b-expand { font-size: 9px; color: hsla(0,0%,55%,0.4); margin-left: auto; flex-shrink: 0; }
+
+  .thinking-b-done {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px 18px 18px 4px;
+    padding: 9px 13px;
+    max-width: 82%;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .thinking-b-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .thinking-b-header-left { font-size: 9px; color: hsla(0,0%,55%,0.5); }
+  .thinking-b-header-right { font-size: 9px; color: hsl(185,80%,47%); cursor: pointer; }
+  .thinking-b-content { font-size: 10px; color: var(--muted-fg); font-style: italic; line-height: 1.55; }
+
+  .label-b { color: hsla(0,0%,55%,0.5); }
+
+  /* ── Option C: Amber-tinted thinking bubble ── */
+  .thinking-c {
+    background: hsla(46, 91%, 53%, 0.06);
+    border: 1px solid hsla(46, 91%, 53%, 0.2);
+    border-radius: 18px 18px 18px 4px;
+    padding: 9px 13px;
+    max-width: 82%;
+    font-size: 10px;
+    color: hsl(46, 60%, 60%);
+    font-style: italic;
+    line-height: 1.55;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .label-c { color: hsl(46, 70%, 50%); }
+
+  /* Card label at bottom */
+  .card-footer { padding: 12px 14px 14px; }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--foreground); margin-bottom: 4px; }
+  .card-label { font-size: 11px; color: var(--muted-fg); line-height: 1.45; }
+  .card-tag {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--primary);
+    background: hsla(185,80%,47%,0.1);
+    border-radius: 4px;
+    padding: 2px 6px;
+  }
+
+  .footer-note { text-align: center; margin-top: 20px; font-size: 10px; color: hsla(0,0%,55%,0.5); }
+</style>
+</head>
+<body>
+
+<h1>How should the thinking state appear?</h1>
+<p class="sub">All options use the real dark theme tokens. Click a card to select.</p>
+
+<div class="grid">
+
+  <!-- ── Option A ── -->
+  <div class="option-card" onclick="select(this, 'a')">
+    <div class="chat-preview">
+
+      <div class="bubble-user-row">
+        <div class="bubble-user">Summarize this report</div>
+      </div>
+
+      <div class="bubble-row">
+        <div class="bubble-label label-a">
+          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+          Thinking
+        </div>
+        <div class="thinking-a">
+          The report contains three sections — executive summary, financial breakdown, and risk analysis. I should start with the high-level findings and then condense...
+        </div>
+      </div>
+
+      <div class="bubble-row">
+        <div class="bubble-label">Assistant</div>
+        <div class="bubble-asst">
+          Here's a concise summary of the report across its three key sections...
+        </div>
+      </div>
+
+    </div>
+    <div class="card-footer">
+      <div class="card-title">A — Cyan tint</div>
+      <div class="card-label">Same bubble shape as assistant. Soft primary-color tint + italic text. Always visible, no interaction needed.</div>
+      <span class="card-tag">On-brand · Simple</span>
+    </div>
+  </div>
+
+  <!-- ── Option B ── -->
+  <div class="option-card" onclick="select(this, 'b')">
+    <div class="chat-preview">
+
+      <div class="bubble-user-row">
+        <div class="bubble-user">Summarize this report</div>
+      </div>
+
+      <!-- Live (streaming) state -->
+      <div class="bubble-row">
+        <div class="bubble-label label-b">
+          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1.5"/></svg>
+          Thinking
+        </div>
+        <div class="thinking-b-live">
+          <div class="dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+          </div>
+          <span class="thinking-b-text">Analyzing the report...</span>
+          <span class="thinking-b-expand">▾ expand</span>
+        </div>
+      </div>
+
+      <!-- Done / collapsed state -->
+      <div class="bubble-row" style="margin-top: -4px;">
+        <div class="thinking-b-done">
+          <div class="thinking-b-header">
+            <span class="thinking-b-header-left">Thought for 2s · 84 tokens</span>
+            <span class="thinking-b-header-right">▾ show</span>
+          </div>
+          <div class="thinking-b-content">
+            The report contains three sections — executive summary, financial breakdown, and risk analysis...
+          </div>
+        </div>
+      </div>
+
+      <div class="bubble-row">
+        <div class="bubble-label">Assistant</div>
+        <div class="bubble-asst">
+          Here's a concise summary of the report across its three key sections...
+        </div>
+      </div>
+
+    </div>
+    <div class="card-footer">
+      <div class="card-title">B — Collapsible</div>
+      <div class="card-label">Dots + status while streaming. Auto-collapses when done, token count shown. Click to expand full reasoning.</div>
+      <span class="card-tag">Clean · Interactive</span>
+    </div>
+  </div>
+
+  <!-- ── Option C ── -->
+  <div class="option-card" onclick="select(this, 'c')">
+    <div class="chat-preview">
+
+      <div class="bubble-user-row">
+        <div class="bubble-user">Summarize this report</div>
+      </div>
+
+      <div class="bubble-row">
+        <div class="bubble-label label-c">
+          <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="8" cy="6" rx="5" ry="4.5"/><path d="M6 11.5c0 1.1.9 2 2 2s2-.9 2-2"/><path d="M8 10.5v1"/></svg>
+          Thinking
+        </div>
+        <div class="thinking-c">
+          The report contains three sections — executive summary, financial breakdown, and risk analysis. I should start with the high-level findings and then condense...
+        </div>
+      </div>
+
+      <div class="bubble-row">
+        <div class="bubble-label">Assistant</div>
+        <div class="bubble-asst">
+          Here's a concise summary of the report across its three key sections...
+        </div>
+      </div>
+
+    </div>
+    <div class="card-footer">
+      <div class="card-title">C — Amber tint</div>
+      <div class="card-label">Uses brand-amber (lightbulb color from the logo). Warm tone signals "internal thought". Always visible.</div>
+      <span class="card-tag">Brand-aligned · Warm</span>
+    </div>
+  </div>
+
+</div>
+
+<p class="footer-note">Click a card to select · or describe your preference in the terminal</p>
+
+<script>
+  let selected = null;
+  function select(el, choice) {
+    document.querySelectorAll('.option-card').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    selected = choice;
+    if (window.__brainstorm_record) window.__brainstorm_record(choice, el.querySelector('.card-title').textContent);
+  }
+</script>
+
+</body>
+</html>

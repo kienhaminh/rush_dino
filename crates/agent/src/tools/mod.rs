@@ -20,5 +20,5 @@ pub mod shell_exec;
 pub mod spawn_agent;
 pub mod spawn_sub_agent;
 pub mod update_workflow;
+pub mod web_fetch;
 pub mod web_search;
-pub mod workspace_tools;

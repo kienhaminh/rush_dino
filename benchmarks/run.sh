@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # RushDino vs OpenClaw Performance Benchmark
-# Measures: binary/package size, boot time, idle memory, HTTP latency
+# Measures: binary/package size, boot time, idle memory, peak memory, HTTP latency
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,6 +17,7 @@ RUSHDINO_HEALTH="http://127.0.0.1:${RUSHDINO_PORT}/healthz"
 
 BOOT_TIMEOUT_S=30   # max seconds to wait for server ready
 LATENCY_SAMPLES=100 # number of curl requests for latency percentiles
+RSS_SAMPLE_INTERVAL=0.2  # seconds between RSS samples during load test
 
 # ---- helpers ----------------------------------------------------------------
 
@@ -26,11 +27,44 @@ info()  { echo -e "${GREEN}[bench]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[warn] ${NC} $*"; }
 error() { echo -e "${RED}[error]${NC} $*" >&2; }
 
-start_ms() { python3 -c "import time; print(int(time.time() * 1000))"; }
+start_ms() {
+  if date +%s%N | grep -v N > /dev/null 2>&1; then
+    # GNU date (nanoseconds)
+    echo "$(( $(date +%s%N) / 1000000 ))"
+  else
+    # BSD date fallback (macOS without coreutils)
+    python3 -c "import time; print(int(time.time() * 1000))"
+  fi
+}
+
+# Reads RSS (resident set size) in KB for a given PID. Returns 0 on failure.
+rss_kb() {
+  local pid="$1"
+  ps -o rss= -p "${pid}" 2>/dev/null | tr -d ' ' || echo 0
+}
+
+# Reads VSZ (virtual memory size) in KB for a given PID. Returns 0 on failure.
+vsz_kb() {
+  local pid="$1"
+  ps -o vsz= -p "${pid}" 2>/dev/null | tr -d ' ' || echo 0
+}
+
+kb_to_mb() {
+  python3 -c "print(f'{int(\"$1\")/1024:.1f}')"
+}
+
+# macOS: ps -o vsz= returns **bytes** (not KB like rss=)
+bytes_to_mb() {
+  python3 -c "print(f'{int(\"$1\")/1048576:.1f}')"
+}
 
 # cleanup: kill any background processes we started
 RDINO_PID=""
+RSS_SAMPLER_PID=""
 cleanup() {
+  if [[ -n "${RSS_SAMPLER_PID}" ]] && kill -0 "${RSS_SAMPLER_PID}" 2>/dev/null; then
+    kill "${RSS_SAMPLER_PID}" 2>/dev/null || true
+  fi
   if [[ -n "${RDINO_PID}" ]] && kill -0 "${RDINO_PID}" 2>/dev/null; then
     kill "${RDINO_PID}" 2>/dev/null || true
     wait "${RDINO_PID}" 2>/dev/null || true
@@ -43,12 +77,40 @@ wait_for_http() {
   local url="$1"
   local deadline
   deadline=$(( $(start_ms) + BOOT_TIMEOUT_S * 1000 ))
-  while ! curl -sf "${url}" > /dev/null 2>&1; do
+  while ! curl -4 --connect-timeout 0.1 -sf "${url}" > /dev/null 2>&1; do
     if (( $(start_ms) > deadline )); then
       return 1
     fi
-    sleep 0.05
+    sleep 0.01
   done
+}
+
+# Background RSS sampler: writes one RSS_KB value per line to a temp file.
+# Usage: start_rss_sampler <pid> <output_file> <interval_s>
+start_rss_sampler() {
+  local pid="$1" out="$2" interval="$3"
+  (
+    while kill -0 "${pid}" 2>/dev/null; do
+      rss_kb "${pid}" >> "${out}" 2>/dev/null || true
+      sleep "${interval}"
+    done
+  ) &
+  RSS_SAMPLER_PID=$!
+}
+
+stop_rss_sampler() {
+  if [[ -n "${RSS_SAMPLER_PID}" ]] && kill -0 "${RSS_SAMPLER_PID}" 2>/dev/null; then
+    kill "${RSS_SAMPLER_PID}" 2>/dev/null || true
+    wait "${RSS_SAMPLER_PID}" 2>/dev/null || true
+    RSS_SAMPLER_PID=""
+  fi
+}
+
+# Compute peak RSS from a sample file (one KB value per line).
+peak_rss_from_file() {
+  local file="$1"
+  if [[ ! -s "${file}" ]]; then echo 0; return; fi
+  sort -n "${file}" | tail -1
 }
 
 # compute p50/p95/p99 from N curl requests; prints "p50=Xms p95=Xms p99=Xms"
@@ -61,7 +123,7 @@ url, samples = sys.argv[1], int(sys.argv[2])
 times = []
 for _ in range(samples):
     r = subprocess.run(
-        ["curl", "-o", "/dev/null", "-s", "-w", "%{time_total}", url],
+        ["curl", "-4", "-o", "/dev/null", "-s", "-w", "%{time_total}", url],
         capture_output=True, text=True,
     )
     try:
@@ -95,6 +157,10 @@ info "All prerequisites satisfied."
 
 mkdir -p "${RESULTS_DIR}"
 
+# Temp file for RSS samples during load test
+RSS_SAMPLE_FILE="$(mktemp /tmp/rushdino_rss_XXXXXX)"
+trap 'rm -f "${RSS_SAMPLE_FILE}"' EXIT
+
 # ---- Section A: Build -------------------------------------------------------
 
 info "Building RushDino release binary..."
@@ -114,7 +180,7 @@ RUSHDINO_SIZE_BYTES=$(stat -f%z "${RUSHDINO_BINARY}" 2>/dev/null \
 RUSHDINO_SIZE_MB=$(python3 -c "print(f'{${RUSHDINO_SIZE_BYTES}/1048576:.1f}')")
 RUSHDINO_SIZE_HUMAN="${RUSHDINO_SIZE_MB} MB"
 
-# OpenClaw runtime footprint: prefer node_modules, fall back to dist/, then source tree
+# OpenClaw runtime footprint
 OPENCLAW_NM_MB=""
 OPENCLAW_DIST_MB=""
 OPENCLAW_SRC_MB=""
@@ -140,12 +206,16 @@ info "OpenClaw footprint: ${OPENCLAW_SIZE_HUMAN}"
 info "Measuring RushDino boot time (port ${RUSHDINO_PORT})..."
 
 RUSHDINO_BOOT=""
-RUSHDINO_RSS_MB=""
+RUSHDINO_IDLE_RSS_MB=""
+RUSHDINO_IDLE_VSZ_MB=""
+RUSHDINO_PEAK_RSS_MB=""
 
-if curl -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
-  warn "Port ${RUSHDINO_PORT} already in use; skipping boot measurement."
+if curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
+  warn "Port ${RUSHDINO_PORT} already in use; skipping boot + memory measurement."
   RUSHDINO_BOOT="N/A (port busy)"
-  RUSHDINO_RSS_MB="N/A"
+  RUSHDINO_IDLE_RSS_MB="N/A"
+  RUSHDINO_IDLE_VSZ_MB="N/A"
+  RUSHDINO_PEAK_RSS_MB="N/A"
   RDINO_PID=""
 else
   T0=$(start_ms)
@@ -157,31 +227,55 @@ else
     RUSHDINO_BOOT="$(( T1 - T0 ))ms"
     info "RushDino boot time: ${RUSHDINO_BOOT}"
 
-    # ---- Section D: Idle memory ---------------------------------------------
-    RSS_KB=$(ps -o rss= -p "${RDINO_PID}" 2>/dev/null | tr -d ' ' || echo 0)
-    RUSHDINO_RSS_MB=$(python3 -c "print(f'{${RSS_KB}/1024:.1f}')")
-    info "RushDino idle RSS: ${RUSHDINO_RSS_MB} MB"
+    # ---- Section D: Idle memory (snapshot right after boot) -----------------
+    IDLE_RSS_KB=$(rss_kb "${RDINO_PID}")
+    IDLE_VSZ_BYTES=$(vsz_kb "${RDINO_PID}")   # bytes on macOS
+    RUSHDINO_IDLE_RSS_MB=$(kb_to_mb "${IDLE_RSS_KB}")
+    RUSHDINO_IDLE_VSZ_MB=$(bytes_to_mb "${IDLE_VSZ_BYTES}")
+    info "RushDino idle RSS: ${RUSHDINO_IDLE_RSS_MB} MB  |  VSZ: ${RUSHDINO_IDLE_VSZ_MB} MB"
   else
     warn "RushDino did not become ready within ${BOOT_TIMEOUT_S}s."
     RUSHDINO_BOOT="timeout (>${BOOT_TIMEOUT_S}s)"
-    RUSHDINO_RSS_MB="N/A"
+    RUSHDINO_IDLE_RSS_MB="N/A"
+    RUSHDINO_IDLE_VSZ_MB="N/A"
+    RUSHDINO_PEAK_RSS_MB="N/A"
   fi
 fi
 
-# OpenClaw is a CLI tool -- no simple HTTP gateway to start
+# OpenClaw is a CLI tool — no HTTP server to start
 OPENCLAW_BOOT="N/A (CLI tool)"
-OPENCLAW_RSS_MB="N/A (CLI tool)"
+OPENCLAW_RSS="N/A (CLI tool)"
 
-# ---- Section E: HTTP latency (RushDino) -------------------------------------
+# ---- Section E: HTTP latency + peak RSS (RushDino) --------------------------
 
 RDINO_LATENCY=""
-if curl -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
+if curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1 && [[ -n "${RDINO_PID}" ]]; then
+  info "Measuring HTTP latency (${LATENCY_SAMPLES} requests to ${RUSHDINO_HEALTH})..."
+
+  # Start background RSS sampler during the load test
+  > "${RSS_SAMPLE_FILE}"
+  start_rss_sampler "${RDINO_PID}" "${RSS_SAMPLE_FILE}" "${RSS_SAMPLE_INTERVAL}"
+
+  RDINO_LATENCY=$(measure_latency "${RUSHDINO_HEALTH}" "${LATENCY_SAMPLES}")
+
+  stop_rss_sampler
+
+  # Compute peak RSS from samples
+  PEAK_RSS_KB=$(peak_rss_from_file "${RSS_SAMPLE_FILE}")
+  RUSHDINO_PEAK_RSS_MB=$(kb_to_mb "${PEAK_RSS_KB}")
+
+  info "RushDino latency: ${RDINO_LATENCY}"
+  info "RushDino peak RSS (under load): ${RUSHDINO_PEAK_RSS_MB} MB"
+elif curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
+  # Port was busy — still measure latency, but no PID for peak RSS
   info "Measuring HTTP latency (${LATENCY_SAMPLES} requests to ${RUSHDINO_HEALTH})..."
   RDINO_LATENCY=$(measure_latency "${RUSHDINO_HEALTH}" "${LATENCY_SAMPLES}")
+  RUSHDINO_PEAK_RSS_MB="N/A (PID unknown)"
   info "RushDino latency: ${RDINO_LATENCY}"
 else
   warn "RushDino health endpoint not reachable; skipping latency."
   RDINO_LATENCY="N/A"
+  RUSHDINO_PEAK_RSS_MB="N/A"
 fi
 
 OPENCLAW_LATENCY="N/A (CLI tool)"
@@ -198,7 +292,7 @@ fi
 # ---- Section G: Compute improvement ratios ----------------------------------
 
 improvement_ratio() {
-  local a="$1" b="$2"   # a = RushDino value (MB), b = OpenClaw value (MB)
+  local a="$1" b="$2"   # a = RushDino value, b = reference value
   python3 - "${a}" "${b}" <<'PYEOF'
 import sys
 try:
@@ -212,7 +306,6 @@ except Exception:
 PYEOF
 }
 
-# determine OpenClaw numeric size
 OPENCLAW_SIZE_NUM=""
 if [[ -n "${OPENCLAW_NM_MB}" ]]; then
   OPENCLAW_SIZE_NUM="${OPENCLAW_NM_MB}"
@@ -239,7 +332,7 @@ cat > "${REPORT}" <<MDEOF
 Generated: ${GENERATED_AT}
 
 > **Note:** OpenClaw is a full-featured CLI tool (TypeScript/Node.js) without a
-> standalone HTTP server entry point, so boot time, idle memory, and HTTP
+> standalone HTTP server entry point, so boot time, memory, and HTTP
 > latency comparisons are marked N/A. Binary size is compared against the
 > node_modules footprint (the closest equivalent runtime dependency set).
 
@@ -249,7 +342,9 @@ Generated: ${GENERATED_AT}
 |---|---|---|---|
 | Binary / package size | ${RUSHDINO_SIZE_HUMAN} | ${OPENCLAW_SIZE_HUMAN} | ${SIZE_RATIO} smaller |
 | Boot time (first HTTP ready) | ${RUSHDINO_BOOT} | ${OPENCLAW_BOOT} | -- |
-| Idle memory RSS | ${RUSHDINO_RSS_MB} MB | ${OPENCLAW_RSS_MB} | -- |
+| Idle RSS (post-boot) | ${RUSHDINO_IDLE_RSS_MB} MB | ${OPENCLAW_RSS} | -- |
+| Peak RSS (under load) | ${RUSHDINO_PEAK_RSS_MB} MB | ${OPENCLAW_RSS} | -- |
+| Virtual memory (VSZ) | ${RUSHDINO_IDLE_VSZ_MB} MB | -- | -- |
 | HTTP latency (${LATENCY_SAMPLES} reqs) | ${RDINO_LATENCY} | ${OPENCLAW_LATENCY} | -- |
 
 ## Environment
@@ -261,6 +356,7 @@ Generated: ${GENERATED_AT}
 | Node.js version | ${NODE_VERSION} |
 | Health endpoint | \`${RUSHDINO_HEALTH}\` |
 | Latency samples | ${LATENCY_SAMPLES} |
+| RSS sample interval | ${RSS_SAMPLE_INTERVAL}s |
 | Date | ${GENERATED_AT} |
 
 ## Raw Results
@@ -270,7 +366,9 @@ Generated: ${GENERATED_AT}
 - Binary path: \`${RUSHDINO_BINARY}\`
 - Binary size: **${RUSHDINO_SIZE_HUMAN}** (${RUSHDINO_SIZE_BYTES} bytes)
 - Boot time: **${RUSHDINO_BOOT}**
-- Idle RSS: **${RUSHDINO_RSS_MB} MB**
+- Idle RSS: **${RUSHDINO_IDLE_RSS_MB} MB**
+- Peak RSS (under load): **${RUSHDINO_PEAK_RSS_MB} MB**
+- Virtual memory (VSZ): **${RUSHDINO_IDLE_VSZ_MB} MB**
 - HTTP latency: **${RDINO_LATENCY}**
 
 ### OpenClaw
@@ -278,25 +376,30 @@ Generated: ${GENERATED_AT}
 - Source root: \`${OPENCLAW_DIR}\`
 - Runtime footprint: **${OPENCLAW_SIZE_HUMAN}**
 - Boot time: ${OPENCLAW_BOOT}
-- Idle RSS: ${OPENCLAW_RSS_MB}
+- Memory: ${OPENCLAW_RSS}
 - HTTP latency: ${OPENCLAW_LATENCY}
 
 ## Methodology
 
 - **Size**: \`stat\` on the release binary vs \`du\` on node_modules (or dist/).
 - **Boot time**: wall-clock ms from process spawn until first successful
-  \`curl\` to the health endpoint (\`/healthz\`), polled every 50 ms.
+  \`curl\` to the health endpoint (\`/healthz\`), polled every 10 ms.
 - **Idle RSS**: \`ps -o rss=\` immediately after the server becomes ready,
-  before any conversations are processed.
+  before any requests are served.
+- **Peak RSS**: highest RSS sample taken while running the latency test,
+  sampled every ${RSS_SAMPLE_INTERVAL}s in background.
+- **VSZ**: virtual address space size at idle (\`ps -o vsz=\`).
 - **HTTP latency**: ${LATENCY_SAMPLES} sequential \`curl\` requests with
   \`%{time_total}\`; sorted to derive p50/p95/p99.
 MDEOF
 
 info "Done. Report written to: ${REPORT}"
 echo ""
-echo "----------------------------------------------------------------"
-echo "  Binary size : ${RUSHDINO_SIZE_HUMAN}  vs  ${OPENCLAW_SIZE_HUMAN}"
-echo "  Boot time   : ${RUSHDINO_BOOT}"
-echo "  Idle RSS    : ${RUSHDINO_RSS_MB} MB"
-echo "  Latency     : ${RDINO_LATENCY}"
-echo "----------------------------------------------------------------"
+echo "================================================================"
+echo "  Binary size  : ${RUSHDINO_SIZE_HUMAN}  vs  ${OPENCLAW_SIZE_HUMAN}"
+echo "  Boot time    : ${RUSHDINO_BOOT}"
+echo "  Idle RSS     : ${RUSHDINO_IDLE_RSS_MB} MB"
+echo "  Peak RSS     : ${RUSHDINO_PEAK_RSS_MB} MB"
+echo "  VSZ          : ${RUSHDINO_IDLE_VSZ_MB} MB"
+echo "  Latency      : ${RDINO_LATENCY}"
+echo "================================================================"

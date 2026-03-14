@@ -1,6 +1,7 @@
 pub mod approval_gate;
 pub mod channel_pairing;
 mod chat_broadcast;
+mod cron_runtime;
 mod knowledge_graph_bridge;
 pub mod middleware;
 mod provider_runtime;
@@ -20,12 +21,12 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
-use state::AppState;
 use tokio::net::TcpListener;
+use state::AppState;
 use tower_http::trace::TraceLayer;
 
 use rushdino_agent::AgentRuntime;
-use rushdino_common::{db, init, AppConfig, AppError, CredentialsConfig, Result};
+use rushdino_common::{asset_sync, db, init, AppConfig, AppError, CredentialsConfig, Result};
 use rushdino_gateway::{
     Gateway, GatewayAdapterCapabilities, GatewayRichDeliveryMode, GatewayStateStore, SessionManager,
 };
@@ -34,6 +35,7 @@ use rushdino_security::rate_limit::EndpointLimiters;
 use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
+    cron_runtime::spawn_cron_runtime,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
     middleware::{cors_layer, hmac_auth_middleware, rate_limit_middleware, HmacAuthState},
     provider_runtime::refresh_runtime_from_disk,
@@ -45,6 +47,7 @@ use crate::{
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
+    
     let home = init::default_home_dir();
     let config_path = home.join("config.toml");
     let credentials_path = home.join("credentials.toml");
@@ -53,6 +56,7 @@ pub async fn run_server() -> Result<()> {
 
     let pool = db::init_pool(&config.db_path).await?;
     db::run_migrations(&pool).await?;
+
     let pool = Arc::new(pool);
     let chat_broadcast = Arc::new(ChatBroadcastHub::new());
     let runtime_logs = Arc::new(RuntimeLogStore::new(
@@ -74,7 +78,6 @@ pub async fn run_server() -> Result<()> {
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
     runtime.reconcile_incomplete_runs().await?;
     let system_broker = Arc::new(LocalSystemBroker::new(
-        config_path.clone(),
         gate.clone(),
         runtime.clone(),
     )) as rushdino_agent::SharedSystemBroker;
@@ -86,23 +89,32 @@ pub async fn run_server() -> Result<()> {
         config_path.clone(),
         credentials_path.clone(),
     ));
-    refresh_runtime_from_disk(runtime_state.as_ref()).await?;
+    spawn_cron_runtime(runtime_state.clone());
 
-    if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
-        let _ = log_runtime(
-            &runtime_logs,
-            "warn",
-            "provider",
-            "default profile runtime unavailable",
-            Some(serde_json::json!({ "error": unavailable_error })),
-        )
-        .await;
-    }
+    // Background heavy runtime initialization for fast boot.
+    let runtime_state_bg = runtime_state.clone();
+    let runtime_logs_bg = runtime_logs.clone();
+    tokio::spawn(async move {
+        if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref()).await {
+            tracing::error!("failed to perform initial runtime refresh: {err}");
+        }
 
-    if let Some(engine) = runtime_state.engine_opt() {
-        // Seed example workflows on first startup (skipped if any workflows already exist).
-        engine.seed_initial_workflows().await;
-    }
+        if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
+            let _ = log_runtime(
+                &runtime_logs_bg,
+                "warn",
+                "provider",
+                "default profile runtime unavailable",
+                Some(serde_json::json!({ "error": unavailable_error })),
+            )
+            .await;
+        }
+
+        if let Some(engine) = runtime_state_bg.engine_opt() {
+            // Seed example workflows on first startup (skipped if any workflows already exist).
+            engine.seed_initial_workflows().await;
+        }
+    });
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
@@ -322,7 +334,6 @@ pub async fn run_server() -> Result<()> {
         chat_broadcast,
         channel_pairing,
     );
-
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
         .route("/api/chat", post(routes::chat::chat))
@@ -331,11 +342,36 @@ pub async fn run_server() -> Result<()> {
             "/api/conversations",
             get(routes::conversations::list_conversations),
         )
-        .route("/api/sessions", get(routes::sessions::list_sessions))
+        .route(
+            "/api/sessions",
+            get(routes::sessions::list_sessions).post(routes::sessions::create_session),
+        )
+        .route(
+            "/api/sessions/:id",
+            get(routes::sessions::get_session).delete(routes::sessions::delete_session),
+        )
+        .route(
+            "/api/sessions/:id/messages",
+            post(routes::sessions::send_session_message),
+        )
+        .route("/api/sessions/:id/reset", post(routes::sessions::reset_session))
+        .route("/api/sessions/:id/archive", post(routes::sessions::archive_session))
         .route(
             "/api/sessions/:id/runs",
             get(routes::runs::list_session_runs),
         )
+        .route(
+            "/api/cron",
+            get(routes::cron::list_cron_jobs).post(routes::cron::create_cron_job),
+        )
+        .route(
+            "/api/cron/:id",
+            get(routes::cron::get_cron_job).patch(routes::cron::update_cron_job).delete(routes::cron::delete_cron_job),
+        )
+        .route("/api/cron/:id/pause", post(routes::cron::pause_cron_job))
+        .route("/api/cron/:id/resume", post(routes::cron::resume_cron_job))
+        .route("/api/cron/:id/run", post(routes::cron::run_cron_job))
+        .route("/api/cron/:id/runs", get(routes::cron::list_cron_runs))
         .route("/api/logs", get(routes::logs::get_logs))
         .route("/api/approvals", get(routes::approval::list_approvals))
         .route(
@@ -390,6 +426,10 @@ pub async fn run_server() -> Result<()> {
         .route(
             "/api/system/prompt",
             get(routes::soul_memory::get_system_prompt),
+        )
+        .route(
+            "/api/system/tools",
+            get(routes::soul_memory::get_registered_tools),
         )
         .route(
             "/api/usage/metrics",
@@ -481,10 +521,6 @@ pub async fn run_server() -> Result<()> {
             "/api/providers/:profile_id/models",
             get(routes::providers::list_provider_models),
         )
-        .route(
-            "/api/providers/:profile_id/connect-oauth",
-            post(routes::providers::connect_codex),
-        )
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),
@@ -500,6 +536,7 @@ pub async fn run_server() -> Result<()> {
 
     let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
+
     tracing::info!("rushdino server listening on http://{addr}");
     let _ = log_runtime(
         &runtime_logs,
@@ -509,6 +546,15 @@ pub async fn run_server() -> Result<()> {
         Some(serde_json::json!({ "addr": addr })),
     )
     .await;
+
+    // Spawn background download of agent/skill templates (first-run only; skips existing files).
+    let asset_home = init::default_home_dir();
+    tokio::spawn(async move {
+        if let Err(e) = asset_sync::seed_bundled_assets(&asset_home).await {
+            tracing::warn!("asset_sync failed: {e}");
+        }
+    });
+
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await

@@ -50,6 +50,7 @@ pub async fn extract_triples(
         temperature: Some(0.0),
         max_tokens: Some(800),
         model: None,
+        thinking_level: None,
     };
 
     let response = provider.chat(request).await?;

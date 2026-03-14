@@ -224,6 +224,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
 
     // Active tool calls: call_id -> (name, partial_args)
     let mut pending_calls: HashMap<String, (String, String)> = HashMap::new();
+    // Responses argument deltas are keyed by item_id, not call_id.
+    let mut item_to_call: HashMap<String, String> = HashMap::new();
 
     while let Some(item) = stream.next().await {
         let Ok(chunk) = item else { break };
@@ -246,6 +248,7 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                             tool_calls: vec![],
                             done: true,
                             usage: None,
+                            thinking_delta: None,
                         })
                         .await;
                     return;
@@ -270,6 +273,11 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                             // (item_type tracking removed — only function_call needs handling)
 
                             if item_type == "function_call" {
+                                let item_id = item_obj
+                                    .get("id")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_owned();
                                 let call_id = item_obj
                                     .get("call_id")
                                     .and_then(Value::as_str)
@@ -280,6 +288,9 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     .and_then(Value::as_str)
                                     .unwrap_or_default()
                                     .to_owned();
+                                if !item_id.is_empty() && !call_id.is_empty() {
+                                    item_to_call.insert(item_id, call_id.clone());
+                                }
                                 pending_calls
                                     .entry(call_id)
                                     .or_insert((name, String::new()));
@@ -301,6 +312,7 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     tool_calls: vec![],
                                     done: false,
                                     usage: None,
+                                    thinking_delta: None,
                                 })
                                 .await;
                         }
@@ -320,6 +332,7 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     tool_calls: vec![],
                                     done: false,
                                     usage: None,
+                                    thinking_delta: None,
                                 })
                                 .await;
                         }
@@ -327,15 +340,27 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
 
                     // -------------------------- Function call arguments delta --------------
                     "response.function_call_arguments.delta" => {
-                        let call_id = event
+                        let direct_call_id = event
                             .get("call_id")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let item_id = event
+                            .get("item_id")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
                         let delta = event
                             .get("delta")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
-                        if let Some(entry) = pending_calls.get_mut(call_id) {
+                        let resolved_call_id = if !direct_call_id.is_empty() {
+                            direct_call_id
+                        } else {
+                            item_to_call
+                                .get(item_id)
+                                .map(String::as_str)
+                                .unwrap_or_default()
+                        };
+                        if let Some(entry) = pending_calls.get_mut(resolved_call_id) {
                             entry.1.push_str(delta);
                         }
                     }
@@ -349,6 +374,11 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 .unwrap_or_default();
 
                             if item_type == "function_call" {
+                                let item_arguments = item_obj
+                                    .get("arguments")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or_default()
+                                    .to_owned();
                                 let call_id = item_obj
                                     .get("call_id")
                                     .and_then(Value::as_str)
@@ -359,9 +389,17 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     .and_then(Value::as_str)
                                     .unwrap_or_default()
                                     .to_owned();
+                                if !item_obj_id.is_empty() {
+                                    item_to_call.remove(&item_obj_id);
+                                }
 
                                 if let Some((name, args_str)) = pending_calls.remove(&call_id) {
-                                    let arguments = serde_json::from_str(&args_str)
+                                    let final_args = if args_str.is_empty() {
+                                        item_arguments.as_str()
+                                    } else {
+                                        args_str.as_str()
+                                    };
+                                    let arguments = serde_json::from_str(final_args)
                                         .unwrap_or_else(|_| json!({}));
                                     // Encode as "call_id|item_id" to preserve both IDs
                                     let id = if item_obj_id.is_empty() {
@@ -379,6 +417,7 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                             }],
                                             done: false,
                                             usage: None,
+                                            thinking_delta: None,
                                         })
                                         .await;
                                 }
@@ -394,6 +433,7 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 tool_calls: vec![],
                                 done: true,
                                 usage: None,
+                                thinking_delta: None,
                             })
                             .await;
                         return;
@@ -415,6 +455,7 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 tool_calls: vec![],
                                 done: true,
                                 usage: None,
+                                thinking_delta: None,
                             })
                             .await;
                         return;
@@ -427,15 +468,25 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 tool_calls: vec![],
                                 done: true,
                                 usage: None,
+                                thinking_delta: None,
                             })
                             .await;
                         return;
                     }
 
-                    // Reasoning / thinking events — forward as empty delta (not user-visible)
+                    // Reasoning / thinking events — forward as thinking_delta
                     "response.reasoning_summary_text.delta" => {
-                        // Thinking text; currently not forwarded as user-visible delta
-                        // (callers can extend this if they need thinking blocks)
+                        if let Some(text) = event.get("delta").and_then(Value::as_str) {
+                            let _ = tx
+                                .send(ChatChunk {
+                                    delta: String::new(),
+                                    tool_calls: vec![],
+                                    done: false,
+                                    usage: None,
+                                    thinking_delta: Some(text.to_owned()),
+                                })
+                                .await;
+                        }
                     }
 
                     _ => {} // All other events are silently ignored
@@ -451,6 +502,64 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
             tool_calls: vec![],
             done: true,
             usage: None,
+            thinking_delta: None,
         })
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    async fn spawn_sse_server(sse_body: String) -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 8192];
+            let _ = stream.read(&mut buf).await;
+            let content_length = sse_body.len();
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {content_length}\r\nConnection: close\r\n\r\n{sse_body}"
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+        format!("http://127.0.0.1:{port}")
+    }
+
+    #[tokio::test]
+    async fn process_responses_stream_collects_function_call_arguments_from_item_id_deltas() {
+        let sse_body = concat!(
+            "data: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_123\",\"type\":\"function_call\",\"call_id\":\"call_123\",\"name\":\"file_write\",\"arguments\":\"\"}}\n\n",
+            "data: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"fc_123\",\"output_index\":0,\"delta\":\"{\\\"path\\\":\\\"note.md\\\",\\\"content\\\":\\\"hello\\\"}\"}\n\n",
+            "data: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_123\",\"type\":\"function_call\",\"call_id\":\"call_123\",\"name\":\"file_write\",\"arguments\":\"{\\\"path\\\":\\\"note.md\\\",\\\"content\\\":\\\"hello\\\"}\"}}\n\n",
+            "data: {\"type\":\"response.completed\"}\n\n",
+        )
+        .to_owned();
+
+        let url = spawn_sse_server(sse_body).await;
+        let response = reqwest::Client::new().get(&url).send().await.unwrap();
+        let (tx, mut rx) = mpsc::channel(8);
+
+        process_responses_stream(response, tx).await;
+
+        let mut tool_calls = Vec::new();
+        while let Some(chunk) = rx.recv().await {
+            tool_calls.extend(chunk.tool_calls);
+            if chunk.done {
+                break;
+            }
+        }
+
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].name, "write");
+        assert_eq!(
+            tool_calls[0].arguments,
+            json!({
+                "path": "note.md",
+                "content": "hello"
+            })
+        );
+    }
 }

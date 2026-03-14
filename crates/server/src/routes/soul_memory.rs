@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 
 use rushdino_agent::engine_bootstrap::system_message;
+use rushdino_agent::memory_bootstrap::{build_bootstrap_context, build_truncation_warning_lines};
 use rushdino_common::Result;
 
 use crate::state::AppState;
@@ -21,14 +22,28 @@ pub struct SoulMemoryFile {
     pub content: String,
 }
 
+/// A single context file as actually injected into the system prompt (post-truncation).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InjectedContextFile {
+    pub label: String,
+    pub content: String,
+    pub truncated: bool,
+    pub original_len: usize,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SoulMemoryStateResponse {
     pub data_dir: String,
+    pub bootstrap: SoulMemoryFile,
     pub soul: SoulMemoryFile,
     pub memory: SoulMemoryFile,
     pub identity_files: Vec<SoulMemoryFile>,
     pub daily_files: Vec<SoulMemoryFile>,
+    /// Files as actually injected into the system prompt (truncation applied).
+    pub injected_context: Vec<InjectedContextFile>,
+    pub truncation_warnings: Vec<String>,
 }
 
 pub async fn get_soul_memory_state(
@@ -36,6 +51,7 @@ pub async fn get_soul_memory_state(
 ) -> Result<Json<SoulMemoryStateResponse>> {
     let data_dir = state.config().data_dir.clone();
 
+    let bootstrap = read_file_snapshot(&data_dir.join("BOOTSTRAP.md"), "BOOTSTRAP.md")?;
     let soul = read_file_snapshot(&data_dir.join("SOUL.md"), "SOUL.md")?;
     let memory = read_memory_snapshot(&data_dir)?;
 
@@ -66,12 +82,38 @@ pub async fn get_soul_memory_state(
 
     daily_files.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
 
+    // Build the injected context exactly as the engine does — same truncation applied.
+    let (injected_context, truncation_warnings) = if let Ok(engine) = state.runtime.engine() {
+        let startup_files = engine.memory().collect_startup_files();
+        let ctx_files = build_bootstrap_context(
+            startup_files,
+            engine.config().bootstrap_max_chars,
+            engine.config().bootstrap_total_max_chars,
+        );
+        let warnings = build_truncation_warning_lines(&ctx_files);
+        let injected = ctx_files
+            .into_iter()
+            .map(|f| InjectedContextFile {
+                label: f.label,
+                content: f.content,
+                truncated: f.truncated,
+                original_len: f.original_len,
+            })
+            .collect();
+        (injected, warnings)
+    } else {
+        (vec![], vec![])
+    };
+
     Ok(Json(SoulMemoryStateResponse {
         data_dir: data_dir.display().to_string(),
+        bootstrap,
         soul,
         memory,
         identity_files,
         daily_files,
+        injected_context,
+        truncation_warnings,
     }))
 }
 
@@ -125,13 +167,49 @@ pub async fn get_system_prompt(
     State(state): State<AppState>,
 ) -> Result<Json<SystemPromptResponse>> {
     let engine = state.runtime.engine()?;
-    let msg = system_message(engine.config(), engine.memory(), engine.agent_manager(), engine.skill_manager());
+    let msg = system_message(
+        engine.config(),
+        engine.memory(),
+        engine.agent_manager(),
+        engine.skill_manager(),
+        engine.tool_registry(),
+    );
     let content = msg.content.clone();
     let token_estimate = content.len() / 4;
     Ok(Json(SystemPromptResponse {
         content,
         token_estimate,
     }))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisteredToolItem {
+    pub name: String,
+    pub description: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisteredToolsResponse {
+    pub tools: Vec<RegisteredToolItem>,
+}
+
+pub async fn get_registered_tools(
+    State(state): State<AppState>,
+) -> Result<Json<RegisteredToolsResponse>> {
+    let engine = state.runtime.engine()?;
+    let mut tools: Vec<RegisteredToolItem> = engine
+        .tool_registry()
+        .definitions()
+        .into_iter()
+        .map(|def| RegisteredToolItem {
+            name: def.name,
+            description: def.description,
+        })
+        .collect();
+    tools.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(Json(RegisteredToolsResponse { tools }))
 }
 
 #[cfg(test)]

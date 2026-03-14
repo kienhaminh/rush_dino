@@ -20,6 +20,50 @@ pub struct Usage {
     pub total_tokens: u32,
 }
 
+/// Unified thinking/reasoning level across all providers.
+///
+/// - OpenAI: maps to `reasoning_effort` ("minimal"…"xhigh") or disabled.
+/// - Anthropic: maps to `thinking.budget_tokens` (token-based) or effort level (adaptive models).
+/// - "xhigh" is only supported by select OpenAI models (gpt-5.*-codex-max, gpt-5.2+).
+/// - "adaptive" lets the model choose its own reasoning depth.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ThinkingLevel {
+    Off,
+    Minimal,
+    #[default]
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Adaptive,
+}
+
+impl ThinkingLevel {
+    /// Token budget for Anthropic token-based thinking (non-adaptive models).
+    pub fn anthropic_budget_tokens(&self) -> Option<u32> {
+        match self {
+            ThinkingLevel::Off => None,
+            ThinkingLevel::Minimal => Some(1024),
+            ThinkingLevel::Low => Some(2048),
+            ThinkingLevel::Medium => Some(8192),
+            ThinkingLevel::High | ThinkingLevel::Xhigh | ThinkingLevel::Adaptive => Some(16384),
+        }
+    }
+
+    /// OpenAI `reasoning_effort` string. Returns `None` for `Off`.
+    pub fn openai_reasoning_effort(&self) -> Option<&'static str> {
+        match self {
+            ThinkingLevel::Off => None,
+            ThinkingLevel::Minimal => Some("minimal"),
+            ThinkingLevel::Low => Some("low"),
+            ThinkingLevel::Medium | ThinkingLevel::Adaptive => Some("medium"),
+            ThinkingLevel::High => Some("high"),
+            ThinkingLevel::Xhigh => Some("xhigh"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatRequest {
     pub messages: Vec<Message>,
@@ -27,6 +71,7 @@ pub struct ChatRequest {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub model: Option<String>,
+    pub thinking_level: Option<ThinkingLevel>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +88,10 @@ pub struct ChatChunk {
     pub delta: String,
     pub tool_calls: Vec<ToolCall>,
     pub done: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking_delta: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,13 +119,5 @@ pub enum ProviderConfig {
     Anthropic {
         api_key: String,
         model: String,
-    },
-    Codex {
-        /// OAuth access token used as Bearer authorization
-        access_token: String,
-        model: String,
-    },
-    Plugin {
-        manifest_path: std::path::PathBuf,
     },
 }

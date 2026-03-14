@@ -16,6 +16,7 @@ import type {
   RunState,
   SessionSummary,
   SoulMemoryStateResponse,
+  RegisteredTool,
   SkillRecord,
   SystemSummaryResponse,
   UsageMetricsResponse,
@@ -158,6 +159,13 @@ export async function fetchSystemPrompt(): Promise<{ content: string; tokenEstim
   const endpoint = '/api/system/prompt';
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchRegisteredTools(): Promise<RegisteredTool[]> {
+  const endpoint = '/api/system/tools';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.tools;
 }
 
 export async function fetchSoulMemoryState(): Promise<SoulMemoryStateResponse> {

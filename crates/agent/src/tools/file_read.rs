@@ -22,11 +22,11 @@ impl FileReadTool {
 #[async_trait]
 impl Tool for FileReadTool {
     fn name(&self) -> &str {
-        "file_read"
+        "read"
     }
 
     fn description(&self) -> &str {
-        "Read file from ~/.rushdino/documents"
+        "Read a file"
     }
 
     fn parameters(&self) -> Value {

@@ -11,6 +11,7 @@ export default {
         body: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       colors: {
+        // ── Legacy teal scale (kept for backward compatibility) ──
         teal: {
           950: '#0a2e2c',
           800: '#0e7a72',
@@ -19,6 +20,20 @@ export default {
           300: '#67e8e3',
           200: '#a5f3ef',
         },
+        // ── Brand palette — extracted from RushDino logo ──
+        brand: {
+          navy:  'hsl(var(--brand-navy))',   // #1A3A5C — outer body silhouette
+          ocean: 'hsl(var(--brand-ocean))',  // #1B70A0 — main body fill
+          teal:  'hsl(var(--brand-teal))',   // #1B9DB8 — mid-tone body
+          cyan:  'hsl(var(--brand-cyan))',   // #17C4D6 — speed lines & highlights
+          mint:  'hsl(var(--brand-mint))',   // #3DBE8A — belly & chest
+          lime:  'hsl(var(--brand-lime))',   // #82C840 — circuit patterns
+          amber: 'hsl(var(--brand-amber))',  // #F5C118 — lightbulb
+          glow:  'hsl(var(--brand-glow))',   // #F07830 — claw tips / warm accent
+          ice:   'hsl(var(--brand-ice))',    // #E8F5FB — background hex grid
+          dark:  'hsl(var(--brand-dark))',   // #1A2E44 — logotype text
+        },
+        // ── Semantic tokens ──
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {

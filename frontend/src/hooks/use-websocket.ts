@@ -99,6 +99,21 @@ export function useWebSocket(
           setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
           return;
         }
+        if (msg.thinking_delta) {
+          setItems((prev) => {
+            const lastIdx = [...prev].map((x, i) => [x, i] as const).reverse()
+              .find(([x]) => x.kind === 'thinking')?.[1] ?? -1;
+            if (lastIdx === -1) return prev;
+            const item = prev[lastIdx];
+            if (item.kind !== 'thinking') return prev;
+            return [
+              ...prev.slice(0, lastIdx),
+              { ...item, content: (item.content ?? '') + msg.thinking_delta },
+              ...prev.slice(lastIdx + 1),
+            ];
+          });
+          return;
+        }
         if (!msg.delta) return;
         // Track which conversation is streaming; on the first chunk of a new
         // conversation (sent without a conversation_id), notify ChatPage so it

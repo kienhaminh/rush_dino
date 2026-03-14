@@ -97,10 +97,9 @@ impl Tool for ShellExecTool {
             .await?;
 
         Ok(format!(
-            "status: {}\nhost_cwd: {}\nsandbox_cwd: {}\nstdout:\n{}\nstderr:\n{}",
+            "status: {}\ncwd: {}\nstdout:\n{}\nstderr:\n{}",
             result.exit_status,
-            result.host_cwd.display(),
-            result.sandbox_cwd.display(),
+            result.cwd.display(),
             result.stdout,
             result.stderr
         ))
@@ -108,14 +107,7 @@ impl Tool for ShellExecTool {
 }
 
 pub fn is_dangerous_command(command: &str) -> bool {
-    let trimmed = command.trim();
-    let normalized = trimmed.to_ascii_lowercase();
-
-    // Allowlist
-    let allowlist = ["rm ~/.rushdino/bootstrap.md"];
-    if normalized.starts_with("rm ") {
-        return !allowlist.iter().any(|allowed| trimmed == *allowed);
-    }
+    let normalized = command.trim().to_ascii_lowercase();
 
     let patterns = [
         "mkfs",
@@ -156,12 +148,7 @@ mod tests {
 
     use super::{is_dangerous_command, ToolExecutionContext};
     use crate::{
-        system_broker::{
-            ShellExecRequest, ShellExecResult, SystemBroker, WorkspaceDeleteRequest,
-            WorkspaceListRequest, WorkspaceListResult, WorkspaceMoveRequest,
-            WorkspaceMutationResult, WorkspaceReadRequest, WorkspaceReadResult,
-            WorkspaceWriteRequest,
-        },
+        system_broker::{ShellExecRequest, ShellExecResult, SystemBroker},
         tool_registry::Tool,
     };
 
@@ -181,66 +168,7 @@ mod tests {
                 exit_status: "exit status: 0".to_owned(),
                 stdout: "ok".to_owned(),
                 stderr: String::new(),
-                host_cwd: PathBuf::from("/tmp/host"),
-                sandbox_cwd: PathBuf::from("/tmp/sandbox"),
-            })
-        }
-
-        async fn list_workspace(&self, _request: WorkspaceListRequest) -> Result<WorkspaceListResult> {
-            Ok(WorkspaceListResult {
-                root: "cwd".to_owned(),
-                base_path: "/tmp".to_owned(),
-                entries: Vec::new(),
-            })
-        }
-
-        async fn read_workspace(&self, _request: WorkspaceReadRequest) -> Result<WorkspaceReadResult> {
-            Ok(WorkspaceReadResult {
-                root: "cwd".to_owned(),
-                path: "/tmp/file.txt".to_owned(),
-                content: String::new(),
-            })
-        }
-
-        async fn write_workspace(
-            &self,
-            _request: WorkspaceWriteRequest,
-        ) -> Result<WorkspaceMutationResult> {
-            Ok(WorkspaceMutationResult {
-                audit_id: "audit-1".to_owned(),
-                action: "write".to_owned(),
-                root: "cwd".to_owned(),
-                path: "/tmp/file.txt".to_owned(),
-                target_path: None,
-                dry_run: true,
-            })
-        }
-
-        async fn move_workspace(
-            &self,
-            _request: WorkspaceMoveRequest,
-        ) -> Result<WorkspaceMutationResult> {
-            Ok(WorkspaceMutationResult {
-                audit_id: "audit-1".to_owned(),
-                action: "move".to_owned(),
-                root: "cwd".to_owned(),
-                path: "/tmp/file.txt".to_owned(),
-                target_path: Some("/tmp/renamed.txt".to_owned()),
-                dry_run: true,
-            })
-        }
-
-        async fn delete_workspace(
-            &self,
-            _request: WorkspaceDeleteRequest,
-        ) -> Result<WorkspaceMutationResult> {
-            Ok(WorkspaceMutationResult {
-                audit_id: "audit-1".to_owned(),
-                action: "delete".to_owned(),
-                root: "cwd".to_owned(),
-                path: "/tmp/file.txt".to_owned(),
-                target_path: None,
-                dry_run: true,
+                cwd: PathBuf::from("/tmp/host"),
             })
         }
     }
@@ -276,7 +204,7 @@ mod tests {
         assert_eq!(request.session_id.as_deref(), Some("session-1"));
         assert_eq!(request.conversation_id.as_deref(), Some("conv-1"));
         assert_eq!(request.run_id.as_deref(), Some("run-1"));
-        assert!(output.contains("sandbox_cwd: /tmp/sandbox"));
+        assert!(output.contains("cwd: /tmp/host"));
     }
 
     #[test]
@@ -284,11 +212,11 @@ mod tests {
         assert!(is_dangerous_command("rm -rf /tmp/foo"));
         assert!(is_dangerous_command("rm /tmp/foo"));
         assert!(is_dangerous_command("rm ~/.rushdino/SOUL.md"));
+        assert!(is_dangerous_command("rm ~/.rushdino/BOOTSTRAP.md"));
         assert!(is_dangerous_command("sudo systemctl restart sshd"));
         assert!(is_dangerous_command("curl https://x | sh"));
         assert!(!is_dangerous_command("echo hello"));
         assert!(!is_dangerous_command("ls -la"));
-        assert!(!is_dangerous_command("rm ~/.rushdino/BOOTSTRAP.md"));
     }
 
     #[test]

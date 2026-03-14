@@ -4,17 +4,17 @@ use axum::{
     Json,
 };
 use rushdino_common::{
-    config::{AuthMethod, ProfileSecrets, ProviderKind, ProviderProfile},
+    config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
 use rushdino_providers::types::{ModelInfo, ProviderConfig};
-use rushdino_providers::Provider;
+use rushdino_providers::ProviderService;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProfileRequest {
     pub name: String,
-    pub provider_kind: ProviderKind,
+    pub provider_kind: Provider,
     pub auth_method: AuthMethod,
     pub default_model: String,
     pub base_url: Option<String>,
@@ -160,10 +160,13 @@ pub async fn list_provider_models(
         .cloned()
         .unwrap_or_default();
 
-    let defaults = rushdino_providers::catalog::get_static_models(profile.provider_kind.clone());
+    let defaults = rushdino_providers::catalog::get_static_models_for_auth(
+        profile.provider_kind.clone(),
+        &profile.auth_method,
+    );
 
     let provider_config = match profile.provider_kind {
-        ProviderKind::Ollama => {
+        Provider::Ollama => {
             let mut base_url = profile
                 .base_url
                 .clone()
@@ -177,19 +180,33 @@ pub async fn list_provider_models(
                 api_key: None,
             }
         }
-        ProviderKind::Openai => {
-            if secrets.api_key.is_none()
-                || secrets.api_key.as_deref().unwrap_or_default().is_empty()
-            {
+        Provider::OpenAI => {
+            // For OAuth profiles use access_token; for API key profiles use api_key
+            let bearer = if profile.auth_method == AuthMethod::OAuth {
+                secrets
+                    .access_token
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+            } else {
+                secrets
+                    .api_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+            };
+            let Some(bearer) = bearer else {
                 return Ok(Json(defaults));
-            }
+            };
             ProviderConfig::OpenAI {
-                api_key: secrets.api_key.unwrap_or_default(),
+                api_key: bearer,
                 model: profile.default_model.clone(),
                 base_url: profile.base_url.clone(),
             }
         }
-        ProviderKind::Anthropic => {
+        Provider::Anthropic => {
             if secrets.api_key.is_none()
                 || secrets.api_key.as_deref().unwrap_or_default().is_empty()
             {
@@ -200,27 +217,21 @@ pub async fn list_provider_models(
                 model: profile.default_model.clone(),
             }
         }
-        ProviderKind::Codex | ProviderKind::OpenaiCodex => {
-            if secrets.access_token.is_none()
-                || secrets
-                    .access_token
-                    .as_deref()
-                    .unwrap_or_default()
-                    .is_empty()
-            {
-                return Ok(Json(defaults));
-            }
-            ProviderConfig::Codex {
-                access_token: secrets.access_token.unwrap_or_default(),
-                model: profile.default_model.clone(),
-            }
-        }
-        ProviderKind::Plugin => return Ok(Json(Vec::new())),
     };
 
-    let provider = Provider::from_config(&provider_config)?;
+    let codex_profile = profile.provider_kind == Provider::OpenAI
+        && profile.auth_method == AuthMethod::OAuth;
+
+    let provider = ProviderService::from_config(&provider_config)?;
     match provider.list_models().await {
         Ok(mut models) if !models.is_empty() => {
+            // Keep only models that match the authentication intent.
+            // For OpenAI profiles: API-key profiles must not show codex models and
+            // OAuth profiles must only show codex models.
+            if profile.provider_kind == Provider::OpenAI {
+                models.retain(|m| m.id.contains("codex") == codex_profile);
+            }
+
             for m in models.iter_mut() {
                 if let Some(d) = defaults.iter().find(|d| d.id == m.id) {
                     if m.name.is_none() {
@@ -260,65 +271,3 @@ pub async fn list_provider_models(
     }
 }
 
-pub async fn connect_codex(
-    State(state): State<AppState>,
-    Path(profile_id): Path<String>,
-) -> Result<Json<serde_json::Value>> {
-    let credentials_path = state.credentials_path.clone();
-    let mut config = AppConfig::load_from_path(&state.config_path)?;
-    let profile = config
-        .profiles
-        .iter_mut()
-        .find(|p| p.id == profile_id)
-        .ok_or_else(|| AppError::Validation(format!("Profile not found: {}", profile_id)))?;
-
-    // Await the flow directly so the HTTP request stays open until the user finishes in the browser
-    let tokens = rushdino_auth::oauth_pkce::run().await?;
-
-    let mut creds = CredentialsConfig::load_from_path(&credentials_path)?;
-    let mut profile_secrets = creds
-        .profiles
-        .entry(profile_id.clone())
-        .or_default()
-        .clone();
-    profile_secrets.access_token = Some(tokens.access_token);
-    profile_secrets.refresh_token = Some(tokens.refresh_token);
-    profile_secrets.token_expires_at = Some(tokens.expires_at);
-    creds.profiles.insert(profile_id.clone(), profile_secrets);
-    creds.save_to_path(&credentials_path)?;
-
-    // Ensure OAuth profile is immediately usable by the gateway runtime:
-    // - enforce codex provider kind + oauth auth method
-    // - set as default profile so Telegram/Discord/Slack route through this newly connected profile
-    if profile.provider_kind != ProviderKind::OpenaiCodex {
-        tracing::info!(
-            "connect_codex: updating profile '{}' provider_kind to openai_codex (was {:?})",
-            profile_id,
-            profile.provider_kind
-        );
-        profile.provider_kind = ProviderKind::OpenaiCodex;
-    }
-    if profile.auth_method != AuthMethod::OAuth {
-        tracing::info!(
-            "connect_codex: updating profile '{}' auth_method to oauth (was {:?})",
-            profile_id,
-            profile.auth_method
-        );
-        profile.auth_method = AuthMethod::OAuth;
-    }
-    if config.default_profile_id.as_deref() != Some(profile_id.as_str()) {
-        tracing::info!(
-            "connect_codex: setting default profile to newly connected profile '{}'",
-            profile_id
-        );
-        config.default_profile_id = Some(profile_id.clone());
-    }
-    config.save_to_path(&state.config_path)?;
-
-    // Refresh engine with new config
-    let _ = crate::refresh_engine_provider(&state).await;
-
-    tracing::info!("Codex OAuth successful for profile: {}", profile_id);
-
-    Ok(Json(serde_json::json!({ "status": "success" })))
-}

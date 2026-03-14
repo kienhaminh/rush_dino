@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod asset_sync;
 pub mod config;
 pub mod db;
 pub mod error;
@@ -10,7 +11,7 @@ pub mod templates;
 pub mod workflow_templates;
 
 pub use config::{
-    AppConfig, ChannelAccessConfig, CredentialsConfig, DmPolicy, ExecutionConfig, ProviderKind,
+    AppConfig, ChannelAccessConfig, CredentialsConfig, DmPolicy, ExecutionConfig, Provider,
     ShellExecSandboxConfig,
 };
 pub use error::{AppError, Result};

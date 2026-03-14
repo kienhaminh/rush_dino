@@ -8,6 +8,7 @@ import {
   fetchSessions,
   fetchSoulMemoryState,
   fetchSystemPrompt,
+  fetchSystemSummary,
 } from '@/lib/api';
 import type {
   Message,
@@ -15,6 +16,7 @@ import type {
   RunSnapshot,
   SessionSummary,
   SoulMemoryStateResponse,
+  SystemSummaryResponse,
 } from '@/lib/types';
 import { SessionsPage } from './SessionsPage';
 
@@ -28,6 +30,7 @@ export function SessionsRoute() {
   const [soulMemory, setSoulMemory] = useState<SoulMemoryStateResponse | null>(null);
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [registeredTools, setRegisteredTools] = useState<RegisteredTool[]>([]);
+  const [agentConfig, setAgentConfig] = useState<SystemSummaryResponse['agentConfig']>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef(false);
@@ -35,16 +38,18 @@ export function SessionsRoute() {
   // Fetch sessions + soul memory + system prompt
   const refreshMeta = useCallback(async (isInitial = false) => {
     try {
-      const [s, mem, prompt, tools] = await Promise.all([
+      const [s, mem, prompt, tools, summary] = await Promise.all([
         fetchSessions(),
         fetchSoulMemoryState(),
         fetchSystemPrompt(),
         fetchRegisteredTools(),
+        fetchSystemSummary(),
       ]);
       setSessions(s);
       setSoulMemory(mem);
       setSystemPrompt(prompt.content);
       setRegisteredTools(tools);
+      setAgentConfig(summary.agentConfig ?? null);
       if (isInitial && s.length > 0) {
         const latest = [...s].sort(
           (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -133,6 +138,7 @@ export function SessionsRoute() {
       soulMemory={soulMemory}
       systemPrompt={systemPrompt}
       registeredTools={registeredTools}
+      agentConfig={agentConfig}
       loading={loading}
       error={error}
       onSelectSession={setSelectedSessionId}

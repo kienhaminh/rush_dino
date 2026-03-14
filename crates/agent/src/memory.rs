@@ -4,6 +4,8 @@ use chrono::{Days, Utc};
 
 use rushdino_common::Result;
 
+use crate::memory_bootstrap::{resolve_within_boundary, BootstrapFile};
+
 #[derive(Clone)]
 pub struct MemoryManager {
     root: PathBuf,
@@ -16,6 +18,39 @@ impl MemoryManager {
 
     pub fn root(&self) -> &PathBuf {
         &self.root
+    }
+
+    /// Returns the files the agent should have in context on every session start
+    /// (SOUL.md, USER.md, TOOLS.md, IDENTITY.md, MEMORY.md, yesterday's daily note).
+    /// Excludes BOOTSTRAP.md, which is handled separately by the system prompt builder.
+    pub fn startup_context(&self) -> String {
+        let mut sections = Vec::new();
+
+        for name in ["SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"] {
+            if let Ok(content) = self.read_named(name) {
+                sections.push(format!("### {name}\n\n{content}"));
+            }
+        }
+
+        if let Ok(memory) = self.read_named("MEMORY.md") {
+            sections.push(format!("### MEMORY.md\n\n{memory}"));
+        }
+
+        // Yesterday's daily note for recent context.
+        let yesterday = chrono::Utc::now()
+            .date_naive()
+            .checked_sub_days(chrono::Days::new(1))
+            .unwrap_or_else(|| chrono::Utc::now().date_naive());
+        let daily_path = self
+            .root
+            .join("memory")
+            .join("daily")
+            .join(format!("{yesterday}.md"));
+        if let Ok(daily) = std::fs::read_to_string(daily_path) {
+            sections.push(format!("### Daily note ({yesterday})\n\n{daily}"));
+        }
+
+        sections.join("\n\n")
     }
 
     pub fn load_context(&self) -> Result<String> {
@@ -117,7 +152,51 @@ impl MemoryManager {
         if trimmed.eq_ignore_ascii_case("MEMORY.md") {
             return self.canonical_memory_path();
         }
-        sanitize(self.root.clone(), trimmed)
+        // Use boundary-aware resolver; fall back to a safe join on error.
+        resolve_within_boundary(&self.root, trimmed).unwrap_or_else(|_| self.root.join(trimmed))
+    }
+
+    /// Returns structured bootstrap file entries (name + path + content-or-missing)
+    /// for the same files loaded by `startup_context()`.
+    pub fn collect_startup_files(&self) -> Vec<BootstrapFile> {
+        let mut files = Vec::new();
+
+        for name in ["SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"] {
+            let path = self.resolve_named_path(name);
+            let content = fs::read_to_string(&path).ok();
+            files.push(BootstrapFile {
+                name: name.to_owned(),
+                path,
+                content,
+            });
+        }
+
+        let memory_path = self.canonical_memory_path();
+        let memory_content = fs::read_to_string(&memory_path).ok();
+        files.push(BootstrapFile {
+            name: "MEMORY.md".to_owned(),
+            path: memory_path,
+            content: memory_content,
+        });
+
+        // Yesterday's daily note for recent context.
+        let yesterday = Utc::now()
+            .date_naive()
+            .checked_sub_days(Days::new(1))
+            .unwrap_or_else(|| Utc::now().date_naive());
+        let daily_path = self
+            .root
+            .join("memory")
+            .join("daily")
+            .join(format!("{yesterday}.md"));
+        let daily_content = fs::read_to_string(&daily_path).ok();
+        files.push(BootstrapFile {
+            name: format!("Daily note ({yesterday})"),
+            path: daily_path,
+            content: daily_content,
+        });
+
+        files
     }
 
     fn push_file_if_exists(&self, sections: &mut Vec<String>, file_name: &str) -> Result<()> {
@@ -129,10 +208,6 @@ impl MemoryManager {
     }
 }
 
-fn sanitize(base: PathBuf, file_name: &str) -> PathBuf {
-    let safe = file_name.replace("..", "").replace('\\', "/");
-    base.join(safe.trim_start_matches('/'))
-}
 
 #[cfg(test)]
 mod tests {

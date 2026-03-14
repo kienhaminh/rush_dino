@@ -5,6 +5,7 @@ pub mod channel_pairing;
 pub mod chat;
 pub mod config;
 pub mod conversations;
+pub mod cron;
 pub mod documents;
 pub mod files;
 pub mod gateway;

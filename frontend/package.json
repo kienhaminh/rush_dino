@@ -48,6 +48,8 @@
     "tailwindcss": "^3.4.19",
     "typescript": "^5.6.2",
     "vite": "^5.4.8",
+    "vite-plugin-compression": "^0.5.1",
+    "vite-plugin-compression2": "^2.5.0",
     "vitest": "^4.0.18"
   }
 }

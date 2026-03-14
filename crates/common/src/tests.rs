@@ -5,49 +5,13 @@ use crate::{
     init,
 };
 
-/// Parses the frontmatter fields from a markdown agent file for validation.
-struct BundledAgentTemplate {
-    name: String,
-    description: String,
-    system_prompt: String,
-    icon: Option<String>,
-}
-
-fn parse_bundled_md(content: &str) -> Option<BundledAgentTemplate> {
-    let content = content.strip_prefix("---\n")?;
-    let close = content.find("\n---")?;
-    let frontmatter = &content[..close];
-    let body = content[close + 4..].trim().to_owned(); // skip "\n---"
-
-    let mut name = None;
-    let mut description = None;
-    let mut icon = None;
-    for line in frontmatter.lines() {
-        if let Some((k, v)) = line.split_once(':') {
-            match k.trim() {
-                "name" => name = Some(v.trim().to_owned()),
-                "description" => description = Some(v.trim().to_owned()),
-                "icon" => icon = Some(v.trim().to_owned()),
-                _ => {}
-            }
-        }
-    }
-
-    Some(BundledAgentTemplate {
-        name: name?,
-        description: description?,
-        system_prompt: body,
-        icon,
-    })
-}
-
 #[test]
 fn load_default_config_without_file() {
     let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
     let path = root.join("config.toml");
     let config = AppConfig::load_from_path(&path).expect("default config should load");
     assert_eq!(config.port, 28847);
-    assert_eq!(config.host, "127.0.0.1");
+    assert_eq!(config.host, "0.0.0.0");
     assert!(config.execution.shell_exec_sandbox.enabled);
     assert_eq!(config.gateway.telegram.access.dm_policy, DmPolicy::Pairing);
     assert_eq!(config.gateway.discord.access.dm_policy, DmPolicy::Pairing);
@@ -70,51 +34,8 @@ fn ensure_dir_creates_expected_structure() {
     assert!(root.join("skills").exists());
     assert!(root.join("MEMORY.md").exists());
     assert!(root.join("agents").exists());
-    assert!(root.join("agents/general-assistant.md").exists());
-    assert!(root.join("agents/spawn-agent.md").exists());
-    assert!(root.join("skills/skill-creator/SKILL.md").exists());
-    assert!(root.join("skills/skill-creator/scripts/run_eval.py").exists());
 
     let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn bundled_skill_files_are_non_empty() {
-    for (path, content) in crate::skills::BUNDLED_SKILL_FILES {
-        assert!(!content.is_empty(), "bundled skill file {} is empty", path);
-    }
-}
-
-#[test]
-fn bundled_agents_are_valid_and_named_consistently() {
-    let mut names = std::collections::HashSet::new();
-    for (key, content) in crate::agents::BUNDLED_AGENTS {
-        let template = parse_bundled_md(content)
-            .unwrap_or_else(|| panic!("invalid bundled agent {key}: failed to parse markdown"));
-        assert_eq!(&template.name, key, "template name must match bundle key");
-        assert!(
-            names.insert(template.name.clone()),
-            "duplicate bundled agent name: {}",
-            template.name
-        );
-        assert!(
-            !template.description.trim().is_empty(),
-            "template {} must have description",
-            template.name
-        );
-        assert!(
-            !template.system_prompt.trim().is_empty(),
-            "template {} must have system prompt",
-            template.name
-        );
-        if let Some(icon) = template.icon {
-            assert!(
-                !icon.trim().is_empty(),
-                "template {} icon cannot be blank",
-                template.name
-            );
-        }
-    }
 }
 
 #[test]
@@ -132,9 +53,6 @@ fn credentials_save_round_trip_special_chars() {
         slack_bot_token: None,
         profiles: std::collections::HashMap::new(),
         slack_app_token: None,
-        codex_access_token: Some("codex-access".to_owned()),
-        codex_refresh_token: Some("codex-refresh".to_owned()),
-        codex_token_expires_at: Some(1_760_000_000),
         api_secret: None,
     };
 
@@ -145,12 +63,6 @@ fn credentials_save_round_trip_special_chars() {
     let loaded = CredentialsConfig::load_from_path(&path).expect("credentials should load");
     assert_eq!(loaded.openai_api_key, credentials.openai_api_key);
     assert_eq!(loaded.anthropic_api_key, credentials.anthropic_api_key);
-    assert_eq!(loaded.codex_access_token, credentials.codex_access_token);
-    assert_eq!(loaded.codex_refresh_token, credentials.codex_refresh_token);
-    assert_eq!(
-        loaded.codex_token_expires_at,
-        credentials.codex_token_expires_at
-    );
 
     let _ = fs::remove_dir_all(root);
 }
@@ -165,7 +77,6 @@ fn credentials_save_overwrites_existing_file() {
 
     let credentials = CredentialsConfig {
         openai_api_key: Some("new-key".to_owned()),
-        codex_token_expires_at: Some(42),
         ..CredentialsConfig::default()
     };
 
@@ -175,7 +86,6 @@ fn credentials_save_overwrites_existing_file() {
     let loaded = CredentialsConfig::load_from_path(&path).expect("credentials should load");
 
     assert_eq!(loaded.openai_api_key.as_deref(), Some("new-key"));
-    assert_eq!(loaded.codex_token_expires_at, Some(42));
 
     let _ = fs::remove_dir_all(root);
 }
@@ -208,9 +118,6 @@ model = "gpt-4.1"
 
 [anthropic]
 model = "claude-3-5-sonnet-latest"
-
-[openai_codex]
-model = "gpt-5-codex"
 
 [gateway.telegram]
 enabled = true

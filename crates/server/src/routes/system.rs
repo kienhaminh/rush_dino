@@ -3,10 +3,19 @@ use chrono::{Duration, Utc};
 use serde::Serialize;
 
 use rushdino_agent::{RunCounts, RunListFilter};
+use rushdino_providers::types::ThinkingLevel;
 use rushdino_common::{AppConfig, CredentialsConfig, Result};
 
 use crate::provider_runtime::{provider_kind_label, validate_default_profile_execution};
 use crate::state::AppState;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConfigView {
+    pub thinking_level: ThinkingLevel,
+    pub max_iterations: usize,
+    pub max_context_tokens: usize,
+}
 
 const RECENT_LOG_LIMIT: i64 = 100;
 const INCIDENT_PREVIEW_LIMIT: usize = 6;
@@ -29,6 +38,7 @@ pub struct SystemSummaryResponse {
     pub conversations: ConversationSummaryView,
     pub security: SecuritySummaryView,
     pub incidents: Vec<IncidentView>,
+    pub agent_config: Option<AgentConfigView>,
 }
 
 #[derive(Debug, Serialize)]
@@ -253,6 +263,14 @@ pub async fn get_system_summary(
                 .to_string(),
         },
         incidents,
+        agent_config: state.engine_opt().map(|engine| {
+            let cfg = engine.config();
+            AgentConfigView {
+                thinking_level: cfg.thinking_level.clone(),
+                max_iterations: cfg.max_iterations,
+                max_context_tokens: cfg.max_context_tokens,
+            }
+        }),
     }))
 }
 
@@ -535,7 +553,7 @@ fn profile_has_secret(credentials: &CredentialsConfig, profile_id: &str) -> bool
 mod tests {
     use super::build_doctor_findings;
     use crate::runtime_state::RuntimeStatus;
-    use rushdino_common::{AppConfig, CredentialsConfig, ProviderKind};
+    use rushdino_common::{AppConfig, CredentialsConfig, Provider};
 
     #[test]
     fn doctor_flags_missing_hmac_secret() {
@@ -558,7 +576,7 @@ mod tests {
             .push(rushdino_common::config::ProviderProfile {
                 id: "primary".to_owned(),
                 name: "Primary".to_owned(),
-                provider_kind: ProviderKind::Openai,
+                provider_kind: Provider::OpenAI,
                 auth_method: rushdino_common::config::AuthMethod::ApiKey,
                 default_model: "gpt-4.1-mini".to_owned(),
                 base_url: None,

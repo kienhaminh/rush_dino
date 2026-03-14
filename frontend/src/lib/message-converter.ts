@@ -52,11 +52,12 @@ export function messagesToItems(messages: Message[]): ConversationItem[] {
       if (idx !== undefined) {
         const existing = items[idx];
         if (existing.kind === 'tool_use') {
+          const isError = msg.content.startsWith('[tool_error:');
           items[idx] = {
             ...existing,
             result: msg.content,
-            is_error: false,
-            status: 'done',
+            is_error: isError,
+            status: isError ? 'error' : 'done',
           };
         }
       }

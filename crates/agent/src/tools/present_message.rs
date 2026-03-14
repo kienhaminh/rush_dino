@@ -16,7 +16,7 @@ impl PresentMessageTool {
 #[async_trait]
 impl Tool for PresentMessageTool {
     fn name(&self) -> &str {
-        "present_message"
+        "message"
     }
 
     fn description(&self) -> &str {

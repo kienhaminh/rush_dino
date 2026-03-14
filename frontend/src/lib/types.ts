@@ -294,6 +294,11 @@ export interface SystemSummaryResponse {
     sandboxWorkspaceRoot: string;
   };
   incidents: SystemIncidentRecord[];
+  agentConfig?: {
+    thinkingLevel: 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive' | string;
+    maxIterations: number;
+    maxContextTokens: number;
+  } | null;
 }
 
 export interface DoctorFinding {
@@ -326,12 +331,28 @@ export interface SoulMemoryFile {
   content: string;
 }
 
+export interface RegisteredTool {
+  name: string;
+  description: string;
+}
+
+export interface InjectedContextFile {
+  label: string;
+  content: string;
+  truncated: boolean;
+  originalLen: number;
+}
+
 export interface SoulMemoryStateResponse {
   dataDir: string;
+  bootstrap: SoulMemoryFile;
   soul: SoulMemoryFile;
   memory: SoulMemoryFile;
   identityFiles: SoulMemoryFile[];
   dailyFiles: SoulMemoryFile[];
+  /** Files as actually injected into the system prompt (truncation applied). */
+  injectedContext: InjectedContextFile[];
+  truncationWarnings: string[];
 }
 
 export interface SessionSummary {
@@ -575,6 +596,7 @@ export interface WsChatChunkEvent {
   delta: string;
   tool_calls: ToolCall[];
   done: boolean;
+  thinking_delta?: string;
 }
 export interface WsAssistantResetEvent {
   type: 'assistant_reset';
@@ -665,7 +687,7 @@ export type ConversationItem =
       richContent?: RichContent | null;
       runId?: string | null;
     }
-  | { kind: 'thinking'; id: string }
+  | { kind: 'thinking'; id: string; content?: string }
   | {
       kind: 'tool_use';
       id: string;

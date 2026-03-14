@@ -1,13 +1,32 @@
 use crate::types::ModelInfo;
-use rushdino_common::config::ProviderKind;
+use rushdino_common::config::{AuthMethod, Provider};
+
+/// Returns the static model catalog filtered to match the given authentication method.
+///
+/// For `Provider::OpenAI`:
+///   - `AuthMethod::OAuth`   → Codex-only models (ChatGPT OAuth bearer)
+///   - everything else       → standard API-key models (no codex IDs)
+///
+/// All other providers ignore `auth` and return the full list.
+pub fn get_static_models_for_auth(kind: Provider, auth: &AuthMethod) -> Vec<ModelInfo> {
+    let all = get_static_models(kind.clone());
+    match kind {
+        Provider::OpenAI => {
+            let codex_profile = *auth == AuthMethod::OAuth;
+            all.into_iter()
+                .filter(|m| m.id.contains("codex") == codex_profile)
+                .collect()
+        }
+        _ => all,
+    }
+}
 
 /// Returns the context window (in tokens) for a known model ID.
 /// Returns `None` for models that are not in the static catalog.
 pub fn context_window_for_model(model_id: &str) -> Option<u32> {
     let all_models: Vec<ModelInfo> = [
-        ProviderKind::Openai,
-        ProviderKind::Anthropic,
-        ProviderKind::OpenaiCodex,
+        Provider::OpenAI,
+        Provider::Anthropic,
     ]
     .into_iter()
     .flat_map(get_static_models)
@@ -19,9 +38,9 @@ pub fn context_window_for_model(model_id: &str) -> Option<u32> {
         .and_then(|info| info.context_window)
 }
 
-pub fn get_static_models(kind: ProviderKind) -> Vec<ModelInfo> {
+pub fn get_static_models(kind: Provider) -> Vec<ModelInfo> {
     match kind {
-        ProviderKind::Openai | ProviderKind::OpenaiCodex => vec![
+        Provider::OpenAI => vec![
             ModelInfo {
                 id: "gpt-5".into(),
                 name: Some("GPT-5".into()),
@@ -46,7 +65,7 @@ pub fn get_static_models(kind: ProviderKind) -> Vec<ModelInfo> {
             ModelInfo {
                 id: "gpt-5.2".into(),
                 name: Some("GPT-5.2".into()),
-                description: Some("Latest GPT-5 iteratiom".into()),
+                description: Some("Latest GPT-5 iteration".into()),
                 context_window: Some(256_000),
                 is_reasoning: Some(false),
             },
@@ -86,20 +105,6 @@ pub fn get_static_models(kind: ProviderKind) -> Vec<ModelInfo> {
                 is_reasoning: Some(true),
             },
             ModelInfo {
-                id: "gpt-5.3-codex".into(),
-                name: Some("GPT-5.3 Codex".into()),
-                description: Some("Latest generation code generation model".into()),
-                context_window: Some(256_000),
-                is_reasoning: Some(false),
-            },
-            ModelInfo {
-                id: "gpt-5.1-codex-max".into(),
-                name: Some("GPT-5.1 Codex Max".into()),
-                description: Some("High-capacity code generation model".into()),
-                context_window: Some(256_000),
-                is_reasoning: Some(false),
-            },
-            ModelInfo {
                 id: "gpt-4o".into(),
                 name: Some("GPT-4o".into()),
                 description: Some("Omni model, most capable and versatile".into()),
@@ -120,8 +125,22 @@ pub fn get_static_models(kind: ProviderKind) -> Vec<ModelInfo> {
                 context_window: Some(128_000),
                 is_reasoning: Some(true),
             },
+            ModelInfo {
+                id: "gpt-5.3-codex".into(),
+                name: Some("GPT-5.3 Codex".into()),
+                description: Some("Codex model — requires Codex (OAuth) authentication".into()),
+                context_window: Some(256_000),
+                is_reasoning: Some(false),
+            },
+            ModelInfo {
+                id: "gpt-5.1-codex-max".into(),
+                name: Some("GPT-5.1 Codex Max".into()),
+                description: Some("High-capacity Codex model — requires Codex (OAuth) authentication".into()),
+                context_window: Some(256_000),
+                is_reasoning: Some(false),
+            },
         ],
-        ProviderKind::Anthropic => vec![
+        Provider::Anthropic => vec![
             ModelInfo {
                 id: "claude-3-7-sonnet-20250219".into(),
                 name: Some("Claude 3.7 Sonnet".into()),

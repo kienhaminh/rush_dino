@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -16,26 +19,35 @@ pub trait Tool: Send + Sync {
 
 #[derive(Default)]
 pub struct ToolRegistry {
-    tools: HashMap<String, Arc<dyn Tool>>,
+    tools: RwLock<HashMap<String, Arc<dyn Tool>>>,
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
-            tools: HashMap::new(),
+            tools: RwLock::new(HashMap::new()),
         }
     }
 
-    pub fn register<T: Tool + 'static>(&mut self, tool: T) {
-        self.tools.insert(tool.name().to_owned(), Arc::new(tool));
+    pub fn register<T: Tool + 'static>(&self, tool: T) {
+        self.tools
+            .write()
+            .expect("tool registry lock poisoned")
+            .insert(tool.name().to_owned(), Arc::new(tool));
     }
 
     pub fn get(&self, name: &str) -> Option<Arc<dyn Tool>> {
-        self.tools.get(name).cloned()
+        self.tools
+            .read()
+            .expect("tool registry lock poisoned")
+            .get(name)
+            .cloned()
     }
 
     pub fn definitions(&self) -> Vec<ToolDefinition> {
         self.tools
+            .read()
+            .expect("tool registry lock poisoned")
             .values()
             .map(|tool| ToolDefinition {
                 name: tool.name().to_owned(),
@@ -46,6 +58,11 @@ impl ToolRegistry {
     }
 
     pub fn names(&self) -> Vec<String> {
-        self.tools.keys().cloned().collect()
+        self.tools
+            .read()
+            .expect("tool registry lock poisoned")
+            .keys()
+            .cloned()
+            .collect()
     }
 }

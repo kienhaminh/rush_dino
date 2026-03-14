@@ -16,7 +16,7 @@ interface ConversationTimelineProps {
 const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationItem }) {
   if (item.kind === 'user') {
     return (
-      <div className="flex justify-end py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="flex justify-end py-1">
         <div className="max-w-[80%] flex flex-col items-end gap-1.5">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 pr-1">
             You
@@ -31,7 +31,7 @@ const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationIt
 
   if (item.kind === 'assistant') {
     return (
-      <div className="flex justify-start py-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
+      <div className="flex justify-start py-1">
         <div className="max-w-[85%] flex flex-col items-start gap-1.5">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/40 pl-1">
             Assistant
@@ -49,7 +49,7 @@ const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationIt
   }
 
   if (item.kind === 'thinking') {
-    return <ThinkingBlock />;
+    return <ThinkingBlock content={item.content} />;
   }
 
   if (item.kind === 'tool_use') {
@@ -58,7 +58,7 @@ const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationIt
 
   if (item.kind === 'error') {
     return (
-      <div className="flex items-center gap-2 py-1 px-2 animate-in fade-in duration-200">
+      <div className="flex items-center gap-2 py-1 px-2">
         <div className="text-[11px] text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
           ⚠ {item.message}
         </div>
@@ -68,7 +68,7 @@ const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationIt
 
   if (item.kind === 'approval') {
     return (
-      <div className="flex justify-start py-1 animate-in fade-in duration-200">
+      <div className="flex justify-start py-1">
         <div className="bg-warning/10 border border-warning/30 rounded-xl px-4 py-3 text-sm space-y-1 max-w-[85%]">
           <p className="font-semibold text-warning text-[12px]">⚡ Approval Required</p>
           <p className="text-muted-foreground/80 text-[12px]">

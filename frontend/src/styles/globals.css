@@ -42,55 +42,85 @@ html.theme-transition::view-transition-new(root) {
 
 @layer base {
   :root {
+    /* ── Shadcn/Tailwind semantic tokens ── */
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 176 72% 48%;
-    --primary-foreground: 220 33% 5%;
+    --primary: 185 80% 47%;
+    --primary-foreground: 213 55% 10%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 176 72% 48%;
-    --accent-foreground: 220 33% 5%;
+    --muted: 200 30% 95%;
+    --muted-foreground: 213 20% 45%;
+    --accent: 185 80% 47%;
+    --accent-foreground: 213 55% 10%;
     --destructive: 0 91% 71%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 92%;
-    --input: 0 0% 91%;
-    --ring: 176 72% 48%;
+    --border: 200 25% 88%;
+    --input: 200 25% 88%;
+    --ring: 185 80% 47%;
     --radius: 0.625rem;
+
+    /* ── Semantic status ── */
     --ds-success: 142 69% 58%;
     --ds-warning: 38 92% 50%;
     --ds-error: 0 91% 71%;
     --ds-info: 213 93% 68%;
+
+    /* ── Brand palette — extracted from RushDino logo ── */
+    /* Deep outer body silhouette */
+    --brand-navy:   213 55% 23%;
+    /* Main body fill */
+    --brand-ocean:  205 68% 38%;
+    /* Mid-tone teal body */
+    --brand-teal:   190 72% 42%;
+    /* Bright cyan — speed lines & circuit highlights */
+    --brand-cyan:   185 80% 47%;
+    /* Belly & chest — mint green */
+    --brand-mint:   155 52% 49%;
+    /* Circuit board — lime green */
+    --brand-lime:   100 52% 52%;
+    /* Lightbulb — warm amber */
+    --brand-amber:  46 91% 53%;
+    /* Claw tips — warm orange glow */
+    --brand-glow:   25 86% 57%;
+    /* Background hexagon grid — ice blue */
+    --brand-ice:    200 65% 95%;
+    /* "RUSHDINO" logotype text — dark navy */
+    --brand-dark:   213 44% 19%;
   }
 
   .dark {
+    /* ── Shadcn/Tailwind semantic tokens ── */
     --background: 220 28% 7%;
     --foreground: 0 0% 92%;
     --card: 217 31% 10%;
     --card-foreground: 0 0% 92%;
     --popover: 217 31% 10%;
     --popover-foreground: 0 0% 92%;
-    --primary: 176 72% 48%;
-    --primary-foreground: 220 33% 5%;
+    --primary: 185 80% 47%;
+    --primary-foreground: 213 55% 5%;
     --secondary: 218 29% 12%;
     --secondary-foreground: 0 0% 92%;
     --muted: 218 29% 12%;
     --muted-foreground: 0 0% 55%;
-    --accent: 176 25% 14%;
-    --accent-foreground: 176 72% 48%;
+    --accent: 190 35% 14%;
+    --accent-foreground: 185 80% 47%;
     --destructive: 0 91% 71%;
     --destructive-foreground: 0 0% 98%;
     --border: 217 25% 14%;
     --input: 217 25% 14%;
-    --ring: 176 72% 48%;
+    --ring: 185 80% 47%;
+
+    /* ── Semantic status ── */
     --ds-success: 142 69% 58%;
     --ds-warning: 38 92% 50%;
     --ds-error: 0 91% 71%;
     --ds-info: 213 93% 68%;
+
+    /* Brand palette is theme-independent — defined in :root above */
   }
 }

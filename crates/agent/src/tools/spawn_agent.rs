@@ -23,7 +23,7 @@ impl SpawnAgentTool {
 #[async_trait]
 impl Tool for SpawnAgentTool {
     fn name(&self) -> &str {
-        "spawn_agent"
+        "spawn_agents"
     }
 
     fn description(&self) -> &str {

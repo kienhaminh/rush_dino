@@ -67,7 +67,7 @@ impl DelegateToAgentTool {
 #[async_trait]
 impl Tool for DelegateToAgentTool {
     fn name(&self) -> &str {
-        "delegate_to_agent"
+        "delegate"
     }
 
     fn description(&self) -> &str {
@@ -234,7 +234,7 @@ mod tests {
 
     use super::*;
     use crate::agent_manager::AgentTemplate;
-    use rushdino_providers::OpenAIProvider;
+    use rushdino_providers::CompletionsProvider;
 
     /// Constructs a dummy provider that will never be called in the error-path
     /// tests below. We use `Provider::Ollama` with a non-resolvable URL so that
@@ -242,10 +242,11 @@ mod tests {
     /// hanging. The tests exercise only the depth-limit and unknown-agent-name
     /// paths, both of which return errors before touching the provider.
     fn make_dummy_provider() -> Arc<Provider> {
-        Arc::new(Provider::Ollama(OpenAIProvider::new(
+        Arc::new(Provider::Ollama(CompletionsProvider::new(
             "http://localhost:0".to_owned(), // port 0 — will never connect
             "noop-model".to_owned(),
             None,
+            Some("ollama".to_owned()),
         )))
     }
 

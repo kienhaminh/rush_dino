@@ -4,7 +4,7 @@ use axum::{extract::Path, extract::State, Json};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use rushdino_common::{config::ProviderKind, AppConfig, AppError, Result};
+use rushdino_common::{AppConfig, AppError, Result};
 
 use crate::provider_runtime::default_profile_model;
 use crate::state::AppState;
@@ -177,24 +177,20 @@ pub async fn get_agent_runtime(
         files.push(read_workspace_file_record(&agents_dir, &id, ws_file));
     }
 
-    let tools = engine
-        .tool_registry
-        .definitions()
-        .into_iter()
-        .map(|definition| AgentToolRecord {
-            id: definition.name.clone(),
-            label: definition.name,
-            description: definition.description,
-            enabled: true,
-            source: "core".to_owned(),
-        })
-        .collect::<Vec<_>>();
-
-    let tool_sections = vec![AgentToolSection {
-        id: "registered".to_owned(),
-        label: "Registered Tools".to_owned(),
-        tools,
-    }];
+    let tool_sections = build_tool_sections(
+        engine
+            .tool_registry
+            .definitions()
+            .into_iter()
+            .map(|definition| AgentToolRecord {
+                id: definition.name.clone(),
+                label: definition.name,
+                description: definition.description,
+                enabled: true,
+                source: "core".to_owned(),
+            })
+            .collect(),
+    );
 
     let skills = read_skills(&skills_dir);
 
@@ -277,15 +273,65 @@ pub async fn delete_agent(
     Ok(Json(serde_json::json!({ "deleted": true, "id": agent_id })))
 }
 
+/// Map tool IDs to canonical section IDs that match the frontend's CORE_TOOL_SECTION_ORDER.
+fn tool_section_id(tool_id: &str) -> &'static str {
+    match tool_id {
+        "read" | "write" | "edit" => "fs",
+        "exec" => "runtime",
+        "web_search" | "web_fetch" => "web",
+        "memory_search" | "memory_write" | "knowledge_graph" => "memory",
+        "sessions_list" | "sessions_history" | "sessions_send" | "sessions_spawn"
+        | "session_status" => "sessions",
+        "list_agents" | "delegate" | "spawn_agents" | "subagents" => "agents",
+        "list_skills" | "read_skill" | "create_skill" => "skills",
+        "message" => "messaging",
+        "cron" | "workflow" => "automation",
+        _ => "registered",
+    }
+}
+
+/// Group a flat list of tool records into ordered sections.
+fn build_tool_sections(tools: Vec<AgentToolRecord>) -> Vec<AgentToolSection> {
+    // Section order mirrors CORE_TOOL_SECTION_ORDER in frontend/src/lib/tool-catalog.ts
+    let section_order: &[(&str, &str)] = &[
+        ("fs", "Files"),
+        ("runtime", "Runtime"),
+        ("web", "Web"),
+        ("memory", "Memory"),
+        ("sessions", "Sessions"),
+        ("agents", "Agents"),
+        ("skills", "Skills"),
+        ("messaging", "Messaging"),
+        ("automation", "Automation"),
+        ("registered", "Registered"),
+    ];
+
+    let mut buckets: std::collections::HashMap<&str, Vec<AgentToolRecord>> =
+        std::collections::HashMap::new();
+
+    for tool in tools {
+        let section = tool_section_id(&tool.id);
+        buckets.entry(section).or_default().push(tool);
+    }
+
+    section_order
+        .iter()
+        .filter_map(|(id, label)| {
+            buckets.remove(*id).map(|tools| AgentToolSection {
+                id: (*id).to_owned(),
+                label: (*label).to_owned(),
+                tools,
+            })
+        })
+        .collect()
+}
+
 fn is_valid_agent_id(id: &str) -> bool {
     !id.is_empty() && !id.starts_with('.') && !id.contains('/') && !id.contains('\\')
 }
 
 fn active_model(config: &AppConfig) -> String {
-    default_profile_model(config).unwrap_or_else(|| match config.active_provider {
-        ProviderKind::Plugin => "plugin".to_owned(),
-        _ => "unavailable".to_owned(),
-    })
+    default_profile_model(config).unwrap_or_else(|| "unavailable".to_owned())
 }
 
 fn humanize_agent_name(raw: &str) -> String {

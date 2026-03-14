@@ -50,6 +50,7 @@ impl Orchestrator {
                 temperature: Some(0.2),
                 max_tokens: Some(800),
                 model: None,
+                thinking_level: None,
             })
             .await
             .map(|res| res.content)

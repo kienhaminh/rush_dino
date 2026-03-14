@@ -28,6 +28,11 @@ const DS_CSS = `
   .ds-swatch { transition: transform 0.15s ease, box-shadow 0.15s ease; cursor: default; }
   .ds-swatch:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
 
+  /* ── Brand palette swatch ── */
+  .ds-brand-swatch { position: relative; overflow: hidden; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease; cursor: pointer; }
+  .ds-brand-swatch:hover { transform: translateY(-5px) scale(1.03); box-shadow: 0 20px 48px rgba(0,0,0,0.6); }
+  .ds-brand-swatch::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.14) 0%, transparent 55%); pointer-events: none; border-radius: inherit; }
+
   /* ── Buttons ── */
   .ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-family: inherit; font-weight: 600; letter-spacing: 0.07em; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
   .ds-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -273,7 +278,7 @@ export function DesignSystemPage() {
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', marginBottom: 4 }}>version</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'rgba(34,211,200,0.5)' }}>1.0</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'rgba(23,196,214,0.5)' }}>2.0</div>
           </div>
         </div>
 
@@ -281,10 +286,11 @@ export function DesignSystemPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 24 }}>
           {[
             { label: 'Font', value: 'JetBrains Mono' },
-            { label: 'Primary', value: '#22d3c8' },
+            { label: 'Primary', value: '#17C4D6' },
             { label: 'Dark bg', value: '#080c10' },
             { label: 'Radius', value: '6–20px' },
             { label: 'Base unit', value: '4px' },
+            { label: 'Brand tokens', value: '10 colors' },
           ].map((t) => (
             <div key={t.label} style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ fontSize: 9, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase' }}>{t.label}</span>
@@ -292,12 +298,87 @@ export function DesignSystemPage() {
             </div>
           ))}
         </div>
+
+        {/* ── Brand palette preview strip ── */}
+        <div style={{ display: 'flex', gap: 0, marginTop: 28, borderRadius: 10, overflow: 'hidden', height: 8 }}>
+          {[
+            'hsl(213,55%,23%)', 'hsl(205,68%,38%)', 'hsl(190,72%,42%)',
+            'hsl(185,80%,47%)', 'hsl(155,52%,49%)', 'hsl(100,52%,52%)',
+            'hsl(46,91%,53%)',  'hsl(25,86%,57%)',
+          ].map((c, i) => <div key={i} style={{ flex: 1, background: c }} />)}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 52 }}>
 
+        {/* ══ BRAND PALETTE ══ */}
+        <Section title="Brand Palette" subtitle="10 colors extracted from the RushDino logo. Available as CSS variables (--brand-*) and Tailwind classes (brand-*)." index={0}>
+          {/* Primary spectrum — cold to warm */}
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 12, textTransform: 'uppercase' }}>Dinosaur body — cold spectrum</div>
+            <div className="ds-token-grid">
+              <Swatch name="Navy"  token="--brand-navy"  value="#1A3A5C" />
+              <Swatch name="Ocean" token="--brand-ocean" value="#1B70A0" />
+              <Swatch name="Teal"  token="--brand-teal"  value="#1B9DB8" />
+              <Swatch name="Cyan ★" token="--brand-cyan" value="#17C4D6" textDark />
+            </div>
+          </div>
+
+          {/* Accent spectrum — green to warm */}
+          <div style={{ marginTop: 24, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 12, textTransform: 'uppercase' }}>Belly & circuit — warm spectrum</div>
+            <div className="ds-token-grid">
+              <Swatch name="Mint"  token="--brand-mint"  value="#3DBE8A" textDark />
+              <Swatch name="Lime"  token="--brand-lime"  value="#82C840" textDark />
+              <Swatch name="Amber" token="--brand-amber" value="#F5C118" textDark />
+              <Swatch name="Glow"  token="--brand-glow"  value="#F07830" textDark />
+            </div>
+          </div>
+
+          {/* Neutrals */}
+          <div style={{ marginTop: 24, marginBottom: 8 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 12, textTransform: 'uppercase' }}>Neutrals</div>
+            <div className="ds-token-grid">
+              <Swatch name="Ice"  token="--brand-ice"  value="#E8F5FB" textDark />
+              <Swatch name="Dark" token="--brand-dark" value="#1A2E44" />
+            </div>
+          </div>
+
+          {/* Full spectrum gradient */}
+          <div style={{ marginTop: 24 }}>
+            <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 10, textTransform: 'uppercase' }}>Full spectrum</div>
+            <div style={{ height: 48, borderRadius: 10, background: 'linear-gradient(90deg, #1A3A5C, #1B70A0, #1B9DB8, #17C4D6, #3DBE8A, #82C840, #F5C118, #F07830)', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>Navy 213°</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>Cyan 185°</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>Mint 155°</span>
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.25)' }}>Glow 25°</span>
+            </div>
+          </div>
+
+          {/* Usage guide */}
+          <div style={{ marginTop: 20, padding: '14px 16px', background: 'rgba(23,196,214,0.04)', border: '1px solid rgba(23,196,214,0.12)', borderRadius: 10 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: 'rgba(23,196,214,0.7)', marginBottom: 8, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Usage</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 4 }}>
+              {[
+                { cls: 'bg-brand-cyan', desc: 'Primary CTA backgrounds' },
+                { cls: 'text-brand-cyan', desc: 'Links, active labels, headings' },
+                { cls: 'text-brand-mint', desc: 'Success states, live indicators' },
+                { cls: 'text-brand-amber', desc: 'Warnings, pending states' },
+                { cls: 'text-brand-glow', desc: 'Critical alerts, hot accents' },
+                { cls: 'bg-brand-navy', desc: 'Deep surface, sidebar backgrounds' },
+              ].map((u) => (
+                <div key={u.cls} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+                  <code style={{ fontSize: 10, color: 'rgba(23,196,214,0.75)', background: 'rgba(23,196,214,0.06)', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>{u.cls}</code>
+                  <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{u.desc}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+
         {/* ══ COLORS ══ */}
-        <Section title="Colors" subtitle="Click any swatch to copy the hex value." index={0}>
+        <Section title="Colors" subtitle="Click any swatch to copy the hex value." index={1}>
           {/* Backgrounds */}
           <div style={{ marginBottom: 8 }}>
             <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 10, textTransform: 'uppercase' }}>Backgrounds</div>
@@ -350,7 +431,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ TYPOGRAPHY ══ */}
-        <Section title="Typography" subtitle="JetBrains Mono — a single typeface applied at all scales." index={1}>
+        <Section title="Typography" subtitle="JetBrains Mono — a single typeface applied at all scales." index={2}>
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '8px 20px', overflow: 'hidden' }}>
             <TypeSpecimen label="display"  size={24} weight={700} tracking="tight"   sample="Agent dashboard — run #1042" />
             <TypeSpecimen label="lg"       size={18} weight={700} tracking="tight"   sample="Conversation sessions" />
@@ -363,7 +444,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ SPACING ══ */}
-        <Section title="Spacing" subtitle="4px base unit. Named scale from --space-1 to --space-10." index={2}>
+        <Section title="Spacing" subtitle="4px base unit. Named scale from --space-1 to --space-10." index={3}>
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '16px 20px' }}>
             {[
               { label: 'space-1', token: '--space-1', px: 4 },
@@ -379,7 +460,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ RADIUS ══ */}
-        <Section title="Border Radius" subtitle="Tight and purposeful. Chips use sm, cards use lg, modals use xl." index={3}>
+        <Section title="Border Radius" subtitle="Tight and purposeful. Chips use sm, cards use lg, modals use xl." index={4}>
           <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap', padding: '24px 20px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12 }}>
             <RadiusBox label="sm"  token="--ds-radius-sm" radius={6} />
             <RadiusBox label="md"  token="--ds-radius-md" radius={10} />
@@ -389,7 +470,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ GLOWS ══ */}
-        <Section title="Glows" subtitle="Contextual ring + shadow combinations. Applied on hover or active state." index={4}>
+        <Section title="Glows" subtitle="Contextual ring + shadow combinations. Applied on hover or active state." index={5}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
             <GlowCard label="Teal Glow"  token="--ds-glow-teal"  glow="0 0 0 1px rgba(34,211,200,0.12), 0 4px 20px rgba(0,0,0,0.3)"   accentColor="#22d3c8" />
             <GlowCard label="Amber Glow" token="--ds-glow-amber" glow="0 0 0 1px rgba(245,158,11,0.15), 0 4px 20px rgba(0,0,0,0.3)"   accentColor="#f59e0b" />
@@ -398,7 +479,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ STATUS DOTS ══ */}
-        <Section title="Status Dots" subtitle="Live animated indicators. Used alongside session and run status labels." index={5}>
+        <Section title="Status Dots" subtitle="Live animated indicators. Used alongside session and run status labels." index={6}>
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
             <StatusDotRow label="active — slow pulse ring"    color="#22d3c8" ring="normal" />
             <StatusDotRow label="awaiting — fast pulse ring"  color="#f59e0b" ring="fast"   />
@@ -408,7 +489,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ BUTTONS ══ */}
-        <Section title="Buttons" subtitle="Four variants × three sizes. Font-family and letter-spacing inherited from root." index={6}>
+        <Section title="Buttons" subtitle="Four variants × three sizes. Font-family and letter-spacing inherited from root." index={7}>
           {/* Variants */}
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             {/* By variant */}
@@ -430,7 +511,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ CHIPS / BADGES ══ */}
-        <Section title="Chips & Badges" subtitle="Status chips, semantic labels, and count indicators." index={7}>
+        <Section title="Chips & Badges" subtitle="Status chips, semantic labels, and count indicators." index={8}>
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '20px', display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
               <div style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', marginBottom: 12, textTransform: 'uppercase' }}>Session status</div>
@@ -462,7 +543,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ PROGRESS BARS ══ */}
-        <Section title="Progress Bars" subtitle="3px height. Gradient transitions from teal → amber → red as usage increases." index={8}>
+        <Section title="Progress Bars" subtitle="3px height. Gradient transitions from teal → amber → red as usage increases." index={9}>
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '20px' }}>
             <ProgBar label="Low usage (25%)"      pct={25}  gradient="linear-gradient(90deg,#22d3c8,#0ea5e9)" />
             <ProgBar label="Moderate usage (55%)" pct={55}  gradient="linear-gradient(90deg,#22d3c8,#0ea5e9)" />
@@ -473,7 +554,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ INPUT ══ */}
-        <Section title="Inputs" subtitle="Focus ring uses teal glow at 8% opacity. Placeholder uses text-dim." index={9}>
+        <Section title="Inputs" subtitle="Focus ring uses teal glow at 8% opacity. Placeholder uses text-dim." index={10}>
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, padding: '20px', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 400 }}>
             <div>
               <label style={{ fontSize: 10, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Default</label>
@@ -492,7 +573,7 @@ export function DesignSystemPage() {
         </Section>
 
         {/* ══ CARDS ══ */}
-        <Section title="Cards" subtitle="Three surface elevations. Hover state applies --ds-glow-teal." index={10}>
+        <Section title="Cards" subtitle="Three surface elevations. Hover state applies --ds-glow-teal." index={11}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
             {[
               { name: 'Surface',  bg: '#0d1117', token: '--ds-bg-surface'  },
@@ -514,7 +595,7 @@ export function DesignSystemPage() {
       {/* Footer */}
       <div style={{ marginTop: 64, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.08em' }}>
-          RUSHDINO DESIGN SYSTEM · v1.0
+          RUSHDINO DESIGN SYSTEM · v2.0
         </div>
         <div style={{ fontSize: 10, color: 'rgba(34,211,200,0.4)' }}>
           Terminal / Mission-Control

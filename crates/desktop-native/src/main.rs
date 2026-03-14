@@ -393,10 +393,8 @@ mod macos_app {
 
             for provider in [
                 AuthProviderId::Ollama,
-                AuthProviderId::Openai,
+                AuthProviderId::OpenAI,
                 AuthProviderId::Anthropic,
-                AuthProviderId::Codex,
-                AuthProviderId::Plugin,
             ] {
                 Self::card(ui, |ui| {
                     ui.horizontal(|ui| {

@@ -215,7 +215,7 @@ mod tests {
                     "owner",
                     "conv-1",
                     Some("run-1"),
-                    "shell_exec",
+                    "exec",
                     json!({"command": "rm -rf /tmp/x"}),
                 )
                 .await
@@ -249,7 +249,7 @@ mod tests {
                     "owner",
                     "conv-2",
                     Some("run-2"),
-                    "shell_exec",
+                    "exec",
                     json!({"command": "sudo reboot"}),
                 )
                 .await
@@ -276,7 +276,7 @@ mod tests {
                 "owner",
                 "conv-3",
                 Some("run-3"),
-                "shell_exec",
+                "exec",
                 json!({"command": "rm -rf /"}),
             )
             .await;
@@ -295,7 +295,7 @@ mod tests {
                     "owner",
                     "conv-4",
                     Some("run-4"),
-                    "shell_exec",
+                    "exec",
                     json!({"command": "sudo rm -rf /tmp/x"}),
                 )
                 .await

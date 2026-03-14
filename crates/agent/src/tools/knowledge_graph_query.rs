@@ -20,7 +20,7 @@ impl KnowledgeGraphQueryTool {
 #[async_trait]
 impl Tool for KnowledgeGraphQueryTool {
     fn name(&self) -> &str {
-        "knowledge_graph_query"
+        "knowledge_graph"
     }
 
     fn description(&self) -> &str {

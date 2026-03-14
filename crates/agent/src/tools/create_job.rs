@@ -24,7 +24,7 @@ impl Tool for CreateJobTool {
     }
 
     fn description(&self) -> &str {
-        "Create async background job"
+        "Create a one-off async background job"
     }
 
     fn parameters(&self) -> Value {

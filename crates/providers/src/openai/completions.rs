@@ -45,9 +45,7 @@ pub struct OpenAICompletionsCompat {
     pub reasoning_effort_map: HashMap<String, String>,
     pub supports_usage_in_streaming: bool,
     pub max_tokens_field: MaxTokensField,
-    pub requires_tool_result_name: bool,
     pub requires_assistant_after_tool_result: bool,
-    pub requires_thinking_as_text: bool,
     pub requires_mistral_tool_ids: bool,
     pub thinking_format: ThinkingFormat,
     pub supports_strict_mode: bool,
@@ -151,9 +149,7 @@ impl CompletionsProvider {
             } else {
                 MaxTokensField::MaxCompletionTokens
             },
-            requires_tool_result_name: is_mistral,
             requires_assistant_after_tool_result: false,
-            requires_thinking_as_text: is_mistral,
             requires_mistral_tool_ids: is_mistral,
             thinking_format: if is_zai || is_mistral {
                 // Zai and Qwen-style
@@ -349,18 +345,28 @@ impl CompletionsProvider {
         tools
             .iter()
             .map(|tool| {
+                // strict=true makes OpenAI guarantee the model output matches the schema.
+                // It requires additionalProperties=false, which we inject here so individual
+                // tools don't need to remember to include it.
+                let mut params = tool.parameters.clone();
+                if compat.supports_strict_mode {
+                    if let Some(obj) = params.as_object_mut() {
+                        obj.insert("additionalProperties".to_owned(), json!(false));
+                    }
+                }
+
                 let function = if compat.supports_strict_mode {
                     json!({
                         "name": tool.name,
                         "description": tool.description,
-                        "parameters": tool.parameters,
-                        "strict": false,
+                        "parameters": params,
+                        "strict": true,
                     })
                 } else {
                     json!({
                         "name": tool.name,
                         "description": tool.description,
-                        "parameters": tool.parameters,
+                        "parameters": params,
                     })
                 };
                 json!({ "type": "function", "function": function })
@@ -383,8 +389,17 @@ impl CompletionsProvider {
     // -----------------------------------------------------------------------
 
     pub async fn chat(&self, request: ChatRequest) -> Result<ChatResponse> {
+        let reasoning_effort = request
+            .thinking_level
+            .as_ref()
+            .and_then(|l| l.openai_reasoning_effort())
+            .map(str::to_owned);
+        let stream_opts = CompletionsStreamOptions {
+            reasoning_effort,
+            ..Default::default()
+        };
         let mut rx = self
-            .stream_chat(request, CompletionsStreamOptions::default())
+            .stream_chat(request, stream_opts)
             .await?;
         let mut content = String::new();
         let mut tool_calls = Vec::new();
@@ -533,6 +548,7 @@ impl CompletionsProvider {
                             tool_calls: vec![],
                             done: true,
                             usage: None,
+                            thinking_delta: None,
                         })
                         .await;
                     return;
@@ -548,6 +564,7 @@ impl CompletionsProvider {
                         tool_calls: vec![],
                         done: true,
                         usage: None,
+                        thinking_delta: None,
                     })
                     .await;
                 return;
@@ -557,6 +574,9 @@ impl CompletionsProvider {
             let mut buffer = String::new();
             // Pending tool calls accumulate arguments across deltas: call_id -> (name, partial_args)
             let mut pending_calls: HashMap<String, (String, String)> = HashMap::new();
+            // Maps stream index -> call_id so argument deltas (which have empty call_id) can find
+            // the correct pending entry that was keyed by call_id on the first chunk.
+            let mut index_to_id: HashMap<String, String> = HashMap::new();
             // Usage captured from the usage SSE event (sent by OpenAI before [DONE] when include_usage=true)
             let mut pending_usage: Option<Usage> = None;
 
@@ -579,6 +599,7 @@ impl CompletionsProvider {
                                 tool_calls: vec![],
                                 done: true,
                                 usage: pending_usage,
+                                thinking_delta: None,
                             })
                             .await;
                         return;
@@ -629,22 +650,28 @@ impl CompletionsProvider {
                                 .and_then(Value::as_str)
                                 .unwrap_or_default();
 
+                            let index_str = tc
+                                .get("index")
+                                .and_then(Value::as_u64)
+                                .map(|i| i.to_string())
+                                .unwrap_or_else(|| "0".to_owned());
+
                             if !call_id.is_empty() {
-                                // New tool call started
+                                // First chunk for this tool call: register call_id and index mapping.
+                                index_to_id.insert(index_str.clone(), call_id.clone());
                                 pending_calls
                                     .entry(call_id.clone())
                                     .or_insert_with(|| (fn_name.clone(), String::new()));
                             }
 
-                            // Accumulate arguments by index (use call_id as key if present,
-                            // otherwise use index from the list — simplify by key only)
-                            let key = if call_id.is_empty() {
-                                tc.get("index")
-                                    .and_then(Value::as_u64)
-                                    .map(|i| i.to_string())
-                                    .unwrap_or_else(|| "0".to_owned())
-                            } else {
+                            // Resolve the key: prefer call_id directly, otherwise look up via index.
+                            let key = if !call_id.is_empty() {
                                 call_id.clone()
+                            } else {
+                                index_to_id
+                                    .get(&index_str)
+                                    .cloned()
+                                    .unwrap_or(index_str)
                             };
 
                             if let Some(entry) = pending_calls.get_mut(&key) {
@@ -683,6 +710,7 @@ impl CompletionsProvider {
                                 tool_calls: finished_tool_calls,
                                 done: false,
                                 usage: None,
+                                thinking_delta: None,
                             })
                             .await;
                     }
@@ -700,6 +728,7 @@ impl CompletionsProvider {
                     tool_calls: vec![],
                     done: true,
                     usage: pending_usage,
+                    thinking_delta: None,
                 })
                 .await;
         });
@@ -751,6 +780,7 @@ mod tests {
             temperature: None,
             max_tokens: None,
             model: None,
+            thinking_level: None,
         }
     }
 

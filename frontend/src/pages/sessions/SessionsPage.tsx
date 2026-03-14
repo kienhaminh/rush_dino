@@ -7,8 +7,10 @@ import type {
   RunSnapshot,
   SessionSummary,
   SoulMemoryStateResponse,
+  SystemSummaryResponse,
   ToolCall,
 } from '@/lib/types';
+import { getCatalogModels } from '@/lib/model-catalog';
 import { TokenUsageBar } from '../context-debug/components/TokenUsageBar';
 import { MessageThread } from '../context-debug/components/MessageThread';
 import {
@@ -43,7 +45,8 @@ function statusColor(status: string): string {
     case 'active': return '#17C4D6';
     case 'awaiting_approval': return '#f59e0b';
     case 'blocked': return '#f87171';
-    default: return 'hsl(var(--muted-foreground) / 0.4)';
+    case 'idle': return 'hsl(var(--muted-foreground) / 0.4)';
+    default: return 'hsl(var(--muted-foreground) / 0.25)';
   }
 }
 
@@ -121,6 +124,8 @@ function Chip({ children, color, bg, border }: { children: ReactNode; color: str
 }
 
 /* ─── Page ────────────────────────────────────────────────────────────────── */
+type AgentConfig = SystemSummaryResponse['agentConfig'];
+
 type SessionsPageProps = {
   sessions: SessionSummary[];
   selectedSessionId: string | null;
@@ -129,12 +134,95 @@ type SessionsPageProps = {
   soulMemory: SoulMemoryStateResponse | null;
   systemPrompt: string | null;
   registeredTools: RegisteredTool[];
+  agentConfig?: AgentConfig;
   loading: boolean;
   error: string | null;
   onSelectSession: (id: string) => void;
   onRefresh: () => void;
   onDelete: (sessionId: string) => void;
 };
+
+/* ─── Session info card ──────────────────────────────────────────────────── */
+function SessionInfoCard({
+  session,
+  agentConfig,
+}: {
+  session: SessionSummary;
+  agentConfig?: AgentConfig;
+}) {
+  const cw = session.contextWindow;
+  const allModels = [
+    ...getCatalogModels('openai', 'apikey'),
+    ...getCatalogModels('openai', 'oauth'),
+    ...getCatalogModels('anthropic', 'apikey'),
+  ];
+  const modelMeta = allModels.find((m) => m.id === cw?.model);
+  const isReasoning = modelMeta?.isReasoning ?? false;
+
+  const thinkingLevel = agentConfig?.thinkingLevel ?? null;
+  const thinkingOn = thinkingLevel != null && thinkingLevel !== 'off';
+
+  function InfoRow({ label, children }: { label: string; children: ReactNode }) {
+    return (
+      <div className="flex items-center justify-between py-[5px] border-b border-border last:border-0">
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
+        <span className="text-[10px] font-mono font-medium text-foreground">{children}</span>
+      </div>
+    );
+  }
+
+  function Badge({ label, active }: { label: string; active: boolean }) {
+    return (
+      <span className={`text-[9px] font-semibold px-[5px] py-[2px] rounded-[3px] ${
+        active
+          ? 'bg-primary/10 text-primary border border-primary/20'
+          : 'bg-muted text-muted-foreground border border-border'
+      }`}>
+        {label}
+      </span>
+    );
+  }
+
+  return (
+    <div className="border border-border rounded-lg p-3 bg-card space-y-1">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-foreground">Model & Agent Config</span>
+        <div className="flex gap-1">
+          {isReasoning && <Badge label="REASONING MODEL" active />}
+          {thinkingOn && <Badge label={`THINKING: ${thinkingLevel?.toUpperCase()}`} active />}
+        </div>
+      </div>
+
+      <InfoRow label="Provider">{cw?.provider ?? '—'}</InfoRow>
+      <InfoRow label="Model">
+        {cw?.model ?? '—'}
+        {modelMeta?.description && (
+          <span className="ml-1 text-muted-foreground/50 font-normal">· {modelMeta.description}</span>
+        )}
+      </InfoRow>
+      <InfoRow label="Context limit">
+        {cw?.limitTokens ? `${(cw.limitTokens / 1000).toFixed(0)}k tokens` : '—'}
+      </InfoRow>
+      <InfoRow label="Thinking level">
+        {thinkingLevel ?? <span className="text-muted-foreground/40">—</span>}
+      </InfoRow>
+      <InfoRow label="Reasoning model">
+        <Badge label={isReasoning ? 'YES' : 'NO'} active={isReasoning} />
+      </InfoRow>
+      {agentConfig && (
+        <>
+          <InfoRow label="Max iterations">{agentConfig.maxIterations}</InfoRow>
+          <InfoRow label="Max context tokens">
+            {agentConfig.maxContextTokens.toLocaleString()}
+          </InfoRow>
+        </>
+      )}
+      <InfoRow label="Last run">
+        {session.lastRunId ? session.lastRunId.slice(0, 8) + '…' : '—'}
+      </InfoRow>
+    </div>
+  );
+}
 
 export function SessionsPage({
   sessions,
@@ -144,6 +232,7 @@ export function SessionsPage({
   soulMemory,
   systemPrompt,
   registeredTools,
+  agentConfig,
   loading,
   error,
   onSelectSession,
@@ -151,9 +240,13 @@ export function SessionsPage({
   onDelete,
 }: SessionsPageProps) {
   const [testMessages, setTestMessages] = useState<Message[]>([]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'prompts' | 'context' | 'runs' | 'tools'>('overview');
 
-  // Reset test messages when session changes
-  useEffect(() => { setTestMessages([]); }, [selectedSessionId]);
+  // Reset when session changes
+  useEffect(() => {
+    setTestMessages([]);
+    setActiveTab('overview');
+  }, [selectedSessionId]);
 
   const allMessages = useMemo(() => [...messages, ...testMessages], [messages, testMessages]);
 
@@ -261,67 +354,111 @@ export function SessionsPage({
         </div>
       </div>
 
-      {/* ── Right panel: context debug ────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col gap-4 p-4">
+      {/* ── Right panel ───────────────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0 h-full overflow-hidden flex flex-col">
         {!selectedSessionId ? (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
             Select a session to inspect its context
           </div>
         ) : (
           <>
-            {/* Right panel header */}
-            <div className="flex items-center justify-between gap-3 flex-shrink-0">
-              <div>
-                <h1 className="text-lg font-semibold">
-                  {session?.title || selectedSessionId.slice(0, 20)}
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Conversation context, tool calls, and memory state
-                </p>
+            {/* Header + tabs */}
+            <div className="flex-shrink-0 border-b border-border px-4 pt-4 pb-0">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <h1 className="text-lg font-semibold leading-tight">
+                    {session?.title || selectedSessionId.slice(0, 20)}
+                  </h1>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {session?.status} · {allMessages.length} messages
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={handleExportJson}
+                    className="text-[10px] px-2 py-1 border border-border rounded hover:bg-muted transition-colors uppercase font-bold"
+                  >
+                    Export JSON
+                  </button>
+                  <PromptInspector systemPrompt={systemPrompt} messages={allMessages} />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleExportJson}
-                  className="text-[10px] px-2 py-1 border border-border rounded hover:bg-muted transition-colors uppercase font-bold"
-                >
-                  Export JSON
-                </button>
-                <PromptInspector systemPrompt={systemPrompt} messages={allMessages} />
+
+              {/* Tab bar */}
+              <div className="flex gap-0">
+                {([
+                  ['overview', 'Overview'],
+                  ['prompts', 'Prompts & Calls'],
+                  ['context', 'Injected Context'],
+                  ['runs', 'Runs'],
+                  ['tools', 'Tools'],
+                ] as const).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide border-b-2 transition-colors whitespace-nowrap ${
+                      activeTab === tab
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Token usage bar */}
-            {session && (
-              <div className="flex-shrink-0">
-                <TokenUsageBar
-                  session={session}
-                  estimatedPromptTokens={estimatedPromptTokens}
-                  systemPromptTokens={systemPromptTokens}
-                  messageCount={allMessages.length}
-                  toolCallCount={allToolCalls.length}
-                  runCount={runs.length}
-                />
-              </div>
-            )}
-
-            {/* Main body */}
+            {/* Tab content */}
             {loading ? (
               <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
                 Loading…
               </div>
-            ) : (
-              <div className="flex-1 grid grid-cols-[1fr_320px] gap-4 overflow-hidden min-h-0">
+            ) : activeTab === 'overview' ? (
+              /* ── Overview ── */
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {session && (
+                  <SessionInfoCard session={session} agentConfig={agentConfig} />
+                )}
+                {session && (
+                  <TokenUsageBar
+                    session={session}
+                    estimatedPromptTokens={estimatedPromptTokens}
+                    systemPromptTokens={systemPromptTokens}
+                    messages={allMessages}
+                    messageCount={allMessages.length}
+                    toolCallCount={allToolCalls.length}
+                    runCount={runs.length}
+                    soulMemory={soulMemory}
+                  />
+                )}
+              </div>
+            ) : activeTab === 'prompts' ? (
+              /* ── Prompts & Calls ── */
+              <div className="flex-1 grid grid-cols-[1fr_300px] gap-4 overflow-hidden min-h-0 p-4">
                 <MessageThread
                   messages={allMessages}
                   systemPrompt={systemPrompt}
+                  actualPromptTokens={session?.contextWindow?.promptTokens}
                   onAddTestMessage={handleAddTestMessage}
                 />
-                <div className="flex flex-col gap-4 overflow-y-auto pr-1">
-                  <BootstrapFilesPanel soulMemory={soulMemory} />
+                <div className="overflow-y-auto pr-1">
                   <ToolCallSummaryPanel toolCalls={allToolCalls} />
-                  <RunHistoryPanel runs={runs} />
-                  <RegisteredToolsPanel tools={registeredTools} />
                 </div>
+              </div>
+            ) : activeTab === 'context' ? (
+              /* ── Injected Context ── */
+              <div className="flex-1 overflow-y-auto p-4">
+                <BootstrapFilesPanel soulMemory={soulMemory} />
+              </div>
+            ) : activeTab === 'runs' ? (
+              /* ── Runs ── */
+              <div className="flex-1 overflow-y-auto p-4">
+                <RunHistoryPanel runs={runs} />
+              </div>
+            ) : (
+              /* ── Tools ── */
+              <div className="flex-1 overflow-y-auto p-4">
+                <RegisteredToolsPanel tools={registeredTools} />
               </div>
             )}
           </>

@@ -311,6 +311,7 @@ impl AgentEngine {
                     tool_calls: response.tool_calls,
                     done: false,
                     usage: response.usage,
+                    thinking_delta: None,
                 })
                 .await;
             let _ = tx
@@ -319,6 +320,7 @@ impl AgentEngine {
                     tool_calls: Vec::new(),
                     done: true,
                     usage: None,
+                    thinking_delta: None,
                 })
                 .await;
         });

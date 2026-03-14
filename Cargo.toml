@@ -61,3 +61,10 @@ eframe = "0.30"
 
 [workspace.lints.clippy]
 pedantic = "warn"
+
+[profile.release]
+opt-level = 3     # Optimize for speed
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Maximize LTO impact
+panic = "abort"     # Remove unwinding infrastructure
+strip = true        # Remove symbols

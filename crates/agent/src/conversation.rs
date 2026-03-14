@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use sqlx::SqlitePool;
+use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
 use crate::conversation_mapper::{map_conversation, map_message, role_to_str};
@@ -9,6 +9,12 @@ use rushdino_common::{
     models::{Conversation, Message, ToolCall},
     AppError, Result,
 };
+
+#[derive(Debug, Clone)]
+pub struct ConversationRecord {
+    pub conversation: Conversation,
+    pub archived_at: Option<chrono::DateTime<Utc>>,
+}
 
 pub struct ConversationManager {
     pool: Arc<SqlitePool>,
@@ -29,7 +35,7 @@ impl ConversationManager {
         };
 
         sqlx::query(
-            "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO conversations (id, title, created_at, updated_at, archived_at) VALUES (?1, ?2, ?3, ?4, NULL)",
         )
         .bind(&conversation.id)
         .bind(&conversation.title)
@@ -51,7 +57,7 @@ impl ConversationManager {
         };
 
         sqlx::query(
-            "INSERT OR IGNORE INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT OR IGNORE INTO conversations (id, title, created_at, updated_at, archived_at) VALUES (?1, ?2, ?3, ?4, NULL)",
         )
         .bind(&conversation.id)
         .bind(&conversation.title)
@@ -85,12 +91,65 @@ impl ConversationManager {
         map_conversation(row)
     }
 
+    pub async fn get_conversation_record(&self, id: &str) -> Result<ConversationRecord> {
+        let row = sqlx::query(
+            "SELECT id, title, created_at, updated_at, archived_at FROM conversations WHERE id = ?1",
+        )
+        .bind(id)
+        .fetch_optional(self.pool.as_ref())
+        .await?
+        .ok_or_else(|| AppError::NotFound(format!("conversation {id} not found")))?;
+
+        let archived_at = row
+            .try_get::<Option<String>, _>("archived_at")?
+            .map(|value| crate::conversation_mapper::parse_ts(value.as_str()))
+            .transpose()?;
+        let conversation = map_conversation(row)?;
+
+        Ok(ConversationRecord {
+            conversation,
+            archived_at,
+        })
+    }
+
     pub async fn delete_conversation(&self, id: &str) -> Result<()> {
         sqlx::query("DELETE FROM conversations WHERE id = ?1")
             .bind(id)
             .execute(self.pool.as_ref())
             .await?;
         Ok(())
+    }
+
+    pub async fn reset_conversation(&self, id: &str) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        let updated = Utc::now().to_rfc3339();
+        sqlx::query("DELETE FROM messages WHERE conversation_id = ?1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        let result = sqlx::query("UPDATE conversations SET updated_at = ?1 WHERE id = ?2")
+            .bind(updated)
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound(format!("conversation {id} not found")));
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn archive_conversation(&self, id: &str) -> Result<ConversationRecord> {
+        let archived_at = Utc::now().to_rfc3339();
+        let result = sqlx::query("UPDATE conversations SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
+            .bind(&archived_at)
+            .bind(id)
+            .execute(self.pool.as_ref())
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound(format!("conversation {id} not found")));
+        }
+        self.get_conversation_record(id).await
     }
 
     pub async fn save_message(&self, conversation_id: &str, message: &Message) -> Result<()> {
@@ -161,5 +220,83 @@ impl ConversationManager {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use rushdino_common::models::{Message, Role};
+
+    use super::*;
+
+    async fn setup_manager() -> ConversationManager {
+        let pool = SqlitePool::connect(":memory:").await.expect("memory db");
+        for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
+            let sql = statement.trim();
+            if sql.is_empty() {
+                continue;
+            }
+            sqlx::query(sql)
+                .execute(&pool)
+                .await
+                .expect("run init migration");
+        }
+        for statement in include_str!("../../common/migrations/008_messages_rich_content.sql").split(';') {
+            let sql = statement.trim();
+            if sql.is_empty() {
+                continue;
+            }
+            let _ = sqlx::query(sql).execute(&pool).await;
+        }
+        for statement in include_str!("../../common/migrations/010_cron_sessions_workspace.sql").split(';') {
+            let sql = statement.trim();
+            if sql.is_empty() {
+                continue;
+            }
+            let _ = sqlx::query(sql).execute(&pool).await;
+        }
+        ConversationManager::new(Arc::new(pool))
+    }
+
+    #[tokio::test]
+    async fn archive_and_reset_preserve_conversation_record() {
+        let manager = setup_manager().await;
+        let conversation = manager
+            .create_conversation("Example")
+            .await
+            .expect("create conversation");
+        manager
+            .save_message(
+                &conversation.id,
+                &Message {
+                    id: Uuid::new_v4().to_string(),
+                    role: Role::User,
+                    content: "hello".to_owned(),
+                    tool_calls: None,
+                    rich_content: None,
+                    created_at: Utc::now(),
+                },
+            )
+            .await
+            .expect("save message");
+
+        manager
+            .reset_conversation(&conversation.id)
+            .await
+            .expect("reset conversation");
+        let messages = manager
+            .get_messages(&conversation.id)
+            .await
+            .expect("read messages after reset");
+        assert!(messages.is_empty());
+
+        let archived = manager
+            .archive_conversation(&conversation.id)
+            .await
+            .expect("archive conversation");
+        assert!(archived.archived_at.is_some());
+        assert_eq!(archived.conversation.id, conversation.id);
     }
 }

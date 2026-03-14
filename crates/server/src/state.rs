@@ -89,6 +89,10 @@ impl AppState {
         self.runtime.engine_opt()
     }
 
+    pub fn system_broker(&self) -> rushdino_agent::SharedSystemBroker {
+        self.runtime.system_broker()
+    }
+
     pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KnowledgeGraphService>> {
         self.runtime.knowledge_graph()
     }

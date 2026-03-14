@@ -1,5 +1,5 @@
 use colored::Colorize;
-use rushdino_common::{init, Result};
+use rushdino_common::{asset_sync, init, Result};
 
 pub async fn run() -> Result<()> {
     println!(
@@ -12,6 +12,16 @@ pub async fn run() -> Result<()> {
     println!("{}", "System Check...".blue().bold());
     let home = init::ensure_rushdino_dir()?;
     println!("{} Created directories at {}", "✔".green(), home.display());
+
+    // Download bundled agent templates and skill files from GitHub.
+    println!("{}", "Syncing bundled assets...".blue().bold());
+    match asset_sync::seed_bundled_assets(&home).await {
+        Ok(()) => println!("{} Bundled agents and skills synced", "✔".green()),
+        Err(e) => println!(
+            "{} Asset sync failed (you can retry by running `rushdino init` again): {e}",
+            "⚠".yellow()
+        ),
+    }
 
     println!("\n{}", "========================================".dimmed());
     println!(

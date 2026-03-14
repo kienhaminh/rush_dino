@@ -1,27 +1,35 @@
+use std::path::PathBuf;
+
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use tokio::fs;
 
 use rushdino_common::{AppError, Result};
+use rushdino_security::validation::validate_path;
 
 use crate::tool_registry::Tool;
 
-pub struct FileEditTool;
+pub struct FileEditTool {
+    /// The workspace root. All edits are restricted to this directory.
+    workspace: PathBuf,
+}
 
 impl FileEditTool {
-    pub fn new() -> Self {
-        Self
+    pub fn new(workspace: PathBuf) -> Self {
+        Self { workspace }
     }
 }
 
 #[async_trait]
 impl Tool for FileEditTool {
     fn name(&self) -> &str {
-        "file_edit"
+        "edit"
     }
 
     fn description(&self) -> &str {
-        "Edit a file by replacing exact text. The oldText must match exactly (including whitespace). Use this for precise, surgical edits."
+        "Edit a file by replacing exact text. The oldText must match exactly (including whitespace). \
+         Use this for precise, surgical edits. \
+         Paths are relative to the workspace root or absolute paths under it."
     }
 
     fn parameters(&self) -> Value {
@@ -30,7 +38,7 @@ impl Tool for FileEditTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Path to the file to edit (relative or absolute)"
+                    "description": "Path to the file to edit. Relative paths are resolved from the workspace root."
                 },
                 "oldText": {
                     "type": "string",
@@ -46,7 +54,7 @@ impl Tool for FileEditTool {
     }
 
     async fn execute(&self, args: Value) -> Result<String> {
-        let path = args
+        let path_str = args
             .get("path")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("path is required".to_owned()))?;
@@ -61,35 +69,41 @@ impl Tool for FileEditTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("newText is required".to_owned()))?;
 
-        // Read the file
-        let content = fs::read_to_string(path).await.map_err(AppError::Io)?;
+        // Resolve relative paths from the workspace root.
+        let raw = if std::path::Path::new(path_str).is_absolute() {
+            PathBuf::from(path_str)
+        } else {
+            self.workspace.join(path_str)
+        };
 
-        // Check if old_text exists in content
+        let target = validate_path(&raw, &[self.workspace.clone()])
+            .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
+
+        let content = fs::read_to_string(&target).await.map_err(AppError::Io)?;
+
         if !content.contains(old_text) {
             return Err(AppError::Validation(format!(
                 "oldText not found in file '{}'. The text must match exactly (including whitespace).",
-                path
+                target.display()
             )));
         }
 
-        // Count occurrences
         let occurrences = content.matches(old_text).count();
         if occurrences > 1 {
             return Err(AppError::Validation(format!(
                 "oldText appears {} times in file '{}'. Use a more specific oldText that matches exactly once.",
-                occurrences, path
+                occurrences,
+                target.display()
             )));
         }
 
-        // Replace the text
         let new_content = content.replace(old_text, new_text);
-
-        // Write back
-        fs::write(path, new_content).await.map_err(AppError::Io)?;
+        fs::write(&target, new_content).await.map_err(AppError::Io)?;
 
         Ok(format!(
             "Successfully edited file '{}'. Replaced {} occurrence(s).",
-            path, occurrences
+            target.display(),
+            occurrences
         ))
     }
 }

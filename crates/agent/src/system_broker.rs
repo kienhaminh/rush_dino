@@ -1,7 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
-
 use rushdino_common::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,8 +18,7 @@ pub struct ShellExecResult {
     pub exit_status: String,
     pub stdout: String,
     pub stderr: String,
-    pub host_cwd: PathBuf,
-    pub sandbox_cwd: PathBuf,
+    pub cwd: PathBuf,
 }
 
 #[async_trait]

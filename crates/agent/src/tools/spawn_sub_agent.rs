@@ -20,7 +20,7 @@ impl SpawnSubAgentTool {
 #[async_trait]
 impl Tool for SpawnSubAgentTool {
     fn name(&self) -> &str {
-        "spawn_sub_agent"
+        "subagents"
     }
 
     fn description(&self) -> &str {

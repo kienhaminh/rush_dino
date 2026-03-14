@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { groupToolsBySection } from '@/lib/tool-catalog';
 import type { AgentRuntimeData, AgentToolSection } from './agent-types';
 
 type AgentToolsPanelProps = {
@@ -10,11 +11,13 @@ type AgentToolsPanelProps = {
 
 export function AgentToolsPanel({ runtime }: AgentToolsPanelProps) {
   const [profile, setProfile] = useState(runtime.toolsProfile);
-  const [sections, setSections] = useState<AgentToolSection[]>(runtime.toolSections);
+  const [sections, setSections] = useState<AgentToolSection[]>(() =>
+    groupToolsBySection(runtime.toolSections.flatMap((s) => s.tools), (t) => t.id),
+  );
 
   useEffect(() => {
     setProfile(runtime.toolsProfile);
-    setSections(runtime.toolSections);
+    setSections(groupToolsBySection(runtime.toolSections.flatMap((s) => s.tools), (t) => t.id));
   }, [runtime]);
 
   const total = useMemo(() => sections.flatMap((section) => section.tools).length, [sections]);

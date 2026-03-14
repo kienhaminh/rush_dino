@@ -7,13 +7,13 @@ use arc_swap::{ArcSwap, ArcSwapOption};
 use sqlx::SqlitePool;
 
 use rushdino_agent::{AgentEngine, AgentRuntime, SharedSystemBroker};
-use rushdino_common::{config::ProviderKind, AppConfig, AppError, Result};
+use rushdino_common::{config::Provider, AppConfig, AppError, Result};
 use rushdino_knowledge_graph::KnowledgeGraphService;
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeStatus {
     pub effective_profile_id: Option<String>,
-    pub effective_provider_kind: Option<ProviderKind>,
+    pub effective_provider_kind: Option<Provider>,
     pub unavailable_error: Option<String>,
 }
 

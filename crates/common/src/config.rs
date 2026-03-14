@@ -10,14 +10,12 @@ use crate::{error::Result, init};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum ProviderKind {
+pub enum Provider {
     Ollama,
-    Openai,
+    /// Accepts legacy "openai_codex" / "codex" values from older configs.
+    #[serde(alias = "openai_codex", alias = "codex")]
+    OpenAI,
     Anthropic,
-    Codex,
-    #[serde(rename = "openai_codex")]
-    OpenaiCodex,
-    Plugin,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -32,7 +30,7 @@ pub enum AuthMethod {
 pub struct ProviderProfile {
     pub id: String,
     pub name: String,
-    pub provider_kind: ProviderKind,
+    pub provider_kind: Provider,
     pub auth_method: AuthMethod,
     pub default_model: String,
     pub base_url: Option<String>,
@@ -215,6 +213,15 @@ pub struct ExecutionConfig {
     pub shell_exec_sandbox: ShellExecSandboxConfig,
 }
 
+/// Bootstrap file injection limits for the system prompt.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BootstrapConfig {
+    /// Max characters per bootstrap file (default: 20 000).
+    pub max_chars_per_file: Option<usize>,
+    /// Max total characters for all bootstrap files combined (default: 150 000).
+    pub max_total_chars: Option<usize>,
+}
+
 /// Local knowledge graph settings.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeGraphConfig {
@@ -248,7 +255,7 @@ pub struct AppConfig {
     pub host: String,
     pub port: u16,
     pub log_level: String,
-    pub active_provider: ProviderKind,
+    pub active_provider: Provider,
     pub profiles: Vec<ProviderProfile>,
     #[serde(default, deserialize_with = "deserialize_optional_nonempty_string")]
     pub default_profile_id: Option<String>,
@@ -260,24 +267,22 @@ pub struct AppConfig {
     pub ollama: OllamaConfig,
     pub openai: ProviderModelConfig,
     pub anthropic: ProviderModelConfig,
-    #[serde(rename = "openai_codex", alias = "codex")]
-    pub codex: ProviderModelConfig,
-    /// Optional provider to use when Codex token refresh fails at startup.
-    pub codex_fallback_provider: Option<ProviderKind>,
     pub gateway: GatewayConfig,
     pub security: SecurityConfig,
     pub execution: ExecutionConfig,
     pub knowledge_graph: KnowledgeGraphConfig,
+    #[serde(default)]
+    pub bootstrap: BootstrapConfig,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         let home = init::default_home_dir();
         Self {
-            host: "127.0.0.1".to_owned(),
+            host: "0.0.0.0".to_owned(),
             port: 28847,
             log_level: "info".to_owned(),
-            active_provider: ProviderKind::Ollama,
+            active_provider: Provider::Ollama,
             profiles: Vec::new(),
             default_profile_id: None,
             fallback_profile_ids: Vec::new(),
@@ -295,14 +300,11 @@ impl Default for AppConfig {
             anthropic: ProviderModelConfig {
                 model: "claude-3-5-sonnet-latest".to_owned(),
             },
-            codex: ProviderModelConfig {
-                model: "gpt-4.1-mini".to_owned(),
-            },
-            codex_fallback_provider: None,
             gateway: GatewayConfig::default(),
             security: SecurityConfig::default(),
             execution: ExecutionConfig::default(),
             knowledge_graph: KnowledgeGraphConfig::default(),
+            bootstrap: BootstrapConfig::default(),
         }
     }
 }
@@ -318,12 +320,6 @@ pub struct CredentialsConfig {
     pub slack_bot_token: Option<String>,
     /// Slack Socket Mode app-level token (xapp-...)
     pub slack_app_token: Option<String>,
-    /// OpenAI Codex OAuth access token
-    pub codex_access_token: Option<String>,
-    /// OpenAI Codex OAuth refresh token
-    pub codex_refresh_token: Option<String>,
-    /// Unix timestamp (seconds) when codex_access_token expires
-    pub codex_token_expires_at: Option<i64>,
     /// HMAC-SHA256 API secret (hex-encoded 256-bit key).  Generated on `rushdino init`.
     pub api_secret: Option<String>,
 }
