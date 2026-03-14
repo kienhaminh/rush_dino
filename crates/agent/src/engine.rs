@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::{Arc, RwLock}, time::Duration};
 
 use sqlx::SqlitePool;
 use tokio::sync::{mpsc, oneshot, Mutex};
@@ -85,6 +85,8 @@ pub struct AgentEngine {
     provider_name: String,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
     config: AgentConfig,
+    /// Shared runtime override — same Arc as RuntimeState.thinking_level_override.
+    thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
     inbox_rx: Arc<Mutex<mpsc::Receiver<JobResult>>>,
     runtime: Arc<AgentRuntime>,
     pending_assistant_runs: Arc<Mutex<HashMap<String, AssistantRunJob>>>,
@@ -146,11 +148,36 @@ pub struct GatewayRunHandle {
 #[cfg(test)]
 mod config_tests {
     use super::AgentConfig;
+    use rushdino_providers::types::ThinkingLevel;
+    use std::sync::{Arc, RwLock};
 
     #[test]
     fn default_context_budget_is_large_enough_for_longer_conversations() {
         let config = AgentConfig::default();
         assert_eq!(config.max_context_tokens, 8192);
+    }
+
+    #[test]
+    fn effective_thinking_level_uses_override_then_falls_back() {
+        let config = AgentConfig::default(); // default is ThinkingLevel::Low
+        let override_arc: Arc<RwLock<Option<ThinkingLevel>>> = Arc::new(RwLock::new(None));
+
+        // No override → falls back to config
+        let effective = override_arc.read().unwrap().clone()
+            .unwrap_or_else(|| config.thinking_level.clone());
+        assert_eq!(effective, ThinkingLevel::Low);
+
+        // With override
+        *override_arc.write().unwrap() = Some(ThinkingLevel::High);
+        let effective = override_arc.read().unwrap().clone()
+            .unwrap_or_else(|| config.thinking_level.clone());
+        assert_eq!(effective, ThinkingLevel::High);
+
+        // Cleared override → falls back again
+        *override_arc.write().unwrap() = None;
+        let effective = override_arc.read().unwrap().clone()
+            .unwrap_or_else(|| config.thinking_level.clone());
+        assert_eq!(effective, ThinkingLevel::Low);
     }
 }
 
@@ -196,6 +223,7 @@ impl AgentEngine {
             provider_name,
             knowledge_graph,
             config,
+            thinking_level_override: Arc::new(RwLock::new(None)),
             inbox_rx: Arc::new(Mutex::new(deps.inbox_rx)),
             runtime,
             pending_assistant_runs: Arc::new(Mutex::new(HashMap::new())),
@@ -265,13 +293,17 @@ impl AgentEngine {
             delegation_depth: 0,
         };
 
+        let effective_config = AgentConfig {
+            thinking_level: self.effective_thinking_level(),
+            ..self.config.clone()
+        };
         let (response, all_messages) = with_tool_execution_context(
             context,
             run_react_loop(
                 self.provider.clone(),
                 self.tool_registry.clone(),
                 messages,
-                &self.config,
+                &effective_config,
                 None,
             ),
         )
@@ -427,13 +459,17 @@ impl AgentEngine {
             delegation_depth: 0,
         };
 
+        let effective_config = AgentConfig {
+            thinking_level: self.effective_thinking_level(),
+            ..self.config.clone()
+        };
         let (response, all_messages) = with_tool_execution_context(
             context,
             run_react_loop_streaming(
                 self.provider.clone(),
                 self.tool_registry.clone(),
                 messages,
-                &self.config,
+                &effective_config,
                 internal_tx,
             ),
         )
@@ -856,6 +892,10 @@ impl AgentEngine {
             delegation_depth: 0,
         };
 
+        let effective_config = AgentConfig {
+            thinking_level: self.effective_thinking_level(),
+            ..self.config.clone()
+        };
         let result = if ws_event_tx.is_some() || gateway_event_tx.is_some() {
             with_tool_execution_context(
                 tool_context,
@@ -863,7 +903,7 @@ impl AgentEngine {
                     self.provider.clone(),
                     self.tool_registry.clone(),
                     messages,
-                    &self.config,
+                    &effective_config,
                     internal_tx,
                 ),
             )
@@ -875,7 +915,7 @@ impl AgentEngine {
                     self.provider.clone(),
                     self.tool_registry.clone(),
                     messages,
-                    &self.config,
+                    &effective_config,
                     Some(internal_tx),
                 ),
             )
@@ -1022,6 +1062,20 @@ impl AgentEngine {
 
     pub fn config(&self) -> &AgentConfig {
         &self.config
+    }
+
+    /// Effective thinking level: override if set, otherwise static config.
+    pub fn effective_thinking_level(&self) -> ThinkingLevel {
+        self.thinking_level_override
+            .read()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| self.config.thinking_level.clone())
+    }
+
+    /// Expose the override Arc so it can be shared with RuntimeState.
+    pub fn thinking_level_override_arc(&self) -> Arc<RwLock<Option<ThinkingLevel>>> {
+        self.thinking_level_override.clone()
     }
 
     pub fn memory(&self) -> &MemoryManager {
