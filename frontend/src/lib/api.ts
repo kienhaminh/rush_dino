@@ -4,6 +4,7 @@ import type {
   ChannelPairingState,
   Conversation,
   CredentialsView,
+  DashboardAuthStatusResponse,
   DoctorReportResponse,
   FetchLogsResponse,
   GatewayAdapterState,
@@ -38,6 +39,8 @@ import type {
 } from '@/pages/workflows/workflow-types';
 import { getAgentRuntime as getMockRuntime } from '@/pages/agents/agent-mock-data';
 
+export const DASHBOARD_AUTH_REQUIRED_EVENT = 'rushdino:dashboard-auth-required';
+
 async function parseJsonOrThrow(response: Response, endpoint: string) {
   const contentType = response.headers.get('content-type') ?? '';
   const raw = await response.text();
@@ -46,6 +49,9 @@ async function parseJsonOrThrow(response: Response, endpoint: string) {
     if (contentType.includes('application/json')) {
       try {
         const data = JSON.parse(raw);
+        if (response.status === 401 && data?.error === 'dashboard_auth_required') {
+          window.dispatchEvent(new CustomEvent(DASHBOARD_AUTH_REQUIRED_EVENT));
+        }
         const errorMessage =
           typeof data?.error === 'string'
             ? data.error
@@ -77,6 +83,29 @@ async function parseJsonOrThrow(response: Response, endpoint: string) {
     return JSON.parse(raw);
   } catch {
     throw new Error(`API ${endpoint} returned invalid JSON.`);
+  }
+}
+
+export async function fetchDashboardAuthStatus(): Promise<DashboardAuthStatusResponse> {
+  const response = await fetch('/api/dashboard-auth/status');
+  return parseJsonOrThrow(response, '/api/dashboard-auth/status');
+}
+
+export async function exchangeDashboardAuthCode(
+  code: string,
+): Promise<DashboardAuthStatusResponse> {
+  const response = await fetch('/api/dashboard-auth/exchange', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  return parseJsonOrThrow(response, '/api/dashboard-auth/exchange');
+}
+
+export async function logoutDashboardAuthSession(): Promise<void> {
+  const response = await fetch('/api/dashboard-auth/logout', { method: 'POST' });
+  if (!response.ok) {
+    await parseJsonOrThrow(response, '/api/dashboard-auth/logout');
   }
 }
 
@@ -378,6 +407,16 @@ export async function fetchSystemSummary(): Promise<SystemSummaryResponse> {
   const endpoint = '/api/system/summary';
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
+}
+
+export async function patchThinkingLevel(level: string): Promise<void> {
+  const endpoint = '/api/system/thinking-level';
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level }),
+  });
+  await parseJsonOrThrow(response, endpoint);
 }
 
 export async function fetchDoctorReport(): Promise<DoctorReportResponse> {
