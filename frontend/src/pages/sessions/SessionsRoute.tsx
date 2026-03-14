@@ -9,6 +9,7 @@ import {
   fetchSoulMemoryState,
   fetchSystemPrompt,
   fetchSystemSummary,
+  patchThinkingLevel,
 } from '@/lib/api';
 import type {
   Message,
@@ -31,6 +32,7 @@ export function SessionsRoute() {
   const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
   const [registeredTools, setRegisteredTools] = useState<RegisteredTool[]>([]);
   const [agentConfig, setAgentConfig] = useState<SystemSummaryResponse['agentConfig']>(null);
+  const [thinkingLevelOverride, setThinkingLevelOverride] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef(false);
@@ -117,6 +119,16 @@ export function SessionsRoute() {
     setSelectedSessionId((prev) => prev);
   };
 
+  const handleThinkingLevelChange = async (level: string) => {
+    setThinkingLevelOverride(level); // optimistic update
+    try {
+      await patchThinkingLevel(level);
+    } catch (err) {
+      setThinkingLevelOverride(null); // revert on error
+      toast.error(err instanceof Error ? err.message : 'Failed to update thinking level');
+    }
+  };
+
   const handleDelete = async (sessionId: string) => {
     if (!window.confirm('Delete this conversation session? This cannot be undone.')) return;
     try {
@@ -144,6 +156,8 @@ export function SessionsRoute() {
       onSelectSession={setSelectedSessionId}
       onRefresh={handleRefresh}
       onDelete={handleDelete}
+      thinkingLevelOverride={thinkingLevelOverride}
+      onThinkingLevelChange={handleThinkingLevelChange}
     />
   );
 }
