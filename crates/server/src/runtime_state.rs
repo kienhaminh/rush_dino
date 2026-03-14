@@ -9,6 +9,7 @@ use sqlx::SqlitePool;
 use rushdino_agent::{AgentEngine, AgentRuntime, SharedSystemBroker};
 use rushdino_common::{config::Provider, AppConfig, AppError, Result};
 use rushdino_knowledge_graph::KnowledgeGraphService;
+use rushdino_providers::types::ThinkingLevel;
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeStatus {
@@ -27,6 +28,9 @@ pub struct RuntimeState {
     system_broker: SharedSystemBroker,
     config_path: PathBuf,
     credentials_path: PathBuf,
+    /// Runtime-only override for the agent's thinking level.
+    /// Shared with the engine via Arc so it survives engine swaps.
+    pub thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
 }
 
 impl RuntimeState {
@@ -48,6 +52,7 @@ impl RuntimeState {
             system_broker,
             config_path,
             credentials_path,
+            thinking_level_override: Arc::new(RwLock::new(None)),
         }
     }
 
