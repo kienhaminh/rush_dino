@@ -37,7 +37,10 @@ use crate::{
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
     cron_runtime::spawn_cron_runtime,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
-    middleware::{cors_layer, hmac_auth_middleware, rate_limit_middleware, HmacAuthState},
+    middleware::{
+        cors_layer, dashboard_auth_middleware, hmac_auth_middleware, rate_limit_middleware,
+        HmacAuthState,
+    },
     provider_runtime::refresh_runtime_from_disk,
     runtime_log_store::RuntimeLogStore,
     runtime_state::RuntimeState,
@@ -118,6 +121,8 @@ pub async fn run_server() -> Result<()> {
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
+    let dashboard_auth =
+        Arc::new(rushdino_common::dashboard_auth::DashboardAuthService::new((*pool).clone()));
     let ingress_policy = Arc::new(ChannelPairingIngressPolicy::new(
         config_path.clone(),
         channel_pairing.clone(),
@@ -333,9 +338,22 @@ pub async fn run_server() -> Result<()> {
         runtime_logs.clone(),
         chat_broadcast,
         channel_pairing,
+        dashboard_auth,
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
+        .route(
+            "/api/dashboard-auth/status",
+            get(routes::dashboard_auth::get_status),
+        )
+        .route(
+            "/api/dashboard-auth/exchange",
+            post(routes::dashboard_auth::exchange),
+        )
+        .route(
+            "/api/dashboard-auth/logout",
+            post(routes::dashboard_auth::logout),
+        )
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
         .route(
@@ -419,6 +437,10 @@ pub async fn run_server() -> Result<()> {
             get(routes::system::get_system_summary),
         )
         .route("/api/system/doctor", get(routes::system::get_doctor_report))
+        .route(
+            "/api/system/thinking-level",
+            patch(routes::system::patch_thinking_level),
+        )
         .route(
             "/api/system/soul-memory",
             get(routes::soul_memory::get_soul_memory_state),
@@ -525,6 +547,10 @@ pub async fn run_server() -> Result<()> {
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),
             rate_limit_middleware,
+        ))
+        .layer(axum_middleware::from_fn_with_state(
+            state.clone(),
+            dashboard_auth_middleware,
         ))
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),

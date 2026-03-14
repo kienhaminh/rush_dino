@@ -1,6 +1,6 @@
 use axum::{extract::State, Json};
 use chrono::{Duration, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use rushdino_agent::{RunCounts, RunListFilter};
 use rushdino_providers::types::ThinkingLevel;
@@ -400,6 +400,17 @@ fn build_doctor_findings(
         });
     }
 
+    if config.security.dashboard_auth_enabled && config.security.hmac_auth_enabled {
+        findings.push(DoctorFindingView {
+            code: "dashboard_auth_hmac_conflict".to_owned(),
+            severity: "error".to_owned(),
+            title: "Dashboard auth conflicts with HMAC auth".to_owned(),
+            detail: "Browser dashboard sessions and HMAC API authentication cannot both protect the same dashboard surface.".to_owned(),
+            action: "Disable either security.dashboard_auth_enabled or security.hmac_auth_enabled so the dashboard has a single authentication boundary.".to_owned(),
+            fixable: true,
+        });
+    }
+
     if !config.execution.shell_exec_sandbox.enabled {
         findings.push(DoctorFindingView {
             code: "shell_sandbox_disabled".to_owned(),
@@ -530,6 +541,24 @@ fn build_doctor_findings(
     findings
 }
 
+#[derive(Debug, Deserialize)]
+pub struct PatchThinkingLevelRequest {
+    pub level: ThinkingLevel,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PatchThinkingLevelResponse {
+    pub level: ThinkingLevel,
+}
+
+pub async fn patch_thinking_level(
+    State(state): State<crate::state::AppState>,
+    axum::Json(body): axum::Json<PatchThinkingLevelRequest>,
+) -> Result<axum::Json<PatchThinkingLevelResponse>> {
+    *state.runtime.thinking_level_override.write().unwrap_or_else(|e| e.into_inner()) = Some(body.level.clone());
+    Ok(axum::Json(PatchThinkingLevelResponse { level: body.level }))
+}
+
 fn profile_has_secret(credentials: &CredentialsConfig, profile_id: &str) -> bool {
     credentials.profiles.get(profile_id).is_some_and(|secret| {
         secret
@@ -585,5 +614,18 @@ mod tests {
         assert!(findings
             .iter()
             .any(|finding| finding.code == "default_profile_execution_invalid"));
+    }
+
+    #[test]
+    fn doctor_flags_dashboard_auth_hmac_conflict() {
+        let mut config = AppConfig::default();
+        config.security.dashboard_auth_enabled = true;
+        config.security.hmac_auth_enabled = true;
+        let credentials = CredentialsConfig::default();
+
+        let findings = build_doctor_findings(&config, &credentials, &RuntimeStatus::default());
+        assert!(findings
+            .iter()
+            .any(|finding| finding.code == "dashboard_auth_hmac_conflict"));
     }
 }
