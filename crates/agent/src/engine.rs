@@ -157,25 +157,28 @@ mod config_tests {
         assert_eq!(config.max_context_tokens, 8192);
     }
 
+    // Note: constructing AgentEngine in a unit test requires the full dependency graph
+    // (provider, DB pool, etc.), which is impractical here. This test verifies the
+    // override→fallback logic pattern that effective_thinking_level() implements.
     #[test]
-    fn effective_thinking_level_uses_override_then_falls_back() {
+    fn thinking_level_override_logic_prefers_override_over_config() {
         let config = AgentConfig::default(); // default is ThinkingLevel::Low
         let override_arc: Arc<RwLock<Option<ThinkingLevel>>> = Arc::new(RwLock::new(None));
 
         // No override → falls back to config
-        let effective = override_arc.read().unwrap().clone()
+        let effective = override_arc.read().unwrap_or_else(|e| e.into_inner()).clone()
             .unwrap_or_else(|| config.thinking_level.clone());
         assert_eq!(effective, ThinkingLevel::Low);
 
         // With override
-        *override_arc.write().unwrap() = Some(ThinkingLevel::High);
-        let effective = override_arc.read().unwrap().clone()
+        *override_arc.write().unwrap_or_else(|e| e.into_inner()) = Some(ThinkingLevel::High);
+        let effective = override_arc.read().unwrap_or_else(|e| e.into_inner()).clone()
             .unwrap_or_else(|| config.thinking_level.clone());
         assert_eq!(effective, ThinkingLevel::High);
 
         // Cleared override → falls back again
-        *override_arc.write().unwrap() = None;
-        let effective = override_arc.read().unwrap().clone()
+        *override_arc.write().unwrap_or_else(|e| e.into_inner()) = None;
+        let effective = override_arc.read().unwrap_or_else(|e| e.into_inner()).clone()
             .unwrap_or_else(|| config.thinking_level.clone());
         assert_eq!(effective, ThinkingLevel::Low);
     }
@@ -1068,7 +1071,7 @@ impl AgentEngine {
     pub fn effective_thinking_level(&self) -> ThinkingLevel {
         self.thinking_level_override
             .read()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .clone()
             .unwrap_or_else(|| self.config.thinking_level.clone())
     }
