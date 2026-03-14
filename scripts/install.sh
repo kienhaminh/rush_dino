@@ -289,6 +289,48 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Memory-aware Cargo build flags
+#
+# The workspace release profile uses lto=true + codegen-units=1, which is
+# very RAM-intensive.  On low-memory machines the OOM killer will SIGKILL
+# the compiler mid-build.  Detect available RAM and apply safe overrides:
+#
+#   < 2 GB  → lto=off, codegen-units=16, 1 parallel job   (minimal RAM)
+#   < 4 GB  → lto=thin, codegen-units=4,  2 parallel jobs  (moderate RAM)
+#   ≥ 4 GB  → use workspace defaults (full LTO, 1 codegen unit)
+# ---------------------------------------------------------------------------
+available_ram_mb() {
+  if [[ "$os_name" == "linux" ]] && [[ -r /proc/meminfo ]]; then
+    awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo
+  elif [[ "$os_name" == "macos" ]]; then
+    local page_size free_pages
+    page_size=$(pagesize 2>/dev/null || echo 4096)
+    free_pages=$(vm_stat 2>/dev/null | awk '/Pages free/ {gsub(/\./,"",$3); print $3}')
+    echo $(( ${free_pages:-0} * page_size / 1024 / 1024 ))
+  else
+    echo 0
+  fi
+}
+
+cargo_build_flags() {
+  local ram
+  ram="$(available_ram_mb)"
+
+  if (( ram > 0 && ram < 2048 )); then
+    warn "Low memory detected (~${ram} MB available). Using memory-safe build settings (LTO off, single job)."
+    echo "--config profile.release.lto=false --config profile.release.codegen-units=16"
+    export CARGO_BUILD_JOBS=1
+  elif (( ram > 0 && ram < 4096 )); then
+    warn "Limited memory detected (~${ram} MB available). Using reduced LTO and 2 parallel jobs."
+    echo "--config 'profile.release.lto=\"thin\"' --config profile.release.codegen-units=4"
+    export CARGO_BUILD_JOBS=2
+  else
+    # Sufficient RAM — let workspace Cargo.toml settings take effect
+    echo ""
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Step 4: Build (source mode) or Download (binary mode)
 # ---------------------------------------------------------------------------
 workdir="$(mktemp -d)"
@@ -305,8 +347,13 @@ if [[ "$build_from_source" == "true" ]]; then
 
   # --- 4b: Build Rust binary ---
   step "Step 4b: Building Rust Binary..."
-  info "  Running cargo build --release -p rushdino-cli ..."
-  ( cd "${REPO_ROOT}" && cargo build --release -p rushdino-cli )
+  # Evaluate memory-aware flags before invoking cargo
+  # shellcheck disable=SC2046
+  extra_flags="$(cargo_build_flags)"
+  info "  Running cargo build --release -p rushdino-cli ${extra_flags}..."
+  # Word-split extra_flags intentionally so each --config flag is a separate arg
+  # shellcheck disable=SC2086
+  ( cd "${REPO_ROOT}" && cargo build --release -p rushdino-cli $extra_flags )
   success "Rust binary built successfully."
 
   binary_src="${REPO_ROOT}/target/release/rushdino"
