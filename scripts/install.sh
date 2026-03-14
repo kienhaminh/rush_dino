@@ -118,11 +118,131 @@ download() {
 }
 
 # ---------------------------------------------------------------------------
+# System dependency installer for source builds
+#
+# Installs pkg-config, OpenSSL dev headers, and a C compiler (needed by
+# openssl-sys and other -sys crates) using the detected package manager.
+# Also sets OPENSSL_DIR for Homebrew on macOS where OpenSSL is keg-only.
+# ---------------------------------------------------------------------------
+ensure_system_deps() {
+  local missing=()
+
+  # Detect package manager
+  local pm=""
+  if   command -v apt-get >/dev/null 2>&1; then pm="apt"
+  elif command -v dnf     >/dev/null 2>&1; then pm="dnf"
+  elif command -v yum     >/dev/null 2>&1; then pm="yum"
+  elif command -v apk     >/dev/null 2>&1; then pm="apk"
+  elif command -v pkg     >/dev/null 2>&1; then pm="pkg"
+  elif command -v brew    >/dev/null 2>&1; then pm="brew"
+  fi
+
+  # --- Check: C compiler (cc / gcc) ---
+  if ! command -v cc >/dev/null 2>&1 && ! command -v gcc >/dev/null 2>&1; then
+    case "$pm" in
+      apt)  missing+=("build-essential") ;;
+      dnf|yum) missing+=("gcc") ;;
+      apk)  missing+=("build-base") ;;
+      pkg)  missing+=("gcc") ;;
+      brew) missing+=("gcc") ;;
+      *)    warn "C compiler (cc/gcc) not found. Install it manually if the build fails." ;;
+    esac
+  fi
+
+  # --- Check: pkg-config ---
+  if ! command -v pkg-config >/dev/null 2>&1; then
+    case "$pm" in
+      apt)     missing+=("pkg-config") ;;
+      dnf|yum) missing+=("pkg-config") ;;
+      apk)     missing+=("pkgconfig") ;;
+      pkg)     missing+=("pkg-config") ;;
+      brew)    missing+=("pkgconf") ;;
+      *)       error "pkg-config not found and no known package manager detected.\n  Install pkg-config manually and retry." ;;
+    esac
+  fi
+
+  # --- Check: OpenSSL dev headers ---
+  local openssl_ok=false
+  if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists openssl 2>/dev/null; then
+    openssl_ok=true
+  elif [[ -f "/usr/include/openssl/ssl.h" ]] \
+    || [[ -f "/usr/local/include/openssl/ssl.h" ]] \
+    || [[ -f "/opt/homebrew/opt/openssl/include/openssl/ssl.h" ]]; then
+    openssl_ok=true
+  fi
+
+  if [[ "$openssl_ok" == "false" ]]; then
+    case "$pm" in
+      apt)     missing+=("libssl-dev") ;;
+      dnf)     missing+=("openssl-devel") ;;
+      yum)     missing+=("openssl-devel") ;;
+      apk)     missing+=("openssl-dev") ;;
+      pkg)     missing+=("openssl") ;;
+      brew)    missing+=("openssl") ;;
+      *)       error "OpenSSL dev headers not found and no package manager detected.\n  Install them manually and retry." ;;
+    esac
+  fi
+
+  # Nothing to do
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    success "System dependencies satisfied (pkg-config, OpenSSL, C compiler)."
+
+    # Homebrew: even if already installed, OpenSSL may be keg-only — set env vars
+    if [[ "$pm" == "brew" ]] && command -v brew >/dev/null 2>&1; then
+      local ossl_prefix
+      ossl_prefix="$(brew --prefix openssl 2>/dev/null || true)"
+      if [[ -n "$ossl_prefix" ]]; then
+        export OPENSSL_DIR="$ossl_prefix"
+        export PKG_CONFIG_PATH="${ossl_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+      fi
+    fi
+    return
+  fi
+
+  warn "Missing system packages: ${missing[*]}"
+  info "  Installing via ${pm}..."
+
+  # Use sudo for system package managers; brew runs as the current user
+  local sudo_cmd=""
+  if [[ "$pm" != "brew" ]] && command -v sudo >/dev/null 2>&1; then
+    sudo_cmd="sudo"
+  fi
+
+  case "$pm" in
+    apt)
+      $sudo_cmd apt-get update -qq
+      $sudo_cmd apt-get install -y "${missing[@]}"
+      ;;
+    dnf)  $sudo_cmd dnf  install -y "${missing[@]}" ;;
+    yum)  $sudo_cmd yum  install -y "${missing[@]}" ;;
+    apk)  $sudo_cmd apk  add --no-cache "${missing[@]}" ;;
+    pkg)  $sudo_cmd pkg  install -y "${missing[@]}" ;;
+    brew)
+      brew install "${missing[@]}"
+      local ossl_prefix
+      ossl_prefix="$(brew --prefix openssl 2>/dev/null || true)"
+      if [[ -n "$ossl_prefix" ]]; then
+        export OPENSSL_DIR="$ossl_prefix"
+        export PKG_CONFIG_PATH="${ossl_prefix}/lib/pkgconfig${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+      fi
+      ;;
+    *)
+      error "Cannot install dependencies: no supported package manager found.\n  Install manually: pkg-config + OpenSSL dev headers, then retry."
+      ;;
+  esac
+
+  success "System dependencies installed."
+}
+
+# ---------------------------------------------------------------------------
 # Step 3: Tool checks
 # ---------------------------------------------------------------------------
 step "Step 3: Checking Required Tools..."
 
 if [[ "$build_from_source" == "true" ]]; then
+  # --- System dependencies (pkg-config, OpenSSL headers, C compiler) ---
+  ensure_system_deps
+
   # --- Rust toolchain check (auto-install via rustup if missing) ---
   if command -v cargo >/dev/null 2>&1; then
     success "Rust toolchain found: $(cargo --version)"
