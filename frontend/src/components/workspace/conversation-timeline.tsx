@@ -49,7 +49,7 @@ const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationIt
   }
 
   if (item.kind === 'thinking') {
-    return <ThinkingBlock content={item.content} />;
+    return <ThinkingBlock content={item.content} done={item.done} />;
   }
 
   if (item.kind === 'tool_use') {
