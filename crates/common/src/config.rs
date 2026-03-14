@@ -85,6 +85,9 @@ pub struct SecurityConfig {
     /// Whether HMAC-SHA256 authentication is required on all API requests.
     /// Defaults to `false` so existing installs keep working until they opt in.
     pub hmac_auth_enabled: bool,
+    /// Whether the browser dashboard requires a login-code-issued session.
+    /// Defaults to `false` so existing installs keep working until they opt in.
+    pub dashboard_auth_enabled: bool,
     /// SSRF: hosts explicitly allowed even if their IPs are in private ranges.
     pub allowed_external_hosts: Vec<String>,
     /// Allowed root paths for document/file operations (path traversal guard).
@@ -103,6 +106,7 @@ impl Default for SecurityConfig {
                 "http://localhost:28847".to_owned(),
             ],
             hmac_auth_enabled: false,
+            dashboard_auth_enabled: false,
             allowed_external_hosts: Vec::new(),
             allowed_read_roots: Vec::new(),
         }

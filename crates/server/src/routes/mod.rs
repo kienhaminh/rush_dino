@@ -6,6 +6,7 @@ pub mod chat;
 pub mod config;
 pub mod conversations;
 pub mod cron;
+pub mod dashboard_auth;
 pub mod documents;
 pub mod files;
 pub mod gateway;

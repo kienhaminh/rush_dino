@@ -2,6 +2,7 @@ use std::fs;
 
 use crate::{
     config::{AppConfig, CredentialsConfig, DmPolicy},
+    db,
     init,
 };
 
@@ -12,6 +13,7 @@ fn load_default_config_without_file() {
     let config = AppConfig::load_from_path(&path).expect("default config should load");
     assert_eq!(config.port, 28847);
     assert_eq!(config.host, "0.0.0.0");
+    assert!(!config.security.dashboard_auth_enabled);
     assert!(config.execution.shell_exec_sandbox.enabled);
     assert_eq!(config.gateway.telegram.access.dm_policy, DmPolicy::Pairing);
     assert_eq!(config.gateway.discord.access.dm_policy, DmPolicy::Pairing);
@@ -20,6 +22,61 @@ fn load_default_config_without_file() {
         .shell_exec_sandbox
         .workspace_root
         .ends_with("workspaces"));
+}
+
+#[test]
+fn config_loads_dashboard_auth_flag_from_security_block() {
+    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("temp dir should be created");
+    let path = root.join("config.toml");
+    fs::write(
+        &path,
+        r#"
+host = "127.0.0.1"
+port = 28847
+log_level = "info"
+active_provider = "ollama"
+profiles = []
+fallback_profile_ids = []
+data_dir = "data"
+db_path = "data.db"
+brave_search_endpoint = "https://api.search.brave.com/res/v1/web/search"
+allowed_chat_ids = []
+
+[ollama]
+base_url = "http://localhost:11434"
+model = "llama3"
+
+[openai]
+model = "gpt-4.1"
+
+[anthropic]
+model = "claude-3-5-sonnet-latest"
+
+[gateway.telegram]
+enabled = true
+
+[gateway.discord]
+enabled = false
+
+[gateway.slack]
+enabled = false
+
+[gateway.webchat]
+enabled = true
+
+[security]
+dashboard_auth_enabled = true
+hmac_auth_enabled = false
+allowed_origins = ["http://localhost:28847"]
+"#,
+    )
+    .expect("seed config");
+
+    let config = AppConfig::load_from_path(&path).expect("config should load");
+    assert!(config.security.dashboard_auth_enabled);
+
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -139,6 +196,125 @@ enabled = true
     assert!(config.gateway.telegram.access.allow_from.is_empty());
     assert_eq!(config.gateway.discord.access.dm_policy, DmPolicy::Pairing);
     assert!(!config.gateway.telegram.native_streaming);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn dashboard_auth_code_can_only_be_exchanged_once() {
+    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("temp dir should be created");
+    let db_path = root.join("data.db");
+    let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+
+    let service = crate::dashboard_auth::DashboardAuthService::new(pool.clone());
+    let issued = service.issue_code().await.expect("code should issue");
+    let session = service
+        .exchange_code(&issued.code)
+        .await
+        .expect("first exchange should succeed");
+
+    let validated = service
+        .validate_session(&session.token)
+        .await
+        .expect("session validation should succeed");
+    assert!(validated.is_some(), "new session should validate");
+
+    let second_exchange = service.exchange_code(&issued.code).await;
+    assert!(second_exchange.is_err(), "code reuse should fail");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn dashboard_auth_new_login_revokes_existing_session() {
+    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("temp dir should be created");
+    let db_path = root.join("data.db");
+    let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+
+    let service = crate::dashboard_auth::DashboardAuthService::new(pool.clone());
+    let first_code = service.issue_code().await.expect("first code should issue");
+    let first_session = service
+        .exchange_code(&first_code.code)
+        .await
+        .expect("first exchange should succeed");
+
+    let second_code = service.issue_code().await.expect("second code should issue");
+    let second_session = service
+        .exchange_code(&second_code.code)
+        .await
+        .expect("second exchange should succeed");
+
+    let first_validation = service
+        .validate_session(&first_session.token)
+        .await
+        .expect("first session validation should succeed");
+    assert!(first_validation.is_none(), "previous session should be revoked");
+
+    let second_validation = service
+        .validate_session(&second_session.token)
+        .await
+        .expect("second session validation should succeed");
+    assert!(second_validation.is_some(), "latest session should stay active");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn dashboard_auth_session_survives_service_restart() {
+    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("temp dir should be created");
+    let db_path = root.join("data.db");
+
+    let token = {
+        let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+        let service = crate::dashboard_auth::DashboardAuthService::new(pool.clone());
+        let code = service.issue_code().await.expect("code should issue");
+        let session = service
+            .exchange_code(&code.code)
+            .await
+            .expect("exchange should succeed");
+        session.token
+    };
+
+    let restarted_pool = db::init_pool(&db_path)
+        .await
+        .expect("pool should initialize after restart");
+    let restarted_service = crate::dashboard_auth::DashboardAuthService::new(restarted_pool);
+    let validated = restarted_service
+        .validate_session(&token)
+        .await
+        .expect("session validation should succeed after restart");
+    assert!(validated.is_some(), "session should survive restart");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn dashboard_auth_can_revoke_specific_session_token() {
+    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("temp dir should be created");
+    let db_path = root.join("data.db");
+    let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+
+    let service = crate::dashboard_auth::DashboardAuthService::new(pool);
+    let code = service.issue_code().await.expect("code should issue");
+    let session = service
+        .exchange_code(&code.code)
+        .await
+        .expect("exchange should succeed");
+
+    service
+        .revoke_session(&session.token)
+        .await
+        .expect("revoke should succeed");
+
+    let validated = service
+        .validate_session(&session.token)
+        .await
+        .expect("validation should succeed");
+    assert!(validated.is_none(), "revoked session should not validate");
 
     let _ = fs::remove_dir_all(root);
 }

@@ -37,6 +37,27 @@ export function ConfigSectionServer({ config, onChange }: Props) {
 
       <div className="flex items-center justify-between rounded-md border border-border/50 p-4">
         <div className="space-y-0.5">
+          <Label className="text-sm font-medium">Dashboard Auth</Label>
+          <p className="text-xs text-muted-foreground">
+            Require a one-time CLI-issued login code before the browser dashboard can load.
+          </p>
+        </div>
+        <Switch
+          checked={config.security.dashboard_auth_enabled}
+          onCheckedChange={(checked) =>
+            onChange({
+              security: {
+                ...config.security,
+                dashboard_auth_enabled: checked,
+                hmac_auth_enabled: checked ? false : config.security.hmac_auth_enabled,
+              },
+            })
+          }
+        />
+      </div>
+
+      <div className="flex items-center justify-between rounded-md border border-border/50 p-4">
+        <div className="space-y-0.5">
           <Label className="text-sm font-medium">HMAC Auth</Label>
           <p className="text-xs text-muted-foreground">
             Require HMAC-SHA256 authentication on all API requests.
@@ -45,7 +66,15 @@ export function ConfigSectionServer({ config, onChange }: Props) {
         <Switch
           checked={config.security.hmac_auth_enabled}
           onCheckedChange={(checked) =>
-            onChange({ security: { ...config.security, hmac_auth_enabled: checked } })
+            onChange({
+              security: {
+                ...config.security,
+                hmac_auth_enabled: checked,
+                dashboard_auth_enabled: checked
+                  ? false
+                  : config.security.dashboard_auth_enabled,
+              },
+            })
           }
         />
       </div>

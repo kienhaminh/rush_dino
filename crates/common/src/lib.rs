@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod asset_sync;
 pub mod config;
+pub mod dashboard_auth;
 pub mod db;
 pub mod error;
 pub mod init;

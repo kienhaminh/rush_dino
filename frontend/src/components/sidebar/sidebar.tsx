@@ -3,6 +3,7 @@ import { TAB_GROUPS, TAB_ICONS, TAB_LABELS, type Tab } from '@/lib/navigation';
 import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
 
 interface SidebarProps {
   activeTab: Tab;
@@ -13,6 +14,7 @@ interface SidebarProps {
 export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
+  const { enabled, logout } = useDashboardAuth();
 
   const toggleGroup = (label: string) => {
     setCollapsedGroups((prev: Record<string, boolean>) => ({
@@ -136,6 +138,14 @@ export function Sidebar({ activeTab, collapsed, onToggleCollapse }: SidebarProps
 
       {/* Footer */}
       <div className="p-4 border-t border-border/40 mt-auto shrink-0 bg-muted/30">
+        {enabled ? (
+          <button
+            onClick={() => void logout()}
+            className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-all mb-2"
+          >
+            <span>Log out</span>
+          </button>
+        ) : null}
         <button
           onClick={onToggleCollapse}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-all"

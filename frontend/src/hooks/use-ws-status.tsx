@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 
+import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
 import type { WsEvent } from '@/lib/types';
 
 interface WsContextValue {
@@ -23,12 +24,19 @@ const WsContext = createContext<WsContextValue>({ isConnected: false });
  * Provides `isConnected` to any consumer via `useWsStatus`.
  */
 export function WsStatusProvider({ children }: { children: ReactNode }) {
+  const { readyForProtectedRoutes } = useDashboardAuth();
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
   const seenErrorLogIdsRef = useRef<Set<string>>(new Set());
+  const readyRef = useRef(readyForProtectedRoutes);
+  readyRef.current = readyForProtectedRoutes;
 
   const connect = useCallback(() => {
+    if (!readyRef.current) {
+      return;
+    }
+
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const url = `${protocol}://${window.location.host}/api/ws/chat`;
     const socket = new WebSocket(url);
@@ -75,6 +83,9 @@ export function WsStatusProvider({ children }: { children: ReactNode }) {
     socket.onclose = () => {
       if (socketRef.current !== socket) return;
       setIsConnected(false);
+      if (!readyRef.current) {
+        return;
+      }
       const wait = Math.min(1000 * 2 ** reconnectRef.current, 30_000);
       reconnectRef.current += 1;
       window.setTimeout(connect, wait);
@@ -85,11 +96,18 @@ export function WsStatusProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!readyForProtectedRoutes) {
+      socketRef.current?.close();
+      socketRef.current = null;
+      setIsConnected(false);
+      return;
+    }
+
     connect();
     return () => {
       socketRef.current?.close();
     };
-  }, [connect]);
+  }, [connect, readyForProtectedRoutes]);
 
   const value = useMemo(() => ({ isConnected }), [isConnected]);
 

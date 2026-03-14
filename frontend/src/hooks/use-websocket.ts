@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
 import type { ActiveAgent, ConversationItem, RichContent, WsEvent } from '../lib/types';
 
 // Callback invoked when a broadcast user_message arrives from a channel.
@@ -20,6 +21,7 @@ export function useWebSocket(
   onChannelMessage?: OnChannelMessage,
   onConversationStarted?: OnConversationStarted,
 ) {
+  const { readyForProtectedRoutes } = useDashboardAuth();
   const [items, setItems] = useState<ConversationItem[]>([]);
   const [activeAgent, setActiveAgent] = useState<ActiveAgent>({
     name: 'Orchestrator',
@@ -34,6 +36,8 @@ export function useWebSocket(
   const lastStreamedConvIdRef = useRef<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
+  const readyRef = useRef(readyForProtectedRoutes);
+  readyRef.current = readyForProtectedRoutes;
 
   const replaceAssistantItem = useCallback(
     (
@@ -77,6 +81,10 @@ export function useWebSocket(
   );
 
   const connect = useCallback(() => {
+    if (!readyRef.current) {
+      return;
+    }
+
     const socket = new WebSocket(buildWsUrl());
     socketRef.current = socket;
 
@@ -88,6 +96,9 @@ export function useWebSocket(
     socket.onclose = () => {
       if (socketRef.current !== socket) return;
       setIsConnected(false);
+      if (!readyRef.current) {
+        return;
+      }
       const wait = Math.min(1000 * 2 ** reconnectRef.current, 30_000);
       reconnectRef.current += 1;
       window.setTimeout(connect, wait);
@@ -269,9 +280,16 @@ export function useWebSocket(
   }, [activeConversationId, onChannelMessage, onConversationStarted, replaceAssistantItem]);
 
   useEffect(() => {
+    if (!readyForProtectedRoutes) {
+      socketRef.current?.close();
+      socketRef.current = null;
+      setIsConnected(false);
+      return;
+    }
+
     connect();
     return () => socketRef.current?.close();
-  }, [connect]);
+  }, [connect, readyForProtectedRoutes]);
 
   const sendMessage = useCallback(
     (text: string) => {

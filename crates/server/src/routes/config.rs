@@ -39,6 +39,7 @@ pub async fn patch_config(
     // Validate by deserializing into AppConfig before saving.
     let updated: AppConfig = serde_json::from_value(current_value)
         .map_err(|e| AppError::Validation(format!("invalid config: {e}")))?;
+    validate_security_config(&updated)?;
     updated.save_to_path(&state.config_path)?;
     let credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
     if execution_runtime_reload_required_from_config(&current, &updated) {
@@ -137,6 +138,16 @@ fn json_merge(base: &mut Value, patch: Value) {
     }
 }
 
+fn validate_security_config(config: &AppConfig) -> Result<()> {
+    if config.security.dashboard_auth_enabled && config.security.hmac_auth_enabled {
+        return Err(AppError::Validation(
+            "dashboard auth cannot be enabled while HMAC auth is enabled".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rushdino_common::{AppConfig, CredentialsConfig};
@@ -146,6 +157,7 @@ mod tests {
         execution_runtime_reload_required_from_credentials,
         gateway_runtime_reload_required_from_config,
         gateway_runtime_reload_required_from_credentials,
+        validate_security_config,
     };
 
     #[test]
@@ -216,6 +228,19 @@ mod tests {
         assert!(execution_runtime_reload_required_from_config(
             &current, &updated
         ));
+    }
+
+    #[test]
+    fn security_validation_rejects_dashboard_auth_with_hmac() {
+        let mut config = AppConfig::default();
+        config.security.dashboard_auth_enabled = true;
+        config.security.hmac_auth_enabled = true;
+
+        let error = validate_security_config(&config).expect_err("config should be rejected");
+        assert!(
+            error.to_string().contains("dashboard auth"),
+            "error should mention dashboard auth conflict"
+        );
     }
 
     #[test]

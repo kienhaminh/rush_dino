@@ -1,0 +1,109 @@
+<h2>Where should the thinking level control live?</h2>
+<p class="subtitle">Currently the "Thinking level" row in the Overview tab is read-only. Pick where you'd like the control to appear.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Inline in the info row</h3>
+      <p>The "Thinking level" row becomes a clickable dropdown in-place. Click the current value to change it.</p>
+      <div style="margin-top:10px">
+        <div class="mockup">
+          <div class="mockup-header">Model &amp; Agent Config — Overview Tab</div>
+          <div class="mockup-body" style="padding:8px 12px;font-size:11px">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.08)">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">PROVIDER</span>
+              <span style="font-family:monospace">anthropic</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.08)">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">MODEL</span>
+              <span style="font-family:monospace">claude-3-7-sonnet</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.08)">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">THINKING LEVEL</span>
+              <select style="background:#1a2a3a;border:1px solid rgba(23,196,214,0.35);border-radius:4px;color:#17C4D6;font-family:monospace;font-size:10px;padding:2px 6px;cursor:pointer">
+                <option>off</option>
+                <option>minimal</option>
+                <option>low</option>
+                <option selected>medium</option>
+                <option>high</option>
+                <option>xhigh</option>
+                <option>adaptive</option>
+              </select>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">MAX ITERATIONS</span>
+              <span style="font-family:monospace">10</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Segmented control in the card header</h3>
+      <p>A compact segmented pill control appears in the "Model &amp; Agent Config" card header, next to the current THINKING badge.</p>
+      <div style="margin-top:10px">
+        <div class="mockup">
+          <div class="mockup-header">Model &amp; Agent Config — Card Header</div>
+          <div class="mockup-body" style="padding:8px 12px;font-size:11px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-size:12px;font-weight:600">Model &amp; Agent Config</span>
+              <div style="display:flex;gap:4px;align-items:center">
+                <span style="background:rgba(23,196,214,0.1);color:#17C4D6;border:1px solid rgba(23,196,214,0.2);font-size:9px;font-weight:600;padding:2px 5px;border-radius:3px">REASONING MODEL</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">THINKING:</span>
+              <div style="display:flex;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:5px;overflow:hidden">
+                <span style="padding:3px 7px;font-size:9px;font-weight:600;color:#888;cursor:pointer">OFF</span>
+                <span style="padding:3px 7px;font-size:9px;font-weight:600;color:#888;cursor:pointer">LOW</span>
+                <span style="padding:3px 7px;font-size:9px;font-weight:600;background:rgba(23,196,214,0.15);color:#17C4D6;border-left:1px solid rgba(255,255,255,0.1);border-right:1px solid rgba(255,255,255,0.1);cursor:pointer">MED</span>
+                <span style="padding:3px 7px;font-size:9px;font-weight:600;color:#888;cursor:pointer">HIGH</span>
+                <span style="padding:3px 7px;font-size:9px;font-weight:600;color:#888;cursor:pointer">MAX</span>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.08)">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">PROVIDER</span>
+              <span style="font-family:monospace">anthropic</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0">
+              <span style="color:#888;text-transform:uppercase;font-size:9px;letter-spacing:0.08em">MODEL</span>
+              <span style="font-family:monospace">claude-3-7-sonnet</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Floating control in chat page header</h3>
+      <p>Add a thinking level picker to the chat page status bar, not the sessions page — so it's accessible while chatting.</p>
+      <div style="margin-top:10px">
+        <div class="mockup">
+          <div class="mockup-header">Chat Page — Status Bar</div>
+          <div class="mockup-body" style="padding:8px 12px;font-size:11px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="background:rgba(23,196,214,0.1);color:#17C4D6;border:1px solid rgba(23,196,214,0.2);font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px">● ACTIVE AGENT</span>
+                <span style="color:#888;font-size:10px">Connected</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="color:#888;font-size:9px;text-transform:uppercase;letter-spacing:0.08em">THINK</span>
+                <select style="background:#1a2a3a;border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#ccc;font-family:monospace;font-size:9px;padding:2px 4px">
+                  <option>medium</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

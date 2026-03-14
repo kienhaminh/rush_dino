@@ -260,6 +260,32 @@ CREATE TABLE IF NOT EXISTS runtime_run_events (
   FOREIGN KEY (run_id) REFERENCES runtime_runs(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS dashboard_login_codes (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_login_codes_active
+  ON dashboard_login_codes(expires_at DESC);
+
+CREATE TABLE IF NOT EXISTS dashboard_sessions (
+  id TEXT PRIMARY KEY,
+  session_hash TEXT NOT NULL UNIQUE,
+  created_from_code_id TEXT,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL,
+  revoked_at TEXT,
+  FOREIGN KEY (created_from_code_id) REFERENCES dashboard_login_codes(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_active
+  ON dashboard_sessions(expires_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_runtime_run_events_run_created
   ON runtime_run_events(run_id, created_at DESC);
 

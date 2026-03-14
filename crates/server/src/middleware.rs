@@ -9,6 +9,7 @@ use axum::{
     http::{header, HeaderValue, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
+    Json,
 };
 use tower_http::cors::CorsLayer;
 
@@ -16,6 +17,7 @@ use rushdino_common::AppConfig;
 use rushdino_security::auth_hmac::{verify_request, AuthError, NonceCache};
 
 use crate::state::AppState;
+use crate::routes::dashboard_auth::dashboard_session_cookie_from_headers;
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -143,6 +145,50 @@ pub async fn hmac_auth_middleware(
     }
 }
 
+pub async fn dashboard_auth_middleware(
+    axum::extract::State(state): axum::extract::State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let path = request.uri().path().to_owned();
+    let config = AppConfig::load_from_path(&state.config_path)
+        .unwrap_or_else(|_| state.config().as_ref().clone());
+    if !config.security.dashboard_auth_enabled || !dashboard_auth_required_path(&path) {
+        return next.run(request).await;
+    }
+
+    let Some(token) = dashboard_session_cookie_from_headers(request.headers()) else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(JsonErrorBody {
+                error: "dashboard_auth_required",
+            }),
+        )
+            .into_response();
+    };
+
+    match state.dashboard_auth.validate_session(&token).await {
+        Ok(Some(_)) => next.run(request).await,
+        Ok(None) => (
+            StatusCode::UNAUTHORIZED,
+            Json(JsonErrorBody {
+                error: "dashboard_auth_required",
+            }),
+        )
+            .into_response(),
+        Err(err) => {
+            tracing::warn!("dashboard auth validation failed: {err}");
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(JsonErrorBody {
+                    error: "dashboard_auth_required",
+                }),
+            )
+                .into_response()
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Rate limiting middleware
 // ---------------------------------------------------------------------------
@@ -211,4 +257,40 @@ fn extract_ip(request: &Request) -> IpAddr {
         .get::<ConnectInfo<std::net::SocketAddr>>()
         .map(|ci| ci.0.ip())
         .unwrap_or_else(|| "0.0.0.0".parse().unwrap())
+}
+
+#[derive(serde::Serialize)]
+struct JsonErrorBody {
+    error: &'static str,
+}
+
+fn dashboard_auth_required_path(path: &str) -> bool {
+    match path {
+        "/api/dashboard-auth/status"
+        | "/api/dashboard-auth/exchange"
+        | "/api/dashboard-auth/logout"
+        | "/healthz" => false,
+        "/api/ws/chat" => true,
+        _ => path.starts_with("/api/"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::dashboard_auth_required_path;
+
+    #[test]
+    fn dashboard_auth_path_guard_skips_public_auth_routes() {
+        assert!(!dashboard_auth_required_path("/healthz"));
+        assert!(!dashboard_auth_required_path("/api/dashboard-auth/status"));
+        assert!(!dashboard_auth_required_path("/api/dashboard-auth/exchange"));
+        assert!(!dashboard_auth_required_path("/api/dashboard-auth/logout"));
+    }
+
+    #[test]
+    fn dashboard_auth_path_guard_protects_dashboard_api_and_ws_routes() {
+        assert!(dashboard_auth_required_path("/api/chat"));
+        assert!(dashboard_auth_required_path("/api/conversations"));
+        assert!(dashboard_auth_required_path("/api/ws/chat"));
+    }
 }

@@ -13,6 +13,12 @@ struct Cli {
 }
 
 #[derive(Subcommand, Debug)]
+enum DashboardAction {
+    IssueCode,
+    Logout,
+}
+
+#[derive(Subcommand, Debug)]
 enum Command {
     Init,
     Start {
@@ -28,6 +34,8 @@ enum Command {
         login: Option<String>,
     },
     Dashboard {
+        #[command(subcommand)]
+        action: Option<DashboardAction>,
         #[arg(long)]
         no_open: bool,
     },
@@ -42,6 +50,41 @@ enum Command {
     Agent,
     Agents,
     Browser,
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::{Cli, Command, DashboardAction};
+
+    #[test]
+    fn dashboard_issue_code_subcommand_parses() {
+        let cli = Cli::try_parse_from(["rushdino", "dashboard", "issue-code"])
+            .expect("dashboard issue-code should parse");
+
+        match cli.command {
+            Command::Dashboard { action, no_open } => {
+                assert!(matches!(action, Some(DashboardAction::IssueCode)));
+                assert!(!no_open);
+            }
+            other => panic!("expected dashboard command, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dashboard_no_open_still_parses_without_subcommand() {
+        let cli = Cli::try_parse_from(["rushdino", "dashboard", "--no-open"])
+            .expect("dashboard --no-open should parse");
+
+        match cli.command {
+            Command::Dashboard { action, no_open } => {
+                assert!(action.is_none());
+                assert!(no_open);
+            }
+            other => panic!("expected dashboard command, got {other:?}"),
+        }
+    }
 }
 
 #[tokio::main]
@@ -68,7 +111,9 @@ async fn run() -> Result<()> {
         Command::Status => commands::status::run().await,
         Command::Upgrade => commands::upgrade::run().await,
         Command::Configure { login } => commands::configure::run(login).await,
-        Command::Dashboard { no_open } => commands::dashboard::run(no_open).await,
+        Command::Dashboard { action, no_open } => {
+            commands::dashboard::run(action, no_open).await
+        }
         Command::Health => commands::health::run().await,
         Command::Doctor => commands::doctor::run().await,
         Command::Reset => commands::reset::run().await,

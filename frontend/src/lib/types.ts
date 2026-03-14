@@ -118,6 +118,7 @@ export interface GatewayConfig {
 
 export interface SecurityConfig {
   hmac_auth_enabled: boolean;
+  dashboard_auth_enabled: boolean;
   allowed_origins: string[];
 }
 
@@ -173,6 +174,12 @@ export interface CredentialsView {
   codex_access_token?: string;
   codex_refresh_token?: string;
   codex_token_expires_at?: number;
+}
+
+export interface DashboardAuthStatusResponse {
+  enabled: boolean;
+  authenticated: boolean;
+  expiresAt?: string | null;
 }
 
 export interface RuntimeLogRecord {
