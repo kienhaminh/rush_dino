@@ -8,6 +8,7 @@ import type { ConversationItem } from '@/lib/types';
 
 interface ConversationTimelineProps {
   items: ConversationItem[];
+  isStreaming?: boolean;
 }
 
 // Memoized so it only re-renders when its own `item` reference changes.
@@ -84,16 +85,16 @@ const TimelineItem = memo(function TimelineItem({ item }: { item: ConversationIt
 
 export const ConversationTimeline = memo(function ConversationTimeline({
   items,
+  isStreaming,
 }: ConversationTimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Scroll to bottom only when items are added (not on every streaming chunk update).
-  // Using items.length avoids restarting the scroll animation on each delta.
+  // Scroll to bottom when items are added or streaming starts.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [items.length]);
+  }, [items.length, isStreaming]);
 
   if (items.length === 0) {
     return (
@@ -109,12 +110,31 @@ export const ConversationTimeline = memo(function ConversationTimeline({
     );
   }
 
+  // Show typing bubble when streaming but no live (non-done) thinking item is visible.
+  const hasLiveThinking = items.some((item) => item.kind === 'thinking' && !item.done);
+  const showTypingBubble = isStreaming && !hasLiveThinking;
+
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto scrollbar-thin px-4 py-6 md:px-8">
       <div className="max-w-3xl mx-auto space-y-1 min-h-full flex flex-col justify-end">
         {items.map((item) => (
           <TimelineItem key={item.id} item={item} />
         ))}
+        {showTypingBubble && (
+          <div className="flex justify-start py-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="bg-card border border-border/40 rounded-[18px] rounded-bl-[4px] px-4 py-3 shadow-sm">
+              <div className="flex items-center gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
