@@ -203,7 +203,15 @@ export function ChatPage() {
                 Disconnected — reconnecting…
               </span>
             ) : isStreaming ? (
-              <span className="text-[10px] text-primary animate-pulse italic">Agent is thinking...</span>
+              <div className="flex items-center gap-1.5 bg-primary/[0.07] border border-primary/25 rounded-[18px] rounded-bl-[4px] px-3 py-2 shadow-sm">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
             ) : (
               <span className="text-[10px] text-muted-foreground/30">
                 Press Enter to send, Shift+Enter for new line
