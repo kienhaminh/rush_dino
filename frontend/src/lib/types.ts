@@ -687,7 +687,7 @@ export type ConversationItem =
       richContent?: RichContent | null;
       runId?: string | null;
     }
-  | { kind: 'thinking'; id: string; content?: string }
+  | { kind: 'thinking'; id: string; content?: string; done?: boolean }
   | {
       kind: 'tool_use';
       id: string;
