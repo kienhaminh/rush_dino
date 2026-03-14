@@ -129,6 +129,9 @@ pub fn is_dangerous_command(command: &str) -> bool {
         "diskpart",
         "rd /s",
         "del /f",
+        "rm -rf ",
+        "rm -r ",
+        "rm ",
     ];
 
     patterns.iter().any(|pattern| normalized.contains(pattern))

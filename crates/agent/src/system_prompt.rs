@@ -201,8 +201,6 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use crate::memory_bootstrap::BootstrapContextFile;
     use rushdino_providers::types::ToolDefinition;
 

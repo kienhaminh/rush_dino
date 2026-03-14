@@ -205,9 +205,7 @@ mod tests {
         let now = 1_700_000_000u64;
         let header = make_token(now, "POST", "/api/chat", b"{}");
         assert!(verify_request(&header, now, "POST", "/api/chat", b"{}", secret(), &cache).is_ok());
-        // Second request with same nonce — different timestamp but same nonce string
-        let header2 = make_token(now + 1, "POST", "/api/chat", b"{}");
-        // Make the nonce the same by constructing manually
+        // Second request: reuse same nonce (abc123) to trigger replay rejection
         let sig = compute_hmac(
             secret(),
             &canonical_message(now + 1, "abc123", "POST", "/api/chat", b"{}"),

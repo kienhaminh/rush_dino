@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Brain } from 'lucide-react';
+import { Brain, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ThinkingBlockProps {
   content?: string;
@@ -26,7 +26,7 @@ export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
         {!done && (
           <div className="bg-primary/[0.07] border border-primary/25 rounded-[18px] rounded-bl-[4px] px-4 py-3 shadow-sm min-w-[80px]">
             {content ? (
-              <p className="text-[11px] text-primary/60 font-mono italic leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
+              <p className="text-[11px] text-primary/60 font-mono italic leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto scrollbar-thin">
                 {content}
               </p>
             ) : (
@@ -46,12 +46,13 @@ export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
         {/* ── Collapsed state: done, not expanded ── */}
         {done && !expanded && (
           <button
+            type="button"
+            aria-expanded={false}
             onClick={() => setExpanded(true)}
             className="bg-primary/[0.07] border border-primary/25 rounded-[18px] rounded-bl-[4px] px-4 py-2.5 shadow-sm text-[11px] text-primary/70 font-mono flex items-center gap-2 hover:bg-primary/[0.12] transition-colors"
           >
-            <Brain size={10} />
             View reasoning
-            <span className="text-primary/40 text-[10px]">▾</span>
+            <ChevronDown size={10} className="text-primary/40" />
           </button>
         )}
 
@@ -63,13 +64,16 @@ export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
                 Reasoning
               </span>
               <button
+                type="button"
+                aria-expanded={true}
+                aria-label="Collapse reasoning"
                 onClick={() => setExpanded(false)}
                 className="text-[10px] text-primary/50 hover:text-primary/80 transition-colors font-mono flex items-center gap-1"
               >
-                Hide <span>▴</span>
+                Hide <ChevronUp size={10} />
               </button>
             </div>
-            <p className="text-[11px] text-primary/60 font-mono italic leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto">
+            <p className="text-[11px] text-primary/60 font-mono italic leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto scrollbar-thin">
               {content ?? '(no content)'}
             </p>
           </div>

@@ -234,7 +234,7 @@ mod tests {
     async fn setup_manager() -> ConversationManager {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
         for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
-            let sql = statement.trim();
+            let sql: &str = statement.trim();
             if sql.is_empty() {
                 continue;
             }
@@ -242,20 +242,6 @@ mod tests {
                 .execute(&pool)
                 .await
                 .expect("run init migration");
-        }
-        for statement in include_str!("../../common/migrations/008_messages_rich_content.sql").split(';') {
-            let sql = statement.trim();
-            if sql.is_empty() {
-                continue;
-            }
-            let _ = sqlx::query(sql).execute(&pool).await;
-        }
-        for statement in include_str!("../../common/migrations/010_cron_sessions_workspace.sql").split(';') {
-            let sql = statement.trim();
-            if sql.is_empty() {
-                continue;
-            }
-            let _ = sqlx::query(sql).execute(&pool).await;
         }
         ConversationManager::new(Arc::new(pool))
     }

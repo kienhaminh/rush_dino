@@ -157,8 +157,8 @@ mod tests {
     async fn setup() -> (Arc<WorkflowManager>, UpdateWorkflowTool) {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
         // Run migrations so the workflow tables exist.
-        for statement in include_str!("../../../common/migrations/004_workflows.sql").split(';') {
-            let sql = statement.trim();
+        for statement in include_str!("../../../common/migrations/001_init.sql").split(';') {
+            let sql: &str = statement.trim();
             if sql.is_empty() {
                 continue;
             }

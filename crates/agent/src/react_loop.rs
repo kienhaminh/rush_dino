@@ -406,7 +406,7 @@ mod tests {
 
     #[tokio::test]
     async fn last_present_message_call_wins() {
-        let mut registry = ToolRegistry::new();
+        let registry = ToolRegistry::new();
         registry.register(PresentMessageTool::new());
 
         let mut messages = Vec::new();

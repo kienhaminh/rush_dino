@@ -551,7 +551,7 @@ mod tests {
         }
 
         assert_eq!(tool_calls.len(), 1);
-        assert_eq!(tool_calls[0].name, "write");
+        assert_eq!(tool_calls[0].name, "file_write");
         assert_eq!(
             tool_calls[0].arguments,
             json!({
