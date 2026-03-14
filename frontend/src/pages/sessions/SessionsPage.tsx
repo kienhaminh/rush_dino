@@ -32,7 +32,7 @@ function fmtTokens(v?: number | null) {
 }
 
 function ctxBarGradient(ratio?: number | null) {
-  if (ratio == null) return 'rgba(255,255,255,0.1)';
+  if (ratio == null) return 'hsl(var(--border))';
   if (ratio > 0.85) return 'linear-gradient(90deg,#f59e0b,#ef4444)';
   if (ratio > 0.6) return 'linear-gradient(90deg,#17C4D6,#f59e0b)';
   return 'linear-gradient(90deg,#17C4D6,#0ea5e9)';
@@ -43,7 +43,7 @@ function statusColor(status: string): string {
     case 'active': return '#17C4D6';
     case 'awaiting_approval': return '#f59e0b';
     case 'blocked': return '#f87171';
-    default: return 'rgba(255,255,255,0.18)';
+    default: return 'hsl(var(--muted-foreground) / 0.4)';
   }
 }
 
@@ -68,17 +68,7 @@ function SessionRow({
   return (
     <div
       onClick={onSelect}
-      className="group relative rounded-[8px] px-3 py-2 cursor-pointer transition-all duration-150"
-      style={{
-        background: selected ? 'rgba(23,196,214,0.08)' : 'transparent',
-        border: selected ? '1px solid rgba(23,196,214,0.22)' : '1px solid transparent',
-      }}
-      onMouseEnter={(e) => {
-        if (!selected) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
-      }}
-      onMouseLeave={(e) => {
-        if (!selected) (e.currentTarget as HTMLElement).style.background = 'transparent';
-      }}
+      className={`group relative rounded-[8px] px-3 py-2 cursor-pointer transition-all duration-150 border ${selected ? 'border-primary/20 bg-primary/[0.06]' : 'border-transparent hover:bg-muted/50'}`}
     >
       {/* Name + status dot */}
       <div className="flex items-center gap-2 pr-6">
@@ -86,16 +76,13 @@ function SessionRow({
           className="w-[6px] h-[6px] rounded-full flex-shrink-0"
           style={{ background: color }}
         />
-        <span
-          className="text-[12px] font-medium truncate"
-          style={{ color: selected ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.65)' }}
-        >
+        <span className={`text-[12px] font-medium truncate ${selected ? 'text-foreground' : 'text-foreground/70'}`}>
           {session.title || session.id.slice(0, 20)}
         </span>
       </div>
 
       {/* Token bar */}
-      <div className="mt-[6px] h-[2px] rounded-sm bg-white/[0.06] overflow-hidden">
+      <div className="mt-[6px] h-[2px] rounded-sm bg-border overflow-hidden">
         <div
           className="h-full rounded-sm transition-all duration-500"
           style={{ width: `${barPct}%`, background: ctxBarGradient(ratio) }}
@@ -112,8 +99,7 @@ function SessionRow({
       {/* Hover-reveal delete */}
       <button
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
-        className="absolute right-2 top-2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-        style={{ color: 'rgba(248,113,113,0.6)' }}
+        className="absolute right-2 top-2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-destructive/60"
         title="Delete session"
       >
         <Trash2 size={10} />
@@ -214,11 +200,11 @@ export function SessionsPage({
     <div className="flex h-full w-full overflow-hidden">
       {/* ── Left sidebar: compact session list ───────────────────────────── */}
       <div
-        className="flex flex-col h-full shrink-0 border-r border-white/[0.07]"
+        className="flex flex-col h-full shrink-0 border-r border-border"
         style={{ width: '260px' }}
       >
         {/* Sidebar header */}
-        <div className="px-4 py-3 border-b border-white/[0.07] flex-shrink-0">
+        <div className="px-4 py-3 border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[13px] font-semibold text-foreground tracking-[-0.01em]">
               Sessions
@@ -232,7 +218,7 @@ export function SessionsPage({
             </button>
           </div>
           <div className="flex gap-[5px] flex-wrap">
-            <Chip color="rgba(255,255,255,0.4)" bg="rgba(255,255,255,0.06)" border="rgba(255,255,255,0.08)">
+            <Chip color="hsl(var(--muted-foreground))" bg="hsl(var(--muted))" border="hsl(var(--border))">
               {sessions.length} TOTAL
             </Chip>
             {activeCount > 0 && (
