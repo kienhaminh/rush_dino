@@ -56,14 +56,21 @@ export function useWebSocket(
       });
 
       if (lastAssistantIndex === -1) {
-        return [...previous.filter((item) => item.kind !== 'thinking'), normalized];
+        return [
+          ...previous.map((item) =>
+            item.kind === 'thinking' ? { ...item, done: true } : item,
+          ),
+          normalized,
+        ];
       }
 
       const index = previous.length - 1 - lastAssistantIndex;
       return [
         ...previous.slice(0, index),
         normalized,
-        ...previous.slice(index + 1).filter((item) => item.kind !== 'thinking'),
+        ...previous.slice(index + 1).map((item) =>
+          item.kind === 'thinking' ? { ...item, done: true } : item,
+        ),
       ];
     },
     [],
