@@ -386,11 +386,9 @@ fn build_doctor_findings(
 ) -> Vec<DoctorFindingView> {
     let mut findings = Vec::new();
 
+    let api_secret = credentials.api_secret.as_deref();
     if config.security.hmac_auth_enabled
-        && credentials
-            .api_secret
-            .as_deref()
-            .map_or(true, |secret| secret.is_empty())
+        && (api_secret.is_none() || api_secret.is_some_and(|secret| secret.is_empty()))
     {
         findings.push(DoctorFindingView {
             code: "api_secret_missing".to_owned(),

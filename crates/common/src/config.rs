@@ -110,19 +110,14 @@ impl Default for SecurityConfig {
 }
 
 /// Per-channel enable/disable flag.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum DmPolicy {
+    #[default]
     Open,
     Pairing,
     Allowlist,
     Disabled,
-}
-
-impl Default for DmPolicy {
-    fn default() -> Self {
-        Self::Open
-    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]

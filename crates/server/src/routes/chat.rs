@@ -108,7 +108,7 @@ pub async fn chat(
                 cleanup_gate.unregister_session(&cleanup_session).await;
             });
 
-            return Ok(Json(ChatResponse {
+            Ok(Json(ChatResponse {
                 run_id: run.id,
                 conversation_id: approval_request.conversation_id,
                 content: String::new(),
@@ -121,7 +121,7 @@ pub async fn chat(
                     session_id,
                     tool: approval_request.tool,
                 }),
-            }));
+            }))
         }
         result = &mut result_rx => {
             gate.unregister_session(&session_id).await;
@@ -129,7 +129,7 @@ pub async fn chat(
                 .map_err(|err| AppError::Agent(format!("run result channel dropped: {err}")))?
                 .map_err(AppError::Agent)?;
 
-            return Ok(Json(ChatResponse {
+            Ok(Json(ChatResponse {
                 run_id: run.id,
                 conversation_id: run
                     .conversation_id
@@ -140,7 +140,7 @@ pub async fn chat(
                 tool_calls: response.tool_calls,
                 status: "completed".to_owned(),
                 pending_approval: None,
-            }));
+            }))
         }
     }
 }

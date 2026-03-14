@@ -21,7 +21,7 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
     let provider = if let Some(p) = login_provider {
         p.to_lowercase()
     } else {
-        println!("{} {}", "i".yellow(), "No --login parameter provided.");
+        println!("{} No --login parameter provided.", "i".yellow());
         println!(
             "{} Example: rushdino configure --login openai",
             "i".yellow()
@@ -77,18 +77,15 @@ pub async fn run(login_provider: Option<String>) -> Result<()> {
                 .interact()
                 .unwrap_or(0);
 
-            match auth_options[auth_selection] {
-                "API key" => {
-                    let key = Password::with_theme(&ColorfulTheme::default())
-                        .with_prompt("OPENAI_API_KEY")
-                        .allow_empty_password(true)
-                        .interact()
-                        .unwrap_or_default();
-                    config = rewrite_active_provider(config, "openai");
-                    credentials = rewrite_value(credentials, "openai_api_key", &key);
-                    println!("{} Configured OpenAI via API key", "✔".green());
-                }
-                _ => {}
+            if auth_options[auth_selection] == "API key" {
+                let key = Password::with_theme(&ColorfulTheme::default())
+                    .with_prompt("OPENAI_API_KEY")
+                    .allow_empty_password(true)
+                    .interact()
+                    .unwrap_or_default();
+                config = rewrite_active_provider(config, "openai");
+                credentials = rewrite_value(credentials, "openai_api_key", &key);
+                println!("{} Configured OpenAI via API key", "✔".green());
             }
         }
         "anthropic" => {

@@ -94,7 +94,6 @@ pub fn convert_responses_messages(
 
     let allowed = allowed_tool_call_providers.contains(provider);
     let mut result: Vec<Value> = Vec::new();
-    let mut msg_index: usize = 0;
 
     // System / developer prompt
     if options.include_system_prompt {
@@ -108,7 +107,7 @@ pub fn convert_responses_messages(
         }
     }
 
-    for msg in messages {
+    for (msg_index, msg) in messages.iter().enumerate() {
         match msg.role {
             Role::System => {
                 // Inline system messages are skipped; handled via `system_prompt` param
@@ -148,9 +147,10 @@ pub fn convert_responses_messages(
                 if let Some(calls) = &msg.tool_calls {
                     for call in calls {
                         let id_normalized = normalize_responses_tool_call_id(&call.id, allowed);
-                        let parts: Vec<&str> = id_normalized.splitn(2, '|').collect();
-                        let call_id = parts[0];
-                        let item_id: Option<&str> = parts.get(1).copied();
+                        let (call_id, item_id) = match id_normalized.split_once('|') {
+                            Some((a, b)) => (a, Some(b)),
+                            None => (id_normalized.as_str(), None),
+                        };
 
                         let mut fc = json!({
                             "type": "function_call",
@@ -172,7 +172,7 @@ pub fn convert_responses_messages(
 
             Role::Tool => {
                 // id is a plain String — split on pipe to extract call_id
-                let call_id = msg.id.splitn(2, '|').next().unwrap_or(&msg.id);
+                let call_id = msg.id.split('|').next().unwrap_or(&msg.id);
 
                 result.push(json!({
                     "type": "function_call_output",
@@ -181,8 +181,6 @@ pub fn convert_responses_messages(
                 }));
             }
         }
-
-        msg_index += 1;
     }
 
     result

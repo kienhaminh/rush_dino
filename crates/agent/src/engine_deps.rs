@@ -58,6 +58,7 @@ pub struct EngineDeps {
     pub task_memory: Arc<AgentTaskMemory>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_engine_deps(
     provider: Arc<Provider>,
     pool: Arc<SqlitePool>,

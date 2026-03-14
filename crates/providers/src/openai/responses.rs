@@ -32,18 +32,12 @@ fn openai_tool_call_providers() -> HashSet<String> {
 // ---------------------------------------------------------------------------
 
 /// Cache retention preference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum CacheRetention {
     None,
+    #[default]
     Short,
     Long,
-}
-
-impl Default for CacheRetention {
-    fn default() -> Self {
-        // Default is "short" (mirrors TS: resolveCacheRetention returns "short" by default)
-        CacheRetention::Short
-    }
 }
 
 /// Resolve prompt_cache_retention for the Responses API.

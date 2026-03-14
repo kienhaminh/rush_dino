@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -13,19 +16,11 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             artifact: rushdino-linux-x86_64
-          - target: aarch64-unknown-linux-gnu
-            artifact: rushdino-linux-aarch64
-          - target: x86_64-apple-darwin
-            artifact: rushdino-macos-x86_64
-          - target: aarch64-apple-darwin
-            artifact: rushdino-macos-aarch64
-          - target: x86_64-pc-windows-msvc
-            artifact: rushdino-windows-x86_64.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
       - name: Build frontend
         run: |
           cd frontend
@@ -41,12 +36,24 @@ jobs:
         run: |
           mkdir -p dist
           BIN="target/${{ matrix.target }}/release/rushdino"
-          if [[ "${{ matrix.artifact }}" == *.exe ]]; then
-            BIN="target/${{ matrix.target }}/release/rushdino.exe"
-          fi
           cp "$BIN" "dist/${{ matrix.artifact }}"
           sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/*
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-dist
+          merge-multiple: true
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-dist/**

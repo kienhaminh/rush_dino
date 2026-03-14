@@ -85,6 +85,7 @@ impl AgentRuntime {
         .await
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn submit_assistant_run_with_origin(
         &self,
         session_id: &str,

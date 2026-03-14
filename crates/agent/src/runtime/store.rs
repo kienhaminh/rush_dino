@@ -29,17 +29,12 @@ pub struct NewRunRecord {
     pub policy: RunPolicySnapshot,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum FieldUpdate<T> {
+    #[default]
     Keep,
     Set(T),
     Clear,
-}
-
-impl<T> Default for FieldUpdate<T> {
-    fn default() -> Self {
-        Self::Keep
-    }
 }
 
 #[derive(Debug, Clone, Default)]

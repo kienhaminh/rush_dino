@@ -76,15 +76,12 @@ pub fn escape_html(text: &str) -> String {
                     list_stack.push(start);
                 }
                 Tag::Item => {
-                    if let Some(last) = list_stack.last_mut() {
-                        if let Some(num) = last {
+                    match list_stack.last_mut() {
+                        Some(Some(num)) => {
                             html.push_str(&format!("{}. ", num));
                             *num += 1;
-                        } else {
-                            html.push_str("• ");
                         }
-                    } else {
-                        html.push_str("• ");
+                        Some(None) | None => html.push_str("• "),
                     }
                 }
                 Tag::Strong => html.push_str("<b>"),
@@ -119,7 +116,7 @@ pub fn escape_html(text: &str) -> String {
             }
             Event::Html(h) => html.push_str(&escape_text(&h)),
             Event::SoftBreak => html.push('\n'),
-            Event::HardBreak => html.push_str("\n"),
+            Event::HardBreak => html.push('\n'),
             Event::Rule => html.push_str("\n---\n\n"),
             _ => {}
         }

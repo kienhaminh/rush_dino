@@ -537,7 +537,7 @@ fn build_pairing_message(
 }
 
 fn load_channel_access(
-    config_path: &PathBuf,
+    config_path: &std::path::Path,
     channel_id: &str,
 ) -> Result<Option<rushdino_common::ChannelAccessConfig>> {
     let config = AppConfig::load_from_path(config_path)?;
@@ -552,8 +552,8 @@ fn load_channel_access(
 fn generate_code() -> String {
     let bytes = *Uuid::new_v4().as_bytes();
     let mut code = String::with_capacity(PAIRING_CODE_LEN);
-    for index in 0..PAIRING_CODE_LEN {
-        let value = bytes[index] as usize % PAIRING_CODE_ALPHABET.len();
+    for value in bytes.iter().take(PAIRING_CODE_LEN) {
+        let value = *value as usize % PAIRING_CODE_ALPHABET.len();
         code.push(PAIRING_CODE_ALPHABET[value] as char);
     }
     code

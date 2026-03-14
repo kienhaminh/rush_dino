@@ -317,16 +317,16 @@ cargo_build_flags() {
   ram="$(available_ram_mb)"
 
   if (( ram > 0 && ram < 2048 )); then
-    warn "Low memory detected (~${ram} MB available). Using memory-safe build settings (LTO off, single job)."
-    echo "--config profile.release.lto=false --config profile.release.codegen-units=16"
+    warn "Low memory detected (~${ram} MB available). Using memory-safe build settings (LTO off, single job)." >&2
     export CARGO_BUILD_JOBS=1
+    echo "--config profile.release.lto=false --config profile.release.codegen-units=16"
   elif (( ram > 0 && ram < 4096 )); then
-    warn "Limited memory detected (~${ram} MB available). Using reduced LTO and 2 parallel jobs."
-    echo "--config 'profile.release.lto=\"thin\"' --config profile.release.codegen-units=4"
+    warn "Limited memory detected (~${ram} MB available). Using reduced LTO and 2 parallel jobs." >&2
     export CARGO_BUILD_JOBS=2
+    echo "--config profile.release.lto=\"thin\" --config profile.release.codegen-units=4"
   else
-    # Sufficient RAM — let workspace Cargo.toml settings take effect
-    echo ""
+    # Sufficient RAM — let workspace Cargo.toml settings take effect; print nothing
+    true
   fi
 }
 

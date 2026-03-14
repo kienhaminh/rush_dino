@@ -53,6 +53,7 @@ pub struct WorkflowRunner {
 }
 
 impl WorkflowRunner {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         provider: Arc<Provider>,
         tool_registry: Arc<ToolRegistry>,
@@ -482,6 +483,7 @@ impl WorkflowRunner {
     }
 
     /// Wraps `execute_step` with an optional wall-clock timeout.
+    #[allow(clippy::too_many_arguments)]
     async fn execute_step_with_timeout(
         &self,
         run_id: &str,

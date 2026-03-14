@@ -174,7 +174,7 @@ pub async fn resolve_default_profile_provider(
     })
 }
 
-fn find_default_profile<'a>(config: &'a AppConfig) -> Option<&'a ProviderProfile> {
+fn find_default_profile(config: &AppConfig) -> Option<&ProviderProfile> {
     let profile_id = config.default_profile_id.as_ref()?;
     config
         .profiles

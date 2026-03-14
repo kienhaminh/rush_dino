@@ -66,7 +66,7 @@ impl Tool for FileWriteTool {
             self.workspace.join(path_str)
         };
 
-        let target = validate_path(&raw, &[self.workspace.clone()])
+        let target = validate_path(&raw, std::slice::from_ref(&self.workspace))
             .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
 
         if let Some(parent) = target.parent() {

@@ -367,6 +367,7 @@ impl CronManager {
         Ok(run_id)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn complete_run(
         &self,
         job_id: &str,
@@ -695,7 +696,7 @@ fn cron_matches(parsed: &ParsedCron, dt: DateTime<Utc>) -> bool {
 fn field_matches(field: &CronField, value: u32) -> bool {
     match field {
         CronField::Any => true,
-        CronField::Step(step) => value % step == 0,
+        CronField::Step(step) => value.is_multiple_of(*step),
         CronField::Exact(exact) => value == *exact,
     }
 }

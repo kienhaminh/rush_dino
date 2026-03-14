@@ -5,9 +5,8 @@ pub async fn run() -> Result<()> {
     println!("{} {}", "🕒".bold(), "Sessions Manager".blue().bold());
     println!("{}", "========================================".dimmed());
     println!(
-        "{} {}",
-        "i".yellow(),
-        "Session management is UI-first. Use the web control UI for normal session review and reserve CLI for hard recovery."
+        "{} Session management is UI-first. Use the web control UI for normal session review and reserve CLI for hard recovery.",
+        "i".yellow()
     );
     Ok(())
 }

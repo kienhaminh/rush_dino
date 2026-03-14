@@ -352,7 +352,7 @@ fn humanize_agent_name(raw: &str) -> String {
         .join(" ")
 }
 
-fn read_agent_file_record(agents_dir: &PathBuf, agent_id: &str) -> AgentFileRecord {
+fn read_agent_file_record(agents_dir: &std::path::Path, agent_id: &str) -> AgentFileRecord {
     let path = agents_dir.join(format!("{agent_id}.toml"));
     let path_display = path.display().to_string();
     match fs::read_to_string(&path) {
@@ -386,7 +386,7 @@ fn read_agent_file_record(agents_dir: &PathBuf, agent_id: &str) -> AgentFileReco
 }
 
 fn read_workspace_file_record(
-    agents_dir: &PathBuf,
+    agents_dir: &std::path::Path,
     agent_id: &str,
     file_name: &str,
 ) -> AgentFileRecord {

@@ -46,7 +46,7 @@ impl Tool for FileReadTool {
         // Canonicalize and verify the path is under the allowed root.
         // This replaces the old naive `.replace("..", "")` which was bypassable.
         let target = self.docs_dir.join(path_str.trim_start_matches('/'));
-        let canonical = validate_path(&target, &[self.docs_dir.clone()])
+        let canonical = validate_path(&target, std::slice::from_ref(&self.docs_dir))
             .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
 
         Ok(fs::read_to_string(canonical)?)

@@ -60,8 +60,10 @@ pub async fn create_profile(
     }
 
     if let Some(api_key) = payload.api_key {
-        let mut secrets = ProfileSecrets::default();
-        secrets.api_key = Some(api_key);
+        let secrets = ProfileSecrets {
+            api_key: Some(api_key),
+            ..Default::default()
+        };
         credentials.profiles.insert(id.clone(), secrets);
     }
 

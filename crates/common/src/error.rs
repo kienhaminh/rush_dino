@@ -5,11 +5,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("database error: {0}")]
-    Db(#[from] sqlx::Error),
+    Db(Box<sqlx::Error>),
     #[error("migration error: {0}")]
-    Migrate(#[from] sqlx::migrate::MigrateError),
+    Migrate(Box<sqlx::migrate::MigrateError>),
     #[error("configuration error: {0}")]
-    Config(#[from] figment::Error),
+    Config(Box<figment::Error>),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
     #[error("provider error: {0}")]
@@ -23,6 +23,24 @@ pub enum AppError {
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
+
+impl From<sqlx::Error> for AppError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::Db(Box::new(value))
+    }
+}
+
+impl From<sqlx::migrate::MigrateError> for AppError {
+    fn from(value: sqlx::migrate::MigrateError) -> Self {
+        Self::Migrate(Box::new(value))
+    }
+}
+
+impl From<figment::Error> for AppError {
+    fn from(value: figment::Error) -> Self {
+        Self::Config(Box::new(value))
+    }
+}
 
 #[derive(Debug, Serialize)]
 struct ErrorBody {

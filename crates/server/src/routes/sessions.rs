@@ -209,9 +209,7 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
         .any(|run| run.state == rushdino_agent::RunState::Blocked)
     {
         "blocked"
-    } else if active_run_count > 0 {
-        "active"
-    } else if now - conversation.conversation.updated_at <= Duration::minutes(30) {
+    } else if active_run_count > 0 || now - conversation.conversation.updated_at <= Duration::minutes(30) {
         "active"
     } else {
         "idle"

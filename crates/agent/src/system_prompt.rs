@@ -193,7 +193,7 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
         has_soul,
     ));
 
-    while lines.last().map_or(false, |l| l.is_empty()) {
+    while lines.last().is_some_and(|l| l.is_empty()) {
         lines.pop();
     }
     lines.join("\n")

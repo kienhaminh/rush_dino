@@ -13,9 +13,8 @@ pub async fn run() -> Result<()> {
     }
 
     println!(
-        "{} {}",
-        "⏳".yellow(),
-        "Fetching health from the running gateway..."
+        "{} Fetching health from the running gateway...",
+        "⏳".yellow()
     );
 
     let config = AppConfig::load()?;

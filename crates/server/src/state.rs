@@ -44,6 +44,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         runtime: Arc<RuntimeState>,
         config_path: PathBuf,

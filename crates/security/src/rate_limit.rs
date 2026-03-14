@@ -9,6 +9,9 @@ use governor::{
 };
 use thiserror::Error;
 
+type IpLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>;
+type LimiterMap = DashMap<IpAddr, IpLimiter>;
+
 #[derive(Debug, Error)]
 pub enum RateLimitError {
     #[error("rate limit exceeded; retry after {retry_after_secs} seconds")]
@@ -22,9 +25,7 @@ pub struct IpRateLimiter {
     /// Permitted burst size (requests per burst window).
     quota: Quota,
     /// Map from IP address to its individual rate limiter.
-    limiters: Arc<
-        DashMap<IpAddr, Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock, NoOpMiddleware>>>,
-    >,
+    limiters: Arc<LimiterMap>,
 }
 
 impl IpRateLimiter {

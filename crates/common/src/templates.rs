@@ -16,14 +16,17 @@ pub fn get_template(content: &'static str) -> &'static str {
 }
 
 fn strip_frontmatter(content: &'static str) -> &'static str {
-    if content.starts_with("---") {
-        if let Some(end) = content[3..].find("---") {
-            let offset = 3 + end + 3;
-            if offset <= content.len() {
-                return content[offset..].trim_start();
-            }
+    let Some(stripped) = content.strip_prefix("---") else {
+        return content;
+    };
+
+    if let Some(end) = stripped.find("---") {
+        let offset = end + 3;
+        if offset <= stripped.len() {
+            return stripped[offset..].trim_start();
         }
     }
+
     content
 }
 

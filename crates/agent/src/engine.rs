@@ -155,6 +155,7 @@ mod config_tests {
 }
 
 impl AgentEngine {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         provider: Arc<Provider>,
         pool: Arc<SqlitePool>,

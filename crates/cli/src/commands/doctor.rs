@@ -6,9 +6,8 @@ pub async fn run() -> Result<()> {
     println!("{} {}", "🩺".bold(), "RushDino Doctor".blue().bold());
     println!("{}", "========================================".dimmed());
     println!(
-        "{} {}",
-        "i".yellow(),
-        "Command not fully implemented. Validating paths..."
+        "{} Command not fully implemented. Validating paths...",
+        "i".yellow()
     );
 
     let home = init::default_home_dir();

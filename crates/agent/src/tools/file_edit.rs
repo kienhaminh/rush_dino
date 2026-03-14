@@ -76,7 +76,7 @@ impl Tool for FileEditTool {
             self.workspace.join(path_str)
         };
 
-        let target = validate_path(&raw, &[self.workspace.clone()])
+        let target = validate_path(&raw, std::slice::from_ref(&self.workspace))
             .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
 
         let content = fs::read_to_string(&target).await.map_err(AppError::Io)?;

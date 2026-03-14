@@ -13,6 +13,12 @@ impl PresentMessageTool {
     }
 }
 
+impl Default for PresentMessageTool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl Tool for PresentMessageTool {
     fn name(&self) -> &str {

@@ -26,6 +26,7 @@ use crate::{
     workflow_runner::WorkflowRunner,
 };
 
+#[allow(clippy::too_many_arguments)]
 async fn run_agent_turn(
     conversation: Arc<ConversationManager>,
     provider: Arc<Provider>,
