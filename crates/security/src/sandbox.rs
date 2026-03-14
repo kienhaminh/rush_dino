@@ -1,7 +1,7 @@
-use std::{
-    ffi::{CStr, CString},
-    path::PathBuf,
-};
+use std::path::PathBuf;
+
+#[cfg(target_os = "macos")]
+use std::ffi::{CStr, CString};
 
 use thiserror::Error;
 
