@@ -89,12 +89,12 @@ export const ConversationTimeline = memo(function ConversationTimeline({
 }: ConversationTimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  // Scroll to bottom when items are added or streaming starts.
+  // Scroll to bottom on every update — covers both new items and streaming content growth.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [items.length, isStreaming]);
+  }, [items, isStreaming]);
 
   if (items.length === 0) {
     return (
