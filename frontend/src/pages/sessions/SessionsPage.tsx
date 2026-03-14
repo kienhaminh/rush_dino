@@ -140,15 +140,21 @@ type SessionsPageProps = {
   onSelectSession: (id: string) => void;
   onRefresh: () => void;
   onDelete: (sessionId: string) => void;
+  thinkingLevelOverride: string | null;
+  onThinkingLevelChange: (level: string) => void;
 };
 
 /* ─── Session info card ──────────────────────────────────────────────────── */
 function SessionInfoCard({
   session,
   agentConfig,
+  thinkingLevelOverride,
+  onThinkingLevelChange,
 }: {
   session: SessionSummary;
   agentConfig?: AgentConfig;
+  thinkingLevelOverride: string | null;
+  onThinkingLevelChange: (level: string) => void;
 }) {
   const cw = session.contextWindow;
   const allModels = [
@@ -160,7 +166,41 @@ function SessionInfoCard({
   const isReasoning = modelMeta?.isReasoning ?? false;
 
   const thinkingLevel = agentConfig?.thinkingLevel ?? null;
-  const thinkingOn = thinkingLevel != null && thinkingLevel !== 'off';
+
+  const THINKING_LEVELS = [
+    { value: 'off',      label: 'off' },
+    { value: 'minimal',  label: 'min' },
+    { value: 'low',      label: 'low' },
+    { value: 'medium',   label: 'med' },
+    { value: 'high',     label: 'high' },
+    { value: 'xhigh',    label: 'xhigh' },
+    { value: 'adaptive', label: 'auto' },
+  ];
+  const activeLevel = thinkingLevelOverride ?? thinkingLevel ?? 'low';
+
+  function ThinkingLevelControl() {
+    return (
+      <div className="flex items-center gap-[2px] bg-muted/50 border border-border rounded-[5px] p-[2px]">
+        {THINKING_LEVELS.map(({ value, label }) => {
+          const isActive = activeLevel === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onThinkingLevelChange(value)}
+              className={`px-[6px] py-[2px] rounded-[3px] text-[9px] font-semibold tracking-wide transition-colors ${
+                isActive
+                  ? 'bg-primary/15 text-primary border border-primary/25'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
 
   function InfoRow({ label, children }: { label: string; children: ReactNode }) {
     return (
@@ -189,7 +229,6 @@ function SessionInfoCard({
         <span className="text-xs font-medium text-foreground">Model & Agent Config</span>
         <div className="flex gap-1">
           {isReasoning && <Badge label="REASONING MODEL" active />}
-          {thinkingOn && <Badge label={`THINKING: ${thinkingLevel?.toUpperCase()}`} active />}
         </div>
       </div>
 
@@ -203,9 +242,10 @@ function SessionInfoCard({
       <InfoRow label="Context limit">
         {cw?.limitTokens ? `${(cw.limitTokens / 1000).toFixed(0)}k tokens` : '—'}
       </InfoRow>
-      <InfoRow label="Thinking level">
-        {thinkingLevel ?? <span className="text-muted-foreground/40">—</span>}
-      </InfoRow>
+      <div className="flex items-center justify-between py-[5px] border-b border-border">
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Thinking level</span>
+        <ThinkingLevelControl />
+      </div>
       <InfoRow label="Reasoning model">
         <Badge label={isReasoning ? 'YES' : 'NO'} active={isReasoning} />
       </InfoRow>
@@ -238,6 +278,8 @@ export function SessionsPage({
   onSelectSession,
   onRefresh,
   onDelete,
+  thinkingLevelOverride,
+  onThinkingLevelChange,
 }: SessionsPageProps) {
   const [testMessages, setTestMessages] = useState<Message[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'prompts' | 'context' | 'runs' | 'tools'>('overview');
@@ -417,7 +459,12 @@ export function SessionsPage({
               /* ── Overview ── */
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {session && (
-                  <SessionInfoCard session={session} agentConfig={agentConfig} />
+                  <SessionInfoCard
+                    session={session}
+                    agentConfig={agentConfig}
+                    thinkingLevelOverride={thinkingLevelOverride}
+                    onThinkingLevelChange={onThinkingLevelChange}
+                  />
                 )}
                 {session && (
                   <TokenUsageBar
