@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import type {
   Message,
@@ -122,7 +123,7 @@ function SessionRow({
 }
 
 /* ─── Chip ────────────────────────────────────────────────────────────────── */
-function Chip({ children, color, bg, border }: { children: React.ReactNode; color: string; bg: string; border: string }) {
+function Chip({ children, color, bg, border }: { children: ReactNode; color: string; bg: string; border: string }) {
   return (
     <span
       className="text-[9px] font-semibold tracking-[0.09em] px-[6px] py-[2px] rounded-[4px]"
@@ -166,7 +167,7 @@ export function SessionsPage({
   const [testMessages, setTestMessages] = useState<Message[]>([]);
 
   // Reset test messages when session changes
-  useMemo(() => { setTestMessages([]); }, [selectedSessionId]);
+  useEffect(() => { setTestMessages([]); }, [selectedSessionId]);
 
   const allMessages = useMemo(() => [...messages, ...testMessages], [messages, testMessages]);
 
