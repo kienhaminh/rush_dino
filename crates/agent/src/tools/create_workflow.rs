@@ -29,7 +29,7 @@ impl CreateWorkflowTool {
 #[async_trait]
 impl Tool for CreateWorkflowTool {
     fn name(&self) -> &str {
-        "create_workflow"
+        "workflow"
     }
 
     fn description(&self) -> &str {

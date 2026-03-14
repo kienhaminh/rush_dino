@@ -5,7 +5,7 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 
 use chrono::Utc;
 use rushdino_common::{models::Message, models::Role, Result, RichContent};
-use rushdino_providers::{types::ChatChunk, types::ChatResponse, Provider};
+use rushdino_providers::{types::ChatChunk, types::ChatResponse, types::ThinkingLevel, Provider};
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -13,7 +13,12 @@ use crate::{
     agent_manager::{AgentManager, AgentTemplate},
     agent_progress::{build_lanes_from_conversation_store, AgentProgressLane},
     conversation::ConversationManager,
-    engine_bootstrap::{build_engine_deps, system_message, title_from, user_message},
+    cron_manager::{
+        CreateCronJobInput, CronJobRecord, CronManager, CronRunRecord, CronRunStatus,
+        CronTargetInput, UpdateCronJobInput,
+    },
+    engine_bootstrap::{system_message, title_from, user_message},
+    engine_deps::build_engine_deps,
     job_manager::{JobManager, JobResult},
     knowledge_graph::KnowledgeGraphAccess,
     memory::MemoryManager,
@@ -42,6 +47,11 @@ pub struct AgentConfig {
     pub system_prompt: String,
     /// Optional model override. When set, overrides the provider's default model for this agent's requests.
     pub model_override: Option<String>,
+    pub thinking_level: ThinkingLevel,
+    /// Max characters per bootstrap file injected into the system prompt.
+    pub bootstrap_max_chars: usize,
+    /// Max total characters for all bootstrap files combined.
+    pub bootstrap_total_max_chars: usize,
 }
 
 impl Default for AgentConfig {
@@ -52,6 +62,9 @@ impl Default for AgentConfig {
             tool_timeout_secs: 30,
             model_override: None,
             system_prompt: "You are RushDino, a local-first AI agent.".to_owned(),
+            thinking_level: ThinkingLevel::Low,
+            bootstrap_max_chars: crate::memory_bootstrap::DEFAULT_BOOTSTRAP_MAX_CHARS,
+            bootstrap_total_max_chars: crate::memory_bootstrap::DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
         }
     }
 }
@@ -66,6 +79,7 @@ pub struct AgentEngine {
     skill_manager: Arc<crate::skill_manager::SkillManager>,
     agent_manager: Arc<AgentManager>,
     workflow_manager: Arc<WorkflowManager>,
+    cron_manager: Arc<CronManager>,
     workflow_runner: Arc<WorkflowRunner>,
     usage_metrics: Arc<UsageMetricsStore>,
     provider_name: String,
@@ -158,22 +172,11 @@ impl AgentEngine {
             home_dir,
             brave_api_key,
             &config,
+            runtime.clone(),
             system_broker,
             knowledge_graph.clone(),
         )?;
 
-        let workflow_runner = Arc::new(WorkflowRunner::new(
-            provider.clone(),
-            deps.tool_registry.clone(),
-            deps.conversation.clone(),
-            deps.memory.clone(),
-            deps.agent_manager.clone(),
-            deps.workflow_manager.clone(),
-            runtime.clone(),
-            config.clone(),
-        ));
-        // Populate the OnceCell so RunWorkflowTool can obtain the runner when invoked.
-        let _ = deps.workflow_runner_cell.set(workflow_runner.clone());
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
 
         Ok(Self {
@@ -186,7 +189,8 @@ impl AgentEngine {
             skill_manager: deps.skill_manager,
             agent_manager: deps.agent_manager,
             workflow_manager: deps.workflow_manager,
-            workflow_runner,
+            cron_manager: deps.cron_manager,
+            workflow_runner: deps.workflow_runner,
             usage_metrics,
             provider_name,
             knowledge_graph,
@@ -232,7 +236,7 @@ impl AgentEngine {
         // be reconstructed and injected fresh on every request.
         messages.insert(
             0,
-            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref()),
+            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref(), self.tool_registry.as_ref()),
         );
 
         let old_len = messages.len();
@@ -306,6 +310,7 @@ impl AgentEngine {
                     delta: response.content,
                     tool_calls: response.tool_calls,
                     done: false,
+                    usage: response.usage,
                 })
                 .await;
             let _ = tx
@@ -313,6 +318,7 @@ impl AgentEngine {
                     delta: String::new(),
                     tool_calls: Vec::new(),
                     done: true,
+                    usage: None,
                 })
                 .await;
         });
@@ -352,7 +358,7 @@ impl AgentEngine {
         // be reconstructed and injected fresh on every request.
         messages.insert(
             0,
-            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref()),
+            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref(), self.tool_registry.as_ref()),
         );
 
         let old_len = messages.len();
@@ -907,7 +913,7 @@ impl AgentEngine {
         // be reconstructed and injected fresh on every request.
         messages.insert(
             0,
-            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref()),
+            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref(), self.tool_registry.as_ref()),
         );
 
         let old_len = messages.len();
@@ -989,6 +995,28 @@ impl AgentEngine {
         self.conversation.delete_conversation(id).await
     }
 
+    pub async fn create_session(&self, title: &str) -> Result<rushdino_common::models::Conversation> {
+        self.conversation.create_conversation(title).await
+    }
+
+    pub async fn get_session_record(
+        &self,
+        id: &str,
+    ) -> Result<crate::conversation::ConversationRecord> {
+        self.conversation.get_conversation_record(id).await
+    }
+
+    pub async fn archive_session(
+        &self,
+        id: &str,
+    ) -> Result<crate::conversation::ConversationRecord> {
+        self.conversation.archive_conversation(id).await
+    }
+
+    pub async fn reset_session(&self, id: &str) -> Result<()> {
+        self.conversation.reset_conversation(id).await
+    }
+
     pub fn config(&self) -> &AgentConfig {
         &self.config
     }
@@ -1003,6 +1031,10 @@ impl AgentEngine {
 
     pub fn skill_manager(&self) -> &crate::skill_manager::SkillManager {
         &self.skill_manager
+    }
+
+    pub fn tool_registry(&self) -> &ToolRegistry {
+        &self.tool_registry
     }
 
     pub fn list_agent_templates(&self) -> Vec<AgentTemplate> {
@@ -1062,6 +1094,140 @@ impl AgentEngine {
 
     pub async fn delete_workflow(&self, id: &str) -> Result<()> {
         self.workflow_manager.delete_workflow(id).await
+    }
+
+    pub async fn list_cron_jobs(&self) -> Result<Vec<CronJobRecord>> {
+        self.cron_manager.list_jobs().await
+    }
+
+    pub async fn get_cron_job(&self, id: &str) -> Result<CronJobRecord> {
+        self.cron_manager.get_job(id).await
+    }
+
+    pub async fn create_cron_job(&self, input: CreateCronJobInput) -> Result<CronJobRecord> {
+        if let CronTargetInput::WorkflowRun { workflow_id, .. } = &input.target {
+            let _ = self.get_workflow(workflow_id).await?;
+        }
+        self.cron_manager.create_job(input).await
+    }
+
+    pub async fn update_cron_job(
+        &self,
+        id: &str,
+        input: UpdateCronJobInput,
+    ) -> Result<CronJobRecord> {
+        if let Some(CronTargetInput::WorkflowRun { workflow_id, .. }) = input.target.as_ref() {
+            let _ = self.get_workflow(workflow_id).await?;
+        }
+        self.cron_manager.update_job(id, input).await
+    }
+
+    pub async fn pause_cron_job(&self, id: &str) -> Result<CronJobRecord> {
+        self.cron_manager.pause_job(id).await
+    }
+
+    pub async fn resume_cron_job(&self, id: &str) -> Result<CronJobRecord> {
+        self.cron_manager.resume_job(id).await
+    }
+
+    pub async fn delete_cron_job(&self, id: &str) -> Result<()> {
+        self.cron_manager.delete_job(id).await
+    }
+
+    pub async fn list_cron_runs(&self, id: &str, limit: i64) -> Result<Vec<CronRunRecord>> {
+        self.cron_manager.list_runs(id, limit).await
+    }
+
+    pub async fn claim_due_cron_jobs(&self, limit: i64) -> Result<Vec<CronJobRecord>> {
+        self.cron_manager.claim_due_jobs(limit, Utc::now()).await
+    }
+
+    pub async fn run_cron_job(
+        &self,
+        job_id: &str,
+        trigger_kind: &str,
+    ) -> Result<(CronJobRecord, Option<String>, Option<String>)> {
+        let job = self.cron_manager.get_job(job_id).await?;
+        let run_id = self
+            .cron_manager
+            .begin_run(job_id, trigger_kind, Utc::now())
+            .await?;
+        let result: Result<(CronJobRecord, Option<String>, Option<String>)> = match &job.target {
+            CronTargetInput::WorkflowRun {
+                workflow_id,
+                input,
+                triggered_by,
+            } => {
+                let workflow_run = self
+                    .start_workflow_run(
+                        workflow_id,
+                        triggered_by.as_deref().unwrap_or("cron"),
+                        input.as_deref().unwrap_or(""),
+                    )
+                    .await?;
+                let updated = self
+                    .cron_manager
+                    .complete_run(
+                        job_id,
+                        &run_id,
+                        CronRunStatus::Ok,
+                        Some("workflow run started"),
+                        None,
+                        None,
+                        Some(&workflow_run.run_id),
+                        Utc::now(),
+                    )
+                    .await?;
+                Ok((updated, None, Some(workflow_run.run_id)))
+            }
+            CronTargetInput::AgentTurn {
+                message,
+                conversation_id,
+                title,
+                ..
+            } => {
+                let conversation = if let Some(existing_id) = conversation_id.clone() {
+                    existing_id
+                } else {
+                    self.create_session(title.as_deref().unwrap_or("Scheduled task"))
+                        .await?
+                        .id
+                };
+                let _ = self.chat(&conversation, message).await?;
+                let updated = self
+                    .cron_manager
+                    .complete_run(
+                        job_id,
+                        &run_id,
+                        CronRunStatus::Ok,
+                        Some("agent turn completed"),
+                        None,
+                        Some(&conversation),
+                        None,
+                        Utc::now(),
+                    )
+                    .await?;
+                Ok((updated, Some(conversation), None))
+            }
+        };
+
+        if let Err(err) = &result {
+            let _ = self
+                .cron_manager
+                .complete_run(
+                    job_id,
+                    &run_id,
+                    CronRunStatus::Error,
+                    None,
+                    Some(&err.to_string()),
+                    None,
+                    None,
+                    Utc::now(),
+                )
+                .await;
+        }
+
+        result
     }
 
     /// Seeds bundled workflow templates as real workflows on first startup.

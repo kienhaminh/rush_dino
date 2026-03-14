@@ -50,7 +50,7 @@ impl ShellExecTool {
 #[async_trait]
 impl Tool for ShellExecTool {
     fn name(&self) -> &str {
-        "shell_exec"
+        "exec"
     }
 
     fn description(&self) -> &str {
@@ -112,7 +112,7 @@ pub fn is_dangerous_command(command: &str) -> bool {
     let normalized = trimmed.to_ascii_lowercase();
 
     // Allowlist
-    let allowlist = ["rm ~/.rushdino/BOOTSTRAP.md"];
+    let allowlist = ["rm ~/.rushdino/bootstrap.md"];
     if normalized.starts_with("rm ") {
         return !allowlist.iter().any(|allowed| trimmed == *allowed);
     }
@@ -156,7 +156,12 @@ mod tests {
 
     use super::{is_dangerous_command, ToolExecutionContext};
     use crate::{
-        system_broker::{ShellExecRequest, ShellExecResult, SystemBroker},
+        system_broker::{
+            ShellExecRequest, ShellExecResult, SystemBroker, WorkspaceDeleteRequest,
+            WorkspaceListRequest, WorkspaceListResult, WorkspaceMoveRequest,
+            WorkspaceMutationResult, WorkspaceReadRequest, WorkspaceReadResult,
+            WorkspaceWriteRequest,
+        },
         tool_registry::Tool,
     };
 
@@ -178,6 +183,64 @@ mod tests {
                 stderr: String::new(),
                 host_cwd: PathBuf::from("/tmp/host"),
                 sandbox_cwd: PathBuf::from("/tmp/sandbox"),
+            })
+        }
+
+        async fn list_workspace(&self, _request: WorkspaceListRequest) -> Result<WorkspaceListResult> {
+            Ok(WorkspaceListResult {
+                root: "cwd".to_owned(),
+                base_path: "/tmp".to_owned(),
+                entries: Vec::new(),
+            })
+        }
+
+        async fn read_workspace(&self, _request: WorkspaceReadRequest) -> Result<WorkspaceReadResult> {
+            Ok(WorkspaceReadResult {
+                root: "cwd".to_owned(),
+                path: "/tmp/file.txt".to_owned(),
+                content: String::new(),
+            })
+        }
+
+        async fn write_workspace(
+            &self,
+            _request: WorkspaceWriteRequest,
+        ) -> Result<WorkspaceMutationResult> {
+            Ok(WorkspaceMutationResult {
+                audit_id: "audit-1".to_owned(),
+                action: "write".to_owned(),
+                root: "cwd".to_owned(),
+                path: "/tmp/file.txt".to_owned(),
+                target_path: None,
+                dry_run: true,
+            })
+        }
+
+        async fn move_workspace(
+            &self,
+            _request: WorkspaceMoveRequest,
+        ) -> Result<WorkspaceMutationResult> {
+            Ok(WorkspaceMutationResult {
+                audit_id: "audit-1".to_owned(),
+                action: "move".to_owned(),
+                root: "cwd".to_owned(),
+                path: "/tmp/file.txt".to_owned(),
+                target_path: Some("/tmp/renamed.txt".to_owned()),
+                dry_run: true,
+            })
+        }
+
+        async fn delete_workspace(
+            &self,
+            _request: WorkspaceDeleteRequest,
+        ) -> Result<WorkspaceMutationResult> {
+            Ok(WorkspaceMutationResult {
+                audit_id: "audit-1".to_owned(),
+                action: "delete".to_owned(),
+                root: "cwd".to_owned(),
+                path: "/tmp/file.txt".to_owned(),
+                target_path: None,
+                dry_run: true,
             })
         }
     }
