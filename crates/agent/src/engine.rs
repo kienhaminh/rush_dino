@@ -1081,6 +1081,12 @@ impl AgentEngine {
         self.thinking_level_override.clone()
     }
 
+    /// Replace the override Arc with an externally-managed shared one.
+    /// Call immediately after construction to link the engine to RuntimeState.
+    pub fn set_thinking_level_override_arc(&mut self, arc: Arc<RwLock<Option<ThinkingLevel>>>) {
+        self.thinking_level_override = arc;
+    }
+
     pub fn memory(&self) -> &MemoryManager {
         &self.memory
     }

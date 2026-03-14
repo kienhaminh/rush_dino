@@ -116,7 +116,7 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 Arc::new(KnowledgeGraphBridge::new(service.clone()))
                     as Arc<dyn KnowledgeGraphAccess>
             });
-            let engine = Arc::new(AgentEngine::new(
+            let mut engine_inner = AgentEngine::new(
                 provider,
                 pool,
                 config.data_dir.clone(),
@@ -141,7 +141,9 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 runtime.agent_runtime(),
                 runtime.system_broker(),
                 knowledge_graph_bridge,
-            )?);
+            )?;
+            engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
+            let engine = Arc::new(engine_inner);
 
             status.effective_profile_id = Some(resolved.profile_id);
             status.effective_provider_kind = Some(resolved.provider_kind);
