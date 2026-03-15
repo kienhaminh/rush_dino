@@ -25,20 +25,25 @@ jobs:
             artifact: rushdino-linux-x86_64
     steps:
       - name: Install base tools
-        run: apt-get update && apt-get install -y git curl build-essential pkg-config libssl-dev
+        run: apt-get update && apt-get install -y git curl build-essential pkg-config libssl-dev xz-utils
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "22"
+      - name: Install Node.js 22
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y nodejs
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          "$HOME/.cargo/bin/rustup" target add ${{ matrix.target }}
       - name: Build frontend
         run: |
           cd frontend
           npm install
           npm run build
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
       - name: Build backend
+        env:
+          CC_x86_64_unknown_linux_gnu: gcc
         run: cargo build --release --target ${{ matrix.target }} -p rushdino-cli
       - name: Prepare artifact
         shell: bash
