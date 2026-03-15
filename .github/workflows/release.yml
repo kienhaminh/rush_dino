@@ -41,10 +41,18 @@ jobs:
           cd frontend
           npm install
           npm run build
+      - name: Check build environment
+        run: |
+          echo "glibc: $(ldd --version | head -1)"
+          echo "gcc: $(gcc --version | head -1)"
+          echo "ld: $(ld --version | head -1)"
+          echo "PATH: $PATH"
       - name: Build backend
         env:
           CC_x86_64_unknown_linux_gnu: gcc
         run: cargo build --release --target ${{ matrix.target }} -p rushdino-cli
+      - name: Check binary glibc requirements
+        run: objdump -p target/${{ matrix.target }}/release/rushdino | grep GLIBC || true
       - name: Prepare artifact
         shell: bash
         run: |
