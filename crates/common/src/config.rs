@@ -314,6 +314,8 @@ pub struct CredentialsConfig {
     pub openai_api_key: Option<String>,
     pub anthropic_api_key: Option<String>,
     pub brave_api_key: Option<String>,
+    /// Gemini API key for image generation.
+    pub gemini_api_key: Option<String>,
     pub telegram_bot_token: Option<String>,
     pub discord_bot_token: Option<String>,
     pub slack_bot_token: Option<String>,

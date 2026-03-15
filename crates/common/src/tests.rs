@@ -105,6 +105,7 @@ fn credentials_save_round_trip_special_chars() {
         openai_api_key: Some("sk-test-\"quote\"".to_owned()),
         anthropic_api_key: Some("anthropic-line\\nvalue".to_owned()),
         brave_api_key: None,
+        gemini_api_key: None,
         telegram_bot_token: None,
         discord_bot_token: None,
         slack_bot_token: None,
