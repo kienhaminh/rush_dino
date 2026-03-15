@@ -8,7 +8,7 @@ Installation, setup, and uninstallation of RushDino.
 
 | Requirement | Version | Notes |
 |---|---|---|
-| OS | macOS 12+, Linux (glibc 2.31+) | Windows not yet supported |
+| OS | macOS 12+, Linux (x86_64, any distro) | Windows not yet supported; Linux binary is statically linked (musl) — no glibc requirement |
 | Disk space | ~50 MB | Binary + data directory |
 | Network | Internet access | Required for LLM API calls |
 
