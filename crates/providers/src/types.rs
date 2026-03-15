@@ -103,6 +103,16 @@ pub struct ModelInfo {
     pub is_reasoning: Option<bool>,
 }
 
+/// Authentication method for OpenAI-compatible providers.
+/// - `ApiKey`: standard API key, routes to `https://api.openai.com/v1`
+/// - `Codex`: ChatGPT OAuth token, routes to `https://chatgpt.com/backend-api/codex/responses`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "method", rename_all = "snake_case")]
+pub enum OpenAIAuth {
+    ApiKey { api_key: String },
+    Codex { access_token: String },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProviderConfig {
@@ -112,7 +122,7 @@ pub enum ProviderConfig {
         api_key: Option<String>,
     },
     OpenAI {
-        api_key: String,
+        auth: OpenAIAuth,
         model: String,
         base_url: Option<String>,
     },

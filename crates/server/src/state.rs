@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::Arc, time::Instant};
 use rushdino_gateway::{GatewayControl, GatewayStateStore, SessionManager};
 use rushdino_security::rate_limit::EndpointLimiters;
 
-use rushdino_common::dashboard_auth::DashboardAuthService;
 use crate::approval_gate::ApprovalGate;
 use crate::channel_pairing::ChannelPairingService;
 use crate::chat_broadcast::ChatBroadcastHub;
@@ -12,6 +11,7 @@ use crate::runtime_log_store::RuntimeLogStore;
 use crate::runtime_state::{RuntimeState, RuntimeStatus};
 use crate::webchat::WebChatAdapter;
 use rushdino_agent::AgentEngine;
+use rushdino_common::dashboard_auth::DashboardAuthService;
 use rushdino_common::{AppConfig, Result};
 
 #[derive(Clone)]

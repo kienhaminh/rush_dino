@@ -95,6 +95,8 @@ pub async fn list_cron_runs(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>> {
     let engine = state.engine()?;
-    let runs = engine.list_cron_runs(&id, query.limit.unwrap_or(20)).await?;
+    let runs = engine
+        .list_cron_runs(&id, query.limit.unwrap_or(20))
+        .await?;
     Ok(Json(serde_json::json!({ "items": runs })))
 }

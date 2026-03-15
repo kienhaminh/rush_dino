@@ -159,12 +159,11 @@ impl AnthropicProvider {
                             }
                         }
                         "content_block_delta" => {
-                            let index = value
-                                .get("index")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0) as usize;
+                            let index =
+                                value.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
                             // Text delta
-                            if let Some(text) = value.pointer("/delta/text").and_then(Value::as_str) {
+                            if let Some(text) = value.pointer("/delta/text").and_then(Value::as_str)
+                            {
                                 let _ = tx
                                     .send(ChatChunk {
                                         delta: text.to_owned(),
@@ -176,7 +175,9 @@ impl AnthropicProvider {
                                     .await;
                             }
                             // Thinking delta (extended thinking)
-                            if let Some(thinking) = value.pointer("/delta/thinking").and_then(Value::as_str) {
+                            if let Some(thinking) =
+                                value.pointer("/delta/thinking").and_then(Value::as_str)
+                            {
                                 let _ = tx
                                     .send(ChatChunk {
                                         delta: String::new(),

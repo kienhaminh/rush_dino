@@ -2,8 +2,7 @@ use std::fs;
 
 use crate::{
     config::{AppConfig, CredentialsConfig, DmPolicy},
-    db,
-    init,
+    db, init,
 };
 
 #[test]
@@ -206,7 +205,9 @@ async fn dashboard_auth_code_can_only_be_exchanged_once() {
     let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&root).expect("temp dir should be created");
     let db_path = root.join("data.db");
-    let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+    let pool = db::init_pool(&db_path)
+        .await
+        .expect("pool should initialize");
 
     let service = crate::dashboard_auth::DashboardAuthService::new(pool.clone());
     let issued = service.issue_code().await.expect("code should issue");
@@ -232,7 +233,9 @@ async fn dashboard_auth_new_login_revokes_existing_session() {
     let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&root).expect("temp dir should be created");
     let db_path = root.join("data.db");
-    let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+    let pool = db::init_pool(&db_path)
+        .await
+        .expect("pool should initialize");
 
     let service = crate::dashboard_auth::DashboardAuthService::new(pool.clone());
     let first_code = service.issue_code().await.expect("first code should issue");
@@ -241,7 +244,10 @@ async fn dashboard_auth_new_login_revokes_existing_session() {
         .await
         .expect("first exchange should succeed");
 
-    let second_code = service.issue_code().await.expect("second code should issue");
+    let second_code = service
+        .issue_code()
+        .await
+        .expect("second code should issue");
     let second_session = service
         .exchange_code(&second_code.code)
         .await
@@ -251,13 +257,19 @@ async fn dashboard_auth_new_login_revokes_existing_session() {
         .validate_session(&first_session.token)
         .await
         .expect("first session validation should succeed");
-    assert!(first_validation.is_none(), "previous session should be revoked");
+    assert!(
+        first_validation.is_none(),
+        "previous session should be revoked"
+    );
 
     let second_validation = service
         .validate_session(&second_session.token)
         .await
         .expect("second session validation should succeed");
-    assert!(second_validation.is_some(), "latest session should stay active");
+    assert!(
+        second_validation.is_some(),
+        "latest session should stay active"
+    );
 
     let _ = fs::remove_dir_all(root);
 }
@@ -269,7 +281,9 @@ async fn dashboard_auth_session_survives_service_restart() {
     let db_path = root.join("data.db");
 
     let token = {
-        let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+        let pool = db::init_pool(&db_path)
+            .await
+            .expect("pool should initialize");
         let service = crate::dashboard_auth::DashboardAuthService::new(pool.clone());
         let code = service.issue_code().await.expect("code should issue");
         let session = service
@@ -297,7 +311,9 @@ async fn dashboard_auth_can_revoke_specific_session_token() {
     let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
     fs::create_dir_all(&root).expect("temp dir should be created");
     let db_path = root.join("data.db");
-    let pool = db::init_pool(&db_path).await.expect("pool should initialize");
+    let pool = db::init_pool(&db_path)
+        .await
+        .expect("pool should initialize");
 
     let service = crate::dashboard_auth::DashboardAuthService::new(pool);
     let code = service.issue_code().await.expect("code should issue");

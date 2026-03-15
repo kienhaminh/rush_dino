@@ -63,11 +63,7 @@ pub async fn run_react_loop(
     for _ in 0..config.max_iterations {
         let input = truncate_messages(&messages, config.max_context_tokens);
         let response = provider
-            .chat(build_chat_request(
-                input.clone(),
-                &registry,
-                config,
-            ))
+            .chat(build_chat_request(input.clone(), &registry, config))
             .await?;
         let iteration_usage = response.usage.clone().unwrap_or_else(|| {
             estimate_turn_usage(&input, &response.content, &response.tool_calls)
@@ -136,11 +132,7 @@ pub async fn run_react_loop_streaming(
     for _ in 0..config.max_iterations {
         let input = truncate_messages(&messages, config.max_context_tokens);
         let mut stream = provider
-            .stream_chat(build_chat_request(
-                input.clone(),
-                &registry,
-                config,
-            ))
+            .stream_chat(build_chat_request(input.clone(), &registry, config))
             .await?;
 
         let mut content = String::new();

@@ -186,6 +186,90 @@ rushdino upgrade
 
 This downloads the latest binary, verifies its checksum, and replaces the current binary in place. Your data directory (`~/.rushdino/`) is never touched during an upgrade.
 
+Release channels and pinned versions are also supported:
+
+```bash
+rushdino upgrade --beta
+rushdino upgrade --version 1.2.3
+rushdino upgrade --version v1.2.3-beta.1
+```
+
+To roll back to a specific older release:
+
+```bash
+rushdino downgrade --version 1.2.3
+rushdino downgrade --version v1.2.3-beta.1
+```
+
+Notes:
+
+- `rushdino upgrade` installs the newest stable release by default
+- `rushdino upgrade --beta` installs the newest beta prerelease
+- `rushdino upgrade --version ...` installs the exact requested release, including prereleases
+- `rushdino downgrade --version ...` requires an explicit target and rejects same-version or newer targets
+
+---
+
+## Creating a Release
+
+Use the release helper to bump the workspace version, verify the release build, create the release commit, tag it, and push both to GitHub:
+
+```bash
+./scripts/release.sh <major|minor|patch> [--latest|--beta]
+```
+
+Examples:
+
+```bash
+./scripts/release.sh patch --latest
+./scripts/release.sh minor --beta
+```
+
+### Stable vs beta
+
+- `--latest` creates a stable tag in the form `vX.Y.Z`
+- `--beta` creates a prerelease tag in the form `vX.Y.Z-beta.1`
+- If you omit the flag, the script defaults to a stable release
+
+### What the script does
+
+1. Verifies the git working tree is clean
+2. Verifies `HEAD` is on a branch with an upstream
+3. Reads `[workspace.package].version` from `Cargo.toml`
+4. Computes the next semver from `major`, `minor`, or `patch`
+5. Updates the workspace version in `Cargo.toml`
+6. Runs `./scripts/build-release.sh`
+7. Creates commit `chore: release <tag>`
+8. Creates the git tag
+9. Pushes the branch and tag to `origin`
+
+If any step fails before the commit is created, the script restores `Cargo.toml` to its previous version.
+
+### Requirements
+
+- Clean working tree
+- Branch checked out locally, not detached `HEAD`
+- Upstream configured for the current branch
+- `git`, `cargo`, `node`, `npm`, and `perl` installed
+- The target tag must not already exist locally or on `origin`
+
+### GitHub release behavior
+
+Pushing the tag triggers [`.github/workflows/release.yml`](../.github/workflows/release.yml):
+
+- stable tags publish a normal GitHub Release and mark it as latest
+- beta tags publish a GitHub prerelease and do not mark it as latest
+
+### Recommended operator flow
+
+```bash
+git pull --ff-only
+bash scripts/test-release.sh
+./scripts/release.sh patch --latest
+```
+
+Run `bash scripts/test-release.sh` first if you want a quick validation of the release script logic before creating a real release.
+
 ---
 
 ## Uninstallation

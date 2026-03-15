@@ -22,6 +22,48 @@ pub struct OAuthTokens {
     pub expires_at: i64,
 }
 
+pub async fn refresh_access_token(client: &Client, refresh_token: &str) -> Result<OAuthTokens> {
+    let params = [
+        ("grant_type", "refresh_token"),
+        ("client_id", CLIENT_ID),
+        ("refresh_token", refresh_token),
+    ];
+
+    let res = client
+        .post(TOKEN_URL)
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| AppError::Provider(format!("token refresh request failed: {e}")))?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res
+            .text()
+            .await
+            .unwrap_or_else(|e| format!("<failed to read body: {e}>"));
+        return Err(AppError::Provider(format!(
+            "token refresh failed ({status}): {body}"
+        )));
+    }
+
+    let token: TokenResponse = res
+        .json()
+        .await
+        .map_err(|e| AppError::Provider(format!("token refresh parse error: {e}")))?;
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    Ok(OAuthTokens {
+        access_token: token.access_token,
+        refresh_token: token.refresh_token,
+        expires_at: now + token.expires_in as i64,
+    })
+}
+
 pub async fn exchange_code(client: &Client, code: &str, verifier: &str) -> Result<OAuthTokens> {
     let params = [
         ("grant_type", "authorization_code"),

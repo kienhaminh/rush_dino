@@ -130,8 +130,7 @@ impl DashboardAuthService {
         .await?;
 
         let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
-        let session_expires_at =
-            (now + Duration::days(DASHBOARD_SESSION_TTL_DAYS)).to_rfc3339();
+        let session_expires_at = (now + Duration::days(DASHBOARD_SESSION_TTL_DAYS)).to_rfc3339();
         sqlx::query(
             "INSERT INTO dashboard_sessions
              (id, session_hash, created_from_code_id, created_at, expires_at, last_seen_at, revoked_at)

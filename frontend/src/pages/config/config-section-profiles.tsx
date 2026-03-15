@@ -18,10 +18,15 @@ import { getCatalogModels, getDefaultModelId, type CatalogModel } from '@/lib/mo
 import type {
   AppConfigView,
   CredentialsView,
-  ProviderKind,
   ProviderProfile,
-  AuthMethod,
 } from '@/lib/types';
+import {
+  formatAuthLabel,
+  isCodexOAuthProfile,
+  resolveProviderKindAndAuth,
+  type OpenAIAuthChoice,
+  type UIProvider,
+} from './config-profile-utils';
 import {
   Brain,
   ChevronDown,
@@ -56,13 +61,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
 const REDACTED = '***';
-
-function formatAuthLabel(profile: ProviderProfile): string {
-  if (profile.provider_kind === 'openai_codex') return 'Codex (OAuth)';
-  if (profile.auth_method === 'apikey') return 'API Key';
-  if (profile.auth_method === 'oauth') return 'OAuth';
-  return profile.auth_method;
-}
 
 const PROVIDER_ICONS: Record<string, React.ReactNode> = {
   openai: <Sparkles className="w-5 h-5 text-success" />,
@@ -182,7 +180,7 @@ function ProfileCard({
         name: profile.name,
         auth_method: profile.auth_method,
         default_model: model,
-        base_url: ['ollama', 'openai', 'openai_codex'].includes(profile.provider_kind)
+        base_url: profile.provider_kind === 'ollama'
           ? baseUrl
           : undefined,
       };
@@ -290,7 +288,7 @@ function ProfileCard({
 
       {isExpanded && (
         <div className="px-5 pb-5 pt-1 border-t border-border/50 space-y-4">
-          {['ollama', 'openai', 'openai_codex'].includes(profile.provider_kind) && (
+          {profile.provider_kind === 'ollama' && (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 Base URL
@@ -301,7 +299,7 @@ function ProfileCard({
                 placeholder={
                   profile.provider_kind === 'ollama'
                     ? 'http://localhost:11434'
-                    : profile.provider_kind === 'openai_codex'
+                    : isCodexOAuthProfile(profile)
                       ? 'https://chatgpt.com/backend-api/v1'
                       : 'https://api.openai.com/v1'
                 }
@@ -438,28 +436,6 @@ function ProfileCard({
       )}
     </div>
   );
-}
-
-// UI provider choice — OpenAI covers both openai and openai_codex backend kinds
-type UIProvider = 'openai' | 'anthropic' | 'ollama';
-
-// For OpenAI we expose two auth choices; the choice drives the backend provider_kind
-type OpenAIAuthChoice = 'apikey' | 'codex_oauth';
-
-function resolveProviderKindAndAuth(
-  uiProvider: UIProvider,
-  openAIAuthChoice: OpenAIAuthChoice,
-): { provider_kind: ProviderKind; auth_method: AuthMethod } {
-  if (uiProvider === 'openai') {
-    if (openAIAuthChoice === 'codex_oauth') {
-      return { provider_kind: 'openai_codex', auth_method: 'oauth' };
-    }
-    return { provider_kind: 'openai', auth_method: 'apikey' };
-  }
-  if (uiProvider === 'anthropic') {
-    return { provider_kind: 'anthropic', auth_method: 'apikey' };
-  }
-  return { provider_kind: 'ollama', auth_method: 'none' };
 }
 
 function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {

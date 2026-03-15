@@ -140,7 +140,6 @@ impl CronManager {
     }
 
     pub async fn list_jobs(&self) -> Result<Vec<CronJobRecord>> {
-
         let rows = sqlx::query(
             r#"
             SELECT id, name, description, schedule_kind, schedule_payload, timezone, target_kind, target_payload,
@@ -155,7 +154,6 @@ impl CronManager {
     }
 
     pub async fn get_job(&self, id: &str) -> Result<CronJobRecord> {
-
         let row = sqlx::query(
             r#"
             SELECT id, name, description, schedule_kind, schedule_payload, timezone, target_kind, target_payload,
@@ -172,7 +170,6 @@ impl CronManager {
     }
 
     pub async fn create_job(&self, input: CreateCronJobInput) -> Result<CronJobRecord> {
-
         validate_job_name(&input.name)?;
         validate_schedule(&input.schedule)?;
         validate_target(&input.target)?;
@@ -215,7 +212,6 @@ impl CronManager {
     }
 
     pub async fn update_job(&self, id: &str, input: UpdateCronJobInput) -> Result<CronJobRecord> {
-
         let existing = self.get_job(id).await?;
         let schedule = input.schedule.unwrap_or(existing.schedule.clone());
         let target = input.target.unwrap_or(existing.target.clone());
@@ -270,7 +266,6 @@ impl CronManager {
     }
 
     pub async fn delete_job(&self, id: &str) -> Result<()> {
-
         let result = sqlx::query("DELETE FROM cron_jobs WHERE id = ?1")
             .bind(id)
             .execute(self.pool.as_ref())
@@ -314,8 +309,11 @@ impl CronManager {
         self.get_job(id).await
     }
 
-    pub async fn claim_due_jobs(&self, limit: i64, now: DateTime<Utc>) -> Result<Vec<CronJobRecord>> {
-
+    pub async fn claim_due_jobs(
+        &self,
+        limit: i64,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<CronJobRecord>> {
         let rows = sqlx::query(
             r#"
             SELECT id, name, description, schedule_kind, schedule_payload, timezone, target_kind, target_payload,
@@ -348,8 +346,12 @@ impl CronManager {
         Ok(claimed)
     }
 
-    pub async fn begin_run(&self, job_id: &str, trigger_kind: &str, now: DateTime<Utc>) -> Result<String> {
-
+    pub async fn begin_run(
+        &self,
+        job_id: &str,
+        trigger_kind: &str,
+        now: DateTime<Utc>,
+    ) -> Result<String> {
         let run_id = Uuid::new_v4().to_string();
         sqlx::query(
             r#"
@@ -379,7 +381,6 @@ impl CronManager {
         workflow_run_id: Option<&str>,
         now: DateTime<Utc>,
     ) -> Result<CronJobRecord> {
-
         let job = self.get_job(job_id).await?;
         let next_run_at = if job.enabled {
             compute_next_run_after(&job.schedule, job.timezone.as_deref(), now)?
@@ -436,7 +437,6 @@ impl CronManager {
     }
 
     pub async fn list_runs(&self, job_id: &str, limit: i64) -> Result<Vec<CronRunRecord>> {
-
         let rows = sqlx::query(
             r#"
             SELECT id, job_id, status, trigger_kind, summary, error, session_id, workflow_run_id, started_at, completed_at, created_at
@@ -523,7 +523,9 @@ fn compute_next_run_at(
     now: DateTime<Utc>,
 ) -> Result<Option<DateTime<Utc>>> {
     match schedule {
-        CronScheduleInput::Every { interval_seconds } => Ok(Some(now + Duration::seconds(*interval_seconds))),
+        CronScheduleInput::Every { interval_seconds } => {
+            Ok(Some(now + Duration::seconds(*interval_seconds)))
+        }
         CronScheduleInput::At { run_at } => {
             let at = parse_rfc3339(run_at)?;
             Ok((at > now).then_some(at))
@@ -592,7 +594,9 @@ fn parse_run_status(value: &str) -> Result<CronRunStatus> {
         "ok" => Ok(CronRunStatus::Ok),
         "error" => Ok(CronRunStatus::Error),
         "blocked" => Ok(CronRunStatus::Blocked),
-        _ => Err(AppError::Validation(format!("invalid cron run status: {value}"))),
+        _ => Err(AppError::Validation(format!(
+            "invalid cron run status: {value}"
+        ))),
     }
 }
 
@@ -687,10 +691,7 @@ fn cron_matches(parsed: &ParsedCron, dt: DateTime<Utc>) -> bool {
         && field_matches(&parsed.hour, dt.hour())
         && field_matches(&parsed.day_of_month, dt.day())
         && field_matches(&parsed.month, dt.month())
-        && field_matches(
-            &parsed.day_of_week,
-            dt.weekday().num_days_from_sunday(),
-        )
+        && field_matches(&parsed.day_of_week, dt.weekday().num_days_from_sunday())
 }
 
 fn field_matches(field: &CronField, value: u32) -> bool {

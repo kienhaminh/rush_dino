@@ -167,6 +167,7 @@ export interface CredentialsView {
   openai_api_key?: string;
   anthropic_api_key?: string;
   brave_api_key?: string;
+  gemini_api_key?: string;
   telegram_bot_token?: string;
   discord_bot_token?: string;
   slack_bot_token?: string;

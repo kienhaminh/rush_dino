@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine as _;
 use chrono::Utc;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use rushdino_common::{AppError, Result};
 
@@ -17,7 +17,10 @@ pub struct ImageTool {
 
 impl ImageTool {
     pub fn new(api_key: Option<String>, images_dir: PathBuf) -> Self {
-        Self { api_key, images_dir }
+        Self {
+            api_key,
+            images_dir,
+        }
     }
 }
 
@@ -91,7 +94,9 @@ impl Tool for ImageTool {
             .and_then(Value::as_str)
             .unwrap_or("1K");
         if !matches!(resolution, "1K" | "2K" | "4K") {
-            return Err(AppError::Validation(format!("invalid resolution: {resolution}")));
+            return Err(AppError::Validation(format!(
+                "invalid resolution: {resolution}"
+            )));
         }
 
         // 5. Validate aspect_ratio
@@ -101,7 +106,9 @@ impl Tool for ImageTool {
         let aspect_ratio = args.get("aspect_ratio").and_then(Value::as_str);
         if let Some(ratio) = aspect_ratio {
             if !VALID_RATIOS.contains(&ratio) {
-                return Err(AppError::Validation(format!("invalid aspect_ratio: {ratio}")));
+                return Err(AppError::Validation(format!(
+                    "invalid aspect_ratio: {ratio}"
+                )));
             }
         }
 
@@ -141,7 +148,14 @@ impl Tool for ImageTool {
             .await
             .map_err(|e| AppError::Agent(format!("image request error: {e}")))?
             .error_for_status()
-            .map_err(|e| AppError::Agent(format!("image generation failed: {}", e.status().map(|s| s.as_str().to_owned()).unwrap_or_else(|| e.to_string()))))?
+            .map_err(|e| {
+                AppError::Agent(format!(
+                    "image generation failed: {}",
+                    e.status()
+                        .map(|s| s.as_str().to_owned())
+                        .unwrap_or_else(|| e.to_string())
+                ))
+            })?
             .json()
             .await
             .map_err(|e| AppError::Agent(format!("image response parse error: {e}")))?;
@@ -207,10 +221,10 @@ impl Tool for ImageTool {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
-    use tempfile::tempdir;
     use super::ImageTool;
     use crate::tool_registry::Tool;
+    use serde_json::json;
+    use tempfile::tempdir;
 
     fn tool_with_key(key: &str) -> ImageTool {
         let dir = tempdir().unwrap();
@@ -225,7 +239,9 @@ mod tests {
     #[tokio::test]
     async fn rejects_missing_api_key() {
         let tool = tool_no_key();
-        let err = tool.execute(json!({"prompt": "a cat", "filename": "test_cat"})).await;
+        let err = tool
+            .execute(json!({"prompt": "a cat", "filename": "test_cat"}))
+            .await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
         assert!(msg.contains("GEMINI_API_KEY missing"), "got: {msg}");
@@ -235,7 +251,9 @@ mod tests {
     async fn rejects_empty_api_key() {
         let dir = tempdir().unwrap();
         let tool = ImageTool::new(Some("   ".to_owned()), dir.path().to_path_buf());
-        let err = tool.execute(json!({"prompt": "a cat", "filename": "test_cat"})).await;
+        let err = tool
+            .execute(json!({"prompt": "a cat", "filename": "test_cat"}))
+            .await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
         assert!(msg.contains("GEMINI_API_KEY missing"), "got: {msg}");
@@ -244,7 +262,9 @@ mod tests {
     #[tokio::test]
     async fn rejects_filename_with_slash() {
         let tool = tool_with_key("fake-key");
-        let err = tool.execute(json!({"prompt": "x", "filename": "foo/bar"})).await;
+        let err = tool
+            .execute(json!({"prompt": "x", "filename": "foo/bar"}))
+            .await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
         assert!(msg.contains("invalid filename"), "got: {msg}");
@@ -253,7 +273,9 @@ mod tests {
     #[tokio::test]
     async fn rejects_filename_with_dotdot() {
         let tool = tool_with_key("fake-key");
-        let err = tool.execute(json!({"prompt": "x", "filename": "../etc/passwd"})).await;
+        let err = tool
+            .execute(json!({"prompt": "x", "filename": "../etc/passwd"}))
+            .await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
         assert!(msg.contains("invalid filename"), "got: {msg}");
@@ -262,7 +284,9 @@ mod tests {
     #[tokio::test]
     async fn rejects_invalid_resolution() {
         let tool = tool_with_key("fake-key");
-        let err = tool.execute(json!({"prompt": "x", "filename": "test_img", "resolution": "8K"})).await;
+        let err = tool
+            .execute(json!({"prompt": "x", "filename": "test_img", "resolution": "8K"}))
+            .await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
         assert!(msg.contains("invalid resolution"), "got: {msg}");
@@ -271,7 +295,9 @@ mod tests {
     #[tokio::test]
     async fn rejects_invalid_aspect_ratio() {
         let tool = tool_with_key("fake-key");
-        let err = tool.execute(json!({"prompt": "x", "filename": "test_img", "aspect_ratio": "5:3"})).await;
+        let err = tool
+            .execute(json!({"prompt": "x", "filename": "test_img", "aspect_ratio": "5:3"}))
+            .await;
         assert!(err.is_err());
         let msg = err.unwrap_err().to_string();
         assert!(msg.contains("invalid aspect_ratio"), "got: {msg}");

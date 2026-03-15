@@ -98,7 +98,9 @@ impl Tool for FileEditTool {
         }
 
         let new_content = content.replace(old_text, new_text);
-        fs::write(&target, new_content).await.map_err(AppError::Io)?;
+        fs::write(&target, new_content)
+            .await
+            .map_err(AppError::Io)?;
 
         Ok(format!(
             "Successfully edited file '{}'. Replaced {} occurrence(s).",

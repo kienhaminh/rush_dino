@@ -67,10 +67,7 @@ impl Tool for UpdateWorkflowTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("workflow_id is required".to_owned()))?;
 
-        let name = args
-            .get("name")
-            .and_then(Value::as_str)
-            .map(str::to_owned);
+        let name = args.get("name").and_then(Value::as_str).map(str::to_owned);
 
         let description = args
             .get("description")
@@ -92,24 +89,18 @@ impl Tool for UpdateWorkflowTool {
         let steps = if let Some(steps_raw) = args.get("steps").and_then(Value::as_array) {
             let mut parsed = Vec::with_capacity(steps_raw.len());
             for (index, raw) in steps_raw.iter().enumerate() {
-                let step_name = raw
-                    .get("name")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| {
-                        AppError::Validation(format!("steps[{index}].name is required"))
-                    })?;
-                let instructions = raw
-                    .get("instructions")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| {
-                        AppError::Validation(format!("steps[{index}].instructions is required"))
-                    })?;
-                let agent_id = raw
-                    .get("agent_id")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| {
-                        AppError::Validation(format!("steps[{index}].agent_id is required"))
-                    })?;
+                let step_name = raw.get("name").and_then(Value::as_str).ok_or_else(|| {
+                    AppError::Validation(format!("steps[{index}].name is required"))
+                })?;
+                let instructions =
+                    raw.get("instructions")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            AppError::Validation(format!("steps[{index}].instructions is required"))
+                        })?;
+                let agent_id = raw.get("agent_id").and_then(Value::as_str).ok_or_else(|| {
+                    AppError::Validation(format!("steps[{index}].agent_id is required"))
+                })?;
                 parsed.push(WorkflowStepInput {
                     name: step_name.to_owned(),
                     instructions: instructions.to_owned(),

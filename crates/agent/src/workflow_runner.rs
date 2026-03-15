@@ -234,13 +234,8 @@ impl WorkflowRunner {
 
                 // ── Evaluate condition gate ───────────────────────────────────────
                 if let Some(cond) = &step.condition {
-                    let cond_met = evaluate_condition(
-                        cond,
-                        &completed,
-                        &skipped,
-                        &failed,
-                        &step_id_by_name,
-                    );
+                    let cond_met =
+                        evaluate_condition(cond, &completed, &skipped, &failed, &step_id_by_name);
                     if !cond_met {
                         tracing::info!(
                             run_id = %run_id,
@@ -291,10 +286,7 @@ impl WorkflowRunner {
                     .record_event(
                         run_id,
                         "workflow_step_running",
-                        format!(
-                            "Step {} ({}) is running.",
-                            step.position, step.step_name
-                        ),
+                        format!("Step {} ({}) is running.", step.position, step.step_name),
                     )
                     .await;
 
@@ -497,13 +489,27 @@ impl WorkflowRunner {
         if let Some(secs) = timeout_secs {
             time::timeout(
                 Duration::from_secs(secs),
-                self.execute_step(run_id, agent_id, step_input, conversation_id, position, step_name),
+                self.execute_step(
+                    run_id,
+                    agent_id,
+                    step_input,
+                    conversation_id,
+                    position,
+                    step_name,
+                ),
             )
             .await
             .unwrap_or_else(|_| Err(AppError::Validation("step timed out".to_owned())))
         } else {
-            self.execute_step(run_id, agent_id, step_input, conversation_id, position, step_name)
-                .await
+            self.execute_step(
+                run_id,
+                agent_id,
+                step_input,
+                conversation_id,
+                position,
+                step_name,
+            )
+            .await
         }
     }
 

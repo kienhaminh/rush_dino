@@ -1,4 +1,9 @@
-use std::{collections::HashMap, path::PathBuf, sync::{Arc, RwLock}, time::Duration};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use sqlx::SqlitePool;
 use tokio::sync::{mpsc, oneshot, Mutex};
@@ -166,19 +171,28 @@ mod config_tests {
         let override_arc: Arc<RwLock<Option<ThinkingLevel>>> = Arc::new(RwLock::new(None));
 
         // No override → falls back to config
-        let effective = override_arc.read().unwrap_or_else(|e| e.into_inner()).clone()
+        let effective = override_arc
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
             .unwrap_or_else(|| config.thinking_level.clone());
         assert_eq!(effective, ThinkingLevel::Low);
 
         // With override
         *override_arc.write().unwrap_or_else(|e| e.into_inner()) = Some(ThinkingLevel::High);
-        let effective = override_arc.read().unwrap_or_else(|e| e.into_inner()).clone()
+        let effective = override_arc
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
             .unwrap_or_else(|| config.thinking_level.clone());
         assert_eq!(effective, ThinkingLevel::High);
 
         // Cleared override → falls back again
         *override_arc.write().unwrap_or_else(|e| e.into_inner()) = None;
-        let effective = override_arc.read().unwrap_or_else(|e| e.into_inner()).clone()
+        let effective = override_arc
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
             .unwrap_or_else(|| config.thinking_level.clone());
         assert_eq!(effective, ThinkingLevel::Low);
     }
@@ -270,7 +284,13 @@ impl AgentEngine {
         // be reconstructed and injected fresh on every request.
         messages.insert(
             0,
-            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref(), self.tool_registry.as_ref()),
+            system_message(
+                &self.config,
+                self.memory.as_ref(),
+                self.agent_manager.as_ref(),
+                self.skill_manager.as_ref(),
+                self.tool_registry.as_ref(),
+            ),
         );
 
         let old_len = messages.len();
@@ -398,7 +418,13 @@ impl AgentEngine {
         // be reconstructed and injected fresh on every request.
         messages.insert(
             0,
-            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref(), self.tool_registry.as_ref()),
+            system_message(
+                &self.config,
+                self.memory.as_ref(),
+                self.agent_manager.as_ref(),
+                self.skill_manager.as_ref(),
+                self.tool_registry.as_ref(),
+            ),
         );
 
         let old_len = messages.len();
@@ -961,7 +987,13 @@ impl AgentEngine {
         // be reconstructed and injected fresh on every request.
         messages.insert(
             0,
-            system_message(&self.config, self.memory.as_ref(), self.agent_manager.as_ref(), self.skill_manager.as_ref(), self.tool_registry.as_ref()),
+            system_message(
+                &self.config,
+                self.memory.as_ref(),
+                self.agent_manager.as_ref(),
+                self.skill_manager.as_ref(),
+                self.tool_registry.as_ref(),
+            ),
         );
 
         let old_len = messages.len();
@@ -1043,7 +1075,10 @@ impl AgentEngine {
         self.conversation.delete_conversation(id).await
     }
 
-    pub async fn create_session(&self, title: &str) -> Result<rushdino_common::models::Conversation> {
+    pub async fn create_session(
+        &self,
+        title: &str,
+    ) -> Result<rushdino_common::models::Conversation> {
         self.conversation.create_conversation(title).await
     }
 

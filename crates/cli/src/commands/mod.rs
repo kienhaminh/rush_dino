@@ -5,10 +5,12 @@ pub mod config;
 pub mod configure;
 pub mod dashboard;
 pub mod doctor;
+pub mod downgrade;
 pub mod health;
 pub mod init;
 pub mod memory;
 pub mod message;
+pub mod release_updater;
 pub mod reset;
 pub mod sessions;
 pub mod start;
@@ -27,7 +29,6 @@ pub fn rewrite_value(mut doc: String, key: &str, value: &str) -> String {
     }
     doc
 }
-
 
 pub fn rewrite_active_provider(doc: String, provider: &str) -> String {
     rewrite_value(doc, "active_provider", provider)

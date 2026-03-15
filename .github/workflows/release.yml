@@ -20,8 +20,8 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             artifact: rushdino-linux-x86_64
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
       - name: Build frontend
@@ -41,7 +41,7 @@ jobs:
           BIN="target/${{ matrix.target }}/release/rushdino"
           cp "$BIN" "dist/${{ matrix.artifact }}"
           sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: dist/*
@@ -52,11 +52,20 @@ jobs:
     needs: build
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: release-dist
           merge-multiple: true
-      - name: Publish release assets
+      - name: Publish beta release assets
+        if: contains(github.ref_name, '-beta.')
         uses: softprops/action-gh-release@v2
         with:
           files: release-dist/**
+          prerelease: true
+          make_latest: false
+      - name: Publish stable release assets
+        if: ${{ !contains(github.ref_name, '-beta.') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-dist/**
+          make_latest: true

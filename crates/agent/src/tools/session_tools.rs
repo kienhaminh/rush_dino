@@ -20,7 +20,9 @@ use crate::{
     react_loop::run_react_loop,
     skill_manager::SkillManager,
     tool_registry::{Tool, ToolRegistry},
-    tools::shell_exec::{current_tool_execution_context, with_tool_execution_context, ToolExecutionContext},
+    tools::shell_exec::{
+        current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
+    },
 };
 
 struct SessionChatDeps {
@@ -73,7 +75,9 @@ async fn run_session_turn(
         rich_content: None,
         created_at: Utc::now(),
     };
-    deps.conversation.save_message(conversation_id, &user_msg).await?;
+    deps.conversation
+        .save_message(conversation_id, &user_msg)
+        .await?;
     messages.push(user_msg);
 
     let parent_ctx = current_tool_execution_context().unwrap_or(ToolExecutionContext {
@@ -89,11 +93,19 @@ async fn run_session_turn(
     };
     let (response, all_messages) = with_tool_execution_context(
         tool_ctx,
-        run_react_loop(deps.provider.clone(), registry, messages, &deps.config, None),
+        run_react_loop(
+            deps.provider.clone(),
+            registry,
+            messages,
+            &deps.config,
+            None,
+        ),
     )
     .await?;
     for message in all_messages.iter().skip(old_len + 1) {
-        deps.conversation.save_message(conversation_id, message).await?;
+        deps.conversation
+            .save_message(conversation_id, message)
+            .await?;
     }
     Ok(response)
 }
@@ -161,7 +173,10 @@ impl Tool for SessionGetTool {
             .get("sessionId")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("sessionId is required".to_owned()))?;
-        let session = self.conversation.get_conversation_record(session_id).await?;
+        let session = self
+            .conversation
+            .get_conversation_record(session_id)
+            .await?;
         let messages = self.conversation.get_messages(session_id).await?;
         serde_json::to_string_pretty(&json!({
             "session": {
@@ -243,4 +258,3 @@ impl Tool for SessionSendTool {
         .map_err(|e| AppError::Agent(e.to_string()))
     }
 }
-

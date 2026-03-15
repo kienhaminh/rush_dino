@@ -398,9 +398,7 @@ impl CompletionsProvider {
             reasoning_effort,
             ..Default::default()
         };
-        let mut rx = self
-            .stream_chat(request, stream_opts)
-            .await?;
+        let mut rx = self.stream_chat(request, stream_opts).await?;
         let mut content = String::new();
         let mut tool_calls = Vec::new();
         let mut usage = None;
@@ -613,10 +611,19 @@ impl CompletionsProvider {
                     // when stream_options.include_usage=true. Capture it before the [DONE] event.
                     if value.pointer("/choices/0").is_none() {
                         if let Some(u) = value.get("usage") {
-                            let prompt = u.get("prompt_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
-                            let completion = u.get("completion_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
-                            let total = u.get("total_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
-                            pending_usage = Some(Usage { prompt_tokens: prompt, completion_tokens: completion, total_tokens: total });
+                            let prompt =
+                                u.get("prompt_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+                            let completion = u
+                                .get("completion_tokens")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(0) as u32;
+                            let total =
+                                u.get("total_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+                            pending_usage = Some(Usage {
+                                prompt_tokens: prompt,
+                                completion_tokens: completion,
+                                total_tokens: total,
+                            });
                         }
                         continue;
                     }
@@ -668,10 +675,7 @@ impl CompletionsProvider {
                             let key = if !call_id.is_empty() {
                                 call_id.clone()
                             } else {
-                                index_to_id
-                                    .get(&index_str)
-                                    .cloned()
-                                    .unwrap_or(index_str)
+                                index_to_id.get(&index_str).cloned().unwrap_or(index_str)
                             };
 
                             if let Some(entry) = pending_calls.get_mut(&key) {
@@ -799,7 +803,9 @@ mod tests {
         let response = provider.chat(simple_request("Hello")).await.unwrap();
 
         assert_eq!(response.content, "Hi");
-        let usage = response.usage.expect("usage must be populated when provided in SSE stream");
+        let usage = response
+            .usage
+            .expect("usage must be populated when provided in SSE stream");
         assert_eq!(usage.prompt_tokens, 10);
         assert_eq!(usage.completion_tokens, 5);
         assert_eq!(usage.total_tokens, 15);
@@ -819,7 +825,10 @@ mod tests {
         let response = provider.chat(simple_request("Hello")).await.unwrap();
 
         assert_eq!(response.content, "Hello");
-        assert!(response.usage.is_none(), "usage should be None when provider omits the usage chunk");
+        assert!(
+            response.usage.is_none(),
+            "usage should be None when provider omits the usage chunk"
+        );
     }
 
     #[tokio::test]

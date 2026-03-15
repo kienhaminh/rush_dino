@@ -30,6 +30,7 @@ tracing-subscriber.workspace = true
 rust-embed.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
+reqwest.workspace = true
 rushdino-common = { path = "../common" }
 rushdino-auth = { path = "../auth" }
 rushdino-providers = { path = "../providers" }

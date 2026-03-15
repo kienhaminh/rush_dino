@@ -7,7 +7,7 @@ use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
-use rushdino_providers::types::{ModelInfo, ProviderConfig};
+use rushdino_providers::types::{ModelInfo, OpenAIAuth, ProviderConfig};
 use rushdino_providers::ProviderService;
 use serde::Deserialize;
 
@@ -28,6 +28,10 @@ pub struct UpdateProfileRequest {
     pub default_model: String,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
+}
+
+fn profile_supports_oauth_connect(profile: &ProviderProfile) -> bool {
+    profile.provider_kind == Provider::OpenAI && profile.auth_method == AuthMethod::OAuth
 }
 
 pub async fn list_profiles(State(state): State<AppState>) -> Result<Json<Vec<ProviderProfile>>> {
@@ -116,6 +120,43 @@ pub async fn update_profile(
     Ok(Json(updated_profile))
 }
 
+pub async fn connect_profile_oauth(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    let config = AppConfig::load_from_path(&state.config_path)?;
+    let profile = config
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .cloned()
+        .ok_or_else(|| AppError::Validation(format!("Profile not found: {}", profile_id)))?;
+
+    if !profile_supports_oauth_connect(&profile) {
+        return Err(AppError::Validation(format!(
+            "Profile '{}' does not support OAuth connect",
+            profile.name
+        )));
+    }
+
+    let tokens = rushdino_auth::oauth_pkce::run().await?;
+    let mut credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
+    let mut secrets = credentials
+        .profiles
+        .entry(profile.id.clone())
+        .or_default()
+        .clone();
+    secrets.access_token = Some(tokens.access_token);
+    secrets.refresh_token = Some(tokens.refresh_token);
+    secrets.token_expires_at = Some(tokens.expires_at);
+    credentials.profiles.insert(profile.id.clone(), secrets);
+    credentials.save_to_path(&state.credentials_path)?;
+
+    let _ = crate::refresh_engine_provider(&state).await;
+
+    Ok(Json(serde_json::json!({ "status": "connected" })))
+}
+
 pub async fn delete_profile(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -183,27 +224,17 @@ pub async fn list_provider_models(
             }
         }
         Provider::OpenAI => {
-            // For OAuth profiles use access_token; for API key profiles use api_key
-            let bearer = if profile.auth_method == AuthMethod::OAuth {
-                secrets
-                    .access_token
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned)
-            } else {
-                secrets
-                    .api_key
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned)
-            };
+            let bearer = secrets
+                .api_key
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned);
             let Some(bearer) = bearer else {
                 return Ok(Json(defaults));
             };
             ProviderConfig::OpenAI {
-                api_key: bearer,
+                auth: OpenAIAuth::ApiKey { api_key: bearer },
                 model: profile.default_model.clone(),
                 base_url: profile.base_url.clone(),
             }
@@ -221,8 +252,8 @@ pub async fn list_provider_models(
         }
     };
 
-    let codex_profile = profile.provider_kind == Provider::OpenAI
-        && profile.auth_method == AuthMethod::OAuth;
+    let codex_profile =
+        profile.provider_kind == Provider::OpenAI && profile.auth_method == AuthMethod::OAuth;
 
     let provider = ProviderService::from_config(&provider_config)?;
     match provider.list_models().await {
@@ -273,3 +304,40 @@ pub async fn list_provider_models(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use rushdino_common::config::{AuthMethod, Provider, ProviderProfile};
+
+    use super::profile_supports_oauth_connect;
+
+    fn profile(provider_kind: Provider, auth_method: AuthMethod) -> ProviderProfile {
+        ProviderProfile {
+            id: "profile-1".to_owned(),
+            name: "Test".to_owned(),
+            provider_kind,
+            auth_method,
+            default_model: "gpt-5.3-codex".to_owned(),
+            base_url: None,
+        }
+    }
+
+    #[test]
+    fn oauth_connect_supports_openai_oauth_profiles() {
+        assert!(profile_supports_oauth_connect(&profile(
+            Provider::OpenAI,
+            AuthMethod::OAuth,
+        )));
+    }
+
+    #[test]
+    fn oauth_connect_rejects_non_oauth_profiles() {
+        assert!(!profile_supports_oauth_connect(&profile(
+            Provider::OpenAI,
+            AuthMethod::ApiKey,
+        )));
+        assert!(!profile_supports_oauth_connect(&profile(
+            Provider::Anthropic,
+            AuthMethod::OAuth,
+        )));
+    }
+}

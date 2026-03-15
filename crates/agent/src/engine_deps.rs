@@ -16,30 +16,42 @@ use crate::{
     knowledge_graph::KnowledgeGraphAccess,
     memory::MemoryManager,
     orchestrator::Orchestrator,
+    runtime::AgentRuntime,
     skill_manager::SkillManager,
     system_broker::SharedSystemBroker,
     tool_registry::ToolRegistry,
     tools::{
-        create_job::CreateJobTool, create_skill::CreateSkillTool,
-        create_workflow::CreateWorkflowTool, delegate_to_agent::DelegateToAgentTool,
-        delete_workflow::DeleteWorkflowTool, inspect_workflow::InspectWorkflowTool,
-        run_workflow::RunWorkflowTool, update_workflow::UpdateWorkflowTool,
+        create_job::CreateJobTool,
+        create_skill::CreateSkillTool,
+        create_workflow::CreateWorkflowTool,
         cron_tools::{
             cron_create_tool, cron_delete_tool, cron_get_tool, cron_list_tool, cron_pause_tool,
             cron_resume_tool, cron_run_now_tool, cron_update_tool,
         },
-        file_edit::FileEditTool, file_read::FileReadTool,
-        file_write::FileWriteTool, image::ImageTool,
-        knowledge_graph_query::KnowledgeGraphQueryTool, list_skills::ListSkillsTool,
-        memory_search::MemorySearchTool, memory_write::MemoryWriteTool,
-        present_message::PresentMessageTool, read_skill::ReadSkillTool,
+        delegate_to_agent::DelegateToAgentTool,
+        delete_workflow::DeleteWorkflowTool,
+        file_edit::FileEditTool,
+        file_read::FileReadTool,
+        file_write::FileWriteTool,
+        image::ImageTool,
+        inspect_workflow::InspectWorkflowTool,
+        knowledge_graph_query::KnowledgeGraphQueryTool,
+        list_skills::ListSkillsTool,
+        memory_search::MemorySearchTool,
+        memory_write::MemoryWriteTool,
+        present_message::PresentMessageTool,
+        read_skill::ReadSkillTool,
+        run_workflow::RunWorkflowTool,
         session_tools::{SessionCreateTool, SessionGetTool, SessionSendTool},
-        shell_exec::ShellExecTool, spawn_agent::SpawnAgentTool,
-        spawn_sub_agent::SpawnSubAgentTool, web_fetch::WebFetchTool, web_search::WebSearchTool,
+        shell_exec::ShellExecTool,
+        spawn_agent::SpawnAgentTool,
+        spawn_sub_agent::SpawnSubAgentTool,
+        update_workflow::UpdateWorkflowTool,
+        web_fetch::WebFetchTool,
+        web_search::WebSearchTool,
     },
-    workflow_runner::WorkflowRunner,
     workflow_manager::WorkflowManager,
-    runtime::AgentRuntime,
+    workflow_runner::WorkflowRunner,
 };
 
 pub struct EngineDeps {
@@ -132,7 +144,10 @@ pub fn build_engine_deps(
             "https://api.search.brave.com/res/v1/web/search".to_owned(),
             brave_c,
         ));
-        r.register(ImageTool::new(gemini_api_key, home_c.join("documents/images")));
+        r.register(ImageTool::new(
+            gemini_api_key,
+            home_c.join("documents/images"),
+        ));
         r.register(FileReadTool::new(home_c.join("documents")));
         r.register(FileWriteTool::new(home_c.clone()));
         r.register(FileEditTool::new(home_c.clone()));
@@ -141,7 +156,10 @@ pub fn build_engine_deps(
         r.register(MemorySearchTool::new(memory_c.clone()));
         r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
         r.register(CreateJobTool::new(jobs_c));
-        r.register(CreateWorkflowTool::new(workflow_manager_c, agent_manager_c3));
+        r.register(CreateWorkflowTool::new(
+            workflow_manager_c,
+            agent_manager_c3,
+        ));
         r.register(UpdateWorkflowTool::new(workflow_manager_c2.clone()));
         r.register(DeleteWorkflowTool::new(workflow_manager_c2.clone()));
         r.register(InspectWorkflowTool::new(workflow_manager_c2.clone()));
@@ -167,7 +185,10 @@ pub fn build_engine_deps(
         runtime.clone(),
         config.clone(),
     ));
-    registry.register(RunWorkflowTool::new(workflow_manager_c3, workflow_runner.clone()));
+    registry.register(RunWorkflowTool::new(
+        workflow_manager_c3,
+        workflow_runner.clone(),
+    ));
     registry.register(WebFetchTool::new());
     registry.register(SessionCreateTool::new(conversation.clone()));
     registry.register(SessionGetTool::new(conversation.clone()));

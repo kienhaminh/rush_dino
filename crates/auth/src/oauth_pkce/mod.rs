@@ -11,7 +11,7 @@ use rushdino_common::{AppError, Result};
 use callback::run_local_callback_server;
 use pkce::{generate_pkce, random_state};
 use token::exchange_code;
-pub use token::OAuthTokens;
+pub use token::{refresh_access_token, OAuthTokens};
 
 const CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
 const AUTHORIZE_URL: &str = "https://auth.openai.com/oauth/authorize";

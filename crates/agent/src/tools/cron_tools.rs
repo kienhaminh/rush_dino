@@ -21,7 +21,9 @@ use crate::{
     runtime::AgentRuntime,
     skill_manager::SkillManager,
     tool_registry::{Tool, ToolRegistry},
-    tools::shell_exec::{current_tool_execution_context, with_tool_execution_context, ToolExecutionContext},
+    tools::shell_exec::{
+        current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
+    },
     workflow_manager::WorkflowManager,
     workflow_runner::WorkflowRunner,
 };
@@ -69,7 +71,9 @@ async fn run_agent_turn(
         rich_content: None,
         created_at: Utc::now(),
     };
-    conversation.save_message(conversation_id, &user_message).await?;
+    conversation
+        .save_message(conversation_id, &user_message)
+        .await?;
     messages.push(user_message);
     let parent_ctx = current_tool_execution_context().unwrap_or(ToolExecutionContext {
         session_id: None,
@@ -126,26 +130,31 @@ pub fn cron_list_tool(manager: Arc<CronManager>) -> impl Tool {
 }
 
 pub fn cron_get_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_get", "Get a cron job and its recent runs by ID.",
+    json_tool!(
+        "cron_get",
+        "Get a cron job and its recent runs by ID.",
         json!({"type": "object", "properties": {"jobId": {"type": "string", "description": "Cron job ID"}}, "required": ["jobId"]}),
         move |args: Value| {
-        let manager = manager.clone();
-        async move {
-            let job_id = args
-                .get("jobId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
-            serde_json::to_string_pretty(&json!({
-                "job": manager.get_job(job_id).await?,
-                "runs": manager.list_runs(job_id, 20).await?,
-            }))
-            .map_err(|e| AppError::Agent(e.to_string()))
+            let manager = manager.clone();
+            async move {
+                let job_id = args
+                    .get("jobId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
+                serde_json::to_string_pretty(&json!({
+                    "job": manager.get_job(job_id).await?,
+                    "runs": manager.list_runs(job_id, 20).await?,
+                }))
+                .map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 pub fn cron_create_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_create", "Create a cron job for an agent turn or workflow run.",
+    json_tool!(
+        "cron_create",
+        "Create a cron job for an agent turn or workflow run.",
         json!({
             "type": "object",
             "properties": {
@@ -160,65 +169,75 @@ pub fn cron_create_tool(manager: Arc<CronManager>) -> impl Tool {
             "required": ["name", "schedule", "target"]
         }),
         move |args| {
-        let manager = manager.clone();
-        async move {
-            let payload: CreateCronJobInput =
-                serde_json::from_value(args).map_err(|e| AppError::Validation(e.to_string()))?;
-            serde_json::to_string_pretty(&manager.create_job(payload).await?)
-                .map_err(|e| AppError::Agent(e.to_string()))
+            let manager = manager.clone();
+            async move {
+                let payload: CreateCronJobInput = serde_json::from_value(args)
+                    .map_err(|e| AppError::Validation(e.to_string()))?;
+                serde_json::to_string_pretty(&manager.create_job(payload).await?)
+                    .map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 pub fn cron_update_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_update", "Update an existing cron job.",
+    json_tool!(
+        "cron_update",
+        "Update an existing cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}, "name": {"type": "string"}, "schedule": {"type": "string"}, "enabled": {"type": "boolean"}}, "required": ["jobId"]}),
         move |args: Value| {
-        let manager = manager.clone();
-        async move {
-            let job_id = args
-                .get("jobId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?
-                .to_owned();
-            let payload: UpdateCronJobInput =
-                serde_json::from_value(args).map_err(|e| AppError::Validation(e.to_string()))?;
-            serde_json::to_string_pretty(&manager.update_job(&job_id, payload).await?)
-                .map_err(|e| AppError::Agent(e.to_string()))
+            let manager = manager.clone();
+            async move {
+                let job_id = args
+                    .get("jobId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?
+                    .to_owned();
+                let payload: UpdateCronJobInput = serde_json::from_value(args)
+                    .map_err(|e| AppError::Validation(e.to_string()))?;
+                serde_json::to_string_pretty(&manager.update_job(&job_id, payload).await?)
+                    .map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 pub fn cron_pause_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_pause", "Pause a cron job.",
+    json_tool!(
+        "cron_pause",
+        "Pause a cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
         move |args: Value| {
-        let manager = manager.clone();
-        async move {
-            let job_id = args
-                .get("jobId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
-            serde_json::to_string_pretty(&manager.pause_job(job_id).await?)
-                .map_err(|e| AppError::Agent(e.to_string()))
+            let manager = manager.clone();
+            async move {
+                let job_id = args
+                    .get("jobId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
+                serde_json::to_string_pretty(&manager.pause_job(job_id).await?)
+                    .map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 pub fn cron_resume_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_resume", "Resume a paused cron job.",
+    json_tool!(
+        "cron_resume",
+        "Resume a paused cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
         move |args: Value| {
-        let manager = manager.clone();
-        async move {
-            let job_id = args
-                .get("jobId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
-            serde_json::to_string_pretty(&manager.resume_job(job_id).await?)
-                .map_err(|e| AppError::Agent(e.to_string()))
+            let manager = manager.clone();
+            async move {
+                let job_id = args
+                    .get("jobId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
+                serde_json::to_string_pretty(&manager.resume_job(job_id).await?)
+                    .map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -236,125 +255,131 @@ pub fn cron_run_now_tool(
     runtime: Arc<AgentRuntime>,
     provider_name: String,
 ) -> impl Tool {
-    json_tool!("cron_run_now", "Run a cron job immediately.",
+    json_tool!(
+        "cron_run_now",
+        "Run a cron job immediately.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
         move |args: Value| {
-        let manager = manager.clone();
-        let conversation = conversation.clone();
-        let provider = provider.clone();
-        let registry = registry.clone();
-        let memory = memory.clone();
-        let skill_manager = skill_manager.clone();
-        let agent_manager = agent_manager.clone();
-        let config = config.clone();
-        let workflow_manager = workflow_manager.clone();
-        let workflow_runner = workflow_runner.clone();
-        let runtime = runtime.clone();
-        let provider_name = provider_name.clone();
-        async move {
-            let job_id = args
-                .get("jobId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
-            let job = manager.get_job(job_id).await?;
-            let run_id = manager.begin_run(job_id, "manual", Utc::now()).await?;
-            let output = match &job.target {
-                CronTargetInput::WorkflowRun {
-                    workflow_id,
-                    input,
-                    triggered_by,
-                } => {
-                    let workflow = workflow_manager.get_workflow(workflow_id).await?;
-                    let run = workflow_manager
-                        .create_run(
-                            workflow_id,
-                            triggered_by.as_deref().unwrap_or("cron"),
-                            input.as_deref().unwrap_or(""),
-                        )
-                        .await?;
-                    runtime
-                        .register_workflow_run(
-                            &run.run_id,
-                            workflow_id,
-                            &workflow.name,
-                            input.as_deref(),
-                            &provider_name,
-                            provider.model(),
-                        )
-                        .await?;
-                    workflow_runner.spawn_run(run.run_id.clone());
-                    manager
-                        .complete_run(
-                            job_id,
-                            &run_id,
-                            CronRunStatus::Ok,
-                            Some("workflow run started"),
-                            None,
-                            None,
-                            Some(&run.run_id),
-                            Utc::now(),
-                        )
-                        .await?;
-                    json!({"workflowRunId": run.run_id})
-                }
-                CronTargetInput::AgentTurn {
-                    message,
-                    conversation_id,
-                    title,
-                    ..
-                } => {
-                    let session_id = if let Some(existing_id) = conversation_id.clone() {
-                        existing_id
-                    } else {
-                        conversation
-                            .create_conversation(title.as_deref().unwrap_or("Scheduled task"))
-                            .await?
-                            .id
-                    };
-                    let reply = run_agent_turn(
-                        conversation.clone(),
-                        provider.clone(),
-                        registry.clone(),
-                        memory.clone(),
-                        skill_manager.clone(),
-                        agent_manager.clone(),
-                        config.clone(),
-                        &session_id,
+            let manager = manager.clone();
+            let conversation = conversation.clone();
+            let provider = provider.clone();
+            let registry = registry.clone();
+            let memory = memory.clone();
+            let skill_manager = skill_manager.clone();
+            let agent_manager = agent_manager.clone();
+            let config = config.clone();
+            let workflow_manager = workflow_manager.clone();
+            let workflow_runner = workflow_runner.clone();
+            let runtime = runtime.clone();
+            let provider_name = provider_name.clone();
+            async move {
+                let job_id = args
+                    .get("jobId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
+                let job = manager.get_job(job_id).await?;
+                let run_id = manager.begin_run(job_id, "manual", Utc::now()).await?;
+                let output = match &job.target {
+                    CronTargetInput::WorkflowRun {
+                        workflow_id,
+                        input,
+                        triggered_by,
+                    } => {
+                        let workflow = workflow_manager.get_workflow(workflow_id).await?;
+                        let run = workflow_manager
+                            .create_run(
+                                workflow_id,
+                                triggered_by.as_deref().unwrap_or("cron"),
+                                input.as_deref().unwrap_or(""),
+                            )
+                            .await?;
+                        runtime
+                            .register_workflow_run(
+                                &run.run_id,
+                                workflow_id,
+                                &workflow.name,
+                                input.as_deref(),
+                                &provider_name,
+                                provider.model(),
+                            )
+                            .await?;
+                        workflow_runner.spawn_run(run.run_id.clone());
+                        manager
+                            .complete_run(
+                                job_id,
+                                &run_id,
+                                CronRunStatus::Ok,
+                                Some("workflow run started"),
+                                None,
+                                None,
+                                Some(&run.run_id),
+                                Utc::now(),
+                            )
+                            .await?;
+                        json!({"workflowRunId": run.run_id})
+                    }
+                    CronTargetInput::AgentTurn {
                         message,
-                    )
-                    .await?;
-                    manager
-                        .complete_run(
-                            job_id,
-                            &run_id,
-                            CronRunStatus::Ok,
-                            Some("agent turn completed"),
-                            None,
-                            Some(&session_id),
-                            None,
-                            Utc::now(),
+                        conversation_id,
+                        title,
+                        ..
+                    } => {
+                        let session_id = if let Some(existing_id) = conversation_id.clone() {
+                            existing_id
+                        } else {
+                            conversation
+                                .create_conversation(title.as_deref().unwrap_or("Scheduled task"))
+                                .await?
+                                .id
+                        };
+                        let reply = run_agent_turn(
+                            conversation.clone(),
+                            provider.clone(),
+                            registry.clone(),
+                            memory.clone(),
+                            skill_manager.clone(),
+                            agent_manager.clone(),
+                            config.clone(),
+                            &session_id,
+                            message,
                         )
                         .await?;
-                    json!({"sessionId": session_id, "reply": reply})
-                }
-            };
-            serde_json::to_string_pretty(&output).map_err(|e| AppError::Agent(e.to_string()))
+                        manager
+                            .complete_run(
+                                job_id,
+                                &run_id,
+                                CronRunStatus::Ok,
+                                Some("agent turn completed"),
+                                None,
+                                Some(&session_id),
+                                None,
+                                Utc::now(),
+                            )
+                            .await?;
+                        json!({"sessionId": session_id, "reply": reply})
+                    }
+                };
+                serde_json::to_string_pretty(&output).map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 pub fn cron_delete_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_delete", "Delete a cron job.",
+    json_tool!(
+        "cron_delete",
+        "Delete a cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
         move |args: Value| {
-        let manager = manager.clone();
-        async move {
-            let job_id = args
-                .get("jobId")
-                .and_then(Value::as_str)
-                .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
-            manager.delete_job(job_id).await?;
-            Ok(format!("cron job deleted: {job_id}"))
+            let manager = manager.clone();
+            async move {
+                let job_id = args
+                    .get("jobId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("jobId is required".to_owned()))?;
+                manager.delete_job(job_id).await?;
+                Ok(format!("cron job deleted: {job_id}"))
+            }
         }
-    })
+    )
 }

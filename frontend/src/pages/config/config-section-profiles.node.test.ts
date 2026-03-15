@@ -1,0 +1,29 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  formatAuthLabel,
+  isCodexOAuthProfile,
+  resolveProviderKindAndAuth,
+} from './config-profile-utils';
+
+describe('config-section-profiles helpers', () => {
+  it('maps Codex OAuth selection to OpenAI plus OAuth', () => {
+    expect(resolveProviderKindAndAuth('openai', 'codex_oauth')).toEqual({
+      provider_kind: 'openai',
+      auth_method: 'oauth',
+    });
+  });
+
+  it('treats OpenAI OAuth profiles as Codex profiles in the UI', () => {
+    const profile = {
+      id: 'profile-1',
+      name: 'Codex',
+      provider_kind: 'openai',
+      auth_method: 'oauth',
+      default_model: 'gpt-5.3-codex',
+    } as const;
+
+    expect(isCodexOAuthProfile(profile)).toBe(true);
+    expect(formatAuthLabel(profile)).toBe('Codex (OAuth)');
+  });
+});

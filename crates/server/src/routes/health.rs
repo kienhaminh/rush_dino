@@ -5,7 +5,6 @@ use crate::provider_runtime::provider_kind_label;
 use crate::state::AppState;
 
 pub async fn healthz(State(state): State<AppState>) -> Json<serde_json::Value> {
-
     let runtime = state.runtime_status();
     Json(json!({
         "status": if runtime.unavailable_error.is_some() { "degraded" } else { "ok" },

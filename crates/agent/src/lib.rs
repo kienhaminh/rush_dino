@@ -13,11 +13,11 @@ pub mod knowledge_graph;
 pub mod memory;
 pub mod memory_bootstrap;
 pub mod orchestrator;
-pub mod system_prompt;
 pub mod react_loop;
 pub mod runtime;
 pub mod skill_manager;
 pub mod system_broker;
+pub mod system_prompt;
 pub mod tool_registry;
 pub mod tools;
 pub mod usage_metrics_store;
@@ -30,11 +30,11 @@ pub use agent_progress::{
     AgentProgressAgentIdentity, AgentProgressCard, AgentProgressCardStatus, AgentProgressColumns,
     AgentProgressEvent, AgentProgressLane, AgentProgressSummary,
 };
-pub use engine::{AgentConfig, AgentEngine};
 pub use cron_manager::{
     CreateCronJobInput, CronJobRecord, CronJobState, CronManager, CronRunRecord, CronRunStatus,
     CronScheduleInput, CronTargetInput, UpdateCronJobInput,
 };
+pub use engine::{AgentConfig, AgentEngine};
 pub use job_manager::JobResult;
 pub use knowledge_graph::KnowledgeGraphAccess;
 pub use runtime::{

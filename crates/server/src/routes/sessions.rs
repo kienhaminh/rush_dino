@@ -181,7 +181,11 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
         .filter(|run| run.state == rushdino_agent::RunState::Queued)
         .count();
     let last_message = messages.last();
-    let latest_usage = engine.latest_usage_metric(conversation_id).await.ok().flatten();
+    let latest_usage = engine
+        .latest_usage_metric(conversation_id)
+        .await
+        .ok()
+        .flatten();
     let latest_run = runs.first();
     let model = latest_usage
         .as_ref()
@@ -209,7 +213,9 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
         .any(|run| run.state == rushdino_agent::RunState::Blocked)
     {
         "blocked"
-    } else if active_run_count > 0 || now - conversation.conversation.updated_at <= Duration::minutes(30) {
+    } else if active_run_count > 0
+        || now - conversation.conversation.updated_at <= Duration::minutes(30)
+    {
         "active"
     } else {
         "idle"

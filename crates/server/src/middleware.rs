@@ -16,8 +16,8 @@ use tower_http::cors::CorsLayer;
 use rushdino_common::AppConfig;
 use rushdino_security::auth_hmac::{verify_request, AuthError, NonceCache};
 
-use crate::state::AppState;
 use crate::routes::dashboard_auth::dashboard_session_cookie_from_headers;
+use crate::state::AppState;
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -283,7 +283,9 @@ mod tests {
     fn dashboard_auth_path_guard_skips_public_auth_routes() {
         assert!(!dashboard_auth_required_path("/healthz"));
         assert!(!dashboard_auth_required_path("/api/dashboard-auth/status"));
-        assert!(!dashboard_auth_required_path("/api/dashboard-auth/exchange"));
+        assert!(!dashboard_auth_required_path(
+            "/api/dashboard-auth/exchange"
+        ));
         assert!(!dashboard_auth_required_path("/api/dashboard-auth/logout"));
     }
 

@@ -1,12 +1,16 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 
 use rushdino_agent::{AgentConfig, AgentEngine, KnowledgeGraphAccess};
 use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
+use rushdino_auth::refresh_access_token;
 use rushdino_knowledge_graph::KnowledgeGraphService;
-use rushdino_providers::{types::ProviderConfig, ProviderService};
+use rushdino_providers::{
+    types::{OpenAIAuth, ProviderConfig},
+    ProviderService,
+};
 
 use crate::{
     knowledge_graph_bridge::KnowledgeGraphBridge,
@@ -59,13 +63,9 @@ pub fn validate_default_profile_execution(
         Provider::Ollama => Ok((profile.id.clone(), profile.provider_kind.clone())),
         Provider::OpenAI | Provider::Anthropic => {
             if profile.auth_method == AuthMethod::OAuth {
-                let token = secrets
-                    .and_then(|s| s.access_token.as_deref())
-                    .map(str::trim)
-                    .unwrap_or("");
-                if token.is_empty() {
+                if !has_openai_oauth_runtime_credentials(secrets) {
                     return Err(AppError::Provider(format!(
-                        "default profile '{}' requires an OAuth access token",
+                        "default profile '{}' requires OAuth login — no access token found",
                         profile.id
                     )));
                 }
@@ -205,7 +205,7 @@ fn require_default_profile(config: &AppConfig) -> Result<&ProviderProfile> {
 async fn provider_config_from_profile(
     _config: &AppConfig,
     credentials: &mut CredentialsConfig,
-    _credentials_path: &Path,
+    credentials_path: &Path,
     profile: &ProviderProfile,
 ) -> Result<ProviderConfig> {
     if profile.default_model.trim().is_empty() {
@@ -222,27 +222,23 @@ async fn provider_config_from_profile(
             api_key: None,
         }),
         Provider::OpenAI => {
-            let secrets = credentials.profiles.get(&profile.id);
-            let bearer = if profile.auth_method == AuthMethod::OAuth {
-                let token = secrets
-                    .and_then(|s| s.access_token.as_deref())
-                    .map(str::trim)
-                    .unwrap_or("");
-                if token.is_empty() {
-                    return Err(AppError::Provider(format!(
-                        "default profile '{}' requires an OAuth access token",
-                        profile.id
-                    )));
-                }
-                token.to_owned()
+            if profile.auth_method == AuthMethod::OAuth {
+                let access_token =
+                    resolve_openai_oauth_api_key(credentials, credentials_path, profile).await?;
+                Ok(ProviderConfig::OpenAI {
+                    auth: OpenAIAuth::Codex { access_token },
+                    model: profile.default_model.clone(),
+                    base_url: None,
+                })
             } else {
-                require_api_key(secrets, &profile.id)?
-            };
-            Ok(ProviderConfig::OpenAI {
-                api_key: bearer,
-                model: profile.default_model.clone(),
-                base_url: profile.base_url.clone(),
-            })
+                let api_key =
+                    require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+                Ok(ProviderConfig::OpenAI {
+                    auth: OpenAIAuth::ApiKey { api_key },
+                    model: profile.default_model.clone(),
+                    base_url: profile.base_url.clone(),
+                })
+            }
         }
         Provider::Anthropic => {
             let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
@@ -268,7 +264,74 @@ fn require_api_key(secrets: Option<&ProfileSecrets>, profile_id: &str) -> Result
     Ok(api_key.to_owned())
 }
 
+fn has_openai_oauth_runtime_credentials(secrets: Option<&ProfileSecrets>) -> bool {
+    secrets
+        .and_then(|secret| secret.access_token.as_deref())
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty())
+}
 
+async fn resolve_openai_oauth_api_key(
+    credentials: &mut CredentialsConfig,
+    credentials_path: &Path,
+    profile: &ProviderProfile,
+) -> Result<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let secrets = credentials.profiles.get(&profile.id);
+
+    let access_token = secrets
+        .and_then(|s| s.access_token.as_deref())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_owned);
+    let expires_at = secrets.and_then(|s| s.token_expires_at);
+    let is_expired = expires_at.is_some_and(|exp| exp <= now);
+
+    if let Some(token) = access_token {
+        if !is_expired {
+            return Ok(token);
+        }
+
+        let refresh_token = secrets
+            .and_then(|s| s.refresh_token.as_deref())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned);
+
+        if let Some(ref_token) = refresh_token {
+            let client = reqwest::Client::new();
+            match refresh_access_token(&client, &ref_token).await {
+                Ok(new_tokens) => {
+                    let entry = credentials
+                        .profiles
+                        .entry(profile.id.clone())
+                        .or_default();
+                    entry.access_token = Some(new_tokens.access_token.clone());
+                    entry.refresh_token = Some(new_tokens.refresh_token);
+                    entry.token_expires_at = Some(new_tokens.expires_at);
+                    credentials.save_to_path(credentials_path)?;
+                    return Ok(new_tokens.access_token);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "OAuth token refresh failed for profile '{}': {err}; falling back to cached access token",
+                        profile.id
+                    );
+                    return Ok(token);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Provider(format!(
+        "default profile '{}' is connected with OAuth but no valid credentials were found — please log in again",
+        profile.id
+    )))
+}
 
 fn normalize_ollama_base_url(base_url: Option<&str>) -> String {
     let raw = base_url
@@ -298,11 +361,10 @@ mod tests {
         config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
         AppConfig, CredentialsConfig,
     };
-    use rushdino_providers::types::ProviderConfig;
+    use rushdino_providers::types::{OpenAIAuth, ProviderConfig};
 
     use super::{
-        default_profile_model, resolve_default_profile_provider,
-        validate_default_profile_execution,
+        default_profile_model, resolve_default_profile_provider, validate_default_profile_execution,
     };
 
     fn temp_credentials_path() -> PathBuf {
@@ -320,6 +382,14 @@ mod tests {
             auth_method: AuthMethod::ApiKey,
             default_model: "gpt-4.1-mini".to_owned(),
             base_url: Some("https://api.openai.com/v1".to_owned()),
+        }
+    }
+
+    fn openai_oauth_profile() -> ProviderProfile {
+        ProviderProfile {
+            auth_method: AuthMethod::OAuth,
+            default_model: "gpt-5.3-codex".to_owned(),
+            ..openai_profile()
         }
     }
 
@@ -348,7 +418,7 @@ mod tests {
 
         match resolved.provider_config {
             ProviderConfig::OpenAI {
-                api_key,
+                auth: OpenAIAuth::ApiKey { api_key },
                 model,
                 base_url,
             } => {
@@ -414,4 +484,58 @@ mod tests {
         let _ = fs::remove_file(temp_path);
     }
 
+    #[tokio::test]
+    async fn resolves_openai_oauth_profile_from_stored_access_token() {
+        let mut config = AppConfig::default();
+        config.default_profile_id = Some("primary".to_owned());
+        config.profiles = vec![openai_oauth_profile()];
+
+        let mut credentials = CredentialsConfig::default();
+        credentials.profiles.insert(
+            "primary".to_owned(),
+            ProfileSecrets {
+                access_token: Some("stored-access-token".to_owned()),
+                refresh_token: Some("stored-refresh-token".to_owned()),
+                ..ProfileSecrets::default()
+            },
+        );
+        let temp_path = temp_credentials_path();
+
+        let resolved =
+            resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
+                .await
+                .expect("oauth profile should resolve from stored access token");
+
+        match resolved.provider_config {
+            ProviderConfig::OpenAI {
+                auth: OpenAIAuth::Codex { access_token },
+                model,
+                ..
+            } => {
+                assert_eq!(access_token, "stored-access-token");
+                assert_eq!(model, "gpt-5.3-codex");
+            }
+            other => panic!("unexpected config: {other:?}"),
+        }
+
+        let _ = fs::remove_file(temp_path);
+    }
+
+    #[tokio::test]
+    async fn rejects_oauth_profile_with_no_stored_credentials() {
+        let mut config = AppConfig::default();
+        config.default_profile_id = Some("primary".to_owned());
+        config.profiles = vec![openai_oauth_profile()];
+
+        let mut credentials = CredentialsConfig::default();
+        let temp_path = temp_credentials_path();
+
+        let err =
+            resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
+                .await
+                .expect_err("oauth profile with no credentials must fail");
+        assert!(err.to_string().contains("please log in again"));
+
+        let _ = fs::remove_file(temp_path);
+    }
 }

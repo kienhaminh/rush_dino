@@ -292,15 +292,13 @@ fn markdown_to_html(markdown: &str) -> String {
                 Tag::List(start) => {
                     list_stack.push(start);
                 }
-                Tag::Item => {
-                    match list_stack.last_mut() {
-                        Some(Some(num)) => {
-                            html.push_str(&format!("{}. ", num));
-                            *num += 1;
-                        }
-                        Some(None) | None => html.push_str("• "),
+                Tag::Item => match list_stack.last_mut() {
+                    Some(Some(num)) => {
+                        html.push_str(&format!("{}. ", num));
+                        *num += 1;
                     }
-                }
+                    Some(None) | None => html.push_str("• "),
+                },
                 Tag::Strong => html.push_str("<b>"),
                 Tag::Emphasis => html.push_str("<i>"),
                 Tag::Strikethrough => html.push_str("<s>"),

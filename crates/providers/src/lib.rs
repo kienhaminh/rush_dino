@@ -35,11 +35,7 @@ impl ProviderService {
                 api_key.clone(),
                 Some("ollama".to_owned()),
             ))),
-            ProviderConfig::OpenAI {
-                base_url,
-                model,
-                api_key,
-            } => {
+            ProviderConfig::OpenAI { auth, model, base_url } => {
                 let base_url = base_url
                     .as_deref()
                     .map(str::trim)
@@ -49,7 +45,7 @@ impl ProviderService {
                 Ok(Self::OpenAI(OpenAIHybridProvider::new(
                     base_url,
                     model.clone(),
-                    Some(api_key.clone()),
+                    auth.clone(),
                 )))
             }
             ProviderConfig::Anthropic { model, api_key } => Ok(Self::Anthropic(
@@ -92,8 +88,11 @@ impl ProviderService {
     pub async fn stream_chat(&self, request: ChatRequest) -> Result<mpsc::Receiver<ChatChunk>> {
         match self {
             Self::Ollama(p) => {
-                p.stream_chat(request, openai::completions::CompletionsStreamOptions::default())
-                    .await
+                p.stream_chat(
+                    request,
+                    openai::completions::CompletionsStreamOptions::default(),
+                )
+                .await
             }
             Self::OpenAI(p) => p.stream_chat(request).await,
             Self::Anthropic(p) => p.stream_chat(request).await,

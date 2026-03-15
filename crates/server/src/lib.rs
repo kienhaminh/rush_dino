@@ -21,8 +21,8 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
-use tokio::net::TcpListener;
 use state::AppState;
+use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
 use rushdino_agent::AgentRuntime;
@@ -35,8 +35,8 @@ use rushdino_security::rate_limit::EndpointLimiters;
 use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
-    cron_runtime::spawn_cron_runtime,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
+    cron_runtime::spawn_cron_runtime,
     middleware::{
         cors_layer, dashboard_auth_middleware, hmac_auth_middleware, rate_limit_middleware,
         HmacAuthState,
@@ -50,7 +50,7 @@ use crate::{
 
 pub async fn run_server() -> Result<()> {
     init::ensure_rushdino_dir()?;
-    
+
     let home = init::default_home_dir();
     let config_path = home.join("config.toml");
     let credentials_path = home.join("credentials.toml");
@@ -80,10 +80,8 @@ pub async fn run_server() -> Result<()> {
     let gate = ApprovalGate::new();
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
     runtime.reconcile_incomplete_runs().await?;
-    let system_broker = Arc::new(LocalSystemBroker::new(
-        gate.clone(),
-        runtime.clone(),
-    )) as rushdino_agent::SharedSystemBroker;
+    let system_broker = Arc::new(LocalSystemBroker::new(gate.clone(), runtime.clone()))
+        as rushdino_agent::SharedSystemBroker;
     let runtime_state = Arc::new(RuntimeState::new(
         config.clone(),
         pool.clone(),
@@ -121,8 +119,9 @@ pub async fn run_server() -> Result<()> {
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
-    let dashboard_auth =
-        Arc::new(rushdino_common::dashboard_auth::DashboardAuthService::new((*pool).clone()));
+    let dashboard_auth = Arc::new(rushdino_common::dashboard_auth::DashboardAuthService::new(
+        (*pool).clone(),
+    ));
     let ingress_policy = Arc::new(ChannelPairingIngressPolicy::new(
         config_path.clone(),
         channel_pairing.clone(),
@@ -372,8 +371,14 @@ pub async fn run_server() -> Result<()> {
             "/api/sessions/:id/messages",
             post(routes::sessions::send_session_message),
         )
-        .route("/api/sessions/:id/reset", post(routes::sessions::reset_session))
-        .route("/api/sessions/:id/archive", post(routes::sessions::archive_session))
+        .route(
+            "/api/sessions/:id/reset",
+            post(routes::sessions::reset_session),
+        )
+        .route(
+            "/api/sessions/:id/archive",
+            post(routes::sessions::archive_session),
+        )
         .route(
             "/api/sessions/:id/runs",
             get(routes::runs::list_session_runs),
@@ -384,7 +389,9 @@ pub async fn run_server() -> Result<()> {
         )
         .route(
             "/api/cron/:id",
-            get(routes::cron::get_cron_job).patch(routes::cron::update_cron_job).delete(routes::cron::delete_cron_job),
+            get(routes::cron::get_cron_job)
+                .patch(routes::cron::update_cron_job)
+                .delete(routes::cron::delete_cron_job),
         )
         .route("/api/cron/:id/pause", post(routes::cron::pause_cron_job))
         .route("/api/cron/:id/resume", post(routes::cron::resume_cron_job))
@@ -542,6 +549,10 @@ pub async fn run_server() -> Result<()> {
         .route(
             "/api/providers/:profile_id/models",
             get(routes::providers::list_provider_models),
+        )
+        .route(
+            "/api/providers/:profile_id/connect-oauth",
+            post(routes::providers::connect_profile_oauth),
         )
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(

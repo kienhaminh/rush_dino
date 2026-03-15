@@ -7,9 +7,11 @@ use crate::{
     agent_manager::AgentManager,
     engine::AgentConfig,
     memory::MemoryManager,
-    memory_bootstrap::{build_bootstrap_context, build_truncation_warning_lines, clamp_to_char_boundary},
+    memory_bootstrap::{
+        build_bootstrap_context, build_truncation_warning_lines, clamp_to_char_boundary,
+    },
     skill_manager::SkillManager,
-    system_prompt::{AgentEntry, SkillEntry, SystemPromptParams, build_system_prompt},
+    system_prompt::{build_system_prompt, AgentEntry, SkillEntry, SystemPromptParams},
     tool_registry::ToolRegistry,
 };
 

@@ -24,8 +24,6 @@ impl WorkflowManager {
     }
 
     pub async fn list_workflows(&self) -> Result<Vec<WorkflowListItem>> {
-
-
         let rows = sqlx::query(
             r#"
             SELECT
@@ -51,8 +49,6 @@ impl WorkflowManager {
     }
 
     pub async fn get_workflow(&self, id: &str) -> Result<WorkflowDetail> {
-
-
         let workflow_row = sqlx::query(
             r#"
             SELECT id, name, description, source, status, created_by, created_at, updated_at
@@ -100,8 +96,6 @@ impl WorkflowManager {
         source: WorkflowSource,
         created_by: &str,
     ) -> Result<WorkflowDetail> {
-
-
         validate_workflow_name(&payload.name)?;
         validate_steps(&payload.steps)?;
 
@@ -165,8 +159,6 @@ impl WorkflowManager {
         id: &str,
         payload: UpdateWorkflowInput,
     ) -> Result<WorkflowDetail> {
-
-
         let existing = self.get_workflow(id).await?;
 
         if let Some(name) = payload.name.as_ref() {
@@ -243,8 +235,6 @@ impl WorkflowManager {
     }
 
     pub async fn delete_workflow(&self, id: &str) -> Result<()> {
-
-
         let result = sqlx::query("DELETE FROM workflows WHERE id = ?1")
             .bind(id)
             .execute(self.pool.as_ref())
@@ -263,8 +253,6 @@ impl WorkflowManager {
         triggered_by: &str,
         run_input: &str,
     ) -> Result<WorkflowRunStartResponse> {
-
-
         let now = Utc::now().to_rfc3339();
         let run_id = Uuid::new_v4().to_string();
 
@@ -358,8 +346,6 @@ impl WorkflowManager {
         workflow_id: &str,
         limit: i64,
     ) -> Result<Vec<WorkflowRunListItem>> {
-
-
         let bounded_limit = limit.clamp(1, 100);
 
         let rows = sqlx::query(
@@ -380,8 +366,6 @@ impl WorkflowManager {
     }
 
     pub async fn get_run_detail(&self, run_id: &str) -> Result<WorkflowRunDetail> {
-
-
         let run_row = sqlx::query(
             r#"
             SELECT id, workflow_id, status, triggered_by, input, error, started_at, completed_at
@@ -427,8 +411,6 @@ impl WorkflowManager {
         &self,
         run_id: &str,
     ) -> Result<WorkflowRunExecutionContext> {
-
-
         let run_row = sqlx::query("SELECT id, workflow_id, input FROM workflow_runs WHERE id = ?1")
             .bind(run_id)
             .fetch_optional(self.pool.as_ref())
@@ -479,9 +461,7 @@ impl WorkflowManager {
                 agent_id: row.get::<String, _>("agent_id"),
                 depends_on,
                 max_retries: u8::try_from(row.get::<i64, _>("max_retries")).unwrap_or(0),
-                timeout_secs: row
-                    .get::<Option<i64>, _>("timeout_secs")
-                    .map(|t| t as u64),
+                timeout_secs: row.get::<Option<i64>, _>("timeout_secs").map(|t| t as u64),
                 condition: row.get::<Option<String>, _>("condition"),
                 retry_count: row.get::<i64, _>("retry_count"),
             });
@@ -496,8 +476,6 @@ impl WorkflowManager {
     }
 
     pub async fn mark_run_running(&self, run_id: &str) -> Result<()> {
-
-
         sqlx::query("UPDATE workflow_runs SET status = ?1 WHERE id = ?2")
             .bind(WorkflowRunStatus::Running.as_str())
             .bind(run_id)
@@ -507,8 +485,6 @@ impl WorkflowManager {
     }
 
     pub async fn mark_run_succeeded(&self, run_id: &str) -> Result<()> {
-
-
         let now = Utc::now().to_rfc3339();
         sqlx::query("UPDATE workflow_runs SET status = ?1, completed_at = ?2 WHERE id = ?3")
             .bind(WorkflowRunStatus::Succeeded.as_str())
@@ -520,8 +496,6 @@ impl WorkflowManager {
     }
 
     pub async fn mark_run_failed(&self, run_id: &str, error: &str) -> Result<()> {
-
-
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             "UPDATE workflow_runs SET status = ?1, error = ?2, completed_at = ?3 WHERE id = ?4",
@@ -536,8 +510,6 @@ impl WorkflowManager {
     }
 
     pub async fn mark_run_step_running(&self, run_step_id: &str, input: &str) -> Result<()> {
-
-
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             "UPDATE workflow_run_steps SET status = ?1, input = ?2, started_at = ?3 WHERE id = ?4",
@@ -557,8 +529,6 @@ impl WorkflowManager {
         output: &str,
         conversation_id: &str,
     ) -> Result<()> {
-
-
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             r#"
@@ -583,8 +553,6 @@ impl WorkflowManager {
         error: &str,
         conversation_id: &str,
     ) -> Result<()> {
-
-
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             r#"
@@ -604,23 +572,17 @@ impl WorkflowManager {
     }
 
     pub async fn mark_run_step_skipped(&self, run_step_id: &str) -> Result<()> {
-
-
         let now = Utc::now().to_rfc3339();
-        sqlx::query(
-            "UPDATE workflow_run_steps SET status = ?1, completed_at = ?2 WHERE id = ?3",
-        )
-        .bind(WorkflowRunStepStatus::Skipped.as_str())
-        .bind(&now)
-        .bind(run_step_id)
-        .execute(self.pool.as_ref())
-        .await?;
+        sqlx::query("UPDATE workflow_run_steps SET status = ?1, completed_at = ?2 WHERE id = ?3")
+            .bind(WorkflowRunStepStatus::Skipped.as_str())
+            .bind(&now)
+            .bind(run_step_id)
+            .execute(self.pool.as_ref())
+            .await?;
         Ok(())
     }
 
     pub async fn increment_run_step_retry(&self, run_step_id: &str) -> Result<()> {
-
-
         sqlx::query(
             "UPDATE workflow_run_steps SET retry_count = retry_count + 1, status = ?1 WHERE id = ?2",
         )
@@ -630,7 +592,6 @@ impl WorkflowManager {
         .await?;
         Ok(())
     }
-
 }
 
 fn validate_workflow_name(name: &str) -> Result<()> {

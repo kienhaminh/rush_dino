@@ -24,13 +24,10 @@ pub fn get_static_models_for_auth(kind: Provider, auth: &AuthMethod) -> Vec<Mode
 /// Returns the context window (in tokens) for a known model ID.
 /// Returns `None` for models that are not in the static catalog.
 pub fn context_window_for_model(model_id: &str) -> Option<u32> {
-    let all_models: Vec<ModelInfo> = [
-        Provider::OpenAI,
-        Provider::Anthropic,
-    ]
-    .into_iter()
-    .flat_map(get_static_models)
-    .collect();
+    let all_models: Vec<ModelInfo> = [Provider::OpenAI, Provider::Anthropic]
+        .into_iter()
+        .flat_map(get_static_models)
+        .collect();
 
     all_models
         .into_iter()
@@ -135,7 +132,9 @@ pub fn get_static_models(kind: Provider) -> Vec<ModelInfo> {
             ModelInfo {
                 id: "gpt-5.1-codex-max".into(),
                 name: Some("GPT-5.1 Codex Max".into()),
-                description: Some("High-capacity Codex model — requires Codex (OAuth) authentication".into()),
+                description: Some(
+                    "High-capacity Codex model — requires Codex (OAuth) authentication".into(),
+                ),
                 context_window: Some(256_000),
                 is_reasoning: Some(false),
             },

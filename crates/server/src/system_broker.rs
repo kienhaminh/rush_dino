@@ -11,7 +11,9 @@ use rushdino_agent::{
 };
 use rushdino_common::{init, AppError, Result};
 
-use rushdino_security::sandbox::{apply_subprocess_isolation, platform_supports_sandbox, SandboxPolicy};
+use rushdino_security::sandbox::{
+    apply_subprocess_isolation, platform_supports_sandbox, SandboxPolicy,
+};
 
 use crate::approval_gate::ApprovalGate;
 
@@ -35,11 +37,10 @@ impl LocalSystemBroker {
 
         // The agent has unrestricted access to its own workspace.
         let rushdino_home = init::canonical_home_dir();
-        let command_targets_rushdino = request.command.contains(
-            rushdino_home
-                .to_str()
-                .unwrap_or(".rushdino"),
-        ) || request.command.contains(".rushdino/")
+        let command_targets_rushdino = request
+            .command
+            .contains(rushdino_home.to_str().unwrap_or(".rushdino"))
+            || request.command.contains(".rushdino/")
             || request.command.contains("/.rushdino");
         if cwd.starts_with(&rushdino_home)
             || cwd.components().any(|c| c.as_os_str() == ".rushdino")
@@ -218,8 +219,7 @@ mod tests {
                 .expect("in-memory sqlite should connect"),
         );
         let runtime = Arc::new(AgentRuntime::new(pool));
-        let broker =
-            LocalSystemBroker::new(gate.clone(), runtime);
+        let broker = LocalSystemBroker::new(gate.clone(), runtime);
         let mut rx = gate.register_session("session-1").await;
 
         let approval_task = tokio::spawn(async move {

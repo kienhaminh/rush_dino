@@ -3,8 +3,8 @@ use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 
 use rushdino_agent::{RunCounts, RunListFilter};
-use rushdino_providers::types::ThinkingLevel;
 use rushdino_common::{AppConfig, CredentialsConfig, Result};
+use rushdino_providers::types::ThinkingLevel;
 
 use crate::provider_runtime::{provider_kind_label, validate_default_profile_execution};
 use crate::state::AppState;
@@ -555,7 +555,11 @@ pub async fn patch_thinking_level(
     State(state): State<crate::state::AppState>,
     axum::Json(body): axum::Json<PatchThinkingLevelRequest>,
 ) -> Result<axum::Json<PatchThinkingLevelResponse>> {
-    *state.runtime.thinking_level_override.write().unwrap_or_else(|e| e.into_inner()) = Some(body.level.clone());
+    *state
+        .runtime
+        .thinking_level_override
+        .write()
+        .unwrap_or_else(|e| e.into_inner()) = Some(body.level.clone());
     Ok(axum::Json(PatchThinkingLevelResponse { level: body.level }))
 }
 

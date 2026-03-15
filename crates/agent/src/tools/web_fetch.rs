@@ -92,8 +92,10 @@ impl Tool for WebFetchTool {
             .max(100)
             .min(self.max_chars);
 
-        let url = validate_url(url_str, &self.allowed_external_hosts)
-            .map_err(|e: ValidationError| AppError::Validation(format!("web_fetch URL blocked: {e}")))?;
+        let url =
+            validate_url(url_str, &self.allowed_external_hosts).map_err(|e: ValidationError| {
+                AppError::Validation(format!("web_fetch URL blocked: {e}"))
+            })?;
 
         if url.scheme() != "http" && url.scheme() != "https" {
             return Err(AppError::Validation("URL must be http or https".to_owned()));
@@ -111,7 +113,10 @@ impl Tool for WebFetchTool {
                 "User-Agent",
                 "Mozilla/5.0 (compatible; RushDino/1.0; +https://github.com/rushdino)",
             )
-            .header("Accept", "text/html, text/plain, application/json;q=0.9, */*;q=0.1")
+            .header(
+                "Accept",
+                "text/html, text/plain, application/json;q=0.9, */*;q=0.1",
+            )
             .send()
             .await
             .map_err(|e| AppError::Agent(format!("web fetch failed: {e}")))?;
@@ -145,8 +150,8 @@ impl Tool for WebFetchTool {
 
         if content_type.contains("application/json") {
             if let Ok(parsed) = serde_json::from_str::<Value>(&extracted) {
-                extracted = serde_json::to_string_pretty(&parsed)
-                    .unwrap_or_else(|_| extracted.clone());
+                extracted =
+                    serde_json::to_string_pretty(&parsed).unwrap_or_else(|_| extracted.clone());
             }
         }
 
@@ -158,7 +163,11 @@ impl Tool for WebFetchTool {
                 .last()
                 .map(|(i, _)| i)
                 .unwrap_or(0);
-            extracted = format!("{}\n…(truncated, {} chars total)…", &extracted[..boundary], extracted.len());
+            extracted = format!(
+                "{}\n…(truncated, {} chars total)…",
+                &extracted[..boundary],
+                extracted.len()
+            );
         }
 
         let result = json!({
@@ -170,7 +179,6 @@ impl Tool for WebFetchTool {
             "text": extracted
         });
 
-        serde_json::to_string_pretty(&result)
-            .map_err(|e| AppError::Agent(e.to_string()))
+        serde_json::to_string_pretty(&result).map_err(|e| AppError::Agent(e.to_string()))
     }
 }

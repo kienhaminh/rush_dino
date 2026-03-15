@@ -2,8 +2,8 @@
 //! Ported from OpenClaw's memory_search tool (simplified; uses substring matching
 //! since we don't have an embedding backend here).
 
-use std::{fs, path::PathBuf};
 use std::sync::Arc;
+use std::{fs, path::PathBuf};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -29,7 +29,9 @@ impl MemorySearchTool {
 /// Walk a directory and collect all `.md` file paths.
 fn collect_md_files(dir: &PathBuf) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    let Ok(rd) = fs::read_dir(dir) else { return files; };
+    let Ok(rd) = fs::read_dir(dir) else {
+        return files;
+    };
     for entry in rd.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -138,7 +140,9 @@ impl Tool for MemorySearchTool {
         let mut all_hits: Vec<SearchHit> = Vec::new();
 
         for file_path in &all_files {
-            let Ok(content) = fs::read_to_string(file_path) else { continue; };
+            let Ok(content) = fs::read_to_string(file_path) else {
+                continue;
+            };
             // Use relative path for display
             let display = file_path
                 .strip_prefix(&root)
@@ -171,7 +175,6 @@ impl Tool for MemorySearchTool {
             "results": results
         });
 
-        serde_json::to_string_pretty(&result)
-            .map_err(|e| AppError::Agent(e.to_string()))
+        serde_json::to_string_pretty(&result).map_err(|e| AppError::Agent(e.to_string()))
     }
 }

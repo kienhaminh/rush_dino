@@ -67,8 +67,10 @@ fn build_skills_section(skills: &[SkillEntry]) -> Vec<String> {
     let mut lines = vec![
         "## Skills (mandatory)".to_owned(),
         "Before replying: scan available skills below.".to_owned(),
-        "- If exactly one skill clearly applies: read its file with `read_skill`, then follow it.".to_owned(),
-        "- If multiple could apply: choose the most specific one, then read and follow it.".to_owned(),
+        "- If exactly one skill clearly applies: read its file with `read_skill`, then follow it."
+            .to_owned(),
+        "- If multiple could apply: choose the most specific one, then read and follow it."
+            .to_owned(),
         "- If none clearly apply: do not read any skill.".to_owned(),
         String::new(),
     ];
@@ -287,7 +289,8 @@ mod tests {
             truncated: true,
             original_len: 1000,
         }];
-        params.truncation_warnings = vec!["SOUL.md: 1000 raw -> 100 injected (~90% removed).".to_owned()];
+        params.truncation_warnings =
+            vec!["SOUL.md: 1000 raw -> 100 injected (~90% removed).".to_owned()];
         let prompt = build_system_prompt(params);
         assert!(prompt.contains("Bootstrap truncation warning"));
         assert!(prompt.contains("SOUL.md: 1000 raw"));

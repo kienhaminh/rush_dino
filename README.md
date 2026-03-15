@@ -25,6 +25,19 @@ RushDino is an **open-source local AI assistant platform** written in Rust, desi
    - `rushdino start`
 5. Open [http://localhost:28847](http://localhost:28847)
 
+## Release
+
+- Build a stable release: `./scripts/release.sh patch --latest`
+- Build a beta release: `./scripts/release.sh patch --beta`
+- Full release guidelines: [docs/deployment-guide.md](./docs/deployment-guide.md)
+
+## Upgrade and Downgrade
+
+- Upgrade to latest stable: `rushdino upgrade`
+- Upgrade to latest beta: `rushdino upgrade --beta`
+- Upgrade to a pinned release: `rushdino upgrade --version 1.2.3`
+- Downgrade to a pinned release: `rushdino downgrade --version 1.2.3`
+
 ## CLI
 
 - `rushdino init`
@@ -33,6 +46,7 @@ RushDino is an **open-source local AI assistant platform** written in Rust, desi
 - `rushdino restart`
 - `rushdino status`
 - `rushdino upgrade`
+- `rushdino downgrade --version <version>`
 
 ## License
 

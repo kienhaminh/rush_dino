@@ -141,9 +141,7 @@ impl ResponsesProvider {
             reasoning_effort,
             ..Default::default()
         };
-        let mut rx = self
-            .stream_chat(request, stream_opts)
-            .await?;
+        let mut rx = self.stream_chat(request, stream_opts).await?;
         let mut content = String::new();
         let mut tool_calls = Vec::new();
 
@@ -346,5 +344,4 @@ impl ResponsesProvider {
 
         Ok(rx)
     }
-
 }

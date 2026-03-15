@@ -156,8 +156,7 @@ mod tests {
         execution_runtime_reload_required_from_config,
         execution_runtime_reload_required_from_credentials,
         gateway_runtime_reload_required_from_config,
-        gateway_runtime_reload_required_from_credentials,
-        validate_security_config,
+        gateway_runtime_reload_required_from_credentials, validate_security_config,
     };
 
     #[test]
@@ -289,7 +288,9 @@ fn execution_runtime_reload_required_from_credentials(
     current: &CredentialsConfig,
     updated: &CredentialsConfig,
 ) -> bool {
-    current.profiles != updated.profiles || current.brave_api_key != updated.brave_api_key
+    current.profiles != updated.profiles
+        || current.brave_api_key != updated.brave_api_key
+        || current.gemini_api_key != updated.gemini_api_key
 }
 
 async fn reconcile_gateway_adapters(

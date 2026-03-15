@@ -141,11 +141,12 @@ impl ConversationManager {
 
     pub async fn archive_conversation(&self, id: &str) -> Result<ConversationRecord> {
         let archived_at = Utc::now().to_rfc3339();
-        let result = sqlx::query("UPDATE conversations SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
-            .bind(&archived_at)
-            .bind(id)
-            .execute(self.pool.as_ref())
-            .await?;
+        let result =
+            sqlx::query("UPDATE conversations SET archived_at = ?1, updated_at = ?1 WHERE id = ?2")
+                .bind(&archived_at)
+                .bind(id)
+                .execute(self.pool.as_ref())
+                .await?;
         if result.rows_affected() == 0 {
             return Err(AppError::NotFound(format!("conversation {id} not found")));
         }

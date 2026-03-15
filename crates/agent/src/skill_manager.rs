@@ -66,8 +66,7 @@ impl SkillManager {
         }
 
         Ok(Skill {
-            name: name
-                .ok_or_else(|| AppError::Validation("SKILL.md missing 'name'".into()))?,
+            name: name.ok_or_else(|| AppError::Validation("SKILL.md missing 'name'".into()))?,
             description: description
                 .ok_or_else(|| AppError::Validation("SKILL.md missing 'description'".into()))?,
             instructions: body,

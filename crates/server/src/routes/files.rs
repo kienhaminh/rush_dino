@@ -133,7 +133,7 @@ fn resolve_managed_path(data_dir: &Path, relative_path: &str) -> Result<PathBuf>
             _ => {
                 return Err(AppError::Validation(format!(
                     "path must stay within managed roots: {relative_path}"
-                )))
+                )));
             }
         }
     }

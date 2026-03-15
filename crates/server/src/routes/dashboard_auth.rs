@@ -81,7 +81,11 @@ pub async fn exchange(
             .into_response();
     }
 
-    match state.dashboard_auth.exchange_code(payload.code.trim()).await {
+    match state
+        .dashboard_auth
+        .exchange_code(payload.code.trim())
+        .await
+    {
         Ok(session) => {
             let mut response = Json(DashboardAuthStatusResponse {
                 enabled: true,

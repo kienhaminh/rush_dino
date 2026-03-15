@@ -15,6 +15,7 @@ type CredentialKey = Exclude<keyof CredentialsView, 'profiles'>;
  */
 const FIELDS: { key: CredentialKey; label: string; placeholder: string }[] = [
   { key: 'brave_api_key', label: 'Brave Search API Key', placeholder: 'BSA...' },
+  { key: 'gemini_api_key', label: 'Gemini API Key', placeholder: 'AIza...' },
   { key: 'telegram_bot_token', label: 'Telegram Bot Token', placeholder: '123456:ABC...' },
   { key: 'discord_bot_token', label: 'Discord Bot Token', placeholder: 'Bot token' },
   { key: 'slack_bot_token', label: 'Slack Bot Token', placeholder: 'xoxb-...' },
