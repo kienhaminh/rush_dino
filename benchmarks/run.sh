@@ -37,23 +37,31 @@ start_ms() {
   fi
 }
 
+# Detect OS for memory unit handling (Linux: rss/vsz in KB; macOS: rss in KB, vsz in bytes)
+PS_VSZ_BYTES=false
+case "$(uname -s)" in
+  Darwin) PS_VSZ_BYTES=true ;;
+esac
+
 # Reads RSS (resident set size) in KB for a given PID. Returns 0 on failure.
+# Linux and macOS both report RSS in KB. Keep trailing newline so sample files get one value per line.
 rss_kb() {
   local pid="$1"
-  ps -o rss= -p "${pid}" 2>/dev/null | tr -d ' ' || echo 0
+  local v
+  v=$(ps -o rss= -p "${pid}" 2>/dev/null | tr -d ' \r')
+  echo "${v:-0}"
 }
 
-# Reads VSZ (virtual memory size) in KB for a given PID. Returns 0 on failure.
-vsz_kb() {
+# Reads VSZ (virtual memory size). Returns raw value; unit is KB on Linux, bytes on macOS.
+vsz_raw() {
   local pid="$1"
-  ps -o vsz= -p "${pid}" 2>/dev/null | tr -d ' ' || echo 0
+  ps -o vsz= -p "${pid}" 2>/dev/null | tr -d ' \r' || echo 0
 }
 
 kb_to_mb() {
   python3 -c "print(f'{int(\"$1\")/1024:.1f}')"
 }
 
-# macOS: ps -o vsz= returns **bytes** (not KB like rss=)
 bytes_to_mb() {
   python3 -c "print(f'{int(\"$1\")/1048576:.1f}')"
 }
@@ -107,10 +115,11 @@ stop_rss_sampler() {
 }
 
 # Compute peak RSS from a sample file (one KB value per line).
+# Only consider numeric lines; cap at 10M KB (~10 GB) to ignore macOS ps quirks.
 peak_rss_from_file() {
   local file="$1"
   if [[ ! -s "${file}" ]]; then echo 0; return; fi
-  sort -n "${file}" | tail -1
+  awk '$1 ~ /^[0-9]+$/ && $1 <= 10000000 { print $1 }' "${file}" | sort -n | tail -1 || echo 0
 }
 
 # compute p50/p95/p99 from N curl requests; prints "p50=Xms p95=Xms p99=Xms"
@@ -227,11 +236,19 @@ else
     RUSHDINO_BOOT="$(( T1 - T0 ))ms"
     info "RushDino boot time: ${RUSHDINO_BOOT}"
 
+    # Resolve the PID that holds the port (more reliable than $! when process tree differs)
+    MEM_PID=$(lsof -i ":${RUSHDINO_PORT}" -t 2>/dev/null | head -1)
+    [[ -z "${MEM_PID}" ]] && MEM_PID="${RDINO_PID}"
+
     # ---- Section D: Idle memory (snapshot right after boot) -----------------
-    IDLE_RSS_KB=$(rss_kb "${RDINO_PID}")
-    IDLE_VSZ_BYTES=$(vsz_kb "${RDINO_PID}")   # bytes on macOS
+    IDLE_RSS_KB=$(rss_kb "${MEM_PID}")
+    IDLE_VSZ_RAW=$(vsz_raw "${MEM_PID}")
     RUSHDINO_IDLE_RSS_MB=$(kb_to_mb "${IDLE_RSS_KB}")
-    RUSHDINO_IDLE_VSZ_MB=$(bytes_to_mb "${IDLE_VSZ_BYTES}")
+    if [[ "${PS_VSZ_BYTES}" == true ]]; then
+      RUSHDINO_IDLE_VSZ_MB=$(bytes_to_mb "${IDLE_VSZ_RAW}")
+    else
+      RUSHDINO_IDLE_VSZ_MB=$(kb_to_mb "${IDLE_VSZ_RAW}")
+    fi
     info "RushDino idle RSS: ${RUSHDINO_IDLE_RSS_MB} MB  |  VSZ: ${RUSHDINO_IDLE_VSZ_MB} MB"
   else
     warn "RushDino did not become ready within ${BOOT_TIMEOUT_S}s."
@@ -249,12 +266,15 @@ OPENCLAW_RSS="N/A (CLI tool)"
 # ---- Section E: HTTP latency + peak RSS (RushDino) --------------------------
 
 RDINO_LATENCY=""
+# Use MEM_PID for RSS sampling when we started the server; else fall back to RDINO_PID or lsof
 if curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1 && [[ -n "${RDINO_PID}" ]]; then
   info "Measuring HTTP latency (${LATENCY_SAMPLES} requests to ${RUSHDINO_HEALTH})..."
+  [[ -z "${MEM_PID:-}" ]] && MEM_PID=$(lsof -i ":${RUSHDINO_PORT}" -t 2>/dev/null | head -1) || true
+  [[ -z "${MEM_PID:-}" ]] && MEM_PID="${RDINO_PID}"
 
   # Start background RSS sampler during the load test
   > "${RSS_SAMPLE_FILE}"
-  start_rss_sampler "${RDINO_PID}" "${RSS_SAMPLE_FILE}" "${RSS_SAMPLE_INTERVAL}"
+  start_rss_sampler "${MEM_PID}" "${RSS_SAMPLE_FILE}" "${RSS_SAMPLE_INTERVAL}"
 
   RDINO_LATENCY=$(measure_latency "${RUSHDINO_HEALTH}" "${LATENCY_SAMPLES}")
 

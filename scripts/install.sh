@@ -45,9 +45,28 @@ echo -e "${DIM}========================================${NC}"
 # ---------------------------------------------------------------------------
 step "Step 1: System Check..."
 
-REPO_OWNER="rushdino"
-REPO_NAME="rushdino"
-BASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download"
+REPO_OWNER="kienhaminh"
+REPO_NAME="rush_dino"
+API_BASE="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}"
+
+# Resolve the latest release tag (includes prereleases; stable takes priority if present)
+RELEASE_TAG=""
+if command -v curl >/dev/null 2>&1; then
+  # Try stable latest first; fall back to the most recent release of any kind
+  RELEASE_TAG="$(curl -fsSL "${API_BASE}/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | cut -d'"' -f4 || true)"
+  if [[ -z "$RELEASE_TAG" ]]; then
+    RELEASE_TAG="$(curl -fsSL "${API_BASE}/releases" 2>/dev/null | grep '"tag_name"' | head -1 | cut -d'"' -f4 || true)"
+  fi
+elif command -v wget >/dev/null 2>&1; then
+  RELEASE_TAG="$(wget -qO- "${API_BASE}/releases/latest" 2>/dev/null | grep '"tag_name"' | head -1 | cut -d'"' -f4 || true)"
+  if [[ -z "$RELEASE_TAG" ]]; then
+    RELEASE_TAG="$(wget -qO- "${API_BASE}/releases" 2>/dev/null | grep '"tag_name"' | head -1 | cut -d'"' -f4 || true)"
+  fi
+fi
+[[ -n "$RELEASE_TAG" ]] || error "Could not determine the latest release tag from GitHub. Check your internet connection."
+info "  Resolved release: ${RELEASE_TAG}"
+
+BASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${RELEASE_TAG}"
 
 os="$(uname -s 2>/dev/null || echo "unknown")"
 arch="$(uname -m 2>/dev/null || echo "unknown")"

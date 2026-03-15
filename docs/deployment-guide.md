@@ -53,6 +53,69 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ---
 
+### Option A1 — Manual Linux Install from GitHub Release
+
+If you prefer not to pipe a script into bash, you can download and install the binary manually.
+
+> **Note:** Currently only `x86_64` (amd64) Linux binaries are published. ARM (`aarch64`) support is planned for a future release.
+
+**1. Pick a release tag**
+
+```bash
+# Latest release — tries stable first, falls back to most recent prerelease:
+TAG=$(curl -fsSL https://api.github.com/repos/kienhaminh/rush_dino/releases/latest 2>/dev/null \
+  | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+if [[ -z "$TAG" ]]; then
+  TAG=$(curl -fsSL https://api.github.com/repos/kienhaminh/rush_dino/releases \
+    | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+fi
+
+# Or pin to a specific version, e.g.:
+# TAG="v0.1.0-beta.1"
+
+echo "Installing: $TAG"
+```
+
+**2. Download the binary**
+
+```bash
+curl -fsSL \
+  "https://github.com/kienhaminh/rush_dino/releases/download/${TAG}/rushdino-linux-x86_64" \
+  -o rushdino
+```
+
+**3. Verify the SHA-256 checksum**
+
+```bash
+curl -fsSL \
+  "https://github.com/kienhaminh/rush_dino/releases/download/${TAG}/rushdino-linux-x86_64.sha256" \
+  -o rushdino.sha256
+
+sha256sum --check rushdino.sha256
+```
+
+**4. Install the binary**
+
+```bash
+chmod +x rushdino
+
+# System-wide (requires sudo):
+sudo mv rushdino /usr/local/bin/rushdino
+
+# Or user-local (no sudo required):
+mkdir -p ~/.local/bin
+mv rushdino ~/.local/bin/rushdino
+export PATH="$HOME/.local/bin:$PATH"   # add to ~/.bashrc or ~/.zshrc to persist
+```
+
+**5. Verify the installation**
+
+```bash
+rushdino --version
+```
+
+---
+
 ### Option B — Build from Source
 
 **1. Clone the repository**

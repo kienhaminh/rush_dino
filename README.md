@@ -14,6 +14,19 @@ RushDino is an **open-source local AI assistant platform** written in Rust, desi
 - [Detailed system architecture](./docs/system-architecture.md)
 - [Installation & Deployment](./docs/deployment-guide.md)
 
+## Quickstart (pre-built binary)
+
+**Linux (x86_64 / aarch64):**
+
+```bash
+# One-liner installer
+curl -fsSL https://raw.githubusercontent.com/kienhaminh/rush_dino/main/scripts/install.sh | bash
+
+# Or download manually — see docs/deployment-guide.md (Option A1) for step-by-step instructions
+```
+
+After installing, run `rushdino init` then `rushdino start`.
+
 ## Quickstart (from source)
 
 1. Install Rust stable + Node.js 22+
