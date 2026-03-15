@@ -39,11 +39,36 @@ main() {
   assert_eq "0.2.0" "$(bump_version 0.1.0 minor)" "minor bump"
   assert_eq "1.0.0" "$(bump_version 0.1.0 major)" "major bump"
 
-  assert_eq "v0.1.1" "$(format_tag 0.1.1 stable)" "stable tag"
-  assert_eq "v0.1.1-beta.1" "$(format_tag 0.1.1 beta)" "beta tag"
+  assert_eq "v0.1.1" "$(format_tag 0.1.1)" "stable tag"
+
+  # next_beta_tag: mock git so no prior betas exist → should return beta.1
+  git() { case "$1" in rev-parse) return 1 ;; ls-remote) return 2 ;; esac }
+  assert_eq "v0.1.1-beta.1" "$(next_beta_tag 0.1.1)" "beta tag (no prior betas)"
+  unset -f git
+
+  # next_beta_tag: mock git so beta.1 exists locally → should return beta.2
+  git() {
+    case "$1" in
+      rev-parse) [[ "$*" == *"beta.1"* ]] && return 0; return 1 ;;
+      ls-remote) return 2 ;;
+    esac
+  }
+  assert_eq "v0.1.1-beta.2" "$(next_beta_tag 0.1.1)" "beta tag (beta.1 exists locally)"
+  unset -f git
+
+  # next_beta_tag: mock git so beta.1 exists on origin → should return beta.2
+  git() {
+    case "$1" in
+      rev-parse) return 1 ;;
+      ls-remote) [[ "$*" == *"beta.1"* ]] && return 0; return 2 ;;
+    esac
+  }
+  assert_eq "v0.1.1-beta.2" "$(next_beta_tag 0.1.1)" "beta tag (beta.1 exists on origin)"
+  unset -f git
 
   assert_nonzero_cmd "invalid bump mode" "source ./scripts/release.sh && bump_version 0.1.0 invalid"
-  assert_nonzero_cmd "invalid release mode" "source ./scripts/release.sh && format_tag 0.1.1 nightly"
+  assert_nonzero_cmd "invalid semver in format_tag" "source ./scripts/release.sh && format_tag 0.1.x"
+  assert_nonzero_cmd "invalid semver in next_beta_tag" "source ./scripts/release.sh && next_beta_tag 0.1.x"
 
   if [[ "$failures" -gt 0 ]]; then
     exit 1

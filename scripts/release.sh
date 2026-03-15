@@ -111,15 +111,35 @@ bump_version() {
 
 format_tag() {
   local version="$1"
-  local release_mode="$2"
+
+  validate_semver "$version"
+  printf 'v%s\n' "$version"
+}
+
+# Find the next available beta tag for a version, auto-incrementing the beta
+# number if prior betas already exist locally or on origin.
+next_beta_tag() {
+  local version="$1"
+  local n=1 tag rc
 
   validate_semver "$version"
 
-  case "$release_mode" in
-    stable) printf 'v%s\n' "$version" ;;
-    beta) printf 'v%s-beta.1\n' "$version" ;;
-    *) die "Invalid release mode: $release_mode" ;;
-  esac
+  while true; do
+    tag="v${version}-beta.${n}"
+
+    # Skip if the tag exists locally.
+    git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1 && { n=$((n + 1)); continue; }
+
+    # Check remote; exit code 2 means "not found" (--exit-code), anything
+    # else is an unexpected error.
+    git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; rc=$?
+    [[ $rc -eq 0 ]] && { n=$((n + 1)); continue; }
+    [[ $rc -ne 2 ]] && die "Could not verify remote tag '$tag' (git ls-remote exit code: $rc)"
+
+    break
+  done
+
+  printf '%s\n' "$tag"
 }
 
 read_workspace_version() {
@@ -141,6 +161,9 @@ update_workspace_version() {
   VERSION_FILE_BACKUP="$(mktemp)"
   cp "$cargo_toml" "$VERSION_FILE_BACKUP"
 
+  # Slurp the file (-0), locate the [workspace.package] section, skip lines
+  # that don't start a new section (negative lookahead (?!^\[) with /m), then
+  # replace only the version value using \K to avoid re-matching the prefix.
   perl -0pi -e 's/\[workspace\.package\]\n((?:(?!^\[).*\n)*)version = "\K[^"]+/'"$new_version"'/m' "$cargo_toml"
 }
 
@@ -162,10 +185,15 @@ ensure_upstream() {
 }
 
 ensure_tag_absent() {
-  local tag="$1"
+  local tag="$1" rc
 
   git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1 && die "Tag already exists locally: $tag"
-  git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && die "Tag already exists on origin: $tag"
+
+  # --exit-code: exits 0 if ref found, 2 if not found, 128+ on error.
+  # Treat anything other than 0 (exists) or 2 (absent) as a network failure.
+  git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; rc=$?
+  [[ $rc -eq 0 ]] && die "Tag already exists on origin: $tag"
+  [[ $rc -ne 2 ]] && die "Could not verify remote tag '$tag' (git ls-remote exit code: $rc)"
 }
 
 run_release() {
@@ -192,9 +220,12 @@ run_release() {
   else
     next_version="$(bump_version "$current_version" "$BUMP_MODE")"
   fi
-  tag="$(format_tag "$next_version" "$RELEASE_MODE")"
-
-  ensure_tag_absent "$tag"
+  if [[ "$RELEASE_MODE" == "beta" ]]; then
+    tag="$(next_beta_tag "$next_version")"
+  else
+    tag="$(format_tag "$next_version")"
+    ensure_tag_absent "$tag"
+  fi
 
   if [[ "$BUMP_MODE" != "none" ]]; then
     update_workspace_version "$cargo_toml" "$next_version"
@@ -203,7 +234,7 @@ run_release() {
   "$repo_root/scripts/build-release.sh"
 
   if [[ "$BUMP_MODE" != "none" ]]; then
-    git -C "$repo_root" add Cargo.toml
+    git -C "$repo_root" add Cargo.toml Cargo.lock
     commit_message="chore: release $tag"
     git -C "$repo_root" commit -m "$commit_message"
   fi
