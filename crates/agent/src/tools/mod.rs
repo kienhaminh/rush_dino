@@ -7,6 +7,7 @@ pub mod delete_workflow;
 pub mod file_edit;
 pub mod file_read;
 pub mod file_write;
+pub mod image;
 pub mod inspect_workflow;
 pub mod knowledge_graph_query;
 pub mod list_skills;

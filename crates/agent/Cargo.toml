@@ -8,6 +8,7 @@ license.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 arc-swap.workspace = true
+base64.workspace = true
 chrono.workspace = true
 futures.workspace = true
 reqwest.workspace = true
@@ -22,3 +23,6 @@ walkdir.workspace = true
 rushdino-common = { path = "../common" }
 rushdino-providers = { path = "../providers" }
 rushdino-security = { path = "../security" }
+
+[dev-dependencies]
+tempfile = "3"
