@@ -40,7 +40,7 @@ jobs:
           mkdir -p dist
           BIN="target/${{ matrix.target }}/release/rushdino"
           cp "$BIN" "dist/${{ matrix.artifact }}"
-          sha256sum "dist/${{ matrix.artifact }}" > "dist/${{ matrix.artifact }}.sha256"
+          cd dist && sha256sum "${{ matrix.artifact }}" > "${{ matrix.artifact }}.sha256"
       - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}

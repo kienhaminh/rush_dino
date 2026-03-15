@@ -393,8 +393,12 @@ else
   download "$sha_url" "$workdir/${artifact}.sha256" "true"
 
   # --- Verify checksum ---
-  # Keep the original artifact filename during verification so sha256sum -c matches
+  # The .sha256 file from the release workflow may contain a path prefix (e.g.
+  # "dist/rushdino-linux-x86_64") because sha256sum was run from the repo root.
+  # Normalise it to just the bare filename so sha256sum -c works from $workdir.
   step "Step 4b: Verifying Checksum..."
+  sed -i "s|.*/||" "$workdir/${artifact}.sha256" 2>/dev/null \
+    || sed -i '' "s|.*/||" "$workdir/${artifact}.sha256" 2>/dev/null || true
   if command -v sha256sum >/dev/null 2>&1; then
     ( cd "$workdir" && sha256sum -c "${artifact}.sha256" > /dev/null 2>&1 ) \
       || error "Checksum mismatch! The downloaded binary may be corrupted."
