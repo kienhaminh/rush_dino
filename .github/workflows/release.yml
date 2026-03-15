@@ -32,10 +32,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - name: Install cargo-zigbuild
-        run: pip3 install ziglang && cargo install cargo-zigbuild
       - name: Build backend
-        run: cargo zigbuild --release --target ${{ matrix.target }}.2.35 -p rushdino-cli
+        run: cargo build --release --target ${{ matrix.target }} -p rushdino-cli
       - name: Prepare artifact
         shell: bash
         run: |
