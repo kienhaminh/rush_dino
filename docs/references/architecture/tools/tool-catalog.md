@@ -19,6 +19,7 @@ This list is sourced from tool registration in `crates/agent/src/engine_bootstra
 | `web_fetch` | Fetch URL content (HTML/text/JSON) | `native` |
 | `file_read` | Read files under `~/.rushdino/documents` | `native` |
 | `file_edit` | Exact text replacement edit in a file | `native` |
+| `image` | Generate image via Gemini | `native` |
 | `shell_exec` | Execute shell commands through the local system broker | `native` |
 | `agents_list` | List available agent templates | `native` |
 | `sessions_list` | List gateway sessions | `native` |
@@ -57,4 +58,4 @@ This list is sourced from tool registration in `crates/agent/src/engine_bootstra
 - `shell_exec` runs in a mirrored workspace under `~/.rushdino/workspaces/...`, not directly in the host workspace.
 - Most destructive operations route through `shell_exec` and may require approval.
 
-Last verified: 2026-03-06
+Last verified: 2026-03-15
