@@ -111,6 +111,47 @@ function SessionRow({
   );
 }
 
+/* ─── Thinking level segmented control ───────────────────────────────────── */
+const THINKING_LEVELS = [
+  { value: 'off',      label: 'off' },
+  { value: 'minimal',  label: 'min' },
+  { value: 'low',      label: 'low' },
+  { value: 'medium',   label: 'med' },
+  { value: 'high',     label: 'high' },
+  { value: 'xhigh',    label: 'xhigh' },
+  { value: 'adaptive', label: 'auto' },
+];
+
+function ThinkingLevelControl({
+  activeLevel,
+  onChange,
+}: {
+  activeLevel: string;
+  onChange: (level: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-[2px] bg-muted/50 border border-border rounded-[5px] p-[2px]">
+      {THINKING_LEVELS.map(({ value, label }) => {
+        const isActive = activeLevel === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            className={`px-[6px] py-[2px] rounded-[3px] text-[9px] font-semibold tracking-wide transition-colors ${
+              isActive
+                ? 'bg-primary/15 text-primary border border-primary/25'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ─── Chip ────────────────────────────────────────────────────────────────── */
 function Chip({ children, color, bg, border }: { children: ReactNode; color: string; bg: string; border: string }) {
   return (
@@ -166,41 +207,7 @@ function SessionInfoCard({
   const isReasoning = modelMeta?.isReasoning ?? false;
 
   const thinkingLevel = agentConfig?.thinkingLevel ?? null;
-
-  const THINKING_LEVELS = [
-    { value: 'off',      label: 'off' },
-    { value: 'minimal',  label: 'min' },
-    { value: 'low',      label: 'low' },
-    { value: 'medium',   label: 'med' },
-    { value: 'high',     label: 'high' },
-    { value: 'xhigh',    label: 'xhigh' },
-    { value: 'adaptive', label: 'auto' },
-  ];
   const activeLevel = thinkingLevelOverride ?? thinkingLevel ?? 'low';
-
-  function ThinkingLevelControl() {
-    return (
-      <div className="flex items-center gap-[2px] bg-muted/50 border border-border rounded-[5px] p-[2px]">
-        {THINKING_LEVELS.map(({ value, label }) => {
-          const isActive = activeLevel === value;
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onThinkingLevelChange(value)}
-              className={`px-[6px] py-[2px] rounded-[3px] text-[9px] font-semibold tracking-wide transition-colors ${
-                isActive
-                  ? 'bg-primary/15 text-primary border border-primary/25'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
 
   function InfoRow({ label, children }: { label: string; children: ReactNode }) {
     return (
@@ -244,7 +251,7 @@ function SessionInfoCard({
       </InfoRow>
       <div className="flex items-center justify-between py-[5px] border-b border-border">
         <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Thinking level</span>
-        <ThinkingLevelControl />
+        <ThinkingLevelControl activeLevel={activeLevel} onChange={onThinkingLevelChange} />
       </div>
       <InfoRow label="Reasoning model">
         <Badge label={isReasoning ? 'YES' : 'NO'} active={isReasoning} />
