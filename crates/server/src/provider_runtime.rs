@@ -121,6 +121,7 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 pool,
                 config.data_dir.clone(),
                 credentials.brave_api_key.clone(),
+                credentials.gemini_api_key.clone(),
                 provider_kind_label(&resolved.provider_kind).to_owned(),
                 {
                     use rushdino_agent::memory_bootstrap::{

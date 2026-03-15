@@ -29,7 +29,7 @@ use crate::{
             cron_resume_tool, cron_run_now_tool, cron_update_tool,
         },
         file_edit::FileEditTool, file_read::FileReadTool,
-        file_write::FileWriteTool,
+        file_write::FileWriteTool, image::ImageTool,
         knowledge_graph_query::KnowledgeGraphQueryTool, list_skills::ListSkillsTool,
         memory_search::MemorySearchTool, memory_write::MemoryWriteTool,
         present_message::PresentMessageTool, read_skill::ReadSkillTool,
@@ -64,6 +64,7 @@ pub fn build_engine_deps(
     pool: Arc<SqlitePool>,
     home_dir: PathBuf,
     brave_api_key: Option<String>,
+    gemini_api_key: Option<String>,
     config: &AgentConfig,
     runtime: Arc<AgentRuntime>,
     system_broker: SharedSystemBroker,
@@ -131,6 +132,7 @@ pub fn build_engine_deps(
             "https://api.search.brave.com/res/v1/web/search".to_owned(),
             brave_c,
         ));
+        r.register(ImageTool::new(gemini_api_key, home_c.join("documents/images")));
         r.register(FileReadTool::new(home_c.join("documents")));
         r.register(FileWriteTool::new(home_c.clone()));
         r.register(FileEditTool::new(home_c.clone()));
