@@ -1,6 +1,10 @@
 # RushDino
 
-Local AI agent platform written in Rust.
+<p align="center">
+  <img src="./logo.png" alt="RushDino logo" width="320" />
+</p>
+
+RushDino is an **open-source local AI assistant platform** written in Rust, designed to run powerful agents on your own machine with fast, privacy‑preserving workflows. It focuses on being **developer-friendly, extensible, and easy to integrate** into your existing tools and automation.
 
 ## Product Docs
 

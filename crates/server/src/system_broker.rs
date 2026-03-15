@@ -34,7 +34,17 @@ impl LocalSystemBroker {
         }
 
         // The agent has unrestricted access to its own workspace.
-        if cwd.components().any(|c| c.as_os_str() == ".rushdino") {
+        let rushdino_home = init::canonical_home_dir();
+        let command_targets_rushdino = request.command.contains(
+            rushdino_home
+                .to_str()
+                .unwrap_or(".rushdino"),
+        ) || request.command.contains(".rushdino/")
+            || request.command.contains("/.rushdino");
+        if cwd.starts_with(&rushdino_home)
+            || cwd.components().any(|c| c.as_os_str() == ".rushdino")
+            || command_targets_rushdino
+        {
             return Ok(());
         }
 
