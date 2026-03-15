@@ -16,7 +16,7 @@ RushDino is an **open-source local AI assistant platform** written in Rust, desi
 
 ## Quickstart (pre-built binary)
 
-**Linux (x86_64 / aarch64):**
+**Linux x86_64 (glibc 2.39+, e.g. Ubuntu 24.04+):**
 
 ```bash
 # One-liner installer
