@@ -14,12 +14,18 @@ env:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: ubuntu:22.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
     strategy:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             artifact: rushdino-linux-x86_64
     steps:
+      - name: Install base tools
+        run: apt-get update && apt-get install -y git curl build-essential pkg-config libssl-dev
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
