@@ -288,12 +288,6 @@ function normalizePath(pathname: string) {
   return pathname;
 }
 
-function capitalize(value: string) {
-  if (!value) {
-    return value;
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
 
 export function resolveLegacyPath(pathname: string): string | null {
   const normalized = normalizePath(pathname);
