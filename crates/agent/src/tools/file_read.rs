@@ -54,6 +54,9 @@ impl Tool for FileReadTool {
 
         let path = Path::new(path_str);
 
+        // INTENTIONAL: Absolute paths bypass all root validation by design.
+        // The agent is trusted — the operator controls which agents run and what
+        // they can access. This is not exposed to untrusted external input.
         if path.is_absolute() {
             // Absolute paths bypass docs_dir restriction — read directly from the filesystem.
             Ok(fs::read_to_string(path)?)
@@ -123,5 +126,16 @@ mod tests {
             .await;
 
         assert!(result.is_err(), "expected Err for non-existent path");
+    }
+
+    #[tokio::test]
+    async fn relative_traversal_is_rejected() {
+        let docs = tempfile::tempdir().unwrap();
+        let tool = FileReadTool::new(docs.path().to_path_buf());
+
+        let result = tool
+            .execute(serde_json::json!({ "path": "../../../etc/passwd" }))
+            .await;
+        assert!(result.is_err(), "path traversal should be rejected");
     }
 }
