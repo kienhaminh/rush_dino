@@ -306,6 +306,7 @@ mod tests {
                 model: None,
                 tools: None,
                 color: None,
+                sandbox_policy: None,
             })
             .unwrap();
 
