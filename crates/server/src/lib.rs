@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use axum::{
     middleware as axum_middleware,
-    routing::{get, patch, post, put},
+    routing::{get, patch, post},
     Router,
 };
 use state::AppState;

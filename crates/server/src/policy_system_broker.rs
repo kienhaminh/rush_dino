@@ -21,7 +21,7 @@ use rushdino_agent::{ShellExecRequest, ShellExecResult, SystemBroker};
 use rushdino_common::{AppError, Result};
 use rushdino_security::{
     audit_log::{AuditCategory, AuditDecision, AuditEntry, AuditLog},
-    credential_injector::CredentialInjector,
+    credential_injector,
     egress_proxy::EgressProxy,
     policy::types::SandboxPolicy,
     sandbox_enforcer,
@@ -40,8 +40,6 @@ pub struct PolicySystemBroker {
     policy: SandboxPolicy,
     /// Dynamic network policy proxy (hot-reloadable via `EgressProxy::update_policy`).
     egress_proxy: Arc<EgressProxy>,
-    /// Resolves credential provider templates into env-var values.
-    credential_injector: CredentialInjector,
     /// Audit log — non-blocking, never fails the caller.
     audit: Arc<AuditLog>,
     /// Secrets store for credential resolution (env var name → secret value).
@@ -65,7 +63,6 @@ impl PolicySystemBroker {
         Self {
             policy,
             egress_proxy,
-            credential_injector: CredentialInjector,
             audit,
             secrets,
         }
@@ -182,7 +179,7 @@ impl SystemBroker for PolicySystemBroker {
         }
 
         // 2. Resolve credentials from configured providers and secrets store.
-        let creds = CredentialInjector::resolve(&self.policy.providers, &self.secrets);
+        let creds = credential_injector::CredentialInjector::resolve(&self.policy.providers, &self.secrets);
 
         // 3. Build the (optionally OS-sandboxed) command string.
         let (final_command, sb_profile_path) =
