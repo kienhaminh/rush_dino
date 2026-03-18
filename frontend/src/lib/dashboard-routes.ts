@@ -1,7 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity,
-  Blocks,
   FolderKanban,
   LayoutDashboard,
   MessageSquare,
@@ -15,14 +13,12 @@ export type PrimaryNavId =
   | 'operations'
   | 'channels'
   | 'sessions'
-  | 'runs'
   | 'config'
-  | 'builder'
   | 'system';
 
 export type OperationsViewId = 'summary' | 'approvals' | 'diagnostics' | 'analytics';
 export type ConfigSectionId = 'profiles' | 'credentials' | 'server' | 'identity';
-export type AdvancedAreaId = 'builder' | 'system';
+
 export type AdvancedViewId =
   | 'agents'
   | 'agent-board'
@@ -59,7 +55,6 @@ export type ConfigSection = {
 };
 
 export type AdvancedView = {
-  area: AdvancedAreaId;
   id: AdvancedViewId;
   label: string;
   description: string;
@@ -103,25 +98,11 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     icon: FolderKanban,
   },
   {
-    id: 'runs',
-    label: 'Runs',
-    description: 'Track active, blocked, and completed execution',
-    href: '/runs',
-    icon: Activity,
-  },
-  {
     id: 'config',
     label: 'Config',
     description: 'Profiles, credentials, identity, and server policy',
     href: '/config',
     icon: Settings,
-  },
-  {
-    id: 'builder',
-    label: 'Builder',
-    description: 'Agents, workflows, skills, and coding tools',
-    href: '/builder',
-    icon: Blocks,
   },
   {
     id: 'system',
@@ -187,134 +168,30 @@ export const CONFIG_SECTIONS: ConfigSection[] = [
 ];
 
 export const ADVANCED_VIEWS: AdvancedView[] = [
-  {
-    area: 'builder',
-    id: 'agents',
-    label: 'Agents',
-    description: 'Manage reusable agent definitions',
-    href: '/agents',
-  },
-  {
-    area: 'builder',
-    id: 'agent-board',
-    label: 'Board',
-    description: 'Overview board for agent activity',
-    href: '/agent-board',
-  },
-  {
-    area: 'builder',
-    id: 'workflows',
-    label: 'Workflows',
-    description: 'Build and run workflow graphs',
-    href: '/workflows',
-  },
-  {
-    area: 'builder',
-    id: 'skills',
-    label: 'Skills',
-    description: 'Manage workspace skills',
-    href: '/skills',
-  },
-  {
-    area: 'builder',
-    id: 'coding-agents',
-    label: 'Coding Agents',
-    description: 'Manage ACP coding agents',
-    href: '/coding-agents',
-  },
-  {
-    area: 'builder',
-    id: 'acp-sessions',
-    label: 'ACP Sessions',
-    description: 'Inspect ACP session activity',
-    href: '/acp-sessions',
-  },
-  {
-    area: 'system',
-    id: 'logs',
-    label: 'Logs',
-    description: 'Inspect runtime logs',
-    href: '/system/logs',
-  },
-  {
-    area: 'system',
-    id: 'cron',
-    label: 'Cron',
-    description: 'Scheduled task management',
-    href: '/system/cron',
-  },
-  {
-    area: 'system',
-    id: 'nodes',
-    label: 'Nodes',
-    description: 'Infrastructure and approval nodes',
-    href: '/system/nodes',
-  },
-  {
-    area: 'system',
-    id: 'debug',
-    label: 'Debug',
-    description: 'Low-level debugging surfaces',
-    href: '/system/debug',
-  },
-  {
-    area: 'system',
-    id: 'sandbox',
-    label: 'Sandbox',
-    description: 'Audit log, pending approvals, and network hot-reload',
-    href: '/system/sandbox',
-  },
+  { id: 'agents',        label: 'Agents',        description: 'Manage reusable agent definitions',          href: '/agents' },
+  { id: 'agent-board',   label: 'Board',          description: 'Overview board for agent activity',          href: '/agent-board' },
+  { id: 'workflows',     label: 'Workflows',      description: 'Build and run workflow graphs',              href: '/workflows' },
+  { id: 'skills',        label: 'Skills',         description: 'Manage workspace skills',                    href: '/skills' },
+  { id: 'coding-agents', label: 'Coding Agents',  description: 'Manage ACP coding agents',                   href: '/coding-agents' },
+  { id: 'acp-sessions',  label: 'ACP Sessions',   description: 'Inspect ACP session activity',               href: '/acp-sessions' },
+  { id: 'logs',          label: 'Logs',           description: 'Inspect runtime logs',                       href: '/system/logs' },
+  { id: 'cron',          label: 'Cron',           description: 'Scheduled task management',                  href: '/system/cron' },
+  { id: 'nodes',         label: 'Nodes',          description: 'Infrastructure and approval nodes',          href: '/system/nodes' },
+  { id: 'debug',         label: 'Debug',          description: 'Low-level debugging surfaces',               href: '/system/debug' },
+  { id: 'sandbox',       label: 'Sandbox',        description: 'Audit log, pending approvals, and network hot-reload', href: '/system/sandbox' },
 ];
 
-const LEGACY_REDIRECTS: Record<string, string> = {
-  '/overview': '/operations/summary',
-  '/approvals': '/operations/approvals',
-  '/diagnostics': '/operations/diagnostics',
-  '/metrics': '/operations/analytics',
-  '/gateway': '/channels',
-  '/instances': '/channels?panel=instances',
-  '/soul-memory': '/config/identity',
-  '/builder/agents': '/agents',
-  '/builder/agent-board': '/agent-board',
-  '/builder/workflows': '/workflows',
-  '/builder/skills': '/skills',
-  '/builder/coding-agents': '/coding-agents',
-  '/builder/acp-sessions': '/acp-sessions',
-  '/logs': '/system/logs',
-  '/cron': '/system/cron',
-  '/nodes': '/system/nodes',
-  '/debug': '/system/debug',
-};
-
 function normalizePath(pathname: string) {
-  if (!pathname) {
-    return '/';
-  }
-  if (pathname !== '/' && pathname.endsWith('/')) {
-    return pathname.slice(0, -1);
-  }
+  if (!pathname) return '/';
+  if (pathname !== '/' && pathname.endsWith('/')) return pathname.slice(0, -1);
   return pathname;
-}
-
-
-export function resolveLegacyPath(pathname: string): string | null {
-  const normalized = normalizePath(pathname);
-  if (normalized.startsWith('/gateway/') && normalized.endsWith('/settings')) {
-    const channel = normalized.slice('/gateway/'.length, -'/settings'.length);
-    return channel ? `/channels/${channel}?panel=settings` : '/channels';
-  }
-  return LEGACY_REDIRECTS[normalized] ?? null;
 }
 
 export function resolvePageHeader(pathname: string): PageHeader {
   const normalized = normalizePath(pathname);
 
-  if (normalized === '/' || normalized === '/chat') {
-    return {
-      id: 'workspace',
-      title: 'Workspace',
-      subtitle: 'Conversations and live assistant interaction',
-    };
+  if (normalized === '/') {
+    return { id: 'workspace', title: 'Workspace', subtitle: 'Conversations and live assistant interaction' };
   }
 
   if (normalized === '/metrics') {
@@ -322,69 +199,33 @@ export function resolvePageHeader(pathname: string): PageHeader {
   }
 
   if (normalized.startsWith('/operations')) {
-    const activeView = OPERATIONS_VIEWS.find((view) => normalized === view.href);
-    if (activeView) {
-      return { id: 'operations', title: activeView.label, subtitle: activeView.description };
-    }
+    const view = OPERATIONS_VIEWS.find((v) => normalized === v.href);
+    if (view) return { id: 'operations', title: view.label, subtitle: view.description };
     return { id: 'operations', title: 'Operations', subtitle: 'Daily operator posture and action surfaces' };
   }
 
   if (normalized.startsWith('/channels')) {
-    return {
-      id: 'channels',
-      title: 'Channels',
-      subtitle: 'Channel runtime, settings, and infrastructure',
-    };
+    return { id: 'channels', title: 'Channels', subtitle: 'Channel runtime, settings, and infrastructure' };
   }
 
   if (normalized.startsWith('/sessions')) {
-    return {
-      id: 'sessions',
-      title: 'Sessions',
-      subtitle: 'Inspect prompt, context, run, and tool state',
-    };
-  }
-
-  if (normalized.startsWith('/runs')) {
-    return {
-      id: 'runs',
-      title: 'Runs',
-      subtitle: 'Execution queue, policy posture, and failures',
-    };
+    return { id: 'sessions', title: 'Sessions', subtitle: 'Inspect prompt, context, run, and tool state' };
   }
 
   if (normalized.startsWith('/config')) {
-    const activeSection = CONFIG_SECTIONS.find((section) => normalized === section.href);
-    return {
-      id: 'config',
-      title: 'Config',
-      subtitle: 'Profiles, credentials, identity, and server policy',
-      detail: activeSection?.label,
-    };
-  }
-
-  const builderView = ADVANCED_VIEWS.find(
-    (view) => view.area === 'builder' && normalized.startsWith(view.href),
-  );
-  if (builderView) {
-    return { id: 'builder', title: builderView.label, subtitle: builderView.description };
+    const section = CONFIG_SECTIONS.find((s) => normalized === s.href);
+    return { id: 'config', title: 'Config', subtitle: 'Profiles, credentials, identity, and server policy', detail: section?.label };
   }
 
   if (normalized.startsWith('/system')) {
-    const activeView = ADVANCED_VIEWS.find((view) => normalized.startsWith(view.href));
-    if (activeView) {
-      return {
-        id: 'system',
-        title: activeView.label,
-        subtitle: activeView.description,
-      };
-    }
+    const view = ADVANCED_VIEWS.find((v) => normalized.startsWith(v.href));
+    if (view) return { id: 'system', title: view.label, subtitle: view.description };
     return { id: 'system', title: 'System', subtitle: 'Logs, cron, nodes, and debug surfaces' };
   }
 
-  return {
-    id: 'workspace',
-    title: 'Workspace',
-    subtitle: 'Conversations and live assistant interaction',
-  };
+  // Flat operation routes (agents, board, workflows, skills, etc.)
+  const view = ADVANCED_VIEWS.find((v) => normalized.startsWith(v.href));
+  if (view) return { id: 'system', title: view.label, subtitle: view.description };
+
+  return { id: 'workspace', title: 'Workspace', subtitle: 'Conversations and live assistant interaction' };
 }

@@ -1,10 +1,9 @@
 import React, { Suspense, lazy } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { ThemeProvider } from './hooks/use-theme';
 import { useDashboardAuth } from './hooks/use-dashboard-auth';
 import { AppLayout } from './layouts/AppLayout';
 import { Toaster } from 'sonner';
-import { resolveLegacyPath } from './lib/dashboard-routes';
 
 // Pages — lazy loaded for route-based code splitting
 const ChatPage = lazy(() => import('./pages/chat/ChatPage').then(m => ({ default: m.ChatPage })));
@@ -12,12 +11,10 @@ const OverviewPage = lazy(() => import('./pages/overview/OverviewPage').then(m =
 const OperationsPage = lazy(() => import('./pages/operations/OperationsPage').then(m => ({ default: m.OperationsPage })));
 const GatewayRoute = lazy(() => import('./pages/gateway/GatewayRoute').then(m => ({ default: m.GatewayRoute })));
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage').then(m => ({ default: m.ApprovalsPage })));
-const InstancesRoute = lazy(() => import('./pages/instances/InstancesRoute').then(m => ({ default: m.InstancesRoute })));
 const SessionsRoute = lazy(() => import('./pages/sessions/SessionsRoute').then(m => ({ default: m.SessionsRoute })));
 const MetricsPage = lazy(() => import('./pages/metrics/MetricsPage').then(m => ({ default: m.MetricsPage })));
 const AgentBoardPage = lazy(() => import('./pages/agent-board/AgentBoardPage').then(m => ({ default: m.AgentBoardPage })));
 const AgentsPage = lazy(() => import('./pages/agents/AgentsPage').then(m => ({ default: m.AgentsPage })));
-const RunsRoute = lazy(() => import('./pages/runs/RunsRoute').then(m => ({ default: m.RunsRoute })));
 const WorkflowsPage = lazy(() => import('./pages/workflows/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
 const SkillsRoute = lazy(() => import('./pages/skills/SkillsRoute').then(m => ({ default: m.SkillsRoute })));
 const NodesPage = lazy(() => import('./pages/nodes/NodesPage').then(m => ({ default: m.NodesPage })));
@@ -28,7 +25,6 @@ const ConfigPage = lazy(() => import('./pages/config/ConfigPage').then(m => ({ d
 const DiagnosticsPage = lazy(() => import('./pages/diagnostics/DiagnosticsPage').then(m => ({ default: m.DiagnosticsPage })));
 const DebugPage = lazy(() => import('./pages/debug/DebugPage').then(m => ({ default: m.DebugPage })));
 const LogsPage = lazy(() => import('./pages/logs/LogsPage').then(m => ({ default: m.LogsPage })));
-const BuilderPage = lazy(() => import('./pages/builder/BuilderPage').then(m => ({ default: m.BuilderPage })));
 const SystemPage = lazy(() => import('./pages/system/SystemPage').then(m => ({ default: m.SystemPage })));
 const SandboxMonitorPage = lazy(() => import('./pages/sandbox/SandboxMonitorPage').then(m => ({ default: m.SandboxMonitorPage })));
 const NotFoundPage = lazy(() => import('./pages/not-found/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
@@ -43,21 +39,6 @@ function RouteLoading() {
       </div>
     </div>
   );
-}
-
-function LegacyRedirect() {
-  const location = useLocation();
-  const redirectTo = resolveLegacyPath(location.pathname);
-
-  if (!redirectTo) {
-    return <NotFoundPage />;
-  }
-
-  if (redirectTo.includes('?') || !location.search) {
-    return <Navigate to={redirectTo} replace />;
-  }
-
-  return <Navigate to={`${redirectTo}${location.search}`} replace />;
 }
 
 // Catches render errors from lazy-loaded chunks and prevents a silent white screen
@@ -98,9 +79,8 @@ export default function App() {
               <Routes>
                 <Route path="/login" element={<Navigate to="/" replace />} />
                 <Route element={<AppLayout />}>
-                  {/* Chat / workspace */}
+                  {/* Workspace */}
                   <Route index element={<ChatPage />} />
-                  <Route path="chat" element={<Navigate to="/" replace />} />
 
                   {/* Operations */}
                   <Route path="operations" element={<OperationsPage />}>
@@ -110,31 +90,27 @@ export default function App() {
                     <Route path="diagnostics" element={<DiagnosticsPage />} />
                     <Route path="analytics" element={<Navigate to="/metrics" replace />} />
                   </Route>
-
-                  {/* Metrics (direct route) */}
                   <Route path="metrics" element={<MetricsPage />} />
 
                   {/* Channels */}
                   <Route path="channels" element={<GatewayRoute />} />
                   <Route path="channels/:channel" element={<GatewayRoute />} />
 
-                  {/* Sessions and runs */}
+                  {/* Sessions */}
                   <Route path="sessions" element={<SessionsRoute />} />
                   <Route path="sessions/:sessionId" element={<SessionsRoute />} />
-                  <Route path="runs" element={<RunsRoute />} />
 
                   {/* Config */}
                   <Route path="config" element={<Navigate to="/config/profiles" replace />} />
                   <Route path="config/:section" element={<ConfigPage />} />
 
-                  {/* Builder (flat routes, no prefix) */}
+                  {/* Operations pages (flat) */}
                   <Route path="agents" element={<AgentsPage />} />
                   <Route path="agent-board" element={<AgentBoardPage />} />
                   <Route path="workflows" element={<WorkflowsPage />} />
                   <Route path="skills" element={<SkillsRoute />} />
                   <Route path="coding-agents" element={<CodingAgentsPage />} />
                   <Route path="acp-sessions" element={<AcpSessionsPage />} />
-                  <Route path="builder" element={<Navigate to="/agents" replace />} />
 
                   {/* System */}
                   <Route path="system" element={<SystemPage />}>
@@ -145,25 +121,6 @@ export default function App() {
                     <Route path="debug" element={<DebugPage />} />
                     <Route path="sandbox" element={<SandboxMonitorPage />} />
                   </Route>
-
-                  {/* Legacy redirects */}
-                  <Route path="overview" element={<LegacyRedirect />} />
-                  <Route path="approvals" element={<LegacyRedirect />} />
-                  <Route path="diagnostics" element={<LegacyRedirect />} />
-                  <Route path="gateway" element={<LegacyRedirect />} />
-                  <Route path="gateway/:channel/settings" element={<LegacyRedirect />} />
-                  <Route path="instances" element={<LegacyRedirect />} />
-                  <Route path="soul-memory" element={<LegacyRedirect />} />
-                  <Route path="builder/agents" element={<LegacyRedirect />} />
-                  <Route path="builder/agent-board" element={<LegacyRedirect />} />
-                  <Route path="builder/workflows" element={<LegacyRedirect />} />
-                  <Route path="builder/skills" element={<LegacyRedirect />} />
-                  <Route path="builder/coding-agents" element={<LegacyRedirect />} />
-                  <Route path="builder/acp-sessions" element={<LegacyRedirect />} />
-                  <Route path="logs" element={<LegacyRedirect />} />
-                  <Route path="cron" element={<LegacyRedirect />} />
-                  <Route path="nodes" element={<LegacyRedirect />} />
-                  <Route path="debug" element={<LegacyRedirect />} />
 
                   {/* Design system */}
                   <Route path="design-system" element={<DesignSystemPage />} />
