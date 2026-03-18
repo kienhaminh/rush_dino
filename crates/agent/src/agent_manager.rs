@@ -20,6 +20,10 @@ pub struct AgentTemplate {
     /// UI hint — a hex color or named color string for the agent's visual identity.
     #[serde(default)]
     pub color: Option<String>,
+    /// Optional sandbox policy loaded from `{agents_dir}/{name}/sandbox.yaml`.
+    /// Present only when the file exists; absent for agents without a sandbox config.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_policy: Option<rushdino_security::policy::types::SandboxPolicy>,
 }
 
 /// Parses an agent template from Markdown front-matter format.
@@ -88,6 +92,8 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         model,
         tools,
         color,
+        // sandbox_policy is populated by AgentManager::get/list after parsing.
+        sandbox_policy: None,
     })
 }
 
@@ -114,20 +120,29 @@ impl AgentManager {
 
     /// Reads an agent template by name — tries `.md` first, falls back to `.toml`.
     /// Returns None if neither file exists, the name is invalid, or parsing fails.
+    /// Also probes `{agents_dir}/{name}/sandbox.yaml` and attaches the policy when found.
     pub fn get(&self, name: &str) -> Option<AgentTemplate> {
         Self::validate_name(name).ok()?;
 
         // Try .md first
         let md_path = self.agents_dir.join(format!("{name}.md"));
-        if md_path.exists() {
+        let mut template = if md_path.exists() {
             let content = fs::read_to_string(md_path).ok()?;
-            return parse_agent_markdown(&content);
-        }
+            parse_agent_markdown(&content)?
+        } else {
+            // Fall back to .toml
+            let toml_path = self.agents_dir.join(format!("{name}.toml"));
+            let content = fs::read_to_string(toml_path).ok()?;
+            toml::from_str(&content).ok()?
+        };
 
-        // Fall back to .toml
-        let toml_path = self.agents_dir.join(format!("{name}.toml"));
-        let content = fs::read_to_string(toml_path).ok()?;
-        toml::from_str(&content).ok()
+        // Attach sandbox policy if a per-agent sandbox.yaml exists.
+        template.sandbox_policy =
+            rushdino_security::policy::types::SandboxPolicy::load_for_agent(&self.agents_dir, name)
+                .ok()
+                .flatten();
+
+        Some(template)
     }
 
     /// Reads all `.md` and `.toml` agent files in the agents directory, skipping invalid ones.
@@ -148,7 +163,14 @@ impl AgentManager {
                     let Ok(content) = fs::read_to_string(&path) else {
                         continue;
                     };
-                    if let Some(template) = parse_agent_markdown(&content) {
+                    if let Some(mut template) = parse_agent_markdown(&content) {
+                        // Attach sandbox policy if a per-agent sandbox.yaml exists.
+                        template.sandbox_policy = rushdino_security::policy::types::SandboxPolicy::load_for_agent(
+                            &self.agents_dir,
+                            &template.name,
+                        )
+                        .ok()
+                        .flatten();
                         entries.push((true, template));
                     }
                 }
@@ -156,7 +178,14 @@ impl AgentManager {
                     let Ok(content) = fs::read_to_string(&path) else {
                         continue;
                     };
-                    if let Ok(template) = toml::from_str::<AgentTemplate>(&content) {
+                    if let Ok(mut template) = toml::from_str::<AgentTemplate>(&content) {
+                        // Attach sandbox policy if a per-agent sandbox.yaml exists.
+                        template.sandbox_policy = rushdino_security::policy::types::SandboxPolicy::load_for_agent(
+                            &self.agents_dir,
+                            &template.name,
+                        )
+                        .ok()
+                        .flatten();
                         entries.push((false, template));
                     }
                 }
@@ -255,6 +284,7 @@ mod tests {
             model: None,
             tools: None,
             color: None,
+            sandbox_policy: None,
         }
     }
 

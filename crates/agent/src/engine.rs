@@ -211,6 +211,8 @@ impl AgentEngine {
         runtime: Arc<AgentRuntime>,
         system_broker: SharedSystemBroker,
         knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
+        // Optional sandbox egress proxy — pass Some for sandboxed agents.
+        egress_proxy: Option<Arc<rushdino_security::egress_proxy::EgressProxy>>,
     ) -> Result<Self> {
         let deps = build_engine_deps(
             provider.clone(),
@@ -222,6 +224,7 @@ impl AgentEngine {
             runtime.clone(),
             system_broker,
             knowledge_graph.clone(),
+            egress_proxy,
         )?;
 
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));

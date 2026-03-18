@@ -80,6 +80,7 @@ impl Tool for SpawnAgentTool {
             model: None,
             tools: None,
             color: None,
+            sandbox_policy: None,
         };
 
         let path = self.agent_manager.save(&template)?;

@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 /// Top-level sandbox policy document. Corresponds to a single YAML policy file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SandboxPolicy {
     /// Schema version, e.g. "1".
     pub version: String,
@@ -22,7 +22,7 @@ pub struct SandboxPolicy {
 }
 
 /// Aggregates all sandbox sub-policies.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct SandboxConfig {
     #[serde(default)]
     pub filesystem: FilesystemPolicy,
@@ -71,7 +71,7 @@ impl Default for AccessMode {
 }
 
 /// A single filesystem allow-rule pairing a path with an access mode.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PathRule {
     /// Filesystem path; `~` will be expanded to the user's home directory.
     pub path: PathBuf,
@@ -81,7 +81,7 @@ pub struct PathRule {
 }
 
 /// Filesystem access policy: allow-list, deny-list, and a default action.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct FilesystemPolicy {
     /// Behaviour for paths not covered by allow/deny rules.
     #[serde(default)]
@@ -99,7 +99,7 @@ pub struct FilesystemPolicy {
 // ---------------------------------------------------------------------------
 
 /// Policy governing subprocess creation and execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ProcessPolicy {
     /// Whether processes may run with elevated privileges.
     #[serde(default)]
@@ -149,7 +149,7 @@ impl Default for BlockBehavior {
 }
 
 /// A single network allow-rule. Supports glob host patterns (e.g. `*.anthropic.com`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct NetworkRule {
     /// Hostname or glob pattern to match against the request target.
     pub host: String,
@@ -164,7 +164,7 @@ pub struct NetworkRule {
 }
 
 /// Network access policy: allow-list, default action, and block behavior.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct NetworkPolicy {
     /// Behaviour for hosts/ports not covered by allow rules.
     #[serde(default)]
@@ -182,7 +182,7 @@ pub struct NetworkPolicy {
 // ---------------------------------------------------------------------------
 
 /// Policy governing access to LLM inference endpoints.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InferencePolicy {
     /// Whether the agent is permitted to call inference APIs at all.
     #[serde(default = "default_true")]
@@ -219,7 +219,7 @@ impl Default for InferencePolicy {
 
 /// A named set of environment variables to inject into the agent process.
 /// Values may reference secrets via `${secret:key}` syntax.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CredentialProvider {
     /// Logical name identifying this provider (e.g. "openai").
     pub name: String,

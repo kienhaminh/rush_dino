@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 
 use rushdino_common::Result;
 use rushdino_providers::Provider;
+use rushdino_security::egress_proxy::EgressProxy;
 
 use crate::{
     agent_manager::AgentManager,
@@ -81,6 +82,8 @@ pub fn build_engine_deps(
     runtime: Arc<AgentRuntime>,
     system_broker: SharedSystemBroker,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
+    // Optional sandbox egress proxy — pass Some to enforce network policy in web tools.
+    egress_proxy: Option<Arc<EgressProxy>>,
 ) -> Result<EngineDeps> {
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
@@ -121,6 +124,7 @@ pub fn build_engine_deps(
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
     let system_broker_c = system_broker.clone();
+    let egress_proxy_c = egress_proxy.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
     let conversation_c = conversation.clone();
@@ -140,10 +144,15 @@ pub fn build_engine_deps(
         let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
 
         let r = ToolRegistry::new();
-        r.register(WebSearchTool::new(
+        // Build WebSearchTool, optionally attaching the sandbox egress proxy.
+        let mut web_search = WebSearchTool::new(
             "https://api.search.brave.com/res/v1/web/search".to_owned(),
             brave_c,
-        ));
+        );
+        if let Some(proxy) = &egress_proxy_c {
+            web_search = web_search.with_egress_proxy(proxy.clone());
+        }
+        r.register(web_search);
         r.register(ImageTool::new(
             gemini_api_key,
             home_c.join("documents/images"),
@@ -189,7 +198,12 @@ pub fn build_engine_deps(
         workflow_manager_c3,
         workflow_runner.clone(),
     ));
-    registry.register(WebFetchTool::new());
+    // Build WebFetchTool, optionally attaching the sandbox egress proxy.
+    let mut web_fetch = WebFetchTool::new();
+    if let Some(proxy) = &egress_proxy {
+        web_fetch = web_fetch.with_egress_proxy(proxy.clone());
+    }
+    registry.register(web_fetch);
     registry.register(SessionCreateTool::new(conversation.clone()));
     registry.register(SessionGetTool::new(conversation.clone()));
     registry.register(SessionSendTool::new(
