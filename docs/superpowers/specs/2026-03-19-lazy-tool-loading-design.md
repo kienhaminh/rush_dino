@@ -26,6 +26,8 @@ pub struct SessionToolContext {
 }
 ```
 
+All tools in the pool are **fully constructed at engine startup** with their dependencies injected (see `engine_deps.rs`). Activation controls visibility only — not construction or execution. A tool in the pool is immediately executable if called; it simply won't appear in the system prompt until activated.
+
 Methods:
 - `new(pool, core_names)` — initializes active set from core names
 - `search_pool(query: &str) -> Vec<ToolDefinition>` — searches pool by name, description, keywords
@@ -78,7 +80,7 @@ Matching tools are activated into the session's active set. Already-active tools
 
 ## System Prompt Change
 
-`build_tooling_section` appends a single hint line after the tool list:
+`build_tooling_section` inserts a hint line immediately before the trailing blank line:
 
 ```
 Use `tool_search` to discover and activate additional tools by keyword.
@@ -86,18 +88,23 @@ Use `tool_search` to discover and activate additional tools by keyword.
 
 Only active tools are listed. Non-core tools are entirely absent until activated.
 
+## Edge Case: Calling an Inactive Tool Directly
+
+If the LLM calls a tool that exists in the registry but is not in the active set, the call **succeeds** — execution is always permitted. The active set controls visibility (system prompt + provider tool schemas) only, not enforcement. This is intentional: lazy loading is a context-saving mechanism, not a security boundary.
+
 ---
 
 ## Affected Files
 
 | File | Change |
 |---|---|
-| `crates/agent/src/tool_registry.rs` | Add `SessionToolContext`; add `keywords()` to `Tool` trait |
-| `crates/agent/src/tools/tool_search.rs` | Enhance search to match name + description + keywords |
-| `crates/agent/src/tools/mod.rs` | Add `pub mod tool_search` |
-| `crates/agent/src/engine_bootstrap.rs` | Build `SessionToolContext`; filter system prompt to core tools only |
-| `crates/agent/src/engine_deps.rs` | Construct and wire `SessionToolContext` |
-| `crates/agent/src/system_prompt.rs` | Add `tool_search` hint to tooling section |
+| `crates/agent/src/tool_registry.rs` | Add `SessionToolContext`; add `keywords()` to `Tool` trait. **Must be done first** — `tool_search.rs` already imports `SessionToolContext` and will not compile until this exists. |
+| `crates/agent/src/tools/tool_search.rs` | File already exists as a partial implementation. Enhance search to match name + description + keywords. Fix compilation by ensuring `SessionToolContext` exists first. |
+| `crates/agent/src/tools/mod.rs` | Add `pub mod tool_search` — currently absent, causing the file to be dead code |
+| `crates/agent/src/engine_bootstrap.rs` | Filter system prompt to core tools only using `session_ctx.active_definitions()` |
+| `crates/agent/src/engine_deps.rs` | Construct `SessionToolContext` from registry pool; register `ToolSearchTool` |
+| `crates/agent/src/react_loop.rs` | Replace `registry.definitions()` with `session_ctx.active_definitions()` so provider-level tool schemas also reflect the active set |
+| `crates/agent/src/system_prompt.rs` | Add `tool_search` hint line before the trailing blank line in `build_tooling_section` |
 | Tool impls (selected) | Add `keywords()` overrides for discoverability |
 
 ---
