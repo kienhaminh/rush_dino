@@ -36,16 +36,7 @@ Methods:
 
 ### Core Tool List
 
-Hardcoded constant in `engine_bootstrap.rs`:
-
-```rust
-const CORE_TOOLS: &[&str] = &[
-    "read", "write", "edit", "exec", "memory_search",
-    "memory_write", "tool_search", "delegate", "message",
-];
-```
-
-Any tool not in this list is excluded from the system prompt until activated.
+Hardcoded constant in `engine_deps.rs` (see Wiring section below). Any tool not in the core list is excluded from the system prompt and provider tool schemas until activated.
 
 ### Tool Keywords
 
@@ -93,6 +84,28 @@ Only active tools are listed. Non-core tools are entirely absent until activated
 If the LLM calls a tool that exists in the registry but is not in the active set, the call **succeeds** — execution is always permitted. The active set controls visibility (system prompt + provider tool schemas) only, not enforcement. This is intentional: lazy loading is a context-saving mechanism, not a security boundary.
 
 ---
+
+## Wiring: EngineDeps and CORE_TOOLS
+
+`SessionToolContext` is added as a new field on `EngineDeps`:
+
+```rust
+pub struct EngineDeps {
+    // ... existing fields ...
+    pub session_ctx: Arc<SessionToolContext>,
+}
+```
+
+`build_engine_deps` constructs `SessionToolContext` from the full tool pool and the hardcoded core list, then stores it on `EngineDeps`. Both `engine_bootstrap.rs` (system prompt) and `react_loop.rs` (provider tool schemas) receive `session_ctx` from `EngineDeps`.
+
+`CORE_TOOLS` is defined in `engine_deps.rs` (where `SessionToolContext` is constructed) — it does not need to be visible to any other module:
+
+```rust
+const CORE_TOOLS: &[&str] = &[
+    "read", "write", "edit", "exec", "memory_search",
+    "memory_write", "tool_search", "delegate", "message",
+];
+```
 
 ## Affected Files
 
