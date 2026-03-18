@@ -1,7 +1,8 @@
 const channels = [
   {
     name: "Telegram",
-    description: "Long polling or webhook via teloxide. Real-time bot integration with full message threading.",
+    description:
+      "Long polling or webhook via teloxide. Real-time bot integration with full message threading.",
     color: "#229ED9",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
@@ -12,7 +13,8 @@ const channels = [
   },
   {
     name: "Discord",
-    description: "Gateway WebSocket via serenity. Full slash command support and rich embed responses.",
+    description:
+      "Gateway WebSocket via serenity. Full slash command support and rich embed responses.",
     color: "#5865F2",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
@@ -23,7 +25,8 @@ const channels = [
   },
   {
     name: "Slack",
-    description: "Socket Mode WebSocket for secure, firewall-friendly connectivity. Works without public endpoints.",
+    description:
+      "Socket Mode WebSocket for secure, firewall-friendly connectivity. Works without public endpoints.",
     color: "#4A154B",
     textColor: "#E01E5A",
     icon: (
@@ -35,11 +38,22 @@ const channels = [
   },
   {
     name: "Web Chat",
-    description: "React frontend with real-time WebSocket. Browser-based interface with conversation history.",
+    description:
+      "React frontend with real-time WebSocket. Browser-based interface with conversation history.",
     color: "#22d3c8",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-6 h-6">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="w-6 h-6"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+        />
       </svg>
     ),
     status: "Production",
@@ -48,12 +62,16 @@ const channels = [
 
 export function Channels() {
   return (
-    <section id="channels" className="relative py-32 border-t border-white/[0.06]">
+    <section
+      id="channels"
+      className="relative py-32 border-t border-white/[0.06]"
+    >
       {/* Background decoration */}
       <div
         className="absolute right-0 top-0 bottom-0 w-1/3 pointer-events-none"
         style={{
-          background: "linear-gradient(to left, rgba(34, 211, 200, 0.02) 0%, transparent 100%)",
+          background:
+            "linear-gradient(to left, rgba(34, 211, 200, 0.02) 0%, transparent 100%)",
         }}
       />
 
@@ -73,8 +91,8 @@ export function Channels() {
               ONE CODEBASE.
             </h2>
             <p className="lg:max-w-xs font-mono text-white/40 text-sm leading-relaxed">
-              Deploy once. Your AI agent is live on every platform
-              your users already use — simultaneously.
+              Deploy once. Your AI agent is live on every platform your users
+              already use — simultaneously.
             </p>
           </div>
           <div className="separator-teal mt-6 opacity-60" />
@@ -96,59 +114,172 @@ export function Channels() {
   );
 }
 
+// ── SVG layout constants ──
+// viewBox: 0 0 860 256 — three balanced columns
+const CH_Y = [44, 100, 156, 212] as const;
+const CHANNELS = ["Telegram", "Discord", "Slack", "Web"] as const;
+const PROVIDERS = ["GPT-5.4", "Claude 4.6", "Kimi 2.5", "Ollama"] as const;
+
+const MID_Y  = 128; // vertical centre
+const MERGE_X = 252; // x where all branch verticals converge
+
+// Right-angle (PCB-style) L-paths: channel right → merge column → centre → gateway
+const BRANCH_PATHS = CH_Y.map(
+  (y) => `M 136,${y} H ${MERGE_X} V ${MID_Y} H 300`
+);
+// Straight shot: Gateway right-edge → Agent left-edge
+const MAIN_PATH = `M 480,${MID_Y} H 568`;
+
 function ArchitectureDiagram() {
+  const FONT = "'JetBrains Mono', monospace";
+
+  // Box geometry — all centred on MID_Y
+  const GW = { x: 300, y: MID_Y - 38, w: 180, h: 76, cx: 390 };
+  const AG = { x: 568, y: MID_Y - 60, w: 252, h: 120, cx: 694 };
+
+  // 4 provider chips perfectly centred inside the Agent box
+  const CHIP_W = 52;
+  const CHIP_GAP = 4;
+  const CHIP_STRIDE = CHIP_W + CHIP_GAP;
+  const CHIP_X0 = AG.x + (AG.w - (PROVIDERS.length * CHIP_W + (PROVIDERS.length - 1) * CHIP_GAP)) / 2;
+  const CHIP_Y = MID_Y + 24;
+
   return (
-    <div className="relative border border-white/[0.08] bg-[#0d1117] p-8 overflow-hidden">
-      {/* Grid overlay */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-30"
-        style={{
-          backgroundImage: `linear-gradient(rgba(34, 211, 200, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 211, 200, 0.06) 1px, transparent 1px)`,
-          backgroundSize: "32px 32px",
-        }}
-      />
+    <div className="relative border border-white/[0.08] bg-[#0d1117] overflow-hidden">
+      {/* Teal grid */}
+      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[linear-gradient(rgba(34,211,200,0.07)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,200,0.07)_1px,transparent_1px)] bg-[size:32px_32px]" />
 
-      <div className="relative flex items-center justify-between gap-8 flex-wrap">
-        {/* Channels */}
-        <div className="flex flex-col gap-3">
-          {["Telegram", "Discord", "Slack", "Web"].map((ch) => (
-            <div key={ch} className="font-mono text-xs border border-white/[0.08] bg-[#080c10] px-4 py-2 text-white/40 hover:border-[#22d3c8]/35 hover:text-white/80 transition-colors">
-              {ch}
-            </div>
+      <svg viewBox="0 0 860 256" className="w-full h-auto relative">
+        <defs>
+          {BRANCH_PATHS.map((d, i) => (
+            <path key={i} id={`bp${i}`} d={d} />
           ))}
-        </div>
+          <path id="mp" d={MAIN_PATH} />
+        </defs>
 
-        {/* Arrow */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-16 h-px bg-[#22d3c8]/25" />
-          <div className="font-mono text-xs text-white/20">adapters</div>
-        </div>
+        {/* ── Channel boxes ── */}
+        {CHANNELS.map((ch, i) => (
+          <g key={ch}>
+            <rect x={20} y={CH_Y[i] - 20} width={116} height={40}
+              fill="#080c10" stroke="rgba(255,255,255,0.14)" strokeWidth={1} />
+            {/* left accent bar */}
+            <rect x={20} y={CH_Y[i] - 20} width={3} height={40}
+              fill="rgba(34,211,200,0.35)" />
+            <text x={84} y={CH_Y[i] + 5} textAnchor="middle"
+              fill="rgba(255,255,255,0.65)" fontSize={12} fontFamily={FONT}>
+              {ch}
+            </text>
+          </g>
+        ))}
 
-        {/* Gateway */}
-        <div className="border-2 border-[#22d3c8]/50 bg-[#0d1117] px-8 py-6 text-center glow-teal">
-          <div className="font-mono font-bold text-xl text-[#22d3c8] mb-1">GATEWAY</div>
-          <div className="font-mono text-xs text-white/25">ChannelAdapter trait</div>
-        </div>
+        {/* ── Branch track lines (right-angle / PCB style) ── */}
+        {BRANCH_PATHS.map((d, i) => (
+          <path key={i} d={d} fill="none"
+            stroke="rgba(34,211,200,0.18)" strokeWidth={1.5} />
+        ))}
 
-        {/* Arrow */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-16 h-px bg-[#22d3c8]/25" />
-          <div className="font-mono text-xs text-white/20">routes to</div>
-        </div>
+        {/* Corner dots at the horizontal→vertical bend (MERGE_X, CH_Y[i]) */}
+        {CH_Y.map((y, i) => (
+          <rect key={i} x={MERGE_X - 3} y={y - 3} width={6} height={6}
+            fill="rgba(34,211,200,0.55)" />
+        ))}
+        {/* Convergence dot where all verticals meet (MERGE_X, MID_Y) */}
+        <circle cx={MERGE_X} cy={MID_Y} r={5}
+          fill="none" stroke="rgba(34,211,200,0.65)" strokeWidth={1.5} />
+        <circle cx={MERGE_X} cy={MID_Y} r={2.5} fill="#22d3c8" opacity={0.9} />
 
-        {/* AgentEngine */}
-        <div className="border border-white/[0.10] bg-[#0d1117] px-8 py-6 text-center">
-          <div className="font-mono font-bold text-xl text-white/80 mb-1">AGENT</div>
-          <div className="font-mono text-xs text-white/25">AgentEngine</div>
-          <div className="mt-3 flex gap-2 justify-center flex-wrap">
-            {["GPT-5.4", "Claude Opus 4.6", "Kimi 2.5", "Ollama"].map((p) => (
-              <span key={p} className="font-mono text-xs border border-white/[0.08] text-white/25 px-2 py-0.5">
-                {p}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+        {/* "adapters" label */}
+        <text x={194} y={MID_Y - 12} textAnchor="middle"
+          fill="rgba(255,255,255,0.25)" fontSize={10} fontFamily={FONT}
+          letterSpacing={1}>
+          adapters
+        </text>
+
+        {/* ── Gateway box ── */}
+        <rect x={GW.x} y={GW.y} width={GW.w} height={GW.h}
+          fill="#081210" stroke="#22d3c8" strokeWidth={1.5} strokeOpacity={0.65} />
+        {/* top accent line */}
+        <line x1={GW.x} y1={GW.y} x2={GW.x + GW.w} y2={GW.y}
+          stroke="#22d3c8" strokeWidth={2.5} strokeOpacity={0.8} />
+        {/* breathing glow */}
+        <rect x={GW.x} y={GW.y} width={GW.w} height={GW.h}
+          fill="none" stroke="#22d3c8" strokeWidth={8} strokeOpacity={0.08}>
+          <animate attributeName="stroke-opacity"
+            values="0.08;0.22;0.08" dur="2.4s" repeatCount="indefinite" />
+        </rect>
+        <text x={GW.cx} y={MID_Y - 7} textAnchor="middle"
+          fill="#22d3c8" fontSize={15} fontWeight="bold"
+          fontFamily={FONT} letterSpacing={3}>
+          GATEWAY
+        </text>
+        <text x={GW.cx} y={MID_Y + 13} textAnchor="middle"
+          fill="rgba(255,255,255,0.30)" fontSize={10} fontFamily={FONT}>
+          ChannelAdapter trait
+        </text>
+
+        {/* ── Main path track ── */}
+        <path d={MAIN_PATH} fill="none"
+          stroke="rgba(34,211,200,0.22)" strokeWidth={1.5} />
+
+        {/* Arrow tip at Agent entrance */}
+        <polygon
+          points={`${568},${MID_Y - 5} ${568},${MID_Y + 5} ${576},${MID_Y}`}
+          fill="rgba(34,211,200,0.50)" />
+
+        {/* "routes to" label */}
+        <text x={524} y={MID_Y - 12} textAnchor="middle"
+          fill="rgba(255,255,255,0.25)" fontSize={10} fontFamily={FONT}
+          letterSpacing={1}>
+          routes to
+        </text>
+
+        {/* ── Agent box ── */}
+        <rect x={AG.x} y={AG.y} width={AG.w} height={AG.h}
+          fill="#0d1117" stroke="rgba(255,255,255,0.16)" strokeWidth={1} />
+        {/* top accent line */}
+        <line x1={AG.x} y1={AG.y} x2={AG.x + AG.w} y2={AG.y}
+          stroke="rgba(255,255,255,0.35)" strokeWidth={2} />
+        <text x={AG.cx} y={MID_Y - 14} textAnchor="middle"
+          fill="rgba(255,255,255,0.88)" fontSize={15} fontWeight="bold"
+          fontFamily={FONT} letterSpacing={2}>
+          AGENT
+        </text>
+        <text x={AG.cx} y={MID_Y + 6} textAnchor="middle"
+          fill="rgba(255,255,255,0.30)" fontSize={10} fontFamily={FONT}>
+          AgentEngine
+        </text>
+
+        {/* Provider chips — evenly centred */}
+        {PROVIDERS.map((p, i) => (
+          <g key={p}>
+            <rect x={CHIP_X0 + i * CHIP_STRIDE} y={CHIP_Y}
+              width={CHIP_W} height={18}
+              fill="rgba(34,211,200,0.04)" stroke="rgba(255,255,255,0.12)"
+              strokeWidth={1} />
+            <text x={CHIP_X0 + i * CHIP_STRIDE + CHIP_W / 2} y={CHIP_Y + 12}
+              textAnchor="middle" fill="rgba(255,255,255,0.40)"
+              fontSize={9} fontFamily={FONT}>
+              {p}
+            </text>
+          </g>
+        ))}
+
+        {/* ── Animated dots: branch paths ── */}
+        {BRANCH_PATHS.map((_, i) => (
+          <circle key={i} r={3.5} fill="#22d3c8" opacity={0.95}>
+            <animateMotion dur="1.7s" repeatCount="indefinite" begin={`${i * 0.38}s`}>
+              <mpath href={`#bp${i}`} />
+            </animateMotion>
+          </circle>
+        ))}
+
+        {/* ── Animated dot: gateway → agent ── */}
+        <circle r={4} fill="#22d3c8" opacity={1}>
+          <animateMotion dur="0.68s" repeatCount="indefinite" begin="0.15s">
+            <mpath href="#mp" />
+          </animateMotion>
+        </circle>
+      </svg>
     </div>
   );
 }
@@ -166,7 +297,9 @@ function ChannelCard({ channel }: { channel: (typeof channels)[0] }) {
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-mono font-semibold text-white/85">{channel.name}</h3>
+          <h3 className="font-mono font-semibold text-white/85">
+            {channel.name}
+          </h3>
           <span className="font-mono text-xs text-[#4ade80] border border-[#4ade80]/20 px-2 py-0.5">
             {channel.status}
           </span>
