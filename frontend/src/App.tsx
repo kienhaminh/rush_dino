@@ -108,8 +108,11 @@ export default function App() {
                     <Route path="summary" element={<OverviewPage />} />
                     <Route path="approvals" element={<ApprovalsPage />} />
                     <Route path="diagnostics" element={<DiagnosticsPage />} />
-                    <Route path="analytics" element={<MetricsPage />} />
+                    <Route path="analytics" element={<Navigate to="/metrics" replace />} />
                   </Route>
+
+                  {/* Metrics (direct route) */}
+                  <Route path="metrics" element={<MetricsPage />} />
 
                   {/* Channels */}
                   <Route path="channels" element={<GatewayRoute />} />

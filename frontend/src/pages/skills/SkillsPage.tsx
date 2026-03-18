@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import type { SkillRecord } from '@/lib/types';
 
 type SkillsPageProps = {
@@ -71,81 +72,42 @@ export function SkillsPage({
         </div>
       ) : null}
 
+      {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative max-w-md flex-1 min-w-[260px]">
           <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={filter}
-            onChange={(event) => onFilterChange(event.target.value)}
+            onChange={(e) => onFilterChange(e.target.value)}
             className="pl-9"
-            placeholder="Search workspace skills..."
+            placeholder="Search skills..."
           />
         </div>
-        <div className="text-sm text-muted-foreground">{filtered.length} shown</div>
-        <Button variant="outline" onClick={onRefresh} disabled={loading}>
+        <span className="text-sm text-muted-foreground">{filtered.length} shown</span>
+        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
           {loading ? 'Refreshing…' : 'Refresh'}
         </Button>
       </div>
 
-      <div className="space-y-3">
-        {filtered.length ? (
-          filtered.map((skill) => {
+      {/* Skill grid */}
+      {filtered.length ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((skill) => {
             const isEditing = editingName === skill.name;
 
             return (
               <div
                 key={skill.name}
-                className="rounded-3xl border border-border/50 bg-card/80 px-4 py-4"
+                className={cn(
+                  'group rounded-3xl border bg-card/40 transition-all duration-300',
+                  isEditing
+                    ? 'border-primary/40 shadow-lg shadow-primary/5'
+                    : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5',
+                )}
               >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-semibold">{skill.name}</p>
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                        workspace
-                      </Badge>
-                    </div>
-                    {!isEditing && (
-                      <>
-                        <p className="text-sm text-muted-foreground">{skill.description}</p>
-                        <p className="font-mono text-[11px] text-muted-foreground">{skill.path}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {skill.tools.length ? (
-                            skill.tools.map((tool) => (
-                              <Badge key={tool} variant="secondary" className="text-[10px] uppercase tracking-wider">
-                                {tool}
-                              </Badge>
-                            ))
-                          ) : (
-                            <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                              no tool constraints
-                            </Badge>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {!isEditing && (
-                    <div className="flex gap-2 shrink-0">
-                      <Button variant="outline" onClick={() => startEdit(skill)}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => onDelete(skill.name)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {isEditing && (
-                  <div className="mt-4 space-y-3">
+                {isEditing ? (
+                  <div className="p-5 space-y-3">
+                    <p className="text-sm font-semibold">{skill.name}</p>
                     <Input
                       value={draft.description}
                       onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
@@ -160,29 +122,72 @@ export function SkillsPage({
                       value={draft.instructions}
                       onChange={(e) => setDraft((d) => ({ ...d, instructions: e.target.value }))}
                       placeholder="Detailed skill instructions"
-                      className="min-h-[160px]"
+                      className="min-h-[140px]"
                     />
                     <div className="flex gap-2">
-                      <Button onClick={() => commitEdit(skill.name)} disabled={saving}>
-                        <Check className="mr-2 h-4 w-4" />
+                      <Button size="sm" onClick={() => commitEdit(skill.name)} disabled={saving}>
+                        <Check className="mr-1.5 h-3.5 w-3.5" />
                         {saving ? 'Saving…' : 'Save'}
                       </Button>
-                      <Button variant="outline" onClick={cancelEdit} disabled={saving}>
-                        <X className="mr-2 h-4 w-4" />
+                      <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
+                        <X className="mr-1.5 h-3.5 w-3.5" />
                         Cancel
                       </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-5 flex flex-col gap-3 h-full">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold leading-tight">{skill.name}</p>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button
+                          onClick={() => startEdit(skill)}
+                          className="p-1.5 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={() => onDelete(skill.name)}
+                          className="p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground leading-relaxed flex-1">
+                      {skill.description || <span className="italic opacity-50">No description</span>}
+                    </p>
+
+                    <div className="space-y-2">
+                      <p className="font-mono text-[10px] text-muted-foreground/60 truncate">{skill.path}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {skill.tools.length ? (
+                          skill.tools.map((tool) => (
+                            <Badge key={tool} variant="secondary" className="text-[10px] uppercase tracking-wider">
+                              {tool}
+                            </Badge>
+                          ))
+                        ) : (
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider opacity-50">
+                            no tool constraints
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             );
-          })
-        ) : (
-          <div className="rounded-3xl border border-dashed border-border/60 bg-background/40 px-4 py-10 text-sm text-muted-foreground">
-            No workspace skills found.
-          </div>
-        )}
-      </div>
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 rounded-3xl border-2 border-dashed border-border/40 bg-card/20 text-sm text-muted-foreground">
+          No workspace skills found.
+        </div>
+      )}
     </div>
   );
 }

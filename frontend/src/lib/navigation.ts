@@ -51,7 +51,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'sessions', label: 'Sessions', icon: FileText, href: '/sessions', matchPrefix: '/sessions' },
       { id: 'logs', label: 'Logs', icon: ScrollText, href: '/system/logs', matchPrefix: '/system/logs' },
-      { id: 'metrics', label: 'Metrics', icon: BarChart, href: '/operations/analytics', matchPrefix: '/operations/analytics' },
+      { id: 'metrics', label: 'Metrics', icon: BarChart, href: '/metrics', matchPrefix: '/metrics' },
       { id: 'cron', label: 'Cron', icon: Loader, href: '/system/cron', matchPrefix: '/system/cron' },
       { id: 'gateway', label: 'Gateway', icon: Waypoints, href: '/channels', matchPrefix: '/channels' },
       { id: 'approvals', label: 'Approvals', icon: ShieldCheck, href: '/operations/approvals', matchPrefix: '/operations/approvals' },

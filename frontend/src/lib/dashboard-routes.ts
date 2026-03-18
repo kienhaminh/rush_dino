@@ -317,14 +317,16 @@ export function resolvePageHeader(pathname: string): PageHeader {
     };
   }
 
+  if (normalized === '/metrics') {
+    return { id: 'operations', title: 'Metrics', subtitle: 'Usage, cost, and activity analytics' };
+  }
+
   if (normalized.startsWith('/operations')) {
     const activeView = OPERATIONS_VIEWS.find((view) => normalized === view.href);
-    return {
-      id: 'operations',
-      title: 'Operations',
-      subtitle: 'Daily operator posture and action surfaces',
-      detail: activeView?.label,
-    };
+    if (activeView) {
+      return { id: 'operations', title: activeView.label, subtitle: activeView.description };
+    }
+    return { id: 'operations', title: 'Operations', subtitle: 'Daily operator posture and action surfaces' };
   }
 
   if (normalized.startsWith('/channels')) {
@@ -362,23 +364,27 @@ export function resolvePageHeader(pathname: string): PageHeader {
   }
 
   if (normalized.startsWith('/builder')) {
-    const activeView = ADVANCED_VIEWS.find((view) => normalized === view.href);
-    return {
-      id: 'builder',
-      title: 'Builder',
-      subtitle: 'Agents, workflows, skills, and coding tools',
-      detail: activeView?.label,
-    };
+    const activeView = ADVANCED_VIEWS.find((view) => normalized.startsWith(view.href));
+    if (activeView) {
+      return {
+        id: 'builder',
+        title: activeView.label,
+        subtitle: activeView.description,
+      };
+    }
+    return { id: 'builder', title: 'Builder', subtitle: 'Agents, workflows, skills, and coding tools' };
   }
 
   if (normalized.startsWith('/system')) {
-    const activeView = ADVANCED_VIEWS.find((view) => normalized === view.href);
-    return {
-      id: 'system',
-      title: 'System',
-      subtitle: 'Logs, cron, nodes, and debug surfaces',
-      detail: activeView?.label,
-    };
+    const activeView = ADVANCED_VIEWS.find((view) => normalized.startsWith(view.href));
+    if (activeView) {
+      return {
+        id: 'system',
+        title: activeView.label,
+        subtitle: activeView.description,
+      };
+    }
+    return { id: 'system', title: 'System', subtitle: 'Logs, cron, nodes, and debug surfaces' };
   }
 
   return {
