@@ -1,4 +1,5 @@
 pub mod approval_gate;
+pub mod policy_system_broker;
 pub mod channel_pairing;
 mod chat_broadcast;
 mod cron_runtime;

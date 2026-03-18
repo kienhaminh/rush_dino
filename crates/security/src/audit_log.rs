@@ -132,6 +132,16 @@ impl AuditLog {
         Arc::new(Self { tx })
     }
 
+    /// Creates a no-op audit log that silently discards all entries.
+    ///
+    /// Useful for tests and contexts where SQLite persistence is not available.
+    pub fn new_noop() -> Arc<Self> {
+        let (tx, _rx) = mpsc::unbounded_channel::<AuditEntry>();
+        // _rx is dropped here, so sends will fail silently — exactly what
+        // `record` already handles by ignoring the send error.
+        Arc::new(Self { tx })
+    }
+
     /// Records an audit entry (non-blocking — never blocks the caller).
     ///
     /// Errors are silently dropped; audit failures must not affect agent
