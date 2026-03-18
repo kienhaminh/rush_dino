@@ -16,7 +16,6 @@ export function AppLayout() {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background font-body text-foreground">
       <Sidebar
-        activeNavId={shellView.id}
         collapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((value) => !value)}
       />
