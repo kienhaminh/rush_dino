@@ -127,16 +127,14 @@ export default function App() {
                   <Route path="config" element={<Navigate to="/config/profiles" replace />} />
                   <Route path="config/:section" element={<ConfigPage />} />
 
-                  {/* Builder */}
-                  <Route path="builder" element={<BuilderPage />}>
-                    <Route index element={<Navigate to="agents" replace />} />
-                    <Route path="agents" element={<AgentsPage />} />
-                    <Route path="agent-board" element={<AgentBoardPage />} />
-                    <Route path="workflows" element={<WorkflowsPage />} />
-                    <Route path="skills" element={<SkillsRoute />} />
-                    <Route path="coding-agents" element={<CodingAgentsPage />} />
-                    <Route path="acp-sessions" element={<AcpSessionsPage />} />
-                  </Route>
+                  {/* Builder (flat routes, no prefix) */}
+                  <Route path="agents" element={<AgentsPage />} />
+                  <Route path="agent-board" element={<AgentBoardPage />} />
+                  <Route path="workflows" element={<WorkflowsPage />} />
+                  <Route path="skills" element={<SkillsRoute />} />
+                  <Route path="coding-agents" element={<CodingAgentsPage />} />
+                  <Route path="acp-sessions" element={<AcpSessionsPage />} />
+                  <Route path="builder" element={<Navigate to="/agents" replace />} />
 
                   {/* System */}
                   <Route path="system" element={<SystemPage />}>
@@ -152,17 +150,16 @@ export default function App() {
                   <Route path="overview" element={<LegacyRedirect />} />
                   <Route path="approvals" element={<LegacyRedirect />} />
                   <Route path="diagnostics" element={<LegacyRedirect />} />
-                  <Route path="metrics" element={<LegacyRedirect />} />
                   <Route path="gateway" element={<LegacyRedirect />} />
                   <Route path="gateway/:channel/settings" element={<LegacyRedirect />} />
                   <Route path="instances" element={<LegacyRedirect />} />
                   <Route path="soul-memory" element={<LegacyRedirect />} />
-                  <Route path="agent-board" element={<LegacyRedirect />} />
-                  <Route path="agents" element={<LegacyRedirect />} />
-                  <Route path="workflows" element={<LegacyRedirect />} />
-                  <Route path="skills" element={<LegacyRedirect />} />
-                  <Route path="coding-agents" element={<LegacyRedirect />} />
-                  <Route path="acp-sessions" element={<LegacyRedirect />} />
+                  <Route path="builder/agents" element={<LegacyRedirect />} />
+                  <Route path="builder/agent-board" element={<LegacyRedirect />} />
+                  <Route path="builder/workflows" element={<LegacyRedirect />} />
+                  <Route path="builder/skills" element={<LegacyRedirect />} />
+                  <Route path="builder/coding-agents" element={<LegacyRedirect />} />
+                  <Route path="builder/acp-sessions" element={<LegacyRedirect />} />
                   <Route path="logs" element={<LegacyRedirect />} />
                   <Route path="cron" element={<LegacyRedirect />} />
                   <Route path="nodes" element={<LegacyRedirect />} />

@@ -40,10 +40,10 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     label: 'operations',
     items: [
-      { id: 'agents', label: 'Agents', icon: Folder, href: '/builder/agents', matchPrefix: '/builder/agents' },
-      { id: 'board', label: 'Board', icon: LayoutGrid, href: '/builder/agent-board', matchPrefix: '/builder/agent-board' },
-      { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/builder/workflows', matchPrefix: '/builder/workflows' },
-      { id: 'skills', label: 'Skills', icon: Zap, href: '/builder/skills', matchPrefix: '/builder/skills' },
+      { id: 'agents', label: 'Agents', icon: Folder, href: '/agents', matchPrefix: '/agents' },
+      { id: 'board', label: 'Board', icon: LayoutGrid, href: '/agent-board', matchPrefix: '/agent-board' },
+      { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows' },
+      { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills' },
     ],
   },
   {

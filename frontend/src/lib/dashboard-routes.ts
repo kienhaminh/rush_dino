@@ -192,42 +192,42 @@ export const ADVANCED_VIEWS: AdvancedView[] = [
     id: 'agents',
     label: 'Agents',
     description: 'Manage reusable agent definitions',
-    href: '/builder/agents',
+    href: '/agents',
   },
   {
     area: 'builder',
     id: 'agent-board',
-    label: 'Agent Board',
+    label: 'Board',
     description: 'Overview board for agent activity',
-    href: '/builder/agent-board',
+    href: '/agent-board',
   },
   {
     area: 'builder',
     id: 'workflows',
     label: 'Workflows',
     description: 'Build and run workflow graphs',
-    href: '/builder/workflows',
+    href: '/workflows',
   },
   {
     area: 'builder',
     id: 'skills',
     label: 'Skills',
     description: 'Manage workspace skills',
-    href: '/builder/skills',
+    href: '/skills',
   },
   {
     area: 'builder',
     id: 'coding-agents',
     label: 'Coding Agents',
     description: 'Manage ACP coding agents',
-    href: '/builder/coding-agents',
+    href: '/coding-agents',
   },
   {
     area: 'builder',
     id: 'acp-sessions',
     label: 'ACP Sessions',
     description: 'Inspect ACP session activity',
-    href: '/builder/acp-sessions',
+    href: '/acp-sessions',
   },
   {
     area: 'system',
@@ -274,12 +274,12 @@ const LEGACY_REDIRECTS: Record<string, string> = {
   '/gateway': '/channels',
   '/instances': '/channels?panel=instances',
   '/soul-memory': '/config/identity',
-  '/agents': '/builder/agents',
-  '/agent-board': '/builder/agent-board',
-  '/workflows': '/builder/workflows',
-  '/skills': '/builder/skills',
-  '/coding-agents': '/builder/coding-agents',
-  '/acp-sessions': '/builder/acp-sessions',
+  '/builder/agents': '/agents',
+  '/builder/agent-board': '/agent-board',
+  '/builder/workflows': '/workflows',
+  '/builder/skills': '/skills',
+  '/builder/coding-agents': '/coding-agents',
+  '/builder/acp-sessions': '/acp-sessions',
   '/logs': '/system/logs',
   '/cron': '/system/cron',
   '/nodes': '/system/nodes',
@@ -363,16 +363,11 @@ export function resolvePageHeader(pathname: string): PageHeader {
     };
   }
 
-  if (normalized.startsWith('/builder')) {
-    const activeView = ADVANCED_VIEWS.find((view) => normalized.startsWith(view.href));
-    if (activeView) {
-      return {
-        id: 'builder',
-        title: activeView.label,
-        subtitle: activeView.description,
-      };
-    }
-    return { id: 'builder', title: 'Builder', subtitle: 'Agents, workflows, skills, and coding tools' };
+  const builderView = ADVANCED_VIEWS.find(
+    (view) => view.area === 'builder' && normalized.startsWith(view.href),
+  );
+  if (builderView) {
+    return { id: 'builder', title: builderView.label, subtitle: builderView.description };
   }
 
   if (normalized.startsWith('/system')) {
