@@ -29,10 +29,6 @@ impl Tool for FileReadTool {
         "Read a file. Provide an absolute path to read any file on the filesystem, or a relative path to read from the workspace documents directory."
     }
 
-    fn keywords(&self) -> &[&str] {
-        &["file", "file_read", "open", "load", "document", "text"]
-    }
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

@@ -13,16 +13,16 @@ pi-mono/
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
+.next/
+out/
 dist/
 bin/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store
@@ -74,6 +74,7 @@ __pycache__
 .opencode
 .gemini
 .agent
+.superpowers
 
 # Rust / RushDino
 /target

@@ -88,10 +88,15 @@ pub fn ensure_rushdino_dir_at(home: &Path) -> Result<()> {
         get_template(templates::AGENTS_MD).as_bytes(),
     )?;
 
-    write_if_missing(
-        &home.join("BOOTSTRAP.md"),
-        get_template(templates::BOOTSTRAP_MD).as_bytes(),
-    )?;
+    let identity_is_default = fs::read_to_string(home.join("IDENTITY.md"))
+        .map(|c| c.trim() == get_template(templates::IDENTITY_MD).trim())
+        .unwrap_or(true);
+    if identity_is_default {
+        write_if_missing(
+            &home.join("BOOTSTRAP.md"),
+            get_template(templates::BOOTSTRAP_MD).as_bytes(),
+        )?;
+    }
 
     write_if_missing(
         &home.join("HEARTBEAT.md"),

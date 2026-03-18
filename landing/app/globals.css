@@ -1,0 +1,181 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: #080c10;
+  --color-foreground: rgba(255,255,255,0.92);
+  --font-sans: 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ── Base overrides ── */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #080c10;
+    color: rgba(255,255,255,0.92);
+    font-family: 'JetBrains Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #080c10; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(34,211,200,0.5); }
+}
+
+/* ── Grain noise overlay ── */
+html::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.3;
+}
+
+/* ── Design system color aliases (CSS vars) ── */
+:root {
+  /* Backgrounds */
+  --ds-bg-base:     #080c10;
+  --ds-bg-surface:  #0d1117;
+  --ds-bg-card:     #111820;
+  --ds-bg-elevated: #161e28;
+  --ds-bg-overlay:  #1c2430;
+
+  /* Teal accent */
+  --ds-teal-950: #0a2e2c;
+  --ds-teal-800: #0e7a72;
+  --ds-teal-600: #0ea898;
+  --ds-teal-400: #22d3c8;
+  --ds-teal-300: #67e8e3;
+  --ds-teal-200: #a5f3ef;
+
+  /* Brand palette */
+  --brand-navy:  #1A3A5C;
+  --brand-ocean: #1B70A0;
+  --brand-teal:  #1B9DB8;
+  --brand-cyan:  #17C4D6;
+  --brand-mint:  #3DBE8A;
+  --brand-lime:  #82C840;
+  --brand-amber: #F5C118;
+  --brand-glow:  #F07830;
+
+  /* Semantic */
+  --ds-success: #4ade80;
+  --ds-warning: #f59e0b;
+  --ds-error:   #f87171;
+  --ds-info:    #60a5fa;
+
+  /* Text */
+  --ds-text-primary:   rgba(255,255,255,0.92);
+  --ds-text-secondary: rgba(255,255,255,0.65);
+  --ds-text-muted:     rgba(255,255,255,0.40);
+  --ds-text-dim:       rgba(255,255,255,0.20);
+
+  /* Borders */
+  --ds-border-subtle: rgba(255,255,255,0.06);
+  --ds-border-base:   rgba(255,255,255,0.10);
+  --ds-border-strong: rgba(255,255,255,0.18);
+
+  /* Glows */
+  --ds-glow-teal:  0 0 0 1px rgba(34,211,200,0.12), 0 4px 20px rgba(0,0,0,0.4);
+  --ds-glow-amber: 0 0 0 1px rgba(245,158,11,0.15), 0 4px 20px rgba(0,0,0,0.4);
+}
+
+/* ── Animated underline ── */
+.animated-underline { position: relative; }
+.animated-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; left: 0;
+  width: 0; height: 1px;
+  background: var(--ds-teal-400);
+  transition: width 0.35s ease;
+}
+.animated-underline:hover::after { width: 100%; }
+
+/* ── Glow helpers ── */
+.glow-teal { box-shadow: 0 0 32px rgba(34,211,200,0.12); }
+.text-glow-teal { text-shadow: 0 0 24px rgba(34,211,200,0.5); }
+
+/* ── Animations ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes subtlePulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+@keyframes pingRing {
+  0%   { box-shadow: 0 0 0 0px  rgba(34,211,200,0.55); }
+  60%  { box-shadow: 0 0 0 10px rgba(34,211,200,0.15); }
+  100% { box-shadow: 0 0 0 16px rgba(34,211,200,0);    }
+}
+@keyframes scanLine {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(100vh); }
+}
+
+.animate-fade-in-up  { animation: fadeInUp 0.55s ease forwards; }
+.animate-ping-ring   { animation: pingRing 0.6s ease-out forwards; }
+.animate-delay-1 { animation-delay: 0.08s; animation-fill-mode: backwards; }
+.animate-delay-2 { animation-delay: 0.16s; animation-fill-mode: backwards; }
+.animate-delay-3 { animation-delay: 0.28s; animation-fill-mode: backwards; }
+.animate-delay-4 { animation-delay: 0.42s; animation-fill-mode: backwards; }
+.animate-subtle-pulse { animation: subtlePulse 3s ease-in-out infinite; }
+
+/* ── Section label ── */
+.section-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(34,211,200,0.65);
+}
+
+/* ── Teal gradient separator ── */
+.separator-teal {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(34,211,200,0.4) 0%, transparent 70%);
+}
+
+/* ── Feature card ── */
+.feature-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+.feature-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(34,211,200,0.22) !important;
+  box-shadow: var(--ds-glow-teal);
+}
+
+/* ── Code block ── */
+.code-block {
+  background: var(--ds-bg-surface);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-left: 2px solid var(--ds-teal-400);
+}
+
+/* ── Diagonal texture ── */
+.diagonal-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent, transparent 14px,
+    rgba(34,211,200,0.018) 14px,
+    rgba(34,211,200,0.018) 28px
+  );
+}
+
+/* ── Channel icon ── */
+.channel-icon-wrapper { transition: transform 0.2s ease; }
+.channel-icon-wrapper:hover { transform: scale(1.08); }
