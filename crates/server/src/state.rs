@@ -1,7 +1,10 @@
-use std::{path::PathBuf, sync::Arc, time::Instant};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Instant};
 
 use rushdino_gateway::{GatewayControl, GatewayStateStore, SessionManager};
+use rushdino_security::approval_gate::ApprovalGate as SandboxApprovalGate;
+use rushdino_security::egress_proxy::EgressProxy;
 use rushdino_security::rate_limit::EndpointLimiters;
+use tokio::sync::RwLock;
 
 use crate::approval_gate::ApprovalGate;
 use crate::channel_pairing::ChannelPairingService;
@@ -13,6 +16,55 @@ use crate::webchat::WebChatAdapter;
 use rushdino_agent::AgentEngine;
 use rushdino_common::dashboard_auth::DashboardAuthService;
 use rushdino_common::{AppConfig, Result};
+
+// ---------------------------------------------------------------------------
+// SandboxRegistry
+// ---------------------------------------------------------------------------
+
+/// Shared registry mapping active session IDs to their sandbox components.
+///
+/// Stored in `AppState` and cloned cheaply via `Arc`. Routes use it to
+/// perform hot-reloads, audit-log queries, and approve/deny pending sandbox
+/// network requests.
+pub struct SandboxRegistry {
+    /// session_id → EgressProxy — enables network policy hot-reload per session.
+    pub proxies: RwLock<HashMap<String, Arc<EgressProxy>>>,
+    /// session_id → ApprovalGate — enables approve/deny of pending egress requests.
+    pub approval_gates: RwLock<HashMap<String, Arc<SandboxApprovalGate>>>,
+    /// Shared SQLite pool for audit log queries.
+    pub pool: Arc<sqlx::SqlitePool>,
+    /// Base directory under which `{agent_id}/sandbox.yaml` files live.
+    pub agents_dir: PathBuf,
+}
+
+impl SandboxRegistry {
+    /// Create a new, empty registry wrapped in an `Arc`.
+    pub fn new(pool: Arc<sqlx::SqlitePool>, agents_dir: PathBuf) -> Arc<Self> {
+        Arc::new(Self {
+            proxies: RwLock::new(HashMap::new()),
+            approval_gates: RwLock::new(HashMap::new()),
+            pool,
+            agents_dir,
+        })
+    }
+
+    /// Register the sandbox components for a newly started agent session.
+    pub async fn register_session(
+        &self,
+        session_id: String,
+        proxy: Arc<EgressProxy>,
+        gate: Arc<SandboxApprovalGate>,
+    ) {
+        self.proxies.write().await.insert(session_id.clone(), proxy);
+        self.approval_gates.write().await.insert(session_id, gate);
+    }
+
+    /// Remove all sandbox components for a completed or aborted session.
+    pub async fn unregister_session(&self, session_id: &str) {
+        self.proxies.write().await.remove(session_id);
+        self.approval_gates.write().await.remove(session_id);
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -44,6 +96,8 @@ pub struct AppState {
     pub channel_pairing: Arc<ChannelPairingService>,
     /// SQLite-backed dashboard auth state store.
     pub dashboard_auth: Arc<DashboardAuthService>,
+    /// Sandbox registry: maps session IDs to their egress proxies and approval gates.
+    pub sandbox_registry: Arc<SandboxRegistry>,
 }
 
 impl AppState {
@@ -63,6 +117,7 @@ impl AppState {
         chat_broadcast: Arc<ChatBroadcastHub>,
         channel_pairing: Arc<ChannelPairingService>,
         dashboard_auth: Arc<DashboardAuthService>,
+        sandbox_registry: Arc<SandboxRegistry>,
     ) -> Self {
         Self {
             runtime,
@@ -80,6 +135,7 @@ impl AppState {
             chat_broadcast,
             channel_pairing,
             dashboard_auth,
+            sandbox_registry,
         }
     }
 

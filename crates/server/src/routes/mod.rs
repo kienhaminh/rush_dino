@@ -15,6 +15,7 @@ pub mod health;
 pub mod logs;
 pub mod providers;
 pub mod runs;
+pub mod sandbox;
 pub mod sessions;
 pub mod skills;
 pub mod soul_memory;

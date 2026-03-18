@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use axum::{
     middleware as axum_middleware,
-    routing::{get, patch, post},
+    routing::{get, patch, post, put},
     Router,
 };
 use state::AppState;
@@ -324,6 +324,10 @@ pub async fn run_server() -> Result<()> {
         }
     }
 
+    // Build the sandbox registry using the shared SQLite pool and agents dir.
+    let agents_dir = config.data_dir.join("agents");
+    let sandbox_registry = state::SandboxRegistry::new(pool.clone(), agents_dir);
+
     let state = AppState::new(
         runtime_state.clone(),
         config_path,
@@ -339,6 +343,7 @@ pub async fn run_server() -> Result<()> {
         chat_broadcast,
         channel_pairing,
         dashboard_auth,
+        sandbox_registry,
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -554,6 +559,27 @@ pub async fn run_server() -> Result<()> {
         .route(
             "/api/providers/:profile_id/connect-oauth",
             post(routes::providers::connect_profile_oauth),
+        )
+        // Sandbox policy API routes
+        .route(
+            "/api/agents/:agent_id/sandbox",
+            get(routes::sandbox::get_agent_sandbox).put(routes::sandbox::put_agent_sandbox),
+        )
+        .route(
+            "/api/sessions/:session_id/sandbox/network",
+            patch(routes::sandbox::patch_session_network_policy),
+        )
+        .route(
+            "/api/sessions/:session_id/audit-log",
+            get(routes::sandbox::get_session_audit_log),
+        )
+        .route(
+            "/api/sessions/:session_id/sandbox/approve",
+            post(routes::sandbox::approve_session_request),
+        )
+        .route(
+            "/api/sessions/:session_id/sandbox/deny",
+            post(routes::sandbox::deny_session_request),
         )
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(
