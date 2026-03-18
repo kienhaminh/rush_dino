@@ -99,7 +99,7 @@ export function SkillsPage({
               <div
                 key={skill.name}
                 className={cn(
-                  'group rounded-3xl border bg-card/40 transition-all duration-300',
+                  'group rounded-xl border bg-card/40 transition-all duration-300',
                   isEditing
                     ? 'border-primary/40 shadow-lg shadow-primary/5'
                     : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5',
@@ -184,7 +184,7 @@ export function SkillsPage({
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-20 rounded-3xl border-2 border-dashed border-border/40 bg-card/20 text-sm text-muted-foreground">
+        <div className="flex flex-col items-center justify-center py-20 rounded-xl border-2 border-dashed border-border/40 bg-card/20 text-sm text-muted-foreground">
           No workspace skills found.
         </div>
       )}
