@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod audit_log;
 pub mod auth_hmac;
 pub mod egress_proxy;
 pub mod credential_injector;

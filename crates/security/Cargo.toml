@@ -22,6 +22,7 @@ url.workspace = true
 tokio = { version = "1", features = ["sync", "time"] }
 serde.workspace = true
 serde_json.workspace = true
+sqlx = { workspace = true, optional = true }
 serde_yaml = "0.9"
 dirs = "5"
 tracing.workspace = true
@@ -31,6 +32,7 @@ hex.workspace = true
 [features]
 wasm-sandbox = ["wasmtime"]
 seccomp = ["seccompiler"]
+audit-log = ["sqlx"]
 
 [dependencies.wasmtime]
 version = "22"
