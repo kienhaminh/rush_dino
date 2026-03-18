@@ -26,6 +26,8 @@ pub enum PolicyError {
         #[source]
         source: serde_yaml::Error,
     },
+    #[error("{0}")]
+    Policy(String),
 }
 
 impl SandboxPolicy {
@@ -45,7 +47,7 @@ impl SandboxPolicy {
                 source,
             })?;
 
-        expand_tilde_in_policy(&mut policy);
+        expand_tilde_in_policy(&mut policy)?;
 
         Ok(policy)
     }
@@ -75,29 +77,32 @@ impl SandboxPolicy {
 
 /// Expand `~` at the start of a path string to the user's home directory.
 ///
-/// Falls back to the literal `~` if `HOME` is not set.
-fn expand_tilde(path: &Path) -> PathBuf {
+/// Returns an error if `HOME` is not set and the path starts with `~`.
+fn expand_tilde(path: &Path) -> Result<PathBuf, PolicyError> {
     let s = path.to_string_lossy();
     if s.starts_with('~') {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+        let home = std::env::var("HOME")
+            .map_err(|_| PolicyError::Policy("HOME environment variable not set; cannot expand '~' in policy paths".to_string()))?;
         let without_tilde = s.trim_start_matches('~');
-        PathBuf::from(format!("{home}{without_tilde}"))
+        Ok(PathBuf::from(format!("{home}{without_tilde}")))
     } else {
-        path.to_owned()
+        Ok(path.to_owned())
     }
 }
 
 /// Walk the entire policy and expand `~` in every path field.
-fn expand_tilde_in_policy(policy: &mut SandboxPolicy) {
+fn expand_tilde_in_policy(policy: &mut SandboxPolicy) -> Result<(), PolicyError> {
     let fs = &mut policy.sandbox.filesystem;
 
     for rule in &mut fs.allow {
-        rule.path = expand_tilde(&rule.path);
+        rule.path = expand_tilde(&rule.path)?;
     }
 
     for deny_path in &mut fs.deny {
-        *deny_path = expand_tilde(deny_path);
+        *deny_path = expand_tilde(deny_path)?;
     }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +204,7 @@ providers:
         let mut policy: SandboxPolicy =
             serde_yaml::from_str(FULL_YAML).expect("YAML should parse");
 
-        expand_tilde_in_policy(&mut policy);
+        expand_tilde_in_policy(&mut policy).expect("tilde expansion should succeed when HOME is set");
 
         let allow_path = policy.sandbox.filesystem.allow[0].path.to_string_lossy();
         assert!(
