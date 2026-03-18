@@ -22,6 +22,8 @@ url.workspace = true
 tokio = { version = "1", features = ["sync", "time"] }
 serde.workspace = true
 serde_json.workspace = true
+serde_yaml = "0.9"
+dirs = "5"
 tracing.workspace = true
 thiserror.workspace = true
 hex.workspace = true
