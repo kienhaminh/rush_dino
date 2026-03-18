@@ -718,3 +718,66 @@ export interface ActiveAgent {
   name: string;
   role: 'orchestrator' | 'delegate';
 }
+
+// ---------------------------------------------------------------------------
+// Sandbox policy types — mirror the Rust SandboxPolicy YAML structs
+// ---------------------------------------------------------------------------
+
+export interface PathRule {
+  path: string;
+  mode: 'read-only' | 'read-write';
+}
+
+export interface NetworkRule {
+  host: string;
+  port: number;
+  methods: string[];
+  paths: string[];
+}
+
+export interface SandboxFilesystemPolicy {
+  default: 'allow' | 'deny';
+  allow: PathRule[];
+  deny: string[];
+}
+
+export interface SandboxProcessPolicy {
+  allow_privileged: boolean;
+  max_concurrent: number;
+  deny_commands: string[];
+}
+
+export interface SandboxNetworkPolicy {
+  default: 'allow' | 'deny';
+  on_block: 'prompt' | 'deny' | 'hard-stop';
+  allow: NetworkRule[];
+}
+
+export interface CredentialProvider {
+  name: string;
+  inject: Record<string, string>;
+}
+
+export interface SandboxPolicy {
+  version: string;
+  sandbox: {
+    filesystem: SandboxFilesystemPolicy;
+    process: SandboxProcessPolicy;
+    network: SandboxNetworkPolicy;
+  };
+  providers: CredentialProvider[];
+}
+
+export interface AuditEntry {
+  id: number;
+  session_id: string;
+  agent_id: string | null;
+  ts: string;
+  category: 'filesystem' | 'network' | 'process' | 'inference';
+  decision: 'allow' | 'deny' | 'route' | 'pending';
+  binary: string | null;
+  destination: string | null;
+  method: string | null;
+  path: string | null;
+  reason: string | null;
+}

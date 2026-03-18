@@ -30,6 +30,7 @@ const DebugPage = lazy(() => import('./pages/debug/DebugPage').then(m => ({ defa
 const LogsPage = lazy(() => import('./pages/logs/LogsPage').then(m => ({ default: m.LogsPage })));
 const BuilderPage = lazy(() => import('./pages/builder/BuilderPage').then(m => ({ default: m.BuilderPage })));
 const SystemPage = lazy(() => import('./pages/system/SystemPage').then(m => ({ default: m.SystemPage })));
+const SandboxMonitorPage = lazy(() => import('./pages/sandbox/SandboxMonitorPage').then(m => ({ default: m.SandboxMonitorPage })));
 const NotFoundPage = lazy(() => import('./pages/not-found/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 const DesignSystemPage = lazy(() => import('./pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
 const LoginPage = lazy(() => import('./pages/login/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -141,6 +142,7 @@ export default function App() {
                     <Route path="cron" element={<CronPage />} />
                     <Route path="nodes" element={<NodesPage />} />
                     <Route path="debug" element={<DebugPage />} />
+                    <Route path="sandbox" element={<SandboxMonitorPage />} />
                   </Route>
 
                   {/* Legacy redirects */}

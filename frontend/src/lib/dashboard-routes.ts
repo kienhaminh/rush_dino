@@ -33,7 +33,8 @@ export type AdvancedViewId =
   | 'logs'
   | 'cron'
   | 'nodes'
-  | 'debug';
+  | 'debug'
+  | 'sandbox';
 
 export type PrimaryNavItem = {
   id: PrimaryNavId;
@@ -255,6 +256,13 @@ export const ADVANCED_VIEWS: AdvancedView[] = [
     label: 'Debug',
     description: 'Low-level debugging surfaces',
     href: '/system/debug',
+  },
+  {
+    area: 'system',
+    id: 'sandbox',
+    label: 'Sandbox',
+    description: 'Audit log, pending approvals, and network hot-reload',
+    href: '/system/sandbox',
   },
 ];
 
