@@ -19,7 +19,7 @@ use rushdino_security::{taint::TaintLevel, validation::scan_prompt_injection};
 use crate::{
     context::{estimate_tokens, truncate_messages},
     engine::AgentConfig,
-    tool_registry::ToolRegistry,
+    tool_registry::{SessionToolContext, ToolRegistry},
 };
 
 /// Compute the minimum taint level for tool arguments based on the conversation messages.
@@ -52,6 +52,7 @@ pub enum StreamingEvent {
 pub async fn run_react_loop(
     provider: Arc<Provider>,
     registry: Arc<ToolRegistry>,
+    session_ctx: Arc<SessionToolContext>,
     mut messages: Vec<Message>,
     config: &AgentConfig,
     event_tx: Option<mpsc::Sender<StreamingEvent>>,
@@ -63,7 +64,7 @@ pub async fn run_react_loop(
     for _ in 0..config.max_iterations {
         let input = truncate_messages(&messages, config.max_context_tokens);
         let response = provider
-            .chat(build_chat_request(input.clone(), &registry, config))
+            .chat(build_chat_request(input.clone(), &session_ctx, config))
             .await?;
         let iteration_usage = response.usage.clone().unwrap_or_else(|| {
             estimate_turn_usage(&input, &response.content, &response.tool_calls)
@@ -121,6 +122,7 @@ pub async fn run_react_loop(
 pub async fn run_react_loop_streaming(
     provider: Arc<Provider>,
     registry: Arc<ToolRegistry>,
+    session_ctx: Arc<SessionToolContext>,
     mut messages: Vec<Message>,
     config: &AgentConfig,
     event_tx: mpsc::Sender<StreamingEvent>,
@@ -132,7 +134,7 @@ pub async fn run_react_loop_streaming(
     for _ in 0..config.max_iterations {
         let input = truncate_messages(&messages, config.max_context_tokens);
         let mut stream = provider
-            .stream_chat(build_chat_request(input.clone(), &registry, config))
+            .stream_chat(build_chat_request(input.clone(), &session_ctx, config))
             .await?;
 
         let mut content = String::new();
@@ -268,12 +270,12 @@ fn finalize_response_content(response: &mut ChatResponse, presented_content: Opt
 
 fn build_chat_request(
     messages: Vec<Message>,
-    registry: &ToolRegistry,
+    session_ctx: &SessionToolContext,
     config: &AgentConfig,
 ) -> ChatRequest {
     ChatRequest {
         messages,
-        tools: Some(registry.definitions()),
+        tools: Some(session_ctx.active_definitions()),
         temperature: Some(0.2),
         max_tokens: Some(8192),
         model: config.model_override.clone(),

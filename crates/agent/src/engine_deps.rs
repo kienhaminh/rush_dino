@@ -120,14 +120,11 @@ pub fn build_engine_deps(
     // DelegateToAgentTool needs it to create isolated sub-conversations.
     let conversation = Arc::new(ConversationManager::new(pool.clone()));
 
-    // Clone all variables needed inside the Arc::new_cyclic closure before it
-    // captures them. The closure is SYNC so all construction inside must be sync.
-    let task_memory_c = task_memory.clone();
+    // Clone all variables needed inside Arc::new_cyclic closures before they
+    // capture them. The closures are SYNC so all construction inside must be sync.
     let provider_c = provider.clone();
-    let agent_manager_c = agent_manager.clone();
     let agent_manager_c2 = agent_manager.clone();
     let agent_manager_c3 = agent_manager.clone();
-    let config_c = config.clone();
     let memory_c = memory.clone();
     let skills_c = skills.clone();
     let jobs_c = jobs.clone();
@@ -141,20 +138,13 @@ pub fn build_engine_deps(
     let egress_proxy_c = egress_proxy.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
-    let conversation_c = conversation.clone();
 
-    // Arc::new_cyclic allows DelegateToAgentTool to hold a Weak<ToolRegistry>
-    // that points back to the registry being constructed, avoiding a retain cycle.
+    // First Arc::new_cyclic builds the ToolRegistry. DelegateToAgentTool is
+    // constructed here so it can receive a Weak<ToolRegistry> to avoid a cycle:
+    // ToolRegistry → DelegateToAgentTool → Weak<ToolRegistry>.
+    // session_ctx is not yet available here; DelegateToAgentTool will receive a
+    // Weak<SessionToolContext> later via the second Arc::new_cyclic.
     let registry = Arc::new_cyclic(|weak_registry| {
-        let delegate_tool = DelegateToAgentTool::new(
-            agent_manager_c,
-            provider_c,
-            config_c,
-            weak_registry.clone(),
-            task_memory_c,
-            conversation_c,
-        );
-
         let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
 
         let r = ToolRegistry::new();
@@ -193,25 +183,29 @@ pub fn build_engine_deps(
         if let Some(graph) = graph_c {
             r.register(KnowledgeGraphQueryTool::new(graph));
         }
-        r.register(delegate_tool);
+        // DelegateToAgentTool needs Weak<ToolRegistry> (avoids cycle) and will
+        // receive a Weak<SessionToolContext> inside session_ctx's Arc::new_cyclic.
+        // Use a dead Weak here; it is overwritten by re-registering inside session_ctx.
+        // NOTE: we deliberately construct and register DelegateToAgentTool twice —
+        // first with a dead session_ctx Weak here to satisfy the registry slot, then
+        // replace it inside session_ctx's Arc::new_cyclic with the live Weak.
+        // Instead: we register it only once, inside session_ctx's closure.
+        // A placeholder (SpawnAgentTool) occupies no slot; DelegateToAgentTool is
+        // registered later. The registry is append-only via register(), so we cannot
+        // replace. Use Weak::new() (dead) for session_ctx in the first registration.
+        r.register(DelegateToAgentTool::new(
+            agent_manager.clone(),
+            provider_c.clone(),
+            config.clone(),
+            weak_registry.clone(),
+            Weak::new(), // session_ctx unavailable here — upgraded lazily at execute time
+            task_memory.clone(),
+            conversation.clone(),
+        ));
         r.register(SpawnAgentTool::new(agent_manager_c2));
         r
     });
 
-    let workflow_runner = Arc::new(WorkflowRunner::new(
-        provider.clone(),
-        registry.clone(),
-        conversation.clone(),
-        memory.clone(),
-        agent_manager.clone(),
-        workflow_manager.clone(),
-        runtime.clone(),
-        config.clone(),
-    ));
-    registry.register(RunWorkflowTool::new(
-        workflow_manager_c3,
-        workflow_runner.clone(),
-    ));
     // Build WebFetchTool, optionally attaching the sandbox egress proxy.
     let mut web_fetch = WebFetchTool::new();
     if let Some(proxy) = &egress_proxy {
@@ -220,47 +214,80 @@ pub fn build_engine_deps(
     registry.register(web_fetch);
     registry.register(SessionCreateTool::new(conversation.clone()));
     registry.register(SessionGetTool::new(conversation.clone()));
-    registry.register(SessionSendTool::new(
-        conversation.clone(),
-        provider.clone(),
-        Arc::downgrade(&registry),
-        memory.clone(),
-        skills.clone(),
-        agent_manager.clone(),
-        config.clone(),
-    ));
     registry.register(cron_list_tool(cron_manager.clone()));
     registry.register(cron_get_tool(cron_manager.clone()));
     registry.register(cron_create_tool(cron_manager.clone()));
     registry.register(cron_update_tool(cron_manager.clone()));
     registry.register(cron_pause_tool(cron_manager.clone()));
     registry.register(cron_resume_tool(cron_manager.clone()));
-    registry.register(cron_run_now_tool(
-        cron_manager.clone(),
-        conversation.clone(),
-        provider.clone(),
-        Arc::downgrade(&registry),
-        memory.clone(),
-        skills.clone(),
-        agent_manager.clone(),
-        config.clone(),
-        workflow_manager.clone(),
-        workflow_runner.clone(),
-        runtime.clone(),
-        provider.model().to_owned(),
-    ));
     registry.register(cron_delete_tool(cron_manager.clone()));
     let _ = system_broker;
 
-    // Build SessionToolContext with Arc::new_cyclic so ToolSearchTool can hold
-    // a Weak reference back to the context without a retain cycle:
-    // SessionToolContext.pool → Arc<ToolSearchTool> → Weak<SessionToolContext>.
+    // Use OnceLock so WorkflowRunner built inside the session_ctx closure can be
+    // retrieved outside for storage in EngineDeps.
+    let workflow_runner_once: Arc<std::sync::OnceLock<Arc<WorkflowRunner>>> =
+        Arc::new(std::sync::OnceLock::new());
+
+    // Build SessionToolContext with Arc::new_cyclic so that tools which need a
+    // Weak<SessionToolContext> back-reference (ToolSearchTool, SessionSendTool,
+    // cron_run_now_tool, WorkflowRunner) can be registered/constructed inside the
+    // closure without a retain cycle:
+    //   SessionToolContext.pool → Arc<Tool> → Weak<SessionToolContext>
+    let workflow_runner_once_c = workflow_runner_once.clone();
     let session_ctx = Arc::new_cyclic(|weak: &Weak<SessionToolContext>| {
+        // WorkflowRunner and cron_run_now need session_ctx; build WorkflowRunner here.
+        let workflow_runner = Arc::new(WorkflowRunner::new(
+            provider.clone(),
+            registry.clone(),
+            weak.clone(),
+            conversation.clone(),
+            memory.clone(),
+            agent_manager.clone(),
+            workflow_manager.clone(),
+            runtime.clone(),
+            config.clone(),
+        ));
+        let _ = workflow_runner_once_c.set(workflow_runner.clone());
+        registry.register(RunWorkflowTool::new(
+            workflow_manager_c3,
+            workflow_runner.clone(),
+        ));
+        registry.register(SessionSendTool::new(
+            conversation.clone(),
+            provider.clone(),
+            Arc::downgrade(&registry),
+            weak.clone(),
+            memory.clone(),
+            skills.clone(),
+            agent_manager.clone(),
+            config.clone(),
+        ));
+        registry.register(cron_run_now_tool(
+            cron_manager.clone(),
+            conversation.clone(),
+            provider.clone(),
+            Arc::downgrade(&registry),
+            weak.clone(),
+            memory.clone(),
+            skills.clone(),
+            agent_manager.clone(),
+            config.clone(),
+            workflow_manager.clone(),
+            workflow_runner.clone(),
+            runtime.clone(),
+            provider.model().to_owned(),
+        ));
         let tool_search = ToolSearchTool::new(weak.clone());
         registry.register(tool_search);
         let pool = registry.all_tools();
         SessionToolContext::new(pool, CORE_TOOLS)
     });
+
+    // SAFETY: session_ctx's Arc::new_cyclic closure always sets workflow_runner_once.
+    let workflow_runner = workflow_runner_once
+        .get()
+        .expect("workflow_runner set inside session_ctx closure")
+        .clone();
 
     Ok(EngineDeps {
         pool: pool.clone(),

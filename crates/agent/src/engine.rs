@@ -332,6 +332,7 @@ impl AgentEngine {
             run_react_loop(
                 self.provider.clone(),
                 self.tool_registry.clone(),
+                self.session_ctx.clone(),
                 messages,
                 &effective_config,
                 None,
@@ -504,6 +505,7 @@ impl AgentEngine {
             run_react_loop_streaming(
                 self.provider.clone(),
                 self.tool_registry.clone(),
+                self.session_ctx.clone(),
                 messages,
                 &effective_config,
                 internal_tx,
@@ -938,6 +940,7 @@ impl AgentEngine {
                 run_react_loop_streaming(
                     self.provider.clone(),
                     self.tool_registry.clone(),
+                    self.session_ctx.clone(),
                     messages,
                     &effective_config,
                     internal_tx,
@@ -950,6 +953,7 @@ impl AgentEngine {
                 run_react_loop(
                     self.provider.clone(),
                     self.tool_registry.clone(),
+                    self.session_ctx.clone(),
                     messages,
                     &effective_config,
                     Some(internal_tx),

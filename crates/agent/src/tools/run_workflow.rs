@@ -120,6 +120,8 @@ mod tests {
         Arc::new(WorkflowRunner::new(
             provider,
             tool_registry,
+            // Dead weak reference — tests do not reach run_react_loop.
+            std::sync::Weak::new(),
             conversation,
             memory,
             agent_manager,

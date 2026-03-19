@@ -20,7 +20,7 @@ use crate::{
     react_loop::run_react_loop,
     runtime::AgentRuntime,
     skill_manager::SkillManager,
-    tool_registry::{Tool, ToolRegistry},
+    tool_registry::{SessionToolContext, Tool, ToolRegistry},
     tools::shell_exec::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
@@ -33,6 +33,7 @@ async fn run_agent_turn(
     conversation: Arc<ConversationManager>,
     provider: Arc<Provider>,
     registry: Weak<ToolRegistry>,
+    session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
     agent_manager: Arc<AgentManager>,
@@ -43,6 +44,9 @@ async fn run_agent_turn(
     let registry = registry
         .upgrade()
         .ok_or_else(|| AppError::Agent("tool registry unavailable".to_owned()))?;
+    let session_ctx = session_ctx
+        .upgrade()
+        .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
     let mut messages = conversation
         .get_messages(conversation_id)
         .await
@@ -59,7 +63,7 @@ async fn run_agent_turn(
             memory.as_ref(),
             agent_manager.as_ref(),
             skill_manager.as_ref(),
-            registry.as_ref(),
+            session_ctx.as_ref(),
         ),
     );
     let old_len = messages.len();
@@ -88,7 +92,7 @@ async fn run_agent_turn(
     };
     let (response, all_messages) = with_tool_execution_context(
         tool_ctx,
-        run_react_loop(provider, registry, messages, &config, None),
+        run_react_loop(provider, registry, session_ctx, messages, &config, None),
     )
     .await?;
     for message in all_messages.iter().skip(old_len + 1) {
@@ -246,6 +250,7 @@ pub fn cron_run_now_tool(
     conversation: Arc<ConversationManager>,
     provider: Arc<Provider>,
     registry: Weak<ToolRegistry>,
+    session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
     agent_manager: Arc<AgentManager>,
@@ -264,6 +269,7 @@ pub fn cron_run_now_tool(
             let conversation = conversation.clone();
             let provider = provider.clone();
             let registry = registry.clone();
+            let session_ctx = session_ctx.clone();
             let memory = memory.clone();
             let skill_manager = skill_manager.clone();
             let agent_manager = agent_manager.clone();
@@ -336,6 +342,7 @@ pub fn cron_run_now_tool(
                             conversation.clone(),
                             provider.clone(),
                             registry.clone(),
+                            session_ctx.clone(),
                             memory.clone(),
                             skill_manager.clone(),
                             agent_manager.clone(),
