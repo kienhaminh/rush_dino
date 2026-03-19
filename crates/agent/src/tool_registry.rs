@@ -115,10 +115,9 @@ impl SessionToolContext {
             .filter(|t| {
                 let name = t.name().to_lowercase();
                 let desc = t.description().to_lowercase();
-                let kws: Vec<String> = t.keywords().iter().map(|k| k.to_lowercase()).collect();
                 name.contains(&q)
                     || desc.contains(&q)
-                    || kws.iter().any(|k| k.contains(&q))
+                    || t.keywords().iter().any(|k| k.to_lowercase().contains(&q))
             })
             .map(|t| ToolDefinition {
                 name: t.name().to_owned(),
