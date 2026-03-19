@@ -36,7 +36,9 @@ fn build_tooling_section(tools: &[ToolDefinition]) -> Vec<String> {
     for tool in tools {
         lines.push(format!("- {}: {}", tool.name, tool.description));
     }
-    lines.push("Use `tool_search` to discover and activate additional tools by keyword.".to_owned());
+    if tools.iter().any(|t| t.name == "tool_search") {
+        lines.push("Use `tool_search` to discover and activate additional tools by keyword.".to_owned());
+    }
     lines.push(String::new());
     lines
 }
@@ -307,5 +309,11 @@ mod tests {
         });
         let prompt = build_system_prompt(params);
         assert!(prompt.contains("Use `tool_search` to discover and activate additional tools"));
+    }
+
+    #[test]
+    fn tooling_hint_absent_without_tool_search() {
+        let prompt = build_system_prompt(make_params()); // make_params() has memory_search, not tool_search
+        assert!(!prompt.contains("Use `tool_search` to discover"));
     }
 }
