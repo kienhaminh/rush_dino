@@ -32,7 +32,7 @@ use crate::{
     runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
     skill_manager::Skill,
     system_broker::SharedSystemBroker,
-    tool_registry::ToolRegistry,
+    tool_registry::{SessionToolContext, ToolRegistry},
     tools::shell_exec::{with_tool_execution_context, ToolExecutionContext},
     usage_metrics_store::UsageMetricsStore,
     workflow_manager::WorkflowManager,
@@ -89,6 +89,7 @@ pub struct AgentEngine {
     usage_metrics: Arc<UsageMetricsStore>,
     provider_name: String,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
+    session_ctx: Arc<SessionToolContext>,
     config: AgentConfig,
     /// Shared runtime override — same Arc as RuntimeState.thinking_level_override.
     thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
@@ -244,6 +245,7 @@ impl AgentEngine {
             usage_metrics,
             provider_name,
             knowledge_graph,
+            session_ctx: deps.session_ctx,
             config,
             thinking_level_override: Arc::new(RwLock::new(None)),
             inbox_rx: Arc::new(Mutex::new(deps.inbox_rx)),
@@ -292,7 +294,7 @@ impl AgentEngine {
                 self.memory.as_ref(),
                 self.agent_manager.as_ref(),
                 self.skill_manager.as_ref(),
-                self.tool_registry.as_ref(),
+                self.session_ctx.as_ref(),
             ),
         );
 
@@ -426,7 +428,7 @@ impl AgentEngine {
                 self.memory.as_ref(),
                 self.agent_manager.as_ref(),
                 self.skill_manager.as_ref(),
-                self.tool_registry.as_ref(),
+                self.session_ctx.as_ref(),
             ),
         );
 
@@ -995,7 +997,7 @@ impl AgentEngine {
                 self.memory.as_ref(),
                 self.agent_manager.as_ref(),
                 self.skill_manager.as_ref(),
-                self.tool_registry.as_ref(),
+                self.session_ctx.as_ref(),
             ),
         );
 
