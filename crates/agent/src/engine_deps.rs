@@ -183,16 +183,8 @@ pub fn build_engine_deps(
         if let Some(graph) = graph_c {
             r.register(KnowledgeGraphQueryTool::new(graph));
         }
-        // DelegateToAgentTool needs Weak<ToolRegistry> (avoids cycle) and will
-        // receive a Weak<SessionToolContext> inside session_ctx's Arc::new_cyclic.
-        // Use a dead Weak here; it is overwritten by re-registering inside session_ctx.
-        // NOTE: we deliberately construct and register DelegateToAgentTool twice —
-        // first with a dead session_ctx Weak here to satisfy the registry slot, then
-        // replace it inside session_ctx's Arc::new_cyclic with the live Weak.
-        // Instead: we register it only once, inside session_ctx's closure.
-        // A placeholder (SpawnAgentTool) occupies no slot; DelegateToAgentTool is
-        // registered later. The registry is append-only via register(), so we cannot
-        // replace. Use Weak::new() (dead) for session_ctx in the first registration.
+        // session_ctx is not yet constructed here; Weak::new() is a dead sentinel
+        // that upgrades correctly at execute-time once session_ctx is live.
         r.register(DelegateToAgentTool::new(
             agent_manager.clone(),
             provider_c.clone(),
