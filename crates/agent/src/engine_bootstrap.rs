@@ -12,7 +12,7 @@ use crate::{
     },
     skill_manager::SkillManager,
     system_prompt::{build_system_prompt, AgentEntry, SkillEntry, SystemPromptParams},
-    tool_registry::ToolRegistry,
+    tool_registry::SessionToolContext,
 };
 
 pub fn title_from(input: &str) -> &str {
@@ -27,7 +27,7 @@ pub fn system_message(
     memory: &MemoryManager,
     agent_manager: &AgentManager,
     skill_manager: &SkillManager,
-    tool_registry: &ToolRegistry,
+    session_ctx: &SessionToolContext,
 ) -> Message {
     // BOOTSTRAP.md, if present, replaces the agent prompt but still gets the full
     // system prompt (tooling, skills, agents) so the agent can use tools — including
@@ -65,8 +65,7 @@ pub fn system_message(
         })
         .collect();
 
-    let mut tool_defs = tool_registry.definitions();
-    tool_defs.sort_by(|a, b| a.name.cmp(&b.name));
+    let tool_defs = session_ctx.active_definitions(); // already sorted
 
     let content = build_system_prompt(SystemPromptParams {
         agent_prompt,
