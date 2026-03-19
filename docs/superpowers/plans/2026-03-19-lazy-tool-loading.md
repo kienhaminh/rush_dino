@@ -507,7 +507,7 @@ cargo check -p rushdino-agent 2>&1 | tail -10
 
 Expected: `Finished` (possibly with warnings about unused `session_ctx` field — that's fine, we'll wire it next).
 
-- [ ] **Step 3.8: Commit**
+- [ ] **Step 3.7: Commit**
 
 ```bash
 git add crates/agent/src/engine_deps.rs
