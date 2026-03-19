@@ -7,10 +7,10 @@ use rushdino_common::{AppError, Result};
 
 use crate::tool_registry::{SessionToolContext, Tool};
 
-/// Tool that lets the LLM discover and activate tools from the pool on demand.
+/// Lets the LLM discover and activate tools from the pool on demand.
 ///
-/// Holds a `Weak<SessionToolContext>` to avoid a retain cycle:
-/// `SessionToolContext → ToolSearchTool → SessionToolContext`.
+/// Holds `Weak<SessionToolContext>` to avoid a retain cycle:
+/// `SessionToolContext.pool → ToolSearchTool → SessionToolContext`.
 pub struct ToolSearchTool {
     session_ctx: Weak<SessionToolContext>,
 }
@@ -28,7 +28,9 @@ impl Tool for ToolSearchTool {
     }
 
     fn description(&self) -> &str {
-        "Search the tool pool for tools matching a keyword and activate them for this session."
+        "Search the tool pool by keyword and activate matching tools for this session. \
+        Searches tool names, descriptions, and keywords. \
+        Activated tools become available immediately in subsequent turns."
     }
 
     fn parameters(&self) -> Value {
@@ -37,7 +39,7 @@ impl Tool for ToolSearchTool {
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Keyword to search for in tool names and descriptions"
+                    "description": "Keyword(s) to search for. Matched against tool name, description, and keywords."
                 }
             },
             "required": ["query"]
@@ -49,6 +51,7 @@ impl Tool for ToolSearchTool {
             .session_ctx
             .upgrade()
             .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
+
         let query = args
             .get("query")
             .and_then(Value::as_str)
@@ -60,22 +63,31 @@ impl Tool for ToolSearchTool {
         }
 
         let mut activated = Vec::new();
+        let mut already_active = Vec::new();
+
         for m in &matches {
             if ctx.activate(&m.name) {
-                activated.push(format!("{} ({})", m.name, m.description));
+                activated.push(format!("{} — {}", m.name, m.description));
+            } else {
+                already_active.push(m.name.clone());
             }
         }
 
-        if activated.is_empty() {
-            return Ok(format!(
-                "No new tools activated for '{query}' (all matches already active)"
+        let mut parts = Vec::new();
+        if !activated.is_empty() {
+            parts.push(format!(
+                "Activated {} tool(s):\n{}",
+                activated.len(),
+                activated.join("\n")
+            ));
+        }
+        if !already_active.is_empty() {
+            parts.push(format!(
+                "Already active: {}",
+                already_active.join(", ")
             ));
         }
 
-        Ok(format!(
-            "Activated {} tools: {}",
-            activated.len(),
-            activated.join(", ")
-        ))
+        Ok(parts.join("\n\n"))
     }
 }
