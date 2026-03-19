@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::{Arc, Weak}};
 
 use sqlx::SqlitePool;
 use tokio::sync::mpsc;
@@ -20,7 +20,7 @@ use crate::{
     runtime::AgentRuntime,
     skill_manager::SkillManager,
     system_broker::SharedSystemBroker,
-    tool_registry::ToolRegistry,
+    tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
         create_job::CreateJobTool,
         create_skill::CreateSkillTool,
@@ -48,12 +48,25 @@ use crate::{
         spawn_agent::SpawnAgentTool,
         spawn_sub_agent::SpawnSubAgentTool,
         update_workflow::UpdateWorkflowTool,
+        tool_search::ToolSearchTool,
         web_fetch::WebFetchTool,
         web_search::WebSearchTool,
     },
     workflow_manager::WorkflowManager,
     workflow_runner::WorkflowRunner,
 };
+
+const CORE_TOOLS: &[&str] = &[
+    "delegate",
+    "edit",
+    "exec",
+    "memory_search",
+    "memory_write",
+    "message",
+    "read",
+    "tool_search",
+    "write",
+];
 
 pub struct EngineDeps {
     pub pool: Arc<SqlitePool>,
@@ -69,6 +82,7 @@ pub struct EngineDeps {
     pub workflow_runner: Arc<WorkflowRunner>,
     pub inbox_rx: mpsc::Receiver<JobResult>,
     pub task_memory: Arc<AgentTaskMemory>,
+    pub session_ctx: Arc<SessionToolContext>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -238,6 +252,16 @@ pub fn build_engine_deps(
     registry.register(cron_delete_tool(cron_manager.clone()));
     let _ = system_broker;
 
+    // Build SessionToolContext with Arc::new_cyclic so ToolSearchTool can hold
+    // a Weak reference back to the context without a retain cycle:
+    // SessionToolContext.pool → Arc<ToolSearchTool> → Weak<SessionToolContext>.
+    let session_ctx = Arc::new_cyclic(|weak: &Weak<SessionToolContext>| {
+        let tool_search = ToolSearchTool::new(weak.clone());
+        registry.register(tool_search);
+        let pool = registry.all_tools();
+        SessionToolContext::new(pool, CORE_TOOLS)
+    });
+
     Ok(EngineDeps {
         pool: pool.clone(),
         conversation,
@@ -252,5 +276,6 @@ pub fn build_engine_deps(
         workflow_runner,
         inbox_rx,
         task_memory,
+        session_ctx,
     })
 }
