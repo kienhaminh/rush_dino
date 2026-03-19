@@ -136,6 +136,10 @@ impl Tool for SessionCreateTool {
         "Create a new session/conversation with a human-readable title."
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["session", "conversation", "history"]
+    }
+
     fn parameters(&self) -> Value {
         json!({"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]})
     }
@@ -168,6 +172,10 @@ impl Tool for SessionGetTool {
 
     fn description(&self) -> &str {
         "Get session metadata and recent messages by session ID."
+    }
+
+    fn keywords(&self) -> Vec<&str> {
+        vec!["session", "conversation", "history"]
     }
 
     fn parameters(&self) -> Value {
@@ -236,6 +244,10 @@ impl Tool for SessionSendTool {
 
     fn description(&self) -> &str {
         "Send a message into an existing session and wait for the agent reply."
+    }
+
+    fn keywords(&self) -> Vec<&str> {
+        vec!["session", "conversation", "history"]
     }
 
     fn parameters(&self) -> Value {

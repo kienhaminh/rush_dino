@@ -82,6 +82,10 @@ impl Tool for WebFetchTool {
         "Fetch and extract readable content from a URL (HTML, JSON, or plain text). Use for lightweight page access without browser automation."
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["http", "url", "fetch", "browser", "page"]
+    }
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

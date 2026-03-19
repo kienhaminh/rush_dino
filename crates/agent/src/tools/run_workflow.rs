@@ -31,6 +31,10 @@ impl Tool for RunWorkflowTool {
         "Start a new run of a workflow"
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["workflow", "run", "execute", "pipeline"]
+    }
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
