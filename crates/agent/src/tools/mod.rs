@@ -20,6 +20,7 @@ pub mod session_tools;
 pub mod shell_exec;
 pub mod spawn_agent;
 pub mod spawn_sub_agent;
+pub mod tool_search;
 pub mod update_workflow;
 pub mod web_fetch;
 pub mod web_search;

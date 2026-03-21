@@ -53,6 +53,10 @@ impl Tool for WebSearchTool {
         "Search web via Brave Search API"
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["internet", "search", "google", "browse"]
+    }
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

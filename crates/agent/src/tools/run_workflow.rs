@@ -31,6 +31,10 @@ impl Tool for RunWorkflowTool {
         "Start a new run of a workflow"
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["workflow", "run", "execute", "pipeline"]
+    }
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -120,6 +124,8 @@ mod tests {
         Arc::new(WorkflowRunner::new(
             provider,
             tool_registry,
+            // Dead weak reference — tests do not reach run_react_loop.
+            std::sync::Weak::new(),
             conversation,
             memory,
             agent_manager,

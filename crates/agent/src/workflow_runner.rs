@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
 
 use chrono::Utc;
@@ -17,7 +17,7 @@ use crate::{
     memory::MemoryManager,
     react_loop::run_react_loop,
     runtime::AgentRuntime,
-    tool_registry::ToolRegistry,
+    tool_registry::{SessionToolContext, ToolRegistry},
     tools::shell_exec::{with_tool_execution_context, ToolExecutionContext},
     workflow_manager::WorkflowManager,
     workflow_types::WorkflowRunExecutionStep,
@@ -44,6 +44,7 @@ enum StepDisposition {
 pub struct WorkflowRunner {
     provider: Arc<Provider>,
     tool_registry: Arc<ToolRegistry>,
+    session_ctx: Weak<SessionToolContext>,
     conversation: Arc<ConversationManager>,
     memory: Arc<MemoryManager>,
     agent_manager: Arc<AgentManager>,
@@ -57,6 +58,7 @@ impl WorkflowRunner {
     pub fn new(
         provider: Arc<Provider>,
         tool_registry: Arc<ToolRegistry>,
+        session_ctx: Weak<SessionToolContext>,
         conversation: Arc<ConversationManager>,
         memory: Arc<MemoryManager>,
         agent_manager: Arc<AgentManager>,
@@ -67,6 +69,7 @@ impl WorkflowRunner {
         Self {
             provider,
             tool_registry,
+            session_ctx,
             conversation,
             memory,
             agent_manager,
@@ -565,11 +568,16 @@ impl WorkflowRunner {
             ..self.config.clone()
         };
 
+        let session_ctx = self
+            .session_ctx
+            .upgrade()
+            .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
         let (response, all_messages) = with_tool_execution_context(
             tool_context,
             run_react_loop(
                 self.provider.clone(),
                 self.tool_registry.clone(),
+                session_ctx,
                 messages,
                 &step_config,
                 None,

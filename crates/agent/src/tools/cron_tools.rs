@@ -20,7 +20,7 @@ use crate::{
     react_loop::run_react_loop,
     runtime::AgentRuntime,
     skill_manager::SkillManager,
-    tool_registry::{Tool, ToolRegistry},
+    tool_registry::{SessionToolContext, Tool, ToolRegistry},
     tools::shell_exec::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
@@ -33,6 +33,7 @@ async fn run_agent_turn(
     conversation: Arc<ConversationManager>,
     provider: Arc<Provider>,
     registry: Weak<ToolRegistry>,
+    session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
     agent_manager: Arc<AgentManager>,
@@ -43,6 +44,9 @@ async fn run_agent_turn(
     let registry = registry
         .upgrade()
         .ok_or_else(|| AppError::Agent("tool registry unavailable".to_owned()))?;
+    let session_ctx = session_ctx
+        .upgrade()
+        .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
     let mut messages = conversation
         .get_messages(conversation_id)
         .await
@@ -59,7 +63,7 @@ async fn run_agent_turn(
             memory.as_ref(),
             agent_manager.as_ref(),
             skill_manager.as_ref(),
-            registry.as_ref(),
+            session_ctx.as_ref(),
         ),
     );
     let old_len = messages.len();
@@ -88,7 +92,7 @@ async fn run_agent_turn(
     };
     let (response, all_messages) = with_tool_execution_context(
         tool_ctx,
-        run_react_loop(provider, registry, messages, &config, None),
+        run_react_loop(provider, registry, session_ctx, messages, &config, None),
     )
     .await?;
     for message in all_messages.iter().skip(old_len + 1) {
@@ -98,6 +102,24 @@ async fn run_agent_turn(
 }
 
 macro_rules! json_tool {
+    // 5-argument form: name, description, schema, keywords, body
+    ($name:expr, $desc:expr, $schema:expr, $kw:expr, $body:expr) => {{
+        struct ToolImpl<F>(F, Value);
+        #[async_trait]
+        impl<F, Fut> Tool for ToolImpl<F>
+        where
+            F: Send + Sync + Fn(Value) -> Fut,
+            Fut: std::future::Future<Output = Result<String>> + Send,
+        {
+            fn name(&self) -> &str { $name }
+            fn description(&self) -> &str { $desc }
+            fn parameters(&self) -> Value { self.1.clone() }
+            fn keywords(&self) -> Vec<&str> { $kw.to_vec() }
+            async fn execute(&self, args: Value) -> Result<String> { (self.0)(args).await }
+        }
+        ToolImpl($body, $schema)
+    }};
+    // 4-argument form: name, description, schema, body (no keywords)
     ($name:expr, $desc:expr, $schema:expr, $body:expr) => {{
         struct ToolImpl<F>(F, Value);
         #[async_trait]
@@ -119,14 +141,22 @@ macro_rules! json_tool {
     };
 }
 
+const CRON_KEYWORDS: &[&str] = &["cron", "schedule", "recurring", "job", "timer"];
+
 pub fn cron_list_tool(manager: Arc<CronManager>) -> impl Tool {
-    json_tool!("cron_list", "List configured cron jobs.", move |_args| {
-        let manager = manager.clone();
-        async move {
-            serde_json::to_string_pretty(&json!({ "items": manager.list_jobs().await? }))
-                .map_err(|e| AppError::Agent(e.to_string()))
+    json_tool!(
+        "cron_list",
+        "List configured cron jobs.",
+        json!({"type": "object", "properties": {}}),
+        CRON_KEYWORDS,
+        move |_args| {
+            let manager = manager.clone();
+            async move {
+                serde_json::to_string_pretty(&json!({ "items": manager.list_jobs().await? }))
+                    .map_err(|e| AppError::Agent(e.to_string()))
+            }
         }
-    })
+    )
 }
 
 pub fn cron_get_tool(manager: Arc<CronManager>) -> impl Tool {
@@ -134,6 +164,7 @@ pub fn cron_get_tool(manager: Arc<CronManager>) -> impl Tool {
         "cron_get",
         "Get a cron job and its recent runs by ID.",
         json!({"type": "object", "properties": {"jobId": {"type": "string", "description": "Cron job ID"}}, "required": ["jobId"]}),
+        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             async move {
@@ -168,6 +199,7 @@ pub fn cron_create_tool(manager: Arc<CronManager>) -> impl Tool {
             },
             "required": ["name", "schedule", "target"]
         }),
+        CRON_KEYWORDS,
         move |args| {
             let manager = manager.clone();
             async move {
@@ -185,6 +217,7 @@ pub fn cron_update_tool(manager: Arc<CronManager>) -> impl Tool {
         "cron_update",
         "Update an existing cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}, "name": {"type": "string"}, "schedule": {"type": "string"}, "enabled": {"type": "boolean"}}, "required": ["jobId"]}),
+        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             async move {
@@ -207,6 +240,7 @@ pub fn cron_pause_tool(manager: Arc<CronManager>) -> impl Tool {
         "cron_pause",
         "Pause a cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
+        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             async move {
@@ -226,6 +260,7 @@ pub fn cron_resume_tool(manager: Arc<CronManager>) -> impl Tool {
         "cron_resume",
         "Resume a paused cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
+        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             async move {
@@ -246,6 +281,7 @@ pub fn cron_run_now_tool(
     conversation: Arc<ConversationManager>,
     provider: Arc<Provider>,
     registry: Weak<ToolRegistry>,
+    session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
     agent_manager: Arc<AgentManager>,
@@ -259,11 +295,13 @@ pub fn cron_run_now_tool(
         "cron_run_now",
         "Run a cron job immediately.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
+        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             let conversation = conversation.clone();
             let provider = provider.clone();
             let registry = registry.clone();
+            let session_ctx = session_ctx.clone();
             let memory = memory.clone();
             let skill_manager = skill_manager.clone();
             let agent_manager = agent_manager.clone();
@@ -336,6 +374,7 @@ pub fn cron_run_now_tool(
                             conversation.clone(),
                             provider.clone(),
                             registry.clone(),
+                            session_ctx.clone(),
                             memory.clone(),
                             skill_manager.clone(),
                             agent_manager.clone(),
@@ -370,6 +409,7 @@ pub fn cron_delete_tool(manager: Arc<CronManager>) -> impl Tool {
         "cron_delete",
         "Delete a cron job.",
         json!({"type": "object", "properties": {"jobId": {"type": "string"}}, "required": ["jobId"]}),
+        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             async move {

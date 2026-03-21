@@ -19,7 +19,7 @@ use crate::{
     memory::MemoryManager,
     react_loop::run_react_loop,
     skill_manager::SkillManager,
-    tool_registry::{Tool, ToolRegistry},
+    tool_registry::{SessionToolContext, Tool, ToolRegistry},
     tools::shell_exec::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
@@ -29,6 +29,7 @@ struct SessionChatDeps {
     conversation: Arc<ConversationManager>,
     provider: Arc<Provider>,
     registry: Weak<ToolRegistry>,
+    session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
     agent_manager: Arc<AgentManager>,
@@ -44,6 +45,10 @@ async fn run_session_turn(
         .registry
         .upgrade()
         .ok_or_else(|| AppError::Agent("tool registry unavailable".to_owned()))?;
+    let session_ctx = deps
+        .session_ctx
+        .upgrade()
+        .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
     let mut messages = deps
         .conversation
         .get_messages(conversation_id)
@@ -62,7 +67,7 @@ async fn run_session_turn(
             deps.memory.as_ref(),
             deps.agent_manager.as_ref(),
             deps.skill_manager.as_ref(),
-            registry.as_ref(),
+            session_ctx.as_ref(),
         ),
     );
 
@@ -96,6 +101,7 @@ async fn run_session_turn(
         run_react_loop(
             deps.provider.clone(),
             registry,
+            session_ctx,
             messages,
             &deps.config,
             None,
@@ -130,6 +136,10 @@ impl Tool for SessionCreateTool {
         "Create a new session/conversation with a human-readable title."
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["session", "conversation", "history"]
+    }
+
     fn parameters(&self) -> Value {
         json!({"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]})
     }
@@ -162,6 +172,10 @@ impl Tool for SessionGetTool {
 
     fn description(&self) -> &str {
         "Get session metadata and recent messages by session ID."
+    }
+
+    fn keywords(&self) -> Vec<&str> {
+        vec!["session", "conversation", "history"]
     }
 
     fn parameters(&self) -> Value {
@@ -201,6 +215,7 @@ impl SessionSendTool {
         conversation: Arc<ConversationManager>,
         provider: Arc<Provider>,
         registry: Weak<ToolRegistry>,
+        session_ctx: Weak<SessionToolContext>,
         memory: Arc<MemoryManager>,
         skill_manager: Arc<SkillManager>,
         agent_manager: Arc<AgentManager>,
@@ -211,6 +226,7 @@ impl SessionSendTool {
                 conversation,
                 provider,
                 registry,
+                session_ctx,
                 memory,
                 skill_manager,
                 agent_manager,
@@ -228,6 +244,10 @@ impl Tool for SessionSendTool {
 
     fn description(&self) -> &str {
         "Send a message into an existing session and wait for the agent reply."
+    }
+
+    fn keywords(&self) -> Vec<&str> {
+        vec!["session", "conversation", "history"]
     }
 
     fn parameters(&self) -> Value {

@@ -18,7 +18,7 @@ use crate::{
     engine::AgentConfig,
     engine_bootstrap::title_from,
     react_loop::run_react_loop,
-    tool_registry::{Tool, ToolRegistry},
+    tool_registry::{SessionToolContext, Tool, ToolRegistry},
     tools::shell_exec::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
@@ -40,6 +40,9 @@ pub struct DelegateToAgentTool {
     config: AgentConfig,
     /// Weak reference prevents a retain-cycle with the registry that owns this tool.
     registry: Weak<ToolRegistry>,
+    /// Weak reference prevents a retain-cycle with SessionToolContext that indirectly
+    /// owns this tool via the tool pool.
+    session_ctx: Weak<SessionToolContext>,
     task_memory: Arc<AgentTaskMemory>,
     conversation: Arc<ConversationManager>,
 }
@@ -50,6 +53,7 @@ impl DelegateToAgentTool {
         provider: Arc<Provider>,
         config: AgentConfig,
         registry: Weak<ToolRegistry>,
+        session_ctx: Weak<SessionToolContext>,
         task_memory: Arc<AgentTaskMemory>,
         conversation: Arc<ConversationManager>,
     ) -> Self {
@@ -58,6 +62,7 @@ impl DelegateToAgentTool {
             provider,
             config,
             registry,
+            session_ctx,
             task_memory,
             conversation,
         }
@@ -130,6 +135,10 @@ impl Tool for DelegateToAgentTool {
             .registry
             .upgrade()
             .ok_or_else(|| AppError::Agent("tool registry unavailable".to_owned()))?;
+        let session_ctx = self
+            .session_ctx
+            .upgrade()
+            .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
 
         // Inject the agent's task history into the system prompt if available.
         let system_content = match self.task_memory.load_task_log(agent_name) {
@@ -192,6 +201,7 @@ impl Tool for DelegateToAgentTool {
             run_react_loop(
                 self.provider.clone(),
                 registry,
+                session_ctx,
                 messages,
                 &self.config,
                 None,
@@ -265,8 +275,9 @@ mod tests {
             agent_manager: Arc::new(AgentManager::new(dir.to_owned())),
             provider: make_dummy_provider(),
             config: AgentConfig::default(),
-            // Dead weak reference — tests do not reach run_react_loop.
+            // Dead weak references — tests do not reach run_react_loop.
             registry: Weak::new(),
+            session_ctx: Weak::new(),
             task_memory: Arc::new(AgentTaskMemory::new(dir.to_owned())),
             conversation: make_test_conversation().await,
         }
@@ -314,7 +325,9 @@ mod tests {
             agent_manager: manager,
             provider: make_dummy_provider(),
             config: AgentConfig::default(),
+            // Dead weak references — tests do not reach run_react_loop.
             registry: Weak::new(),
+            session_ctx: Weak::new(),
             task_memory: Arc::new(crate::agent_task_memory::AgentTaskMemory::new(dir.clone())),
             conversation: make_test_conversation().await,
         };

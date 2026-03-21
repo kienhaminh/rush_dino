@@ -36,6 +36,10 @@ impl Tool for CreateWorkflowTool {
         "Create a persisted workflow definition with ordered agent-assigned steps"
     }
 
+    fn keywords(&self) -> Vec<&str> {
+        vec!["workflow", "pipeline", "automation"]
+    }
+
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
