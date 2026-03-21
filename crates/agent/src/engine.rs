@@ -1149,6 +1149,10 @@ impl AgentEngine {
         &self.tool_registry
     }
 
+    pub fn session_ctx(&self) -> &SessionToolContext {
+        &self.session_ctx
+    }
+
     pub fn list_agent_templates(&self) -> Vec<AgentTemplate> {
         self.agent_manager.list()
     }
