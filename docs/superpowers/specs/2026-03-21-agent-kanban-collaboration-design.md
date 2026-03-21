@@ -82,7 +82,7 @@ Each agent template gets a new `claim_tags` field:
 | docs-manager | `docs, technical-writing, runbooks` |
 | git-manager | `git, branching, merge, conflict` |
 
-**Scoring formula:** `score = overlap_count / task_tag_count` (percentage of task tags matched by the agent). If one agent scores highest with score > 0.7 and no other agent is within 0.1 of their score → auto-claim. This means an agent must match at least 70% of what the task asks for.
+**Scoring formula:** `score = overlap_count / task_tag_count` (percentage of task tags matched by the agent). If one agent scores highest with score > 0.7 and no other agent is within 0.1 of their score → auto-claim. This means an agent must match at least 70% of what the task asks for. **Edge case:** if `task_tag_count == 0` (empty tags array), skip Phase 1 and go directly to Phase 2 (LLM fallback). The `post_task` tool schema enforces `"minItems": 1` on tags to discourage this, but the matching engine handles it gracefully regardless.
 
 ### Phase 2 — LLM Fallback
 
@@ -153,7 +153,7 @@ CREATE INDEX idx_kanban_tasks_parent ON kanban_tasks(parent_task_id);
 
 - `parent_task_id` → creates task tree (orchestrator posts root tasks, specialists post child help-requests)
 - `source_request_id` → groups everything from one user message for the global Kanban view
-- `conversation_id` → links to the agent's working conversation for that task
+- `conversation_id` → links to the agent's working conversation for that task. **Written at claim-time:** when the matching engine claims a task for an agent, it creates a new conversation (via `ConversationManager::create_conversation_with_id()`) and writes that `conversation_id` to `kanban_tasks`. **Read at relaunch-time:** when a blocked task resumes or a revision is requested, the system loads history from this `conversation_id` to replay into the new agent run.
 - `depth` → enforced at creation, mirrors existing max delegation depth of 3
 
 ---
@@ -171,7 +171,7 @@ Any agent can create a subtask on the Kanban board.
     "parameters": {
         "title": { "type": "string", "description": "Short task title" },
         "description": { "type": "string", "description": "Detailed task instructions" },
-        "tags": { "type": "array", "items": { "type": "string" }, "description": "Domain tags for matching" },
+        "tags": { "type": "array", "items": { "type": "string" }, "minItems": 1, "description": "Domain tags for matching" },
         "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium" }
     },
     "required": ["title", "description", "tags"]
@@ -182,7 +182,7 @@ Any agent can create a subtask on the Kanban board.
 - `parent_task_id` auto-set to the agent's current task (if working one)
 - `depth` = parent depth + 1 (rejected if > 3)
 - `created_by_agent` = current agent name
-- `source_request_id` inherited from parent task. For orchestrator-created root tasks, set to the current `runtime_runs.id` (the run that triggered the decomposition) — this links Kanban tasks to the existing run tracking system for correlation.
+- `source_request_id` inherited from parent task. For orchestrator-created root tasks, set to the current `runtime_runs.id` (the run that triggered the decomposition) — this links Kanban tasks to the existing run tracking system for correlation. **Mechanism:** `post_task` reads `source_request_id` from `ToolExecutionContext.run_id`. The engine must ensure `run_id` is always `Some(...)` in `ToolExecutionContext` before invoking the react loop for interactive sessions (currently true for `AssistantRunJob` paths, but must be verified for all call paths).
 - Triggers the matching engine via `tokio::spawn` (async background task, similar to `WorkflowRunner::spawn_run`). The `post_task` tool returns immediately with the task ID. The matching engine runs in the background: scores agents, writes the claim to DB atomically, and spawns the claimed agent's run. If Phase 2 LLM fallback is needed, this adds latency to the background task but does not block the calling agent.
 
 ### 4.2 `claim_task`
@@ -250,7 +250,7 @@ Approve or reject completed work.
 **Behavior:**
 - `approved` → status = `done`, `completed_at` set
 - `needs_revision` → status = `in_progress`, `review_notes` set. The system **launches a new agent run** for the assigned agent with: (1) full previous conversation history from DB, (2) review feedback injected as a system message: "Your task was reviewed and needs revision: {feedback}". Same relaunch pattern as blocked task resumption.
-- **Authorization:** `review_task` is only registered in the general-assistant's tool set via `SessionToolContext` activation. It is excluded from specialist agent tool registries entirely, enforced at tool registration time (not runtime check). This follows the existing pattern where tools are selectively activated per agent session.
+- **Authorization:** Enforced via runtime check inside `review_task.execute()`. The tool reads the calling agent's name from `ToolExecutionContext` (requires adding `agent_name: Option<String>` to the context struct) and rejects execution if the caller is not `general-assistant`. This is the only feasible approach because the codebase uses a single shared `ToolRegistry` and `SessionToolContext` pool across all agent invocations — there is no per-agent registry isolation. The runtime check is a simple guard clause at the top of `execute()`, returning an error message if unauthorized.
 
 ---
 
@@ -362,7 +362,11 @@ WS     (via existing /ws/chat)             — real-time task updates multiplexe
 
 ### Agent Templates
 
-Add `claim_tags` field to `AgentTemplate`:
+**Add `agent_name` to `ToolExecutionContext`:**
+
+The Kanban tools need to know which agent is calling them. Add `agent_name: Option<String>` to `ToolExecutionContext`. This is set when the engine starts a react loop for an agent. Used by: `post_task` (sets `created_by_agent`), `review_task` (authorization check), `claim_task` (sets `assigned_agent`).
+
+**Add `claim_tags` field to `AgentTemplate`:**
 
 ```rust
 pub struct AgentTemplate {
@@ -377,6 +381,7 @@ Parsed from `.toml` and `.md` agent definition files. Backward-compatible — ag
 - **TOML parser:** Adding `#[serde(default)]` to the struct field is sufficient — serde handles it.
 - **Markdown parser:** `parse_agent_markdown` in `agent_manager.rs` uses a manual `match key { ... }` block. A new match arm for `"claim_tags"` must be added, parsing the value as a comma-separated list.
 - **Save function:** `AgentManager::save()` writes front-matter manually. Must serialize `claim_tags` back as a comma-separated value to avoid round-trip data loss.
+- **Bundled agents:** The built-in agents in `crates/common/src/agents/` exist as both `.toml` and `.md` files. Add `claim_tags` to the `.md` files (which take precedence). Note: calling `save()` on a `.toml`-only agent migrates it to `.md` format — this is pre-existing behavior and acceptable since `.md` is the preferred format going forward.
 
 ### Workflow System Coexistence
 
