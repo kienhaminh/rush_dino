@@ -82,7 +82,7 @@ Each agent template gets a new `claim_tags` field:
 | docs-manager | `docs, technical-writing, runbooks` |
 | git-manager | `git, branching, merge, conflict` |
 
-**Scoring:** Count tag overlap between task tags and agent `claim_tags`. If one agent scores highest with >70% confidence → auto-claim.
+**Scoring formula:** `score = overlap_count / task_tag_count` (percentage of task tags matched by the agent). If one agent scores highest with score > 0.7 and no other agent is within 0.1 of their score → auto-claim. This means an agent must match at least 70% of what the task asks for.
 
 ### Phase 2 — LLM Fallback
 
@@ -182,8 +182,8 @@ Any agent can create a subtask on the Kanban board.
 - `parent_task_id` auto-set to the agent's current task (if working one)
 - `depth` = parent depth + 1 (rejected if > 3)
 - `created_by_agent` = current agent name
-- `source_request_id` inherited from parent task or set to new UUID for orchestrator-created root tasks
-- Immediately triggers the matching engine
+- `source_request_id` inherited from parent task. For orchestrator-created root tasks, set to the current `runtime_runs.id` (the run that triggered the decomposition) — this links Kanban tasks to the existing run tracking system for correlation.
+- Triggers the matching engine via `tokio::spawn` (async background task, similar to `WorkflowRunner::spawn_run`). The `post_task` tool returns immediately with the task ID. The matching engine runs in the background: scores agents, writes the claim to DB atomically, and spawns the claimed agent's run. If Phase 2 LLM fallback is needed, this adds latency to the background task but does not block the calling agent.
 
 ### 4.2 `claim_task`
 
@@ -226,7 +226,7 @@ Agent updates their task status and result.
 
 **Behavior:**
 - `status=done` → moves task to `in_review`, notifies orchestrator
-- `status=blocked` → agent pauses, resumes when child subtask completes (child result injected into context)
+- `status=blocked` → agent's current react loop **ends** (returns a "blocked waiting for subtask" result). When the child subtask completes, the system **launches a new agent run** for the blocked agent with: (1) the full previous conversation history replayed from DB, (2) the child task's result injected as a new system message. This "relaunch" pattern is compatible with the existing synchronous react loop — no suspend/resume needed.
 - `status=failed` → marks task failed with error, notifies orchestrator
 - Updates `updated_at` on every call, `completed_at` when done/failed
 
@@ -249,8 +249,8 @@ Approve or reject completed work.
 
 **Behavior:**
 - `approved` → status = `done`, `completed_at` set
-- `needs_revision` → status = `in_progress`, `review_notes` set, feedback injected into assigned agent's context
-- Only callable by the general-assistant (orchestrator)
+- `needs_revision` → status = `in_progress`, `review_notes` set. The system **launches a new agent run** for the assigned agent with: (1) full previous conversation history from DB, (2) review feedback injected as a system message: "Your task was reviewed and needs revision: {feedback}". Same relaunch pattern as blocked task resumption.
+- **Authorization:** `review_task` is only registered in the general-assistant's tool set via `SessionToolContext` activation. It is excluded from specialist agent tool registries entirely, enforced at tool registration time (not runtime check). This follows the existing pattern where tools are selectively activated per agent session.
 
 ---
 
@@ -353,7 +353,7 @@ POST   /api/kanban/tasks                  — create task (internal, called via 
 PATCH  /api/kanban/tasks/:id              — update task status/result
 GET    /api/kanban/tasks/:id/children     — get subtasks of a task
 GET    /api/kanban/stats                  — dashboard stats (counts per status, per agent)
-WS     /api/kanban/events                 — real-time task updates stream
+WS     (via existing /ws/chat)             — real-time task updates multiplexed on existing connection
 ```
 
 ---
@@ -373,6 +373,11 @@ pub struct AgentTemplate {
 
 Parsed from `.toml` and `.md` agent definition files. Backward-compatible — agents without `claim_tags` are excluded from auto-claiming but can still be explicitly delegated to.
 
+**Parser changes required:**
+- **TOML parser:** Adding `#[serde(default)]` to the struct field is sufficient — serde handles it.
+- **Markdown parser:** `parse_agent_markdown` in `agent_manager.rs` uses a manual `match key { ... }` block. A new match arm for `"claim_tags"` must be added, parsing the value as a comma-separated list.
+- **Save function:** `AgentManager::save()` writes front-matter manually. Must serialize `claim_tags` back as a comma-separated value to avoid round-trip data loss.
+
 ### Workflow System Coexistence
 
 The Kanban system operates alongside the existing workflow engine:
@@ -383,17 +388,21 @@ A workflow step could potentially post Kanban tasks in the future, but this is o
 
 ### WebSocket Events
 
-Extend existing WebSocket infrastructure to emit Kanban events:
+Extend the existing `ChatBroadcastHub` to emit Kanban events over the existing `/ws/chat` connection (no separate WebSocket endpoint). This avoids requiring clients to maintain two concurrent WebSocket connections. Kanban events are multiplexed alongside existing chat events using a `"kanban"` event type prefix:
 
 ```rust
-enum KanbanEvent {
-    TaskCreated { task: KanbanTask },
-    TaskClaimed { task_id: String, agent: String },
-    TaskStatusChanged { task_id: String, old_status: String, new_status: String },
-    TaskCompleted { task_id: String, result: String },
-    TaskReviewed { task_id: String, verdict: String },
+// New variants added to existing broadcast event enum
+enum BroadcastEvent {
+    // ... existing chat events
+    KanbanTaskCreated { task: KanbanTask },
+    KanbanTaskClaimed { task_id: String, agent: String },
+    KanbanTaskStatusChanged { task_id: String, old_status: String, new_status: String },
+    KanbanTaskCompleted { task_id: String, result: String },
+    KanbanTaskReviewed { task_id: String, verdict: String },
 }
 ```
+
+Frontend filters these events by type prefix to route to the Kanban UI components.
 
 ---
 
