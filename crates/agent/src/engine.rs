@@ -9,7 +9,7 @@ use sqlx::SqlitePool;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use chrono::Utc;
-use rushdino_common::{models::Message, models::Role, Result, RichContent};
+use rushdino_common::{config::AuthMethod, models::Message, models::Role, Result, RichContent};
 use rushdino_providers::{types::ChatChunk, types::ChatResponse, types::ThinkingLevel, Provider};
 use serde_json::Value;
 use uuid::Uuid;
@@ -84,10 +84,12 @@ pub struct AgentEngine {
     skill_manager: Arc<crate::skill_manager::SkillManager>,
     agent_manager: Arc<AgentManager>,
     workflow_manager: Arc<WorkflowManager>,
+    kanban_store: Arc<crate::kanban_store::KanbanStore>,
     cron_manager: Arc<CronManager>,
     workflow_runner: Arc<WorkflowRunner>,
     usage_metrics: Arc<UsageMetricsStore>,
     provider_name: String,
+    auth_method: AuthMethod,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
     session_ctx: Arc<SessionToolContext>,
     config: AgentConfig,
@@ -208,6 +210,7 @@ impl AgentEngine {
         brave_api_key: Option<String>,
         gemini_api_key: Option<String>,
         provider_name: String,
+        auth_method: AuthMethod,
         config: AgentConfig,
         runtime: Arc<AgentRuntime>,
         system_broker: SharedSystemBroker,
@@ -240,10 +243,12 @@ impl AgentEngine {
             skill_manager: deps.skill_manager,
             agent_manager: deps.agent_manager,
             workflow_manager: deps.workflow_manager,
+            kanban_store: deps.kanban_store,
             cron_manager: deps.cron_manager,
             workflow_runner: deps.workflow_runner,
             usage_metrics,
             provider_name,
+            auth_method,
             knowledge_graph,
             session_ctx: deps.session_ctx,
             config,
@@ -1141,12 +1146,20 @@ impl AgentEngine {
         &self.agent_manager
     }
 
+    pub fn kanban_store(&self) -> &crate::kanban_store::KanbanStore {
+        &self.kanban_store
+    }
+
     pub fn skill_manager(&self) -> &crate::skill_manager::SkillManager {
         &self.skill_manager
     }
 
     pub fn tool_registry(&self) -> &ToolRegistry {
         &self.tool_registry
+    }
+
+    pub fn session_ctx(&self) -> &SessionToolContext {
+        &self.session_ctx
     }
 
     pub fn list_agent_templates(&self) -> Vec<AgentTemplate> {
@@ -1469,12 +1482,19 @@ impl AgentEngine {
             return;
         };
 
+        let auth_method_db = match self.auth_method {
+            AuthMethod::ApiKey => "apikey",
+            AuthMethod::OAuth => "oauth",
+            AuthMethod::None => "none",
+        };
+
         if let Err(err) = self
             .usage_metrics
             .insert_usage(
                 conversation_id,
                 &self.provider_name,
                 self.provider.model(),
+                auth_method_db,
                 usage,
             )
             .await

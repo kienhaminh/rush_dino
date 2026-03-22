@@ -12,6 +12,13 @@ export interface CatalogModel {
 // Regular OpenAI API Key models (non-Codex)
 const OPENAI_APIKEY_MODELS: CatalogModel[] = [
   {
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    description: 'Frontier model for complex professional work',
+    contextWindow: 1_050_000,
+    isReasoning: true,
+  },
+  {
     id: 'gpt-4.1-mini',
     name: 'GPT-4.1 Mini',
     description: 'Fast, efficient iteration of 4.1',
@@ -92,6 +99,7 @@ const OPENAI_APIKEY_MODELS: CatalogModel[] = [
 
 // Codex (OAuth) models — only available via ChatGPT OAuth
 const OPENAI_CODEX_MODELS: CatalogModel[] = [
+  ...OPENAI_APIKEY_MODELS,
   {
     id: 'gpt-5.3-codex',
     name: 'GPT-5.3 Codex',
@@ -107,6 +115,27 @@ const OPENAI_CODEX_MODELS: CatalogModel[] = [
 ];
 
 const ANTHROPIC_MODELS: CatalogModel[] = [
+  {
+    id: 'claude-opus-4-6',
+    name: 'Claude Opus 4.6',
+    description: 'Flagship Claude model for complex reasoning and tool use',
+    contextWindow: 1_000_000,
+    isReasoning: true,
+  },
+  {
+    id: 'claude-sonnet-4-6',
+    name: 'Claude Sonnet 4.6',
+    description: 'High-intelligence model for fast, strong reasoning',
+    contextWindow: 1_000_000,
+    isReasoning: true,
+  },
+  {
+    id: 'claude-haiku-4-5-20251001',
+    name: 'Claude Haiku 4.5',
+    description: 'Fast, cost-effective model for lightweight tasks',
+    contextWindow: 200_000,
+    isReasoning: false,
+  },
   {
     id: 'claude-3-7-sonnet-20250219',
     name: 'Claude 3.7 Sonnet',

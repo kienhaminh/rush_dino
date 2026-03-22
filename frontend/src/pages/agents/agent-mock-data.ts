@@ -2,8 +2,6 @@ import type { AgentRecord, AgentRuntimeData, AgentSoulData, AgentMemoryEntry } f
 
 export const AGENT_PANELS = [
   'overview',
-  'progress',
-  'files',
   'tools',
   'skills',
   'channels',
@@ -17,7 +15,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🤖',
     isDefault: true,
     workspace: 'default',
-    model: 'gpt-4o',
     description: 'Default assistant used for normal routing.',
   },
   {
@@ -26,7 +23,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🧭',
     isDefault: false,
     workspace: 'workspace/research',
-    model: 'claude-3.7-sonnet',
     description: 'Focused on retrieval and web research tasks.',
   },
   {
@@ -35,7 +31,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '💡',
     isDefault: false,
     workspace: 'workspace/brainstormer',
-    model: 'gpt-4o',
     description: 'Ideation specialist for generating options and concepts.',
   },
   {
@@ -44,7 +39,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🧹',
     isDefault: false,
     workspace: 'workspace/code-simplifier',
-    model: 'gpt-4o',
     description: 'Refactoring specialist for reducing complexity safely.',
   },
   {
@@ -53,7 +47,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🪲',
     isDefault: false,
     workspace: 'workspace/debugger',
-    model: 'gpt-4o',
     description: 'Root-cause specialist for failures and runtime issues.',
   },
   {
@@ -62,7 +55,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '📚',
     isDefault: false,
     workspace: 'workspace/docs',
-    model: 'gpt-4o-mini',
     description: 'Maintains technical docs, runbooks, and decision records.',
   },
   {
@@ -71,7 +63,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🧩',
     isDefault: false,
     workspace: 'workspace/fullstack',
-    model: 'gpt-4o',
     description: 'Implements end-to-end features across frontend and backend.',
   },
   {
@@ -80,7 +71,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🌿',
     isDefault: false,
     workspace: 'workspace/git',
-    model: 'gpt-4o-mini',
     description: 'Handles branch strategy, rebases, and conflict resolution.',
   },
   {
@@ -89,7 +79,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '📓',
     isDefault: false,
     workspace: 'workspace/journal',
-    model: 'gpt-4o-mini',
     description: 'Captures progress, decisions, and lessons learned.',
   },
   {
@@ -98,7 +87,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🔌',
     isDefault: false,
     workspace: 'workspace/mcp',
-    model: 'gpt-4o',
     description: 'Configures and troubleshoots MCP integrations.',
   },
   {
@@ -107,7 +95,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🗂️',
     isDefault: false,
     workspace: 'workspace/project',
-    model: 'gpt-4o-mini',
     description: 'Owns scope, milestones, and delivery coordination.',
   },
   {
@@ -116,7 +103,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '✅',
     isDefault: false,
     workspace: 'workspace/test',
-    model: 'gpt-4o-mini',
     description: 'Designs test strategy and regression coverage.',
   },
   {
@@ -125,7 +111,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     emoji: '🧭',
     isDefault: false,
     workspace: 'workspace/design',
-    model: 'gpt-4o',
     description: 'Designs user flows, interaction patterns, and accessibility.',
   },
 ];

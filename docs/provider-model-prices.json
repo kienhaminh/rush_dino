@@ -40,6 +40,12 @@
         "cacheRead": 0.175,
         "cacheWrite": null
       },
+      "gpt-5.4": {
+        "input": 2.5,
+        "output": 15,
+        "cacheRead": 0.25,
+        "cacheWrite": null
+      },
       "gpt-4.1": {
         "input": 2,
         "output": 8,
@@ -126,6 +132,12 @@
         "cacheRead": 0.175,
         "cacheWrite": null
       },
+      "gpt-5.4": {
+        "input": 2.5,
+        "output": 15,
+        "cacheRead": 0.25,
+        "cacheWrite": null
+      },
       "gpt-4.1": {
         "input": 2,
         "output": 8,
@@ -188,6 +200,24 @@
       }
     },
     "anthropic": {
+      "claude-opus-4-6": {
+        "input": 5,
+        "output": 25,
+        "cacheRead": 0.5,
+        "cacheWrite": 6.25
+      },
+      "claude-sonnet-4-6": {
+        "input": 3,
+        "output": 15,
+        "cacheRead": 0.3,
+        "cacheWrite": 3.75
+      },
+      "claude-haiku-4-5-20251001": {
+        "input": 1,
+        "output": 5,
+        "cacheRead": 0.1,
+        "cacheWrite": 1.25
+      },
       "claude-3-7-sonnet-20250219": {
         "input": 3,
         "output": 15,

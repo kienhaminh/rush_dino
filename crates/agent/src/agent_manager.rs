@@ -11,9 +11,6 @@ pub struct AgentTemplate {
     pub description: String,
     pub system_prompt: String,
     pub icon: Option<String>,
-    /// Optional preferred model ID for workflow steps using this agent.
-    #[serde(default)]
-    pub model: Option<String>,
     /// Informational list of tools available to this agent (e.g. "shell,web_search").
     #[serde(default)]
     pub tools: Option<String>,
@@ -62,7 +59,6 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
     let mut name: Option<String> = None;
     let mut description: Option<String> = None;
     let mut icon: Option<String> = None;
-    let mut model: Option<String> = None;
     let mut tools: Option<String> = None;
     let mut color: Option<String> = None;
 
@@ -74,7 +70,6 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
                 "name" => name = Some(value),
                 "description" => description = Some(value),
                 "icon" => icon = Some(value),
-                "model" => model = Some(value),
                 "tools" => tools = Some(value),
                 "color" => color = Some(value),
                 _ => {}
@@ -89,7 +84,6 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         description: description.unwrap_or_default(),
         system_prompt,
         icon,
-        model,
         tools,
         color,
         // sandbox_policy is populated by AgentManager::get/list after parsing.
@@ -224,9 +218,6 @@ impl AgentManager {
         if let Some(icon) = &template.icon {
             content.push_str(&format!("icon: {}\n", icon));
         }
-        if let Some(model) = &template.model {
-            content.push_str(&format!("model: {}\n", model));
-        }
         if let Some(tools) = &template.tools {
             content.push_str(&format!("tools: {}\n", tools));
         }
@@ -265,7 +256,7 @@ impl AgentManager {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
+    use std::{fs::read_dir, io::Write};
 
     use uuid::Uuid;
 
@@ -281,7 +272,6 @@ mod tests {
             description: "A test agent".to_owned(),
             system_prompt: "You are a helpful assistant.".to_owned(),
             icon: None,
-            model: None,
             tools: None,
             color: None,
             sandbox_policy: None,
@@ -371,5 +361,32 @@ mod tests {
         assert_eq!(template.description, "A test");
         assert_eq!(template.icon.as_deref(), Some("🤖"));
         assert_eq!(template.system_prompt, "You are a test agent.");
+    }
+
+    #[test]
+    fn bundled_agent_templates_do_not_pin_models() {
+        let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../common/src/agents");
+        let entries = read_dir(&common_agents_dir).expect("bundled agents dir should exist");
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+                continue;
+            };
+            if !matches!(ext, "toml" | "md") {
+                continue;
+            }
+
+            let content = fs::read_to_string(&path).expect("bundled agent template should load");
+            assert!(
+                !content.lines().any(|line| {
+                    let trimmed = line.trim_start();
+                    trimmed.starts_with("model = ") || trimmed.starts_with("model:")
+                }),
+                "bundled agent template {} still pins a model",
+                path.display()
+            );
+        }
     }
 }

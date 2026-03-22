@@ -10,7 +10,8 @@ import {
   createProfile,
   updateProfile,
   deleteProfile,
-  connectCodex,
+  completeCodexConnect,
+  startCodexConnect,
   type ModelInfo,
 } from '@/lib/api';
 import { formatProviderLabel } from '@/lib/provider-display';
@@ -23,6 +24,7 @@ import type {
 import {
   formatAuthLabel,
   isCodexOAuthProfile,
+  normalizeOAuthRedirectInput,
   resolveProviderKindAndAuth,
   type OpenAIAuthChoice,
   type UIProvider,
@@ -147,6 +149,10 @@ function ProfileCard({
   );
   const [loadingModels, setLoadingModels] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [oauthSessionId, setOauthSessionId] = useState('');
+  const [oauthAuthUrl, setOauthAuthUrl] = useState('');
+  const [oauthRedirectUrl, setOauthRedirectUrl] = useState('');
+  const normalizedOAuthRedirectUrl = normalizeOAuthRedirectInput(oauthRedirectUrl);
 
   const fetchModels = useCallback(async () => {
     setLoadingModels(true);
@@ -213,17 +219,42 @@ function ProfileCard({
     }
   };
 
-  const handleConnect = async () => {
+  const handleConnectStart = async () => {
     setConnecting(true);
-    const id = toast.loading('Opening OpenAI OAuth...', {
-      description: 'Please complete the login in your browser.',
+    const id = toast.loading('Generating OpenAI OAuth link...', {
+      description: 'Open the link on your local machine, then paste the redirect URL here.',
     });
     try {
-      await connectCodex(profile.id);
+      const started = await startCodexConnect(profile.id);
+      setOauthSessionId(started.session_id);
+      setOauthAuthUrl(started.auth_url);
+      setOauthRedirectUrl('');
+      toast.success('OAuth link ready.', { id });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start OAuth.', { id });
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleConnectComplete = async () => {
+    if (!oauthSessionId || !normalizedOAuthRedirectUrl) return;
+    setConnecting(true);
+    const id = toast.loading('Completing OpenAI OAuth...', {
+      description: 'Validating the pasted redirect URL and exchanging the code.',
+    });
+    try {
+      await completeCodexConnect(profile.id, {
+        session_id: oauthSessionId,
+        redirect_url: normalizedOAuthRedirectUrl,
+      });
+      setOauthSessionId('');
+      setOauthAuthUrl('');
+      setOauthRedirectUrl('');
       toast.success('OAuth connection successful!', { id });
       onRefresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to connect OAuth.', { id });
+      toast.error(err instanceof Error ? err.message : 'Failed to complete OAuth.', { id });
     } finally {
       setConnecting(false);
     }
@@ -323,7 +354,7 @@ function ProfileCard({
           )}
 
           {profile.auth_method === 'oauth' && (
-            <div className="space-y-1.5">
+            <div className="space-y-3">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 OAuth Connection
                 {isConnected && (
@@ -337,7 +368,7 @@ function ProfileCard({
                 variant="outline"
                 size="sm"
                 className="w-full gap-2 border-primary/20 hover:bg-primary/5 text-primary"
-                onClick={handleConnect}
+                onClick={handleConnectStart}
                 disabled={connecting}
               >
                 {connecting ? (
@@ -345,8 +376,56 @@ function ProfileCard({
                 ) : (
                   <ExternalLink className="w-4 h-4" />
                 )}
-                {isConnected ? 'Reconnect OAuth' : 'Connect OAuth'}
+                {oauthAuthUrl ? 'Regenerate Auth Link' : isConnected ? 'Reconnect OAuth' : 'Generate Auth Link'}
               </Button>
+              {oauthAuthUrl && (
+                <div className="space-y-3 rounded-lg border border-border/50 bg-background/60 p-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-foreground">1. Open the auth link on your local machine</p>
+                    <Input
+                      readOnly
+                      value={oauthAuthUrl}
+                      className="font-mono text-xs border-border/40 bg-background"
+                    />
+                    <a
+                      href={oauthAuthUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      Open auth link
+                    </a>
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-foreground">
+                      2. Paste the full redirect URL after login
+                    </p>
+                    <Input
+                      value={oauthRedirectUrl}
+                      onChange={(e) => setOauthRedirectUrl(e.target.value)}
+                      placeholder="http://localhost:1455/auth/callback?code=..."
+                      className="font-mono text-xs border-border/40 bg-background"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      If the local browser shows a localhost callback URL, copy that entire URL and paste it here.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full gap-2"
+                    onClick={handleConnectComplete}
+                    disabled={connecting || !oauthSessionId || !normalizedOAuthRedirectUrl}
+                  >
+                    {connecting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    Complete OAuth
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

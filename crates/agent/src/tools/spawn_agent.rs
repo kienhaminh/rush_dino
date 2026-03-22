@@ -81,7 +81,6 @@ impl Tool for SpawnAgentTool {
             description: description.to_owned(),
             system_prompt: system_prompt.to_owned(),
             icon,
-            model: None,
             tools: None,
             color: None,
             sandbox_policy: None,

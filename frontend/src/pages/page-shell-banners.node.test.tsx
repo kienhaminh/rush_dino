@@ -69,10 +69,10 @@ function renderBuilderPage() {
 
 function renderSystemPage() {
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={['/system/logs']}>
+    <MemoryRouter initialEntries={['/logs']}>
       <Routes>
-        <Route path="/system" element={<SystemPage />}>
-          <Route path="logs" element={<div>Logs body</div>} />
+        <Route path="/logs" element={<SystemPage />}>
+          <Route index element={<div>Logs body</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,

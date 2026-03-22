@@ -41,10 +41,6 @@ pub fn runtime_status_from_config(config: &AppConfig) -> RuntimeStatus {
     }
 }
 
-pub fn default_profile_model(config: &AppConfig) -> Option<String> {
-    find_default_profile(config).map(|profile| profile.default_model.clone())
-}
-
 pub fn validate_default_profile_execution(
     config: &AppConfig,
     credentials: &CredentialsConfig,
@@ -116,6 +112,21 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 Arc::new(KnowledgeGraphBridge::new(service.clone()))
                     as Arc<dyn KnowledgeGraphAccess>
             });
+
+            let auth_method = match &resolved.provider_config {
+                ProviderConfig::OpenAI { auth, .. } => match auth {
+                    OpenAIAuth::ApiKey { .. } => AuthMethod::ApiKey,
+                    OpenAIAuth::Codex { .. } => AuthMethod::OAuth,
+                },
+                ProviderConfig::Ollama { api_key, .. } => {
+                    if api_key.as_deref().unwrap_or_default().trim().is_empty() {
+                        AuthMethod::None
+                    } else {
+                        AuthMethod::ApiKey
+                    }
+                }
+                ProviderConfig::Anthropic { .. } => AuthMethod::ApiKey,
+            };
             let mut engine_inner = AgentEngine::new(
                 provider,
                 pool,
@@ -123,6 +134,7 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 credentials.brave_api_key.clone(),
                 credentials.gemini_api_key.clone(),
                 provider_kind_label(&resolved.provider_kind).to_owned(),
+                auth_method,
                 {
                     use rushdino_agent::memory_bootstrap::{
                         DEFAULT_BOOTSTRAP_MAX_CHARS, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
@@ -180,13 +192,6 @@ pub async fn resolve_default_profile_provider(
     })
 }
 
-fn find_default_profile(config: &AppConfig) -> Option<&ProviderProfile> {
-    let profile_id = config.default_profile_id.as_ref()?;
-    config
-        .profiles
-        .iter()
-        .find(|profile| profile.id == *profile_id)
-}
 
 fn require_default_profile(config: &AppConfig) -> Result<&ProviderProfile> {
     let Some(profile_id) = config.default_profile_id.as_ref() else {
@@ -366,9 +371,7 @@ mod tests {
     };
     use rushdino_providers::types::{OpenAIAuth, ProviderConfig};
 
-    use super::{
-        default_profile_model, resolve_default_profile_provider, validate_default_profile_execution,
-    };
+    use super::{resolve_default_profile_provider, validate_default_profile_execution};
 
     fn temp_credentials_path() -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -451,19 +454,6 @@ mod tests {
         let err = validate_default_profile_execution(&config, &credentials)
             .expect_err("missing default profile must fail");
         assert!(err.to_string().contains("default_profile_id is not set"));
-    }
-
-    #[test]
-    fn active_model_comes_from_default_profile() {
-        let mut config = AppConfig::default();
-        config.default_profile_id = Some("primary".to_owned());
-        config.profiles = vec![openai_profile()];
-        config.openai.model = "legacy-model".to_owned();
-
-        assert_eq!(
-            default_profile_model(&config).as_deref(),
-            Some("gpt-4.1-mini")
-        );
     }
 
     #[tokio::test]

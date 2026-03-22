@@ -37,7 +37,7 @@ describe('dashboard route metadata', () => {
     ]);
     expect(ADVANCED_VIEWS.map((item) => item.id)).toEqual([
       'agents',
-      'agent-board',
+      'kanban',
       'workflows',
       'skills',
       'coding-agents',
@@ -52,11 +52,16 @@ describe('dashboard route metadata', () => {
 
   it('maps concrete paths to their shell view metadata', () => {
     expect(resolvePageHeader('/')).toMatchObject({ id: 'workspace', title: 'Workspace' });
-    expect(resolvePageHeader('/operations/approvals')).toMatchObject({ id: 'operations', title: 'Approvals' });
-    expect(resolvePageHeader('/channels/telegram')).toMatchObject({ id: 'channels', title: 'Channels' });
-    expect(resolvePageHeader('/system/logs')).toMatchObject({ id: 'system', title: 'Logs' });
+    expect(resolvePageHeader('/approvals')).toMatchObject({ id: 'operations', title: 'Approvals' });
+    expect(resolvePageHeader('/gateway/telegram')).toMatchObject({ id: 'channels', title: 'Channels' });
+    expect(resolvePageHeader('/logs')).toMatchObject({ id: 'system', title: 'Logs' });
+    expect(resolvePageHeader('/sandbox')).toMatchObject({ id: 'system', title: 'Sandbox' });
     expect(resolvePageHeader('/agents')).toMatchObject({ id: 'system', title: 'Agents' });
     expect(resolvePageHeader('/skills')).toMatchObject({ id: 'system', title: 'Skills' });
     expect(resolvePageHeader('/metrics')).toMatchObject({ id: 'operations', title: 'Metrics' });
+  });
+
+  it('routes the sandbox advanced view without the /system prefix', () => {
+    expect(ADVANCED_VIEWS.find((item) => item.id === 'sandbox')?.href).toBe('/sandbox');
   });
 });

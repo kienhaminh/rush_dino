@@ -13,7 +13,7 @@ export function buildChannelsPath({
   channel: string | null;
   panel: ChannelPanel;
 }) {
-  const path = channel ? `/channels/${encodeURIComponent(channel)}` : '/channels';
+  const path = channel ? `/gateway/${encodeURIComponent(channel)}` : '/gateway';
   if (panel === 'overview') {
     return path;
   }

@@ -1,12 +1,13 @@
-use std::{fs, path::PathBuf};
+use std::fs;
 
 use axum::{extract::Path, extract::State, Json};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
-use rushdino_common::{AppConfig, AppError, Result};
+use rushdino_common::{AppError, Result};
+use rushdino_security::policy::types::SandboxPolicy;
 
-use crate::provider_runtime::default_profile_model;
+use crate::routes::skills::is_built_in_skill_name;
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -17,8 +18,9 @@ pub struct AgentListItem {
     pub emoji: String,
     pub is_default: bool,
     pub workspace: String,
-    pub model: String,
     pub description: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sandbox_policy: Option<SandboxPolicy>,
 }
 
 #[derive(Debug, Serialize)]
@@ -112,18 +114,11 @@ pub struct AgentCronJob {
     pub payload: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
-struct SkillDoc {
-    name: String,
-    description: String,
-}
-
 pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
     let engine = state.engine()?;
     let config = state.config();
     let mut items = engine.list_agent_templates();
     items.sort_by(|a, b| a.name.cmp(&b.name));
-    let default_model = active_model(config.as_ref());
 
     let mapped = items
         .into_iter()
@@ -138,8 +133,8 @@ pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_jso
                 .join(format!("{}.toml", agent.name))
                 .display()
                 .to_string(),
-            model: default_model.clone(),
             description: agent.description,
+            sandbox_policy: agent.sandbox_policy,
         })
         .collect::<Vec<_>>();
 
@@ -161,7 +156,6 @@ pub async fn get_agent_runtime(
         .ok_or_else(|| AppError::Validation(format!("unknown agent: {id}")))?;
 
     let agents_dir = config.data_dir.join("agents");
-    let skills_dir = config.data_dir.join("skills");
     let file = read_agent_file_record(&agents_dir, &id);
     let mut files = vec![file];
 
@@ -192,7 +186,22 @@ pub async fn get_agent_runtime(
             .collect(),
     );
 
-    let skills = read_skills(&skills_dir);
+    let mut skills: Vec<AgentSkillRecord> = engine
+        .list_skills()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|skill| {
+            let built_in = is_built_in_skill_name(&skill.name);
+            AgentSkillRecord {
+                name: skill.name,
+                description: skill.description,
+                group: if built_in { "built-in".to_owned() } else { "workspace".to_owned() },
+                source: if built_in { "builtin".to_owned() } else { "workspace".to_owned() },
+                enabled: true,
+            }
+        })
+        .collect();
+    skills.sort_by(|a, b| a.name.cmp(&b.name));
 
     Ok(Json(AgentRuntimeResponse {
         files,
@@ -330,10 +339,6 @@ fn is_valid_agent_id(id: &str) -> bool {
     !id.is_empty() && !id.starts_with('.') && !id.contains('/') && !id.contains('\\')
 }
 
-fn active_model(config: &AppConfig) -> String {
-    default_profile_model(config).unwrap_or_else(|| "unavailable".to_owned())
-}
-
 fn humanize_agent_name(raw: &str) -> String {
     raw.split('-')
         .filter(|part| !part.is_empty())
@@ -423,37 +428,6 @@ fn read_workspace_file_record(
     }
 }
 
-fn read_skills(skills_dir: &PathBuf) -> Vec<AgentSkillRecord> {
-    let read_dir = match fs::read_dir(skills_dir) {
-        Ok(entries) => entries,
-        Err(_) => return Vec::new(),
-    };
-
-    let mut skills = Vec::new();
-    for entry in read_dir.flatten() {
-        if entry.path().extension().and_then(|ext| ext.to_str()) != Some("toml") {
-            continue;
-        }
-
-        let Ok(content) = fs::read_to_string(entry.path()) else {
-            continue;
-        };
-        let Ok(parsed) = toml::from_str::<SkillDoc>(&content) else {
-            continue;
-        };
-
-        skills.push(AgentSkillRecord {
-            name: parsed.name.clone(),
-            description: parsed.description,
-            group: "workspace".to_owned(),
-            source: "workspace".to_owned(),
-            enabled: true,
-        });
-    }
-
-    skills.sort_by(|a, b| a.name.cmp(&b.name));
-    skills
-}
 
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
@@ -464,5 +438,73 @@ fn format_bytes(bytes: u64) -> String {
         format!("{:.1} KB", bytes as f64 / KB as f64)
     } else {
         format!("{bytes} B")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AgentListItem;
+    use rushdino_security::policy::types::{
+        AccessMode, BlockBehavior, CredentialProvider, DefaultAction, FilesystemPolicy,
+        InferencePolicy, NetworkPolicy, PathRule, ProcessPolicy, SandboxConfig, SandboxPolicy,
+    };
+
+    #[test]
+    fn agent_list_item_serializes_sandbox_policy_when_present() {
+        let item = AgentListItem {
+            id: "agent-1".to_owned(),
+            name: "Agent 1".to_owned(),
+            emoji: "🤖".to_owned(),
+            is_default: false,
+            workspace: "/tmp/agent-1".to_owned(),
+            description: "test".to_owned(),
+            sandbox_policy: Some(SandboxPolicy {
+                version: "1".to_owned(),
+                sandbox: SandboxConfig {
+                    filesystem: FilesystemPolicy {
+                        default: DefaultAction::Deny,
+                        allow: vec![PathRule {
+                            path: "/tmp".into(),
+                            mode: AccessMode::ReadWrite,
+                        }],
+                        deny: vec!["/etc".into()],
+                    },
+                    process: ProcessPolicy {
+                        allow_privileged: false,
+                        max_concurrent: 1,
+                        deny_commands: vec!["curl".to_owned()],
+                    },
+                    network: NetworkPolicy {
+                        default: DefaultAction::Deny,
+                        on_block: BlockBehavior::Prompt,
+                        allow: vec![],
+                    },
+                    inference: InferencePolicy::default(),
+                },
+                providers: vec![CredentialProvider {
+                    name: "openai".to_owned(),
+                    inject: Default::default(),
+                }],
+            }),
+        };
+
+        let value = serde_json::to_value(item).expect("agent list item should serialize");
+        assert!(value.get("sandboxPolicy").is_some());
+    }
+
+    #[test]
+    fn agent_list_item_does_not_serialize_per_agent_model() {
+        let item = AgentListItem {
+            id: "agent-1".to_owned(),
+            name: "Agent 1".to_owned(),
+            emoji: "🤖".to_owned(),
+            is_default: false,
+            workspace: "/tmp/agent-1".to_owned(),
+            description: "test".to_owned(),
+            sandbox_policy: None,
+        };
+
+        let value = serde_json::to_value(item).expect("agent list item should serialize");
+        assert!(value.get("model").is_none());
     }
 }

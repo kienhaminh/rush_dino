@@ -314,7 +314,6 @@ mod tests {
                 description: "Researcher".to_owned(),
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
-                model: None,
                 tools: None,
                 color: None,
                 sandbox_policy: None,

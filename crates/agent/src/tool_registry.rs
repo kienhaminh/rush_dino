@@ -103,23 +103,47 @@ impl SessionToolContext {
         }
     }
 
-    /// Search the pool by name, description, and keywords (case-insensitive substring).
-    /// Returns matching tool definitions. Empty query returns nothing.
+    /// Search the pool by name, description, and keywords (case-insensitive).
+    /// The query is split into words; a tool matches if **any** word appears in its
+    /// name, description, or keywords. Results are ranked by the number of matching
+    /// words (descending).
     pub fn search_pool(&self, query: &str) -> Vec<ToolDefinition> {
-        let q = query.trim().to_lowercase();
-        if q.is_empty() {
+        let words: Vec<String> = query
+            .split_whitespace()
+            .map(|w| w.to_lowercase())
+            .collect();
+        if words.is_empty() {
             return vec![];
         }
-        self.pool
+
+        let mut scored: Vec<(usize, &Arc<dyn Tool>)> = self
+            .pool
             .iter()
-            .filter(|t| {
+            .filter_map(|t| {
                 let name = t.name().to_lowercase();
                 let desc = t.description().to_lowercase();
-                name.contains(&q)
-                    || desc.contains(&q)
-                    || t.keywords().iter().any(|k| k.to_lowercase().contains(&q))
+                let kws: Vec<String> =
+                    t.keywords().iter().map(|k| k.to_lowercase()).collect();
+
+                let hits = words
+                    .iter()
+                    .filter(|w| {
+                        name.contains(w.as_str())
+                            || desc.contains(w.as_str())
+                            || kws.iter().any(|k| k.contains(w.as_str()))
+                    })
+                    .count();
+
+                if hits > 0 { Some((hits, t)) } else { None }
             })
-            .map(|t| ToolDefinition {
+            .collect();
+
+        // Best matches first.
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+
+        scored
+            .into_iter()
+            .map(|(_, t)| ToolDefinition {
                 name: t.name().to_owned(),
                 description: t.description().to_owned(),
                 parameters: t.parameters(),
@@ -245,5 +269,22 @@ mod session_ctx_tests {
         let ctx = SessionToolContext::new(make_pool(), &[]);
         let results = ctx.search_pool("");
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn multi_word_query_matches_any_word() {
+        let ctx = SessionToolContext::new(make_pool(), &[]);
+        // "web" matches web_search, "browse" matches its keyword, "research" matches nothing extra
+        let results = ctx.search_pool("web search browser research internet");
+        assert!(results.iter().any(|d| d.name == "web_search"));
+    }
+
+    #[test]
+    fn multi_word_results_ranked_by_hits() {
+        let ctx = SessionToolContext::new(make_pool(), &[]);
+        // "web internet" — both words match web_search (name + keyword), only "web" matches via desc
+        let results = ctx.search_pool("web internet");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "web_search");
     }
 }

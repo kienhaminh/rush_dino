@@ -9,7 +9,7 @@ read_when:
 
 This folder is home. Treat it that way.
 
-## Every Session
+## Session Startup
 
 Before doing anything else:
 
@@ -48,7 +48,7 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
 
-## Safety
+## Red Lines
 
 - Don't exfiltrate private data. Ever.
 - Don't run destructive commands without asking.

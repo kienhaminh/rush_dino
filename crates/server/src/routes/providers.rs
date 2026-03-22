@@ -1,15 +1,20 @@
+use std::time::{Duration, Instant};
+
 use crate::state::AppState;
 use axum::{
     extract::{Path, State},
     Json,
 };
+use crate::state::{PendingOAuthSession, PendingOAuthStore};
 use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
 use rushdino_providers::types::{ModelInfo, OpenAIAuth, ProviderConfig};
 use rushdino_providers::ProviderService;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+const OAUTH_PENDING_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Deserialize)]
 pub struct CreateProfileRequest {
@@ -28,6 +33,18 @@ pub struct UpdateProfileRequest {
     pub default_model: String,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StartOAuthResponse {
+    pub session_id: String,
+    pub auth_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CompleteOAuthRequest {
+    pub session_id: String,
+    pub redirect_url: String,
 }
 
 fn profile_supports_oauth_connect(profile: &ProviderProfile) -> bool {
@@ -120,11 +137,7 @@ pub async fn update_profile(
     Ok(Json(updated_profile))
 }
 
-pub async fn connect_profile_oauth(
-    State(state): State<AppState>,
-    Path(profile_id): Path<String>,
-) -> Result<Json<serde_json::Value>> {
-    let config = AppConfig::load_from_path(&state.config_path)?;
+fn get_oauth_profile(config: &AppConfig, profile_id: &str) -> Result<ProviderProfile> {
     let profile = config
         .profiles
         .iter()
@@ -139,7 +152,78 @@ pub async fn connect_profile_oauth(
         )));
     }
 
-    let tokens = rushdino_auth::oauth_pkce::run().await?;
+    Ok(profile)
+}
+
+async fn consume_pending_oauth_session(
+    store: &PendingOAuthStore,
+    session_id: &str,
+    max_age: Duration,
+    now: Instant,
+) -> Result<PendingOAuthSession> {
+    store
+        .take_if_fresh(session_id, max_age, now)
+        .await
+        .ok_or_else(|| {
+            AppError::Validation("OAuth session expired or was not found. Start again.".into())
+        })
+}
+
+fn parse_complete_oauth_input(
+    pending: &PendingOAuthSession,
+    redirect_url: &str,
+) -> Result<String> {
+    rushdino_auth::oauth_pkce::extract_authorization_code(redirect_url, &pending.state)
+}
+
+pub async fn connect_profile_oauth_start(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+) -> Result<Json<StartOAuthResponse>> {
+    let config = AppConfig::load_from_path(&state.config_path)?;
+    let profile = get_oauth_profile(&config, &profile_id)?;
+    let login = rushdino_auth::oauth_pkce::start_login();
+    let session_id = uuid::Uuid::new_v4().to_string();
+    let auth_url = login.auth_url.clone();
+    state
+        .pending_oauth
+        .insert(
+            session_id.clone(),
+            PendingOAuthSession::from_login(profile.id.clone(), login, Instant::now()),
+        )
+        .await;
+
+    Ok(Json(StartOAuthResponse {
+        session_id,
+        auth_url,
+    }))
+}
+
+pub async fn connect_profile_oauth_complete(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+    Json(payload): Json<CompleteOAuthRequest>,
+) -> Result<Json<serde_json::Value>> {
+    let config = AppConfig::load_from_path(&state.config_path)?;
+    let profile = get_oauth_profile(&config, &profile_id)?;
+    let pending = consume_pending_oauth_session(
+        &state.pending_oauth,
+        &payload.session_id,
+        OAUTH_PENDING_TTL,
+        Instant::now(),
+    )
+    .await?;
+
+    if pending.profile_id != profile.id {
+        return Err(AppError::Validation(
+            "OAuth session does not match the selected profile. Start again.".into(),
+        ));
+    }
+
+    let code = parse_complete_oauth_input(&pending, &payload.redirect_url)?;
+    let client = reqwest::Client::new();
+    let tokens = rushdino_auth::oauth_pkce::complete_login(&client, &code, &pending.verifier)
+        .await?;
     let mut credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
     let mut secrets = credentials
         .profiles
@@ -252,18 +336,15 @@ pub async fn list_provider_models(
         }
     };
 
-    let codex_profile =
-        profile.provider_kind == Provider::OpenAI && profile.auth_method == AuthMethod::OAuth;
-
     let provider = ProviderService::from_config(&provider_config)?;
     match provider.list_models().await {
         Ok(mut models) if !models.is_empty() => {
-            // Keep only models that match the authentication intent.
-            // For OpenAI profiles: API-key profiles must not show codex models and
-            // OAuth profiles must only show codex models.
-            if profile.provider_kind == Provider::OpenAI {
-                models.retain(|m| m.id.contains("codex") == codex_profile);
-            }
+            // Filter returned models to those that match our static catalog selection
+            // for the profile's authentication method.
+            //
+            // (This avoids relying on a fragile `id.contains("codex")` heuristic,
+            // since Codex models can now include IDs like `gpt-5.4`.)
+            models.retain(|m| defaults.iter().any(|d| d.id == m.id));
 
             for m in models.iter_mut() {
                 if let Some(d) = defaults.iter().find(|d| d.id == m.id) {
@@ -306,9 +387,16 @@ pub async fn list_provider_models(
 
 #[cfg(test)]
 mod tests {
+    use std::time::{Duration, Instant};
+
+    use rushdino_auth::oauth_pkce::PendingOAuthLogin;
     use rushdino_common::config::{AuthMethod, Provider, ProviderProfile};
 
-    use super::profile_supports_oauth_connect;
+    use crate::state::{PendingOAuthSession, PendingOAuthStore};
+
+    use super::{
+        consume_pending_oauth_session, parse_complete_oauth_input, profile_supports_oauth_connect,
+    };
 
     fn profile(provider_kind: Provider, auth_method: AuthMethod) -> ProviderProfile {
         ProviderProfile {
@@ -339,5 +427,56 @@ mod tests {
             Provider::Anthropic,
             AuthMethod::OAuth,
         )));
+    }
+
+    #[tokio::test]
+    async fn oauth_complete_rejects_unknown_pending_session() {
+        let store = PendingOAuthStore::new();
+        let error = consume_pending_oauth_session(
+            &store,
+            "missing",
+            Duration::from_secs(300),
+            Instant::now(),
+        )
+        .await
+        .expect_err("missing session should fail");
+
+        assert!(error.to_string().contains("expired"));
+    }
+
+    #[tokio::test]
+    async fn oauth_complete_rejects_state_mismatch() {
+        let store = PendingOAuthStore::new();
+        let now = Instant::now();
+        store
+            .insert(
+                "session-1".to_owned(),
+                PendingOAuthSession::from_login(
+                    "profile-1".to_owned(),
+                    PendingOAuthLogin {
+                        verifier: "verifier".to_owned(),
+                        state: "expected-state".to_owned(),
+                        auth_url: "https://example.test/oauth".to_owned(),
+                    },
+                    now,
+                ),
+            )
+            .await;
+
+        let pending = consume_pending_oauth_session(
+            &store,
+            "session-1",
+            Duration::from_secs(300),
+            now,
+        )
+        .await
+        .expect("session should exist");
+        let error = parse_complete_oauth_input(
+            &pending,
+            "http://localhost:1455/auth/callback?code=abc123&state=wrong-state",
+        )
+        .expect_err("state mismatch should fail");
+
+        assert!(error.to_string().contains("state mismatch"));
     }
 }

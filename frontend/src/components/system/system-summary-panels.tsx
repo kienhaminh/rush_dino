@@ -152,7 +152,7 @@ export function OperationalStatusCard({
           defaultOpen={channelAttentionCount > 0}
           action={
             <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-              <RouterLink to="/channels">
+              <RouterLink to="/gateway">
                 Open channels
                 <ArrowRight className="ml-1 h-3 w-3" />
               </RouterLink>
@@ -234,7 +234,7 @@ export function OperationalStatusCard({
                     </p>
                   </div>
                   <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                    <RouterLink to="/operations/approvals">
+                    <RouterLink to="/approvals">
                       Review
                       <ArrowRight className="ml-1 h-3 w-3" />
                     </RouterLink>

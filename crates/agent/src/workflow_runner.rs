@@ -563,11 +563,6 @@ impl WorkflowRunner {
             delegation_depth: 0,
         };
 
-        let step_config = AgentConfig {
-            model_override: template.model.clone(),
-            ..self.config.clone()
-        };
-
         let session_ctx = self
             .session_ctx
             .upgrade()
@@ -579,7 +574,7 @@ impl WorkflowRunner {
                 self.tool_registry.clone(),
                 session_ctx,
                 messages,
-                &step_config,
+                &self.config,
                 None,
             ),
         )

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { AgentBoardPage } from './agent-board/AgentBoardPage';
+import { KanbanPage } from './kanban/KanbanPage';
 import { BuilderPage } from './builder/BuilderPage';
 import { ChannelsPage } from './channels/ChannelsPage';
 import { CronPage } from './cron/CronPage';
@@ -85,7 +85,7 @@ describe('critical flow page coverage', () => {
         />
 
         <CronPage />
-        <AgentBoardPage />
+        <KanbanPage />
       </MemoryRouter>,
     );
 
@@ -93,7 +93,7 @@ describe('critical flow page coverage', () => {
     expect(html).toContain('Telegram');
     expect(html).toContain('smoke-skill');
     expect(html).toContain('Active Jobs');
-    expect(html).toContain('All Agents Overview');
+    expect(html).toContain('Task Board');
   });
 
   it('renders builder and system navigation shells', () => {
@@ -108,10 +108,10 @@ describe('critical flow page coverage', () => {
     );
 
     const systemHtml = renderToStaticMarkup(
-      <MemoryRouter initialEntries={['/system/logs']}>
+      <MemoryRouter initialEntries={['/logs']}>
         <Routes>
-          <Route path="/system" element={<SystemPage />}>
-            <Route path="logs" element={<div>System body</div>} />
+          <Route path="/logs" element={<SystemPage />}>
+            <Route index element={<div>System body</div>} />
           </Route>
         </Routes>
       </MemoryRouter>,

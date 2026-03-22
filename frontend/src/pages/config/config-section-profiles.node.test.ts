@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAuthLabel,
   isCodexOAuthProfile,
+  normalizeOAuthRedirectInput,
   resolveProviderKindAndAuth,
 } from './config-profile-utils';
 
@@ -25,5 +26,12 @@ describe('config-section-profiles helpers', () => {
 
     expect(isCodexOAuthProfile(profile)).toBe(true);
     expect(formatAuthLabel(profile)).toBe('Codex (OAuth)');
+  });
+
+  it('trims pasted OAuth redirect input before submit', () => {
+    expect(normalizeOAuthRedirectInput('  http://localhost:1455/auth/callback?code=abc123  ')).toBe(
+      'http://localhost:1455/auth/callback?code=abc123',
+    );
+    expect(normalizeOAuthRedirectInput('   ')).toBe('');
   });
 });

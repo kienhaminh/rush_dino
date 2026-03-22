@@ -3,6 +3,7 @@ pub mod create_skill;
 pub mod create_workflow;
 pub mod cron_tools;
 pub mod delegate_to_agent;
+pub mod kanban_tools;
 pub mod delete_workflow;
 pub mod file_edit;
 pub mod file_read;

@@ -17,6 +17,8 @@ pub struct SkillRecord {
     pub instructions: String,
     pub path: String,
     pub tools: Vec<String>,
+    /// Bundled / system skills — not editable or deletable via the dashboard API.
+    pub is_built_in: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -49,6 +51,12 @@ pub async fn upsert_skill(
     State(state): State<AppState>,
     Json(payload): Json<UpsertSkillRequest>,
 ) -> Result<Json<SkillRecord>> {
+    if is_built_in_skill_name(&payload.name) {
+        return Err(AppError::Validation(format!(
+            "cannot modify built-in skill {:?}",
+            payload.name
+        )));
+    }
     let engine = state.engine()?;
     let config = state.config();
     let skill = Skill {
@@ -68,12 +76,30 @@ pub async fn delete_skill(
     if name.is_empty() {
         return Err(AppError::Validation("invalid skill name".to_owned()));
     }
+    if is_built_in_skill_name(&name) {
+        return Err(AppError::Validation(format!(
+            "cannot delete built-in skill {:?}",
+            name
+        )));
+    }
     let engine = state.engine()?;
     engine.delete_skill(&name)?;
     Ok(Json(serde_json::json!({ "deleted": true, "name": name })))
 }
 
+/// Built-in skills are those shipped under `rushdino_common::skills::SKILL_PATHS` (top-level folder
+/// per entry), plus explicit system skills like `image-generator`.
+pub fn is_built_in_skill_name(name: &str) -> bool {
+    if name == "image-generator" {
+        return true;
+    }
+    rushdino_common::skills::SKILL_PATHS
+        .iter()
+        .any(|rel| rel.split('/').next() == Some(name))
+}
+
 fn map_skill(config: &rushdino_common::AppConfig, skill: Skill) -> SkillRecord {
+    let is_built_in = is_built_in_skill_name(&skill.name);
     SkillRecord {
         path: config
             .data_dir
@@ -85,5 +111,6 @@ fn map_skill(config: &rushdino_common::AppConfig, skill: Skill) -> SkillRecord {
         description: skill.description,
         instructions: skill.instructions,
         tools: skill.tools.unwrap_or_default(),
+        is_built_in,
     }
 }

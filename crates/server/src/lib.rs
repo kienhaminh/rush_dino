@@ -327,6 +327,7 @@ pub async fn run_server() -> Result<()> {
     // Build the sandbox registry using the shared SQLite pool and agents dir.
     let agents_dir = config.data_dir.join("agents");
     let sandbox_registry = state::SandboxRegistry::new(pool.clone(), agents_dir);
+    let pending_oauth = state::PendingOAuthStore::new();
 
     let state = AppState::new(
         runtime_state.clone(),
@@ -344,6 +345,7 @@ pub async fn run_server() -> Result<()> {
         channel_pairing,
         dashboard_auth,
         sandbox_registry,
+        pending_oauth,
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -514,6 +516,11 @@ pub async fn run_server() -> Result<()> {
             "/api/documents/ingest",
             post(routes::documents::ingest_documents),
         )
+        // Kanban task board
+        .route("/api/kanban/board", get(routes::kanban::get_kanban_board))
+        .route("/api/kanban/tasks", get(routes::kanban::list_kanban_tasks))
+        .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task))
+        .route("/api/kanban/stats", get(routes::kanban::get_kanban_stats))
         .route("/api/graph/search", get(routes::graph::search))
         .route("/api/graph/facts", get(routes::graph::facts))
         .route("/api/graph/node/:id", get(routes::graph::node))
@@ -557,8 +564,12 @@ pub async fn run_server() -> Result<()> {
             get(routes::providers::list_provider_models),
         )
         .route(
-            "/api/providers/:profile_id/connect-oauth",
-            post(routes::providers::connect_profile_oauth),
+            "/api/providers/:profile_id/connect-oauth/start",
+            post(routes::providers::connect_profile_oauth_start),
+        )
+        .route(
+            "/api/providers/:profile_id/connect-oauth/complete",
+            post(routes::providers::connect_profile_oauth_complete),
         )
         // Sandbox policy API routes
         .route(
