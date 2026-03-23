@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   deleteConversation,
+  resetSession,
   fetchConversation,
   fetchRegisteredTools,
   fetchSessionRuns,
@@ -52,11 +53,10 @@ export function SessionsRoute() {
       setSystemPrompt(prompt.content);
       setRegisteredTools(tools);
       setAgentConfig(summary.agentConfig ?? null);
-      if (isInitial && s.length > 0) {
-        const latest = [...s].sort(
-          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-        )[0];
-        setSelectedSessionId(latest.id);
+      if (isInitial) {
+        // Always connect to the main session by its fixed ID.
+        const main = s.find((x) => x.id === 'main') ?? s[0] ?? null;
+        if (main) setSelectedSessionId(main.id);
       }
     } catch (e) {
       if (isInitial) setError(e instanceof Error ? e.message : 'Failed to load sessions');
@@ -129,6 +129,18 @@ export function SessionsRoute() {
     }
   };
 
+  const handleReset = async (sessionId: string) => {
+    if (!window.confirm('Reset this session? This will clear the conversation history and cannot be undone.')) return;
+    try {
+      await resetSession(sessionId);
+      toast.success('Session reset.');
+      await refreshMeta(false);
+      setSelectedSessionId(sessionId); // re-trigger conversation reload
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reset session.');
+    }
+  };
+
   const handleDelete = async (sessionId: string) => {
     if (!window.confirm('Delete this conversation session? This cannot be undone.')) return;
     try {
@@ -155,6 +167,7 @@ export function SessionsRoute() {
       error={error}
       onSelectSession={setSelectedSessionId}
       onRefresh={handleRefresh}
+      onReset={handleReset}
       onDelete={handleDelete}
       thinkingLevelOverride={thinkingLevelOverride}
       onThinkingLevelChange={handleThinkingLevelChange}

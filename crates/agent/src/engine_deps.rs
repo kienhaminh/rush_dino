@@ -169,7 +169,7 @@ pub fn build_engine_deps(
             gemini_api_key,
             home_c.join("documents/images"),
         ));
-        r.register(FileReadTool::new(home_c.join("documents")));
+        r.register(FileReadTool::new(home_c.clone()));
         r.register(FileWriteTool::new(home_c.clone()));
         r.register(FileEditTool::new(home_c.clone()));
         r.register(shell_exec);
@@ -201,6 +201,7 @@ pub fn build_engine_deps(
             Weak::new(), // session_ctx unavailable here — upgraded lazily at execute time
             task_memory.clone(),
             conversation.clone(),
+            home_c.clone(),
         ));
         r.register(SpawnAgentTool::new(agent_manager_c2));
         r

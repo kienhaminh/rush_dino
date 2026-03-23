@@ -22,7 +22,7 @@ use crate::{
         CreateCronJobInput, CronJobRecord, CronManager, CronRunRecord, CronRunStatus,
         CronTargetInput, UpdateCronJobInput,
     },
-    engine_bootstrap::{system_message, title_from, user_message},
+    engine_bootstrap::{resolve_skills_for_prompt, system_message, title_from, user_message},
     engine_deps::build_engine_deps,
     job_manager::{JobManager, JobResult},
     knowledge_graph::KnowledgeGraphAccess,
@@ -91,6 +91,7 @@ pub struct AgentEngine {
     provider_name: String,
     auth_method: AuthMethod,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
+    pub(crate) skill_graph: Option<Arc<rushdino_skill_graph::SkillGraphService>>,
     session_ctx: Arc<SessionToolContext>,
     config: AgentConfig,
     /// Shared runtime override — same Arc as RuntimeState.thinking_level_override.
@@ -250,6 +251,7 @@ impl AgentEngine {
             provider_name,
             auth_method,
             knowledge_graph,
+            skill_graph: None,
             session_ctx: deps.session_ctx,
             config,
             thinking_level_override: Arc::new(RwLock::new(None)),
@@ -257,6 +259,10 @@ impl AgentEngine {
             runtime,
             pending_assistant_runs: Arc::new(Mutex::new(HashMap::new())),
         })
+    }
+
+    pub fn set_skill_graph(&mut self, sg: Arc<rushdino_skill_graph::SkillGraphService>) {
+        self.skill_graph = Some(sg);
     }
 
     pub async fn chat_or_create(
@@ -292,13 +298,19 @@ impl AgentEngine {
         // Always prepend the system message at position 0. It is never stored in
         // the DB (dynamic memory/soul files can change between turns), so it must
         // be reconstructed and injected fresh on every request.
+        let skills = resolve_skills_for_prompt(
+            self.skill_manager.as_ref(),
+            self.skill_graph.as_ref().map(|sg| sg.as_ref()),
+            user_input,
+        )
+        .await;
         messages.insert(
             0,
             system_message(
                 &self.config,
                 self.memory.as_ref(),
                 self.agent_manager.as_ref(),
-                self.skill_manager.as_ref(),
+                skills,
                 self.session_ctx.as_ref(),
             ),
         );
@@ -326,6 +338,7 @@ impl AgentEngine {
             conversation_id: Some(conversation_id.to_owned()),
             run_id: None,
             delegation_depth: 0,
+            workspace_override: None,
         };
 
         let effective_config = AgentConfig {
@@ -427,13 +440,19 @@ impl AgentEngine {
         // Always prepend the system message at position 0. It is never stored in
         // the DB (dynamic memory/soul files can change between turns), so it must
         // be reconstructed and injected fresh on every request.
+        let skills = resolve_skills_for_prompt(
+            self.skill_manager.as_ref(),
+            self.skill_graph.as_ref().map(|sg| sg.as_ref()),
+            user_input,
+        )
+        .await;
         messages.insert(
             0,
             system_message(
                 &self.config,
                 self.memory.as_ref(),
                 self.agent_manager.as_ref(),
-                self.skill_manager.as_ref(),
+                skills,
                 self.session_ctx.as_ref(),
             ),
         );
@@ -499,6 +518,7 @@ impl AgentEngine {
             conversation_id: Some(conversation_id.clone()),
             run_id: None,
             delegation_depth: 0,
+            workspace_override: None,
         };
 
         let effective_config = AgentConfig {
@@ -933,6 +953,7 @@ impl AgentEngine {
             conversation_id: Some(conversation_id.to_owned()),
             run_id: Some(run_id.clone()),
             delegation_depth: 0,
+            workspace_override: None,
         };
 
         let effective_config = AgentConfig {
@@ -999,13 +1020,19 @@ impl AgentEngine {
         // Always prepend the system message at position 0. It is never stored in
         // the DB (dynamic memory/soul files can change between turns), so it must
         // be reconstructed and injected fresh on every request.
+        let skills = resolve_skills_for_prompt(
+            self.skill_manager.as_ref(),
+            self.skill_graph.as_ref().map(|sg| sg.as_ref()),
+            user_input,
+        )
+        .await;
         messages.insert(
             0,
             system_message(
                 &self.config,
                 self.memory.as_ref(),
                 self.agent_manager.as_ref(),
-                self.skill_manager.as_ref(),
+                skills,
                 self.session_ctx.as_ref(),
             ),
         );
@@ -1094,6 +1121,14 @@ impl AgentEngine {
         title: &str,
     ) -> Result<rushdino_common::models::Conversation> {
         self.conversation.create_conversation(title).await
+    }
+
+    /// Creates the main workspace session with the fixed ID `"main"` if it does
+    /// not yet exist. Safe to call on every startup (uses INSERT OR IGNORE).
+    pub async fn ensure_main_session(&self) -> Result<rushdino_common::models::Conversation> {
+        self.conversation
+            .create_conversation_with_id("main", "Main")
+            .await
     }
 
     pub async fn get_session_record(

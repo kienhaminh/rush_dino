@@ -259,6 +259,7 @@ mod tests {
                 icon: Some("💻".into()),
                 tools: None,
                 color: None,
+                model: None,
                 sandbox_policy: None,
             },
             AgentTemplate {
@@ -268,6 +269,7 @@ mod tests {
                 icon: Some("🔍".into()),
                 tools: None,
                 color: None,
+                model: None,
                 sandbox_policy: None,
             },
             AgentTemplate {
@@ -277,6 +279,7 @@ mod tests {
                 icon: Some("🎨".into()),
                 tools: None,
                 color: None,
+                model: None,
                 sandbox_policy: None,
             },
         ]

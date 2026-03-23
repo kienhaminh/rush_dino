@@ -5,6 +5,27 @@ use crate::{
     db, init,
 };
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Run `f` with `var` set to `value`, restoring the original value (or
+/// removing the variable) even if `f` panics.  This prevents env-var leakage
+/// between parallel tests.
+fn with_env_var<F: FnOnce() + std::panic::UnwindSafe>(var: &str, value: &str, f: F) {
+    let previous = std::env::var(var).ok();
+    // SAFETY: tests run in a single process; we restore the value afterwards.
+    unsafe { std::env::set_var(var, value) };
+    let result = std::panic::catch_unwind(f);
+    match previous {
+        Some(v) => unsafe { std::env::set_var(var, v) },
+        None => unsafe { std::env::remove_var(var) },
+    }
+    if let Err(e) = result {
+        std::panic::resume_unwind(e);
+    }
+}
+
 #[test]
 fn load_default_config_without_file() {
     let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
@@ -196,6 +217,85 @@ enabled = true
     assert!(config.gateway.telegram.access.allow_from.is_empty());
     assert_eq!(config.gateway.discord.access.dm_policy, DmPolicy::Pairing);
     assert!(!config.gateway.telegram.native_streaming);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+// ---------------------------------------------------------------------------
+// CredentialsConfig::with_env_fallbacks
+// ---------------------------------------------------------------------------
+
+#[test]
+fn env_fallback_picks_up_brave_api_key_when_field_is_none() {
+    with_env_var("BRAVE_API_KEY", "brave-env-key", || {
+        let creds = CredentialsConfig::default().with_env_fallbacks();
+        assert_eq!(creds.brave_api_key.as_deref(), Some("brave-env-key"));
+    });
+}
+
+#[test]
+fn env_fallback_picks_up_openai_api_key_when_field_is_none() {
+    with_env_var("OPENAI_API_KEY", "sk-env-openai", || {
+        let creds = CredentialsConfig::default().with_env_fallbacks();
+        assert_eq!(creds.openai_api_key.as_deref(), Some("sk-env-openai"));
+    });
+}
+
+#[test]
+fn env_fallback_picks_up_anthropic_and_gemini_keys() {
+    with_env_var("ANTHROPIC_API_KEY", "anth-env", || {
+        with_env_var("GEMINI_API_KEY", "gemini-env", || {
+            let creds = CredentialsConfig::default().with_env_fallbacks();
+            assert_eq!(creds.anthropic_api_key.as_deref(), Some("anth-env"));
+            assert_eq!(creds.gemini_api_key.as_deref(), Some("gemini-env"));
+        });
+    });
+}
+
+#[test]
+fn env_fallback_does_not_override_file_value() {
+    // A key that is already set in the file must not be replaced by an env var.
+    with_env_var("BRAVE_API_KEY", "env-override-attempt", || {
+        let creds = CredentialsConfig {
+            brave_api_key: Some("from-file".to_owned()),
+            ..CredentialsConfig::default()
+        }
+        .with_env_fallbacks();
+        assert_eq!(
+            creds.brave_api_key.as_deref(),
+            Some("from-file"),
+            "file value must win over env var"
+        );
+    });
+}
+
+#[test]
+fn env_fallback_ignores_empty_env_var() {
+    with_env_var("BRAVE_API_KEY", "", || {
+        let creds = CredentialsConfig::default().with_env_fallbacks();
+        assert!(
+            creds.brave_api_key.is_none(),
+            "empty env var must not populate the field"
+        );
+    });
+}
+
+#[test]
+fn env_fallback_round_trip_with_credentials_file() {
+    // Simulate the full load -> with_env_fallbacks flow: file has openai key,
+    // env var provides the brave key that is missing from the file.
+    let root = std::env::temp_dir().join(format!("rushdino-test-{}", uuid::Uuid::new_v4()));
+    fs::create_dir_all(&root).expect("temp dir should be created");
+    let path = root.join("credentials.toml");
+    fs::write(&path, "openai_api_key = \"sk-from-file\"\n").expect("write credentials");
+
+    with_env_var("BRAVE_API_KEY", "brave-from-env", || {
+        let creds = CredentialsConfig::load_from_path(&path)
+            .expect("load should succeed")
+            .with_env_fallbacks();
+        assert_eq!(creds.openai_api_key.as_deref(), Some("sk-from-file"));
+        assert_eq!(creds.brave_api_key.as_deref(), Some("brave-from-env"));
+    });
 
     let _ = fs::remove_dir_all(root);
 }

@@ -47,10 +47,22 @@ pub fn truncate_messages(messages: &[Message], max_tokens: usize) -> Vec<Message
         keep.push(first.iter().map(|m| (*m).clone()).collect());
     }
 
-    // Walk groups from most-recent to oldest, keeping whole groups.
+    // Always keep the last group (most recent user/assistant message) to ensure
+    // providers receive at least one non-system input message.
+    if groups.len() > 1 {
+        let last = groups.last().unwrap();
+        let cost: usize = last.iter().map(|m| estimate_tokens(&m.content)).sum();
+        used += cost;
+        keep.push(last.iter().map(|m| (*m).clone()).collect());
+    }
+
+    // Walk remaining groups from most-recent to oldest, keeping whole groups.
     for group in groups.iter().rev() {
-        // Skip the first group (already kept).
+        // Skip the first group (already kept) and last group (already kept).
         if std::ptr::eq(group.as_ptr(), groups[0].as_ptr()) {
+            continue;
+        }
+        if std::ptr::eq(group.as_ptr(), groups.last().unwrap().as_ptr()) {
             continue;
         }
         let cost: usize = group.iter().map(|m| estimate_tokens(&m.content)).sum();

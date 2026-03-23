@@ -83,6 +83,7 @@ impl Tool for SpawnAgentTool {
             icon,
             tools: None,
             color: None,
+            model: None,
             sandbox_policy: None,
         };
 

@@ -182,6 +182,7 @@ mod tests {
                 icon: None,
                 tools: None,
                 color: None,
+                model: None,
                 sandbox_policy: None,
             })
             .expect("save template");

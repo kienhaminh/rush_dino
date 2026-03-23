@@ -127,6 +127,17 @@ impl CodexResponsesProvider {
             .and_then(|l| l.openai_reasoning_effort())
             .is_some();
 
+        // Guard: OpenAI Responses API rejects empty `input` arrays with
+        // "missing_required_parameter". Ensure at least one user input exists.
+        let messages = if messages.is_empty() {
+            vec![json!({
+                "role": "user",
+                "content": [{ "type": "input_text", "text": "Continue." }]
+            })]
+        } else {
+            messages
+        };
+
         let mut body = json!({
             "model": model_id,
             "store": false,

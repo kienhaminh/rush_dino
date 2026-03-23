@@ -135,6 +135,11 @@ export async function deleteConversation(id: string): Promise<void> {
   await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
 }
 
+export async function resetSession(id: string): Promise<void> {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/reset`, { method: 'POST' });
+  await parseJsonOrThrow(response, `/api/sessions/${id}/reset`);
+}
+
 export async function sendChat(conversationId: string | null, message: string) {
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -344,6 +349,7 @@ export async function fetchSessions(): Promise<SessionSummary[]> {
   const data = await parseJsonOrThrow(response, endpoint);
   return (data.items ?? []).map(normalizeSessionSummary);
 }
+
 
 export async function fetchLogs(params?: {
   level?: string[];

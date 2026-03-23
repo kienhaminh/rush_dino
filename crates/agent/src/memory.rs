@@ -21,7 +21,7 @@ impl MemoryManager {
     }
 
     /// Returns the files the agent should have in context on every session start
-    /// (SOUL.md, USER.md, TOOLS.md, IDENTITY.md, MEMORY.md, yesterday's daily note).
+    /// (USER.md, TOOLS.md, IDENTITY.md, MEMORY.md, yesterday's daily note).
     /// Excludes BOOTSTRAP.md, which is handled separately by the system prompt builder.
     pub fn startup_context(&self) -> String {
         let mut sections = Vec::new();
@@ -161,7 +161,7 @@ impl MemoryManager {
     pub fn collect_startup_files(&self) -> Vec<BootstrapFile> {
         let mut files = Vec::new();
 
-        for name in ["SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"] {
+        for name in ["USER.md", "TOOLS.md", "IDENTITY.md"] {
             let path = self.resolve_named_path(name);
             let content = fs::read_to_string(&path).ok();
             files.push(BootstrapFile {

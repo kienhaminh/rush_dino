@@ -10,6 +10,8 @@ pub struct Skill {
     pub description: String,
     pub instructions: String,
     pub tools: Option<Vec<String>>,
+    pub category: Option<String>,
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Clone)]
@@ -45,6 +47,8 @@ impl SkillManager {
         let mut name = None;
         let mut description = None;
         let mut tools: Option<Vec<String>> = None;
+        let mut category = None;
+        let mut tags: Option<Vec<String>> = None;
         for line in frontmatter.lines() {
             if let Some((k, v)) = line.split_once(':') {
                 match k.trim() {
@@ -60,6 +64,17 @@ impl SkillManager {
                             tools = Some(list);
                         }
                     }
+                    "category" => category = Some(v.trim().to_owned()),
+                    "tags" => {
+                        let list: Vec<String> = v
+                            .split(',')
+                            .map(|s| s.trim().to_owned())
+                            .filter(|s| !s.is_empty())
+                            .collect();
+                        if !list.is_empty() {
+                            tags = Some(list);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -71,6 +86,8 @@ impl SkillManager {
                 .ok_or_else(|| AppError::Validation("SKILL.md missing 'description'".into()))?,
             instructions: body,
             tools,
+            category,
+            tags,
         })
     }
 
@@ -84,6 +101,14 @@ impl SkillManager {
         if let Some(tools) = &skill.tools {
             if !tools.is_empty() {
                 fm.push(format!("tools: {}", tools.join(", ")));
+            }
+        }
+        if let Some(category) = &skill.category {
+            fm.push(format!("category: {}", category));
+        }
+        if let Some(tags) = &skill.tags {
+            if !tags.is_empty() {
+                fm.push(format!("tags: {}", tags.join(", ")));
             }
         }
         fm.push("---".to_owned());

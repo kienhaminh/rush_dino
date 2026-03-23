@@ -164,6 +164,30 @@ impl SessionToolContext {
             .insert(name.to_owned())
     }
 
+    /// Create a scoped context that only includes tools whose names are in `allowed`.
+    /// If `allowed` is empty, all pool tools are included (unrestricted agent).
+    /// All included tools start active.
+    pub fn scoped(pool: &[Arc<dyn Tool>], allowed: &[&str]) -> Self {
+        let filtered: Vec<Arc<dyn Tool>> = if allowed.is_empty() {
+            pool.to_vec()
+        } else {
+            pool.iter()
+                .filter(|t| allowed.contains(&t.name()))
+                .cloned()
+                .collect()
+        };
+        let active: HashSet<String> = filtered.iter().map(|t| t.name().to_owned()).collect();
+        Self {
+            pool: filtered,
+            active: RwLock::new(active),
+        }
+    }
+
+    /// Returns a reference to the full tool pool (active and inactive).
+    pub fn pool_tools(&self) -> &[Arc<dyn Tool>] {
+        &self.pool
+    }
+
     /// Definitions for currently active tools, sorted by name.
     pub fn active_definitions(&self) -> Vec<ToolDefinition> {
         let active = self.active.read().expect("active set lock poisoned");
@@ -286,5 +310,42 @@ mod session_ctx_tests {
         let results = ctx.search_pool("web internet");
         assert!(!results.is_empty());
         assert_eq!(results[0].name, "web_search");
+    }
+
+    #[test]
+    fn scoped_filters_pool() {
+        let pool = make_pool();
+        let ctx = SessionToolContext::scoped(&pool, &["read", "web_search"]);
+        let names: Vec<String> = ctx.pool_tools().iter().map(|t| t.name().to_owned()).collect();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"read".to_owned()));
+        assert!(names.contains(&"web_search".to_owned()));
+        assert!(!names.contains(&"cron_create".to_owned()));
+    }
+
+    #[test]
+    fn scoped_empty_allows_all() {
+        let pool = make_pool();
+        let ctx = SessionToolContext::scoped(&pool, &[]);
+        assert_eq!(ctx.pool_tools().len(), 3);
+    }
+
+    #[test]
+    fn scoped_all_tools_active() {
+        let pool = make_pool();
+        let ctx = SessionToolContext::scoped(&pool, &["read", "cron_create"]);
+        let defs = ctx.active_definitions();
+        assert_eq!(defs.len(), 2);
+        let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+        assert!(names.contains(&"read"));
+        assert!(names.contains(&"cron_create"));
+    }
+
+    #[test]
+    fn pool_tools_returns_full_pool() {
+        let ctx = SessionToolContext::new(make_pool(), &["read"]);
+        // pool_tools returns all 3, even though only 1 is active
+        assert_eq!(ctx.pool_tools().len(), 3);
+        assert_eq!(ctx.active_definitions().len(), 1);
     }
 }

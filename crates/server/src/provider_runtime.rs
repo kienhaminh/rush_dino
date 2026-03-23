@@ -159,6 +159,9 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 None,
             )?;
             engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
+            if let Some(sg) = runtime.skill_graph() {
+                engine_inner.set_skill_graph(sg);
+            }
             let engine = Arc::new(engine_inner);
 
             status.effective_profile_id = Some(resolved.profile_id);

@@ -115,6 +115,8 @@ pub async fn run_server() -> Result<()> {
         if let Some(engine) = runtime_state_bg.engine_opt() {
             // Seed example workflows on first startup (skipped if any workflows already exist).
             engine.seed_initial_workflows().await;
+            // Ensure the single main workspace session exists.
+            engine.ensure_main_session().await.ok();
         }
     });
 
@@ -329,6 +331,13 @@ pub async fn run_server() -> Result<()> {
     let sandbox_registry = state::SandboxRegistry::new(pool.clone(), agents_dir);
     let pending_oauth = state::PendingOAuthStore::new();
 
+    // Skill graph: keyword-based routing for skill selection
+    let skill_graph_service = Arc::new(rushdino_skill_graph::SkillGraphService::new((*pool).clone()));
+    if let Err(err) = skill_graph_service.ensure_seeded().await {
+        tracing::warn!("skill graph seeding failed: {err}");
+    }
+    runtime_state.set_skill_graph(skill_graph_service.clone());
+
     let state = AppState::new(
         runtime_state.clone(),
         config_path,
@@ -346,6 +355,7 @@ pub async fn run_server() -> Result<()> {
         dashboard_auth,
         sandbox_registry,
         pending_oauth,
+        skill_graph_service,
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -554,6 +564,15 @@ pub async fn run_server() -> Result<()> {
             "/api/skills/:name",
             axum::routing::delete(routes::skills::delete_skill),
         )
+        // Skill graph routing
+        .route("/api/skill-graph", get(routes::skill_graph::get_graph))
+        .route("/api/skill-graph/query", get(routes::skill_graph::query_skills))
+        .route("/api/skill-graph/nodes", post(routes::skill_graph::upsert_node))
+        .route("/api/skill-graph/nodes/:id", axum::routing::delete(routes::skill_graph::delete_node))
+        .route("/api/skill-graph/edges", post(routes::skill_graph::upsert_edge))
+        .route("/api/skill-graph/edges/:id", axum::routing::delete(routes::skill_graph::delete_edge))
+        .route("/api/skill-graph/assign", post(routes::skill_graph::assign_category))
+        .route("/api/skill-graph/reseed", post(routes::skill_graph::reseed))
         .route(
             "/api/profiles/:id",
             axum::routing::put(routes::providers::update_profile)

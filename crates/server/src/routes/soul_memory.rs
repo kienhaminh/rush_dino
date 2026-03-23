@@ -6,6 +6,7 @@ use serde::Serialize;
 
 use rushdino_agent::engine_bootstrap::system_message;
 use rushdino_agent::memory_bootstrap::{build_bootstrap_context, build_truncation_warning_lines};
+use rushdino_agent::system_prompt::SkillEntry;
 use rushdino_common::Result;
 
 use crate::state::AppState;
@@ -167,11 +168,21 @@ pub async fn get_system_prompt(
     State(state): State<AppState>,
 ) -> Result<Json<SystemPromptResponse>> {
     let engine = state.runtime.engine()?;
+    let skills = engine
+        .skill_manager()
+        .list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| SkillEntry {
+            name: s.name,
+            description: s.description,
+        })
+        .collect();
     let msg = system_message(
         engine.config(),
         engine.memory(),
         engine.agent_manager(),
-        engine.skill_manager(),
+        skills,
         engine.session_ctx(),
     );
     let content = msg.content.clone();

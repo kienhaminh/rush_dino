@@ -160,6 +160,8 @@ pub struct AppState {
     pub sandbox_registry: Arc<SandboxRegistry>,
     /// Temporary OAuth PKCE sessions for UI-driven headless login.
     pub pending_oauth: Arc<PendingOAuthStore>,
+    /// Skill graph service for keyword-based skill routing.
+    pub skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
 }
 
 impl AppState {
@@ -181,6 +183,7 @@ impl AppState {
         dashboard_auth: Arc<DashboardAuthService>,
         sandbox_registry: Arc<SandboxRegistry>,
         pending_oauth: Arc<PendingOAuthStore>,
+        skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
     ) -> Self {
         Self {
             runtime,
@@ -200,6 +203,7 @@ impl AppState {
             dashboard_auth,
             sandbox_registry,
             pending_oauth,
+            skill_graph,
         }
     }
 
@@ -221,6 +225,10 @@ impl AppState {
 
     pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KnowledgeGraphService>> {
         self.runtime.knowledge_graph()
+    }
+
+    pub fn skill_graph(&self) -> &Arc<rushdino_skill_graph::SkillGraphService> {
+        &self.skill_graph
     }
 
     pub fn runtime_status(&self) -> RuntimeStatus {

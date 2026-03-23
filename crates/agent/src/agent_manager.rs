@@ -17,6 +17,10 @@ pub struct AgentTemplate {
     /// UI hint — a hex color or named color string for the agent's visual identity.
     #[serde(default)]
     pub color: Option<String>,
+    /// Optional model identifier (e.g. "gpt-4o", "claude-sonnet-4-20250514"). When set,
+    /// overrides the engine's default model for this agent's requests.
+    #[serde(default)]
+    pub model: Option<String>,
     /// Optional sandbox policy loaded from `{agents_dir}/{name}/sandbox.yaml`.
     /// Present only when the file exists; absent for agents without a sandbox config.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -61,6 +65,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
     let mut icon: Option<String> = None;
     let mut tools: Option<String> = None;
     let mut color: Option<String> = None;
+    let mut model: Option<String> = None;
 
     for line in front_matter.lines() {
         if let Some(colon_pos) = line.find(':') {
@@ -72,6 +77,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
                 "icon" => icon = Some(value),
                 "tools" => tools = Some(value),
                 "color" => color = Some(value),
+                "model" => model = Some(value),
                 _ => {}
             }
         }
@@ -86,6 +92,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         icon,
         tools,
         color,
+        model,
         // sandbox_policy is populated by AgentManager::get/list after parsing.
         sandbox_policy: None,
     })
@@ -224,6 +231,9 @@ impl AgentManager {
         if let Some(color) = &template.color {
             content.push_str(&format!("color: {}\n", color));
         }
+        if let Some(model) = &template.model {
+            content.push_str(&format!("model: {}\n", model));
+        }
         content.push_str("---\n\n");
         content.push_str(&template.system_prompt);
 
@@ -274,6 +284,7 @@ mod tests {
             icon: None,
             tools: None,
             color: None,
+            model: None,
             sandbox_policy: None,
         }
     }
@@ -361,6 +372,29 @@ mod tests {
         assert_eq!(template.description, "A test");
         assert_eq!(template.icon.as_deref(), Some("🤖"));
         assert_eq!(template.system_prompt, "You are a test agent.");
+    }
+
+    #[test]
+    fn markdown_model_round_trip() {
+        let content =
+            "---\nname: ml-agent\ndescription: ML specialist\nmodel: gpt-4o\n---\n\nYou are an ML agent.";
+        let template = parse_agent_markdown(content).expect("should parse");
+        assert_eq!(template.model.as_deref(), Some("gpt-4o"));
+
+        // Save and reload
+        let dir = temp_dir();
+        let manager = AgentManager::new(dir.clone());
+        manager.save(&template).expect("save should succeed");
+        let loaded = manager.get("ml-agent").expect("should load");
+        assert_eq!(loaded.model.as_deref(), Some("gpt-4o"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn markdown_without_model_parses_none() {
+        let content = "---\nname: basic\ndescription: Basic agent\n---\n\nHello.";
+        let template = parse_agent_markdown(content).expect("should parse");
+        assert!(template.model.is_none());
     }
 
     #[test]

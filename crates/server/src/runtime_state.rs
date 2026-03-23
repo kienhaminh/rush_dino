@@ -10,6 +10,7 @@ use rushdino_agent::{AgentEngine, AgentRuntime, SharedSystemBroker};
 use rushdino_common::{config::Provider, AppConfig, AppError, Result};
 use rushdino_knowledge_graph::KnowledgeGraphService;
 use rushdino_providers::types::ThinkingLevel;
+use rushdino_skill_graph::SkillGraphService;
 
 #[derive(Debug, Clone, Default)]
 pub struct RuntimeStatus {
@@ -22,6 +23,7 @@ pub struct RuntimeState {
     engine: Arc<ArcSwapOption<AgentEngine>>,
     config: Arc<ArcSwap<AppConfig>>,
     knowledge_graph: Arc<ArcSwapOption<KnowledgeGraphService>>,
+    skill_graph: Arc<ArcSwapOption<SkillGraphService>>,
     status: Arc<RwLock<RuntimeStatus>>,
     pool: Arc<SqlitePool>,
     runtime: Arc<AgentRuntime>,
@@ -46,6 +48,7 @@ impl RuntimeState {
             engine: Arc::new(ArcSwapOption::new(None)),
             config: Arc::new(ArcSwap::new(initial_config)),
             knowledge_graph: Arc::new(ArcSwapOption::new(None)),
+            skill_graph: Arc::new(ArcSwapOption::new(None)),
             status: Arc::new(RwLock::new(RuntimeStatus::default())),
             pool,
             runtime,
@@ -75,6 +78,14 @@ impl RuntimeState {
 
     pub fn knowledge_graph(&self) -> Option<Arc<KnowledgeGraphService>> {
         self.knowledge_graph.load_full()
+    }
+
+    pub fn skill_graph(&self) -> Option<Arc<SkillGraphService>> {
+        self.skill_graph.load_full()
+    }
+
+    pub fn set_skill_graph(&self, service: Arc<SkillGraphService>) {
+        self.skill_graph.store(Some(service));
     }
 
     pub fn status(&self) -> RuntimeStatus {

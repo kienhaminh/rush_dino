@@ -15,6 +15,47 @@ use crate::{
     tool_registry::SessionToolContext,
 };
 
+/// Resolve skills for the system prompt: graph-scored top-K if available, flat list fallback.
+pub async fn resolve_skills_for_prompt(
+    skill_manager: &SkillManager,
+    skill_graph: Option<&rushdino_skill_graph::SkillGraphService>,
+    user_input: &str,
+) -> Vec<SkillEntry> {
+    // Try graph-based routing first
+    if let Some(graph) = skill_graph {
+        match graph.query_top_skills(user_input, 5).await {
+            Ok(scored) if scored.len() >= 2 => {
+                return scored
+                    .into_iter()
+                    .map(|s| SkillEntry {
+                        name: s.name,
+                        description: s.description,
+                    })
+                    .collect();
+            }
+            Ok(_) => {
+                tracing::debug!(
+                    "skill graph returned fewer than 2 results, falling back to flat list"
+                );
+            }
+            Err(err) => {
+                tracing::warn!("skill graph query failed, falling back to flat list: {err}");
+            }
+        }
+    }
+
+    // Fallback: flat list of all skills
+    skill_manager
+        .list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| SkillEntry {
+            name: s.name,
+            description: s.description,
+        })
+        .collect()
+}
+
 pub fn title_from(input: &str) -> &str {
     if input.len() <= 60 {
         return input;
@@ -26,7 +67,7 @@ pub fn system_message(
     config: &AgentConfig,
     memory: &MemoryManager,
     agent_manager: &AgentManager,
-    skill_manager: &SkillManager,
+    skills: Vec<SkillEntry>,
     session_ctx: &SessionToolContext,
 ) -> Message {
     // BOOTSTRAP.md, if present, replaces the agent prompt but still gets the full
@@ -52,16 +93,6 @@ pub fn system_message(
             name: a.name,
             icon: a.icon,
             description: a.description,
-        })
-        .collect();
-
-    let skills = skill_manager
-        .list()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|s| SkillEntry {
-            name: s.name,
-            description: s.description,
         })
         .collect();
 

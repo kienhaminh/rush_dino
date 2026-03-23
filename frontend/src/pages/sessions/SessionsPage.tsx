@@ -180,6 +180,7 @@ type SessionsPageProps = {
   error: string | null;
   onSelectSession: (id: string) => void;
   onRefresh: () => void;
+  onReset: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
   thinkingLevelOverride: string | null;
   onThinkingLevelChange: (level: string) => void;
@@ -284,6 +285,7 @@ export function SessionsPage({
   error,
   onSelectSession,
   onRefresh,
+  onReset,
   onDelete,
   thinkingLevelOverride,
   onThinkingLevelChange,
@@ -428,6 +430,13 @@ export function SessionsPage({
                     className="text-[10px] px-2 py-1 border border-border rounded hover:bg-muted transition-colors uppercase font-bold"
                   >
                     Export JSON
+                  </button>
+                  <button
+                    onClick={() => onReset(selectedSessionId!)}
+                    className="text-[10px] px-2 py-1 border border-destructive/40 text-destructive/70 rounded hover:bg-destructive/10 transition-colors uppercase font-bold"
+                    title="Clear conversation history"
+                  >
+                    Reset
                   </button>
                   <PromptInspector systemPrompt={systemPrompt} messages={allMessages} />
                 </div>

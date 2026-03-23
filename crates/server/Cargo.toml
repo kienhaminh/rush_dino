@@ -37,6 +37,7 @@ rushdino-providers = { path = "../providers" }
 rushdino-agent = { path = "../agent" }
 rushdino-gateway = { path = "../gateway" }
 rushdino-knowledge-graph = { path = "../knowledge-graph" }
+rushdino-skill-graph = { path = "../skill-graph" }
 rushdino-security = { path = "../security", features = ["audit-log"] }
 serde_yaml = "0.9"
 rushdino-telegram = { path = "../extensions/telegram" }

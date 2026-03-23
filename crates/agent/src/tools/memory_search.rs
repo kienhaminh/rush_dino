@@ -83,7 +83,7 @@ impl Tool for MemorySearchTool {
     }
 
     fn description(&self) -> &str {
-        "Search root MEMORY.md and memory/*.md files for relevant snippets before answering questions about prior work, decisions, preferences, or todos. Returns top matching excerpts with file path and line number."
+        "Search root MEMORY.md and memory/daily/*.md files for relevant snippets before answering questions about prior work, decisions, preferences, or todos. Returns top matching excerpts with file path and line number."
     }
 
     fn parameters(&self) -> Value {

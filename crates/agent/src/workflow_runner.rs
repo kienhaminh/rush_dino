@@ -561,6 +561,7 @@ impl WorkflowRunner {
             conversation_id: Some(conversation_id.to_owned()),
             run_id: Some(run_id.to_owned()),
             delegation_depth: 0,
+            workspace_override: None,
         };
 
         let session_ctx = self
