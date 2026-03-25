@@ -79,6 +79,10 @@ impl Tool for PostTaskTool {
                 "complexity_level": {
                     "type": "integer",
                     "description": "Complexity: 1=simple, 2=moderate, 3=complex"
+                },
+                "notify_conversation_id": {
+                    "type": "string",
+                    "description": "Conversation to notify when task completes (pass your current conversation ID)"
                 }
             },
             "required": ["title", "description", "tags"]
@@ -128,6 +132,11 @@ impl Tool for PostTaskTool {
             .map(|v| v as u32)
             .unwrap_or(2);
 
+        let notify_conversation_id = args
+            .get("notify_conversation_id")
+            .and_then(Value::as_str)
+            .map(String::from);
+
         let input = CreateTaskInput {
             title: title.to_owned(),
             description: description.to_owned(),
@@ -136,6 +145,7 @@ impl Tool for PostTaskTool {
             parent_task_id,
             source_request_id,
             complexity_level,
+            notify_conversation_id,
         };
 
         let task = self.store.create_task(&input).await?;

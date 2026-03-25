@@ -134,6 +134,8 @@ pub struct KanbanTask {
     pub updated_at: String,
     pub claimed_at: Option<String>,
     pub completed_at: Option<String>,
+    /// Conversation to notify when this task reaches a terminal state (done/failed).
+    pub notify_conversation_id: Option<String>,
 }
 
 /// Input for creating a new task.
@@ -150,6 +152,8 @@ pub struct CreateTaskInput {
     pub source_request_id: Option<String>,
     #[serde(default = "default_complexity")]
     pub complexity_level: u32,
+    /// Conversation to notify when this task reaches a terminal state (done/failed).
+    pub notify_conversation_id: Option<String>,
 }
 
 fn default_priority() -> TaskPriority {
@@ -215,8 +219,8 @@ impl KanbanStore {
         };
 
         sqlx::query(
-            "INSERT INTO kanban_tasks (id, source_request_id, parent_task_id, title, description, tags, priority, status, complexity_level, depth, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'backlog', ?, ?, ?, ?)"
+            "INSERT INTO kanban_tasks (id, source_request_id, parent_task_id, title, description, tags, priority, status, complexity_level, depth, created_at, updated_at, notify_conversation_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'backlog', ?, ?, ?, ?, ?)"
         )
         .bind(&id)
         .bind(&source_request_id)
@@ -229,6 +233,7 @@ impl KanbanStore {
         .bind(depth)
         .bind(&now)
         .bind(&now)
+        .bind(&input.notify_conversation_id)
         .execute(self.pool.as_ref())
         .await?;
 
@@ -506,6 +511,7 @@ struct KanbanTaskRow {
     updated_at: String,
     claimed_at: Option<String>,
     completed_at: Option<String>,
+    notify_conversation_id: Option<String>,
 }
 
 impl KanbanTaskRow {
@@ -535,6 +541,7 @@ impl KanbanTaskRow {
             updated_at: self.updated_at,
             claimed_at: self.claimed_at,
             completed_at: self.completed_at,
+            notify_conversation_id: self.notify_conversation_id,
         }
     }
 }
@@ -605,8 +612,58 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             claimed_at: None,
             completed_at: None,
+            notify_conversation_id: None,
         };
         let task = row.into_task();
         assert_eq!(task.tags, vec!["code", "architecture"]);
+    }
+
+    async fn test_store() -> KanbanStore {
+        let pool = sqlx::SqlitePool::connect(":memory:").await.unwrap();
+        sqlx::query(
+            "CREATE TABLE kanban_tasks (
+                id TEXT PRIMARY KEY,
+                source_request_id TEXT,
+                parent_task_id TEXT,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                tags TEXT NOT NULL DEFAULT '',
+                priority TEXT NOT NULL DEFAULT 'medium',
+                status TEXT NOT NULL DEFAULT 'backlog',
+                assigned_agent TEXT,
+                conversation_id TEXT,
+                result TEXT,
+                review_feedback TEXT,
+                block_reason TEXT,
+                complexity_level INTEGER NOT NULL DEFAULT 2,
+                depth INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                claimed_at TEXT,
+                completed_at TEXT,
+                notify_conversation_id TEXT
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        KanbanStore::new(std::sync::Arc::new(pool))
+    }
+
+    #[tokio::test]
+    async fn notify_conversation_id_stored_and_retrieved() {
+        let store = test_store().await;
+        let input = CreateTaskInput {
+            title: "test".into(),
+            description: "desc".into(),
+            tags: vec![],
+            priority: TaskPriority::Medium,
+            parent_task_id: None,
+            source_request_id: None,
+            complexity_level: 1,
+            notify_conversation_id: Some("main".into()),
+        };
+        let task = store.create_task(&input).await.unwrap();
+        assert_eq!(task.notify_conversation_id.as_deref(), Some("main"));
     }
 }
