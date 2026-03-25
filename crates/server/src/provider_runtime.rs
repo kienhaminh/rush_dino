@@ -157,6 +157,7 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                 // No per-agent sandbox policy at global engine build time.
                 // Sandboxed agents attach their egress proxy at session creation.
                 None,
+                runtime.broadcast_tx(),
             )?;
             engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
             if let Some(sg) = runtime.skill_graph() {

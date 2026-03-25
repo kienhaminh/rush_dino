@@ -20,6 +20,10 @@ impl ChatBroadcastHub {
         self.tx.subscribe()
     }
 
+    pub fn sender(&self) -> broadcast::Sender<serde_json::Value> {
+        self.tx.clone()
+    }
+
     pub fn broadcast_user_message(&self, conversation_id: &str, channel: &str, content: &str) {
         let _ = self.tx.send(serde_json::json!({
             "type": "user_message",

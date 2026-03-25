@@ -224,6 +224,7 @@ impl AgentEngine {
         knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
         // Optional sandbox egress proxy — pass Some for sandboxed agents.
         egress_proxy: Option<Arc<rushdino_security::egress_proxy::EgressProxy>>,
+        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Result<Self> {
         let deps = build_engine_deps(
             provider.clone(),
@@ -236,9 +237,28 @@ impl AgentEngine {
             system_broker,
             knowledge_graph.clone(),
             egress_proxy,
+            broadcast_tx,
         )?;
 
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
+
+        // Start the kanban dispatcher background loop. It polls the backlog and
+        // auto-executes matched tasks using isolated react loops.
+        let dispatcher = Arc::new(crate::kanban_dispatcher::KanbanDispatcher::new(
+            deps.kanban_store.clone(),
+            deps.agent_manager.clone(),
+            provider.clone(),
+            config.clone(),
+            Arc::downgrade(&deps.tool_registry),
+            Arc::downgrade(&deps.session_ctx),
+            deps.memory.clone(),
+            deps.skill_manager.clone(),
+            deps.conversation.clone(),
+            deps.task_memory.clone(),
+            deps.home_dir.clone(),
+            deps.broadcast_tx.clone(),
+        ));
+        dispatcher.start();
 
         Ok(Self {
             provider,

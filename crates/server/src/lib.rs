@@ -90,6 +90,7 @@ pub async fn run_server() -> Result<()> {
         system_broker.clone(),
         config_path.clone(),
         credentials_path.clone(),
+        chat_broadcast.sender(),
     ));
     spawn_cron_runtime(runtime_state.clone());
 

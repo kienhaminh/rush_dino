@@ -90,6 +90,8 @@ pub struct EngineDeps {
     pub inbox_rx: mpsc::Receiver<JobResult>,
     pub task_memory: Arc<AgentTaskMemory>,
     pub session_ctx: Arc<SessionToolContext>,
+    pub home_dir: std::path::PathBuf,
+    pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -105,6 +107,7 @@ pub fn build_engine_deps(
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
     // Optional sandbox egress proxy — pass Some to enforce network policy in web tools.
     egress_proxy: Option<Arc<EgressProxy>>,
+    broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> Result<EngineDeps> {
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
@@ -311,5 +314,7 @@ pub fn build_engine_deps(
         inbox_rx,
         task_memory,
         session_ctx,
+        home_dir,
+        broadcast_tx,
     })
 }

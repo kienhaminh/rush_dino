@@ -33,6 +33,8 @@ pub struct RuntimeState {
     /// Runtime-only override for the agent's thinking level.
     /// Shared with the engine via Arc so it survives engine swaps.
     pub thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
+    /// Broadcast channel sender for pushing events (e.g. kanban completions) to WebSocket clients.
+    pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
 impl RuntimeState {
@@ -43,6 +45,7 @@ impl RuntimeState {
         system_broker: SharedSystemBroker,
         config_path: PathBuf,
         credentials_path: PathBuf,
+        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Self {
         Self {
             engine: Arc::new(ArcSwapOption::new(None)),
@@ -56,6 +59,7 @@ impl RuntimeState {
             config_path,
             credentials_path,
             thinking_level_override: Arc::new(RwLock::new(None)),
+            broadcast_tx,
         }
     }
 
@@ -109,6 +113,10 @@ impl RuntimeState {
 
     pub(crate) fn system_broker(&self) -> SharedSystemBroker {
         self.system_broker.clone()
+    }
+
+    pub(crate) fn broadcast_tx(&self) -> tokio::sync::broadcast::Sender<serde_json::Value> {
+        self.broadcast_tx.clone()
     }
 
     pub(crate) fn config_path(&self) -> &Path {
