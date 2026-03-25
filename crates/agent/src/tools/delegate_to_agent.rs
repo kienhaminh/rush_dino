@@ -46,7 +46,7 @@ const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search"];
 ///
 /// Returns an empty vec when `tools` is `None`, which signals "unrestricted" —
 /// the agent gets access to all tools in the parent pool.
-fn parse_tool_list(tools: &Option<String>) -> Vec<String> {
+pub(crate) fn parse_tool_list(tools: &Option<String>) -> Vec<String> {
     let Some(raw) = tools else {
         return Vec::new();
     };

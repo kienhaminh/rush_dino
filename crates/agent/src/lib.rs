@@ -6,6 +6,7 @@ pub mod conversation;
 mod conversation_mapper;
 pub mod cron_manager;
 pub mod engine;
+pub mod kanban_dispatcher;
 pub mod kanban_matching_engine;
 pub mod kanban_store;
 pub mod engine_bootstrap;
