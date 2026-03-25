@@ -2,12 +2,6 @@ use rushdino_providers::types::ToolDefinition;
 
 use crate::memory_bootstrap::BootstrapContextFile;
 
-pub struct AgentEntry {
-    pub name: String,
-    pub icon: Option<String>,
-    pub description: String,
-}
-
 pub struct SkillEntry {
     pub name: String,
     pub description: String,
@@ -16,11 +10,9 @@ pub struct SkillEntry {
 pub struct SystemPromptParams {
     pub agent_prompt: String,
     pub tool_defs: Vec<ToolDefinition>,
-    pub agents: Vec<AgentEntry>,
     pub skills: Vec<SkillEntry>,
     pub ctx_files: Vec<BootstrapContextFile>,
     pub truncation_warnings: Vec<String>,
-    pub boot: Option<String>,
     pub workspace_dir: Option<String>,
 }
 
@@ -41,6 +33,14 @@ fn build_tooling_section(tools: &[ToolDefinition]) -> Vec<String> {
     }
     lines.push(String::new());
     lines
+}
+
+fn build_language_section() -> Vec<String> {
+    vec![
+        "## Language".to_owned(),
+        "Always reply in the same language the user is writing in. If they write in Vietnamese, reply in Vietnamese. If English, reply in English. Match their language automatically.".to_owned(),
+        String::new(),
+    ]
 }
 
 fn build_tool_call_style_section() -> Vec<String> {
@@ -95,28 +95,6 @@ fn build_memory_recall_section(has_memory_search: bool) -> Vec<String> {
     ]
 }
 
-fn build_agents_section(agents: &[AgentEntry]) -> Vec<String> {
-    if agents.is_empty() {
-        return vec![];
-    }
-    let mut lines = vec!["## Available Agents".to_owned(), String::new()];
-    for agent in agents {
-        let icon_part = agent
-            .icon
-            .as_deref()
-            .map(|i| format!(" {i}"))
-            .unwrap_or_default();
-        lines.push(format!(
-            "- **{}**{} — {}",
-            agent.name, icon_part, agent.description
-        ));
-    }
-    lines.push(String::new());
-    lines.push("Use `delegate` to assign a task to any agent above.".to_owned());
-    lines.push(String::new());
-    lines
-}
-
 fn build_project_context_section(
     ctx_files: &[BootstrapContextFile],
     truncation_warnings: &[String],
@@ -142,8 +120,7 @@ fn build_project_context_section(
     for file in ctx_files {
         lines.push(format!("## {}", file.label));
         lines.push(String::new());
-        lines.push(file.content.clone());
-        lines.push(String::new());
+        lines.push(file.content.trim_end().to_owned());
         lines.push(String::new());
     }
 
@@ -167,18 +144,13 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
 
     let mut lines = vec![params.agent_prompt, String::new()];
 
+    lines.extend(build_language_section());
     lines.extend(build_tooling_section(&params.tool_defs));
     lines.extend(build_tool_call_style_section());
     lines.extend(build_safety_section());
     lines.extend(build_skills_section(&params.skills));
     lines.extend(build_memory_recall_section(has_memory_search));
-    lines.extend(build_agents_section(&params.agents));
     lines.extend(build_workspace_section(params.workspace_dir.as_deref()));
-
-    if let Some(boot) = params.boot {
-        lines.push(boot);
-        lines.push(String::new());
-    }
 
     lines.extend(build_project_context_section(
         &params.ctx_files,
@@ -206,11 +178,9 @@ mod tests {
                 description: "Search memory files".to_owned(),
                 parameters: serde_json::Value::Null,
             }],
-            agents: vec![],
             skills: vec![],
             ctx_files: vec![],
             truncation_warnings: vec![],
-            boot: None,
             workspace_dir: Some("/home/user/.rushdino".to_owned()),
         }
     }

@@ -51,13 +51,6 @@ pub async fn init_pool(db_path: &Path) -> Result<SqlitePool> {
 }
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
-    let _embedded_schema_markers = (
-        include_str!("../migrations/001_init.sql"),
-        include_str!("../migrations/002_sandbox_audit.sql"),
-        include_str!("../migrations/003_usage_metrics_auth_method.sql"),
-        include_str!("../migrations/004_kanban_tasks.sql"),
-        include_str!("../migrations/005_skill_graph.sql"),
-    );
     sqlx::migrate!("./migrations").run(pool).await?;
     Ok(())
 }

@@ -201,14 +201,34 @@ impl Tool for DelegateToAgentTool {
             AppError::Agent(format!("failed to create agent workspace: {e}"))
         })?;
 
-        // Inject the agent's task history into the system prompt if available.
-        let system_content = match self.task_memory.load_task_log(agent_name) {
-            Some(log) => format!(
-                "{}\n\n## Your Task History\n\n{}",
-                template.system_prompt, log
-            ),
-            None => template.system_prompt,
-        };
+        // Build the full system content: agent prompt + workspace/tool context + task history.
+        let mut system_content = template.system_prompt.clone();
+
+        // Inform the agent about its workspace and tool constraints.
+        system_content.push_str(&format!(
+            "\n\n## Workspace\nYour working directory is: {}\n\
+             Confine all file operations to this directory unless explicitly instructed otherwise.",
+            agent_workspace.display()
+        ));
+
+        // List available tools so the agent knows its boundaries.
+        let tool_names: Vec<String> = scoped_ctx
+            .active_definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        if !tool_names.is_empty() {
+            system_content.push_str(&format!(
+                "\n\n## Available Tools\nYou have access to: {}.\n\
+                 Do not attempt to call tools not in this list.",
+                tool_names.join(", ")
+            ));
+        }
+
+        // Inject the agent's task history if available.
+        if let Some(log) = self.task_memory.load_task_log(agent_name) {
+            system_content.push_str(&format!("\n\n## Your Task History\n\n{log}"));
+        }
 
         // Create an isolated conversation for this delegation so the sub-agent's
         // message history is persisted and traceable independently.
@@ -216,7 +236,7 @@ impl Tool for DelegateToAgentTool {
         let conv_id_str = conv_id.to_string();
         let conv_title = format!("{agent_name}: {}", title_from(task));
         self.conversation
-            .create_conversation_with_id(&conv_id_str, &conv_title)
+            .create_agent_conversation(&conv_id_str, &conv_title)
             .await?;
 
         // Build the initial message list: target system prompt followed by the task.
@@ -249,8 +269,11 @@ impl Tool for DelegateToAgentTool {
         let messages = vec![sys_msg, user_msg];
 
         // Build the child context: isolated conversation, workspace, incremented depth.
+        // Use the sub-agent's own conv_id as its session_id so that tool calls
+        // (sandbox approvals, usage metrics) are attributed to the sub-agent's
+        // session rather than leaking into the main session.
         let child_ctx = ToolExecutionContext {
-            session_id: parent_ctx.session_id,
+            session_id: Some(conv_id_str.clone()),
             conversation_id: Some(conv_id_str.clone()),
             run_id: None,
             delegation_depth: current_depth + 1,
@@ -379,6 +402,7 @@ mod tests {
                 tools: None,
                 color: None,
                 model: None,
+                claims_tasks: true,
                 sandbox_policy: None,
             })
             .unwrap();

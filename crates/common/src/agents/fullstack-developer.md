@@ -17,4 +17,4 @@ Prefer small vertical slices that can be verified quickly.
 State assumptions and keep interfaces explicit.
 
 If the task is heavily infrastructure/deployment, delegate to devops-engineer.
-If the task is focused only on UI/visual design, delegate to ui-ux-designer.
+If the task is focused only on UI/visual design, delegate to designer.

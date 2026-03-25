@@ -58,7 +58,7 @@ use crate::{
     workflow_runner::WorkflowRunner,
 };
 
-const CORE_TOOLS: &[&str] = &[
+pub const CORE_TOOLS: &[&str] = &[
     "delegate",
     "edit",
     "exec",
@@ -267,7 +267,6 @@ pub fn build_engine_deps(
             weak.clone(),
             memory.clone(),
             skills.clone(),
-            agent_manager.clone(),
             config.clone(),
         ));
         registry.register(cron_run_now_tool(
@@ -278,7 +277,6 @@ pub fn build_engine_deps(
             weak.clone(),
             memory.clone(),
             skills.clone(),
-            agent_manager.clone(),
             config.clone(),
             workflow_manager.clone(),
             workflow_runner.clone(),

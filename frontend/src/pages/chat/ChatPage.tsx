@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, RefreshCw } from 'lucide-react';
 
 import { ConversationTimeline } from '@/components/workspace/conversation-timeline';
-import { AgentBadge } from '@/components/workspace/agent-badge';
+import { SubAgentPanel } from '@/components/workspace/sub-agent-panel';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { useSubAgentSessions } from '@/hooks/use-sub-agent-sessions';
 import { fetchConversation } from '@/lib/api';
 import { messagesToItems } from '@/lib/message-converter';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,10 @@ export function ChatPage() {
   const [inputValue, setInputValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { items, activeAgent, sendMessage, resetWithItems, isConnected, isStreaming } =
+  const { items, sendMessage, resetWithItems, isConnected, isStreaming } =
     useWebSocket(MAIN_SESSION_ID, undefined);
+
+  const { sessions: agentSessions, liveRuns } = useSubAgentSessions(items);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -63,12 +66,6 @@ export function ChatPage() {
   return (
     <div className="flex flex-1 min-w-0 h-full overflow-hidden bg-background">
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
-        {isStreaming && (
-          <div className="flex items-center gap-2 px-6 py-2 border-b border-border/20 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <span className="text-[11px] text-muted-foreground/50">Active agent:</span>
-            <AgentBadge agent={activeAgent} isStreaming={isStreaming} />
-          </div>
-        )}
 
         {historyLoading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -115,6 +112,9 @@ export function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Sub-agent side panel — always visible, shows empty state when idle */}
+      <SubAgentPanel sessions={agentSessions} liveRuns={liveRuns} />
     </div>
   );
 }

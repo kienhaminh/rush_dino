@@ -8,10 +8,7 @@ mod tests {
     use crate::{
         cron_manager::CronManager,
         tool_registry::Tool,
-        tools::{
-            cron_tools::cron_create_tool,
-            shell_exec::{with_tool_execution_context, ToolExecutionContext},
-        },
+        tools::cron_tools::cron_create_tool,
     };
 
     async fn setup_manager() -> Arc<CronManager> {
@@ -30,29 +27,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cron_create_rejects_non_general_assistant_context() {
+    async fn cron_create_rejects_invalid_payload() {
         let tool = cron_create_tool(setup_manager().await);
-        let result = with_tool_execution_context(
-            ToolExecutionContext {
-                session_id: None,
-                conversation_id: Some("conv-1".to_owned()),
-                run_id: None,
-                delegation_depth: 1,
-                workspace_override: None,
-            },
-            tool.execute(json!({
-                "name": "Nightly digest",
-                "schedule": { "kind": "cron", "expr": "0 9 * * *" },
-                "target": {
-                    "kind": "agent_turn",
-                    "message": "Summarize the queue",
-                    "agentId": "researcher"
-                }
-            })),
-        )
-        .await;
+        let result = tool
+            .execute(json!({
+                "name": "Nightly digest"
+                // missing required fields: schedule, target
+            }))
+            .await;
 
-        let error = result.expect_err("non-general assistant should be rejected");
-        assert!(error.to_string().contains("general-assistant"));
+        assert!(result.is_err(), "missing required fields should be rejected");
     }
 }

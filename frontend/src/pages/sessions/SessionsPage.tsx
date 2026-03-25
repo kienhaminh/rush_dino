@@ -14,12 +14,10 @@ import { getCatalogModels } from '@/lib/model-catalog';
 import { TokenUsageBar } from '../context-debug/components/TokenUsageBar';
 import { MessageThread } from '../context-debug/components/MessageThread';
 import {
-  BootstrapFilesPanel,
   RegisteredToolsPanel,
   RunHistoryPanel,
   ToolCallSummaryPanel,
 } from '../context-debug/components/SidebarPanels';
-import { PromptInspector } from '../context-debug/components/PromptInspector';
 
 // Rough token estimate: ~1 token per 4 chars
 function estimateTokens(text: string): number {
@@ -291,7 +289,7 @@ export function SessionsPage({
   onThinkingLevelChange,
 }: SessionsPageProps) {
   const [testMessages, setTestMessages] = useState<Message[]>([]);
-  const [activeTab, setActiveTab] = useState<'overview' | 'prompts' | 'context' | 'runs' | 'tools'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'prompts' | 'runs' | 'tools'>('overview');
 
   // Reset when session changes
   useEffect(() => {
@@ -325,18 +323,7 @@ export function SessionsPage({
     setTestMessages((prev) => [...prev, newMessage]);
   };
 
-  const handleExportJson = () => {
-    const data = { sessionId: selectedSessionId, systemPrompt, messages: allMessages, estimatedTokens: estimatedPromptTokens };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `context-${selectedSessionId}-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const activeCount = sessions.filter((s) => s.status === 'active').length;
+const activeCount = sessions.filter((s) => s.status === 'active').length;
   const awaitingCount = sessions.filter((s) => s.status === 'awaiting_approval').length;
   const session = sessions.find((s) => s.id === selectedSessionId);
 
@@ -425,20 +412,13 @@ export function SessionsPage({
                   </p>
                 </div>
                 <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={handleExportJson}
-                    className="text-[10px] px-2 py-1 border border-border rounded hover:bg-muted transition-colors uppercase font-bold"
-                  >
-                    Export JSON
-                  </button>
-                  <button
+<button
                     onClick={() => onReset(selectedSessionId!)}
                     className="text-[10px] px-2 py-1 border border-destructive/40 text-destructive/70 rounded hover:bg-destructive/10 transition-colors uppercase font-bold"
                     title="Clear conversation history"
                   >
                     Reset
                   </button>
-                  <PromptInspector systemPrompt={systemPrompt} messages={allMessages} />
                 </div>
               </div>
 
@@ -447,7 +427,6 @@ export function SessionsPage({
                 {([
                   ['overview', 'Overview'],
                   ['prompts', 'Prompts & Calls'],
-                  ['context', 'Injected Context'],
                   ['runs', 'Runs'],
                   ['tools', 'Tools'],
                 ] as const).map(([tab, label]) => (
@@ -491,7 +470,7 @@ export function SessionsPage({
                     messageCount={allMessages.length}
                     toolCallCount={allToolCalls.length}
                     runCount={runs.length}
-                    soulMemory={soulMemory}
+                    registeredTools={registeredTools}
                   />
                 )}
               </div>
@@ -507,11 +486,6 @@ export function SessionsPage({
                 <div className="overflow-y-auto pr-1">
                   <ToolCallSummaryPanel toolCalls={allToolCalls} />
                 </div>
-              </div>
-            ) : activeTab === 'context' ? (
-              /* ── Injected Context ── */
-              <div className="flex-1 overflow-y-auto p-4">
-                <BootstrapFilesPanel soulMemory={soulMemory} />
               </div>
             ) : activeTab === 'runs' ? (
               /* ── Runs ── */

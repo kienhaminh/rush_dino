@@ -1,262 +1,42 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  createWorkflow,
-  deleteWorkflow,
-  fetchAgents,
-  fetchWorkflow,
-  fetchWorkflowRun,
-  fetchWorkflowRuns,
-  fetchWorkflows,
-  startWorkflowRun,
-  updateWorkflow,
-} from '@/lib/api';
-import type { AgentRecord } from '@/pages/agents/agent-types';
-import type {
-  WorkflowDetail,
-  WorkflowListItem,
-  WorkflowRunDetail,
-  WorkflowRunListItem,
-} from './workflow-types';
 import { WorkflowSidebar } from './WorkflowSidebar';
-import { WorkflowEditorPanel, type WorkflowDraft } from './WorkflowEditorPanel';
-import { WorkflowRunsPanel } from './WorkflowRunsPanel';
-import { WorkflowRunDetailPanel } from './WorkflowRunDetailPanel';
-
-function emptyDraft(defaultAgentId: string): WorkflowDraft {
-  return {
-    id: null,
-    name: '',
-    description: '',
-    source: 'manual',
-    status: 'draft',
-    createdBy: 'user',
-    steps: [
-      {
-        key: Math.random().toString(36).slice(2, 10),
-        name: 'Step 1',
-        instructions: '',
-        agentId: defaultAgentId,
-      },
-    ],
-  };
-}
-
-function mapDetailToDraft(detail: WorkflowDetail): WorkflowDraft {
-  return {
-    id: detail.id,
-    name: detail.name,
-    description: detail.description,
-    source: detail.source,
-    status: detail.status,
-    createdBy: detail.createdBy,
-    steps: detail.steps.map((step) => ({
-      key: step.id,
-      name: step.name,
-      instructions: step.instructions,
-      agentId: step.agentId,
-    })),
-  };
-}
+import { WorkflowPipelineCanvas } from './WorkflowPipelineCanvas';
+import { WorkflowRunHistory } from './WorkflowRunHistory';
+import { useWorkflowPageState } from './use-workflow-page-state';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { PlayIcon, Trash2Icon, SaveIcon } from 'lucide-react';
+import type { WorkflowDraft } from './WorkflowEditorPanel';
 
 export function WorkflowsPage() {
-  const [workflowSummaries, setWorkflowSummaries] = useState<WorkflowListItem[]>([]);
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<WorkflowDraft | null>(null);
-  const [runs, setRuns] = useState<WorkflowRunListItem[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedRun, setSelectedRun] = useState<WorkflowRunDetail | null>(null);
-
-  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [loadingRuns, setLoadingRuns] = useState(false);
-  const [loadingRunDetail, setLoadingRunDetail] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadWorkflowSummaries = useCallback(async () => {
-    setLoadingWorkflows(true);
-    try {
-      const [nextWorkflows, nextAgents] = await Promise.all([fetchWorkflows(), fetchAgents()]);
-      setWorkflowSummaries(nextWorkflows);
-      setAgents(nextAgents);
-      setSelectedWorkflowId((current) => {
-        if (current && nextWorkflows.some((workflow) => workflow.id === current)) {
-          return current;
-        }
-        return nextWorkflows[0]?.id ?? null;
-      });
-      if (nextWorkflows.length === 0) {
-        setDraft(emptyDraft(nextAgents[0]?.id ?? 'general-assistant'));
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load workflows');
-    } finally {
-      setLoadingWorkflows(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadWorkflowSummaries();
-  }, [loadWorkflowSummaries]);
-
-  const loadSelectedWorkflow = useCallback(async (workflowId: string) => {
-    setLoadingDetail(true);
-    setLoadingRuns(true);
-    try {
-      const [detail, runItems] = await Promise.all([fetchWorkflow(workflowId), fetchWorkflowRuns(workflowId)]);
-      setDraft(mapDetailToDraft(detail));
-      setRuns(runItems);
-      setSelectedRunId((current) => {
-        if (current && runItems.some((run) => run.id === current)) return current;
-        return runItems[0]?.id ?? null;
-      });
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load workflow detail');
-    } finally {
-      setLoadingDetail(false);
-      setLoadingRuns(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!selectedWorkflowId) return;
-    void loadSelectedWorkflow(selectedWorkflowId);
-  }, [selectedWorkflowId, loadSelectedWorkflow]);
-
-  useEffect(() => {
-    if (!selectedRunId) {
-      setSelectedRun(null);
-      return;
-    }
-
-    let cancelled = false;
-    const loadRunDetail = async () => {
-      setLoadingRunDetail(true);
-      try {
-        const detail = await fetchWorkflowRun(selectedRunId);
-        if (!cancelled) {
-          setSelectedRun(detail);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to load run detail');
-        }
-      } finally {
-        if (!cancelled) setLoadingRunDetail(false);
-      }
-    };
-
-    void loadRunDetail();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedRunId]);
-
-  const hasActiveRun = useMemo(
-    () => runs.some((run) => run.status === 'queued' || run.status === 'running'),
-    [runs],
-  );
-
-  useEffect(() => {
-    if (!selectedWorkflowId || !hasActiveRun) return;
-
-    const interval = setInterval(() => {
-      void (async () => {
-        try {
-          const runItems = await fetchWorkflowRuns(selectedWorkflowId);
-          setRuns(runItems);
-          if (selectedRunId) {
-            const runDetail = await fetchWorkflowRun(selectedRunId);
-            setSelectedRun(runDetail);
-          }
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to refresh active run');
-        }
-      })();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [selectedWorkflowId, hasActiveRun, selectedRunId]);
-
-  const handleCreate = () => {
-    setSelectedWorkflowId(null);
-    setSelectedRunId(null);
-    setSelectedRun(null);
-    setDraft(emptyDraft(agents[0]?.id ?? 'general-assistant'));
-  };
-
-  const handleSave = async () => {
-    if (!draft) return;
-    setSaving(true);
-    try {
-      const payload = {
-        name: draft.name,
-        description: draft.description,
-        status: draft.status,
-        steps: draft.steps.map((step) => ({
-          name: step.name,
-          instructions: step.instructions,
-          agentId: step.agentId,
-        })),
-      };
-
-      const saved = draft.id
-        ? await updateWorkflow(draft.id, payload)
-        : await createWorkflow(payload);
-
-      setDraft(mapDetailToDraft(saved));
-      setSelectedWorkflowId(saved.id);
-      await loadWorkflowSummaries();
-      await loadSelectedWorkflow(saved.id);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save workflow');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!draft?.id) return;
-    setDeleting(true);
-    try {
-      await deleteWorkflow(draft.id);
-      setDraft(null);
-      setSelectedRun(null);
-      setSelectedRunId(null);
-      await loadWorkflowSummaries();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete workflow');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleRun = async () => {
-    if (!draft?.id) return;
-    setRunning(true);
-    try {
-      const started = await startWorkflowRun(draft.id, { triggeredBy: 'user' });
-      setSelectedRunId(started.runId);
-      const [runItems, runDetail] = await Promise.all([
-        fetchWorkflowRuns(draft.id),
-        fetchWorkflowRun(started.runId),
-      ]);
-      setRuns(runItems);
-      setSelectedRun(runDetail);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start run');
-    } finally {
-      setRunning(false);
-    }
-  };
+  const {
+    workflowSummaries,
+    agents,
+    selectedWorkflowId,
+    setSelectedWorkflowId,
+    draft,
+    setDraft,
+    runs,
+    selectedRunId,
+    setSelectedRunId,
+    selectedRun,
+    loadingWorkflows,
+    loadingDetail,
+    loadingRuns,
+    loadingRunDetail,
+    saving,
+    deleting,
+    running,
+    error,
+    handleCreate,
+    handleSave,
+    handleDelete,
+    handleRun,
+  } = useWorkflowPageState();
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-background">
@@ -269,35 +49,101 @@ export function WorkflowsPage() {
       />
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Header bar: workflow name + status + controls */}
+        <div className="flex items-center gap-3 px-6 py-3 border-b border-border/50 bg-card/20 flex-shrink-0">
+          {draft ? (
+            <>
+              <input
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                placeholder="Workflow name"
+                className="flex-1 min-w-0 bg-transparent text-sm font-semibold placeholder:text-muted-foreground/50 outline-none"
+              />
+              <Select
+                value={draft.status}
+                onValueChange={(val) => setDraft({ ...draft, status: val as WorkflowDraft['status'] })}
+              >
+                <SelectTrigger className="h-7 w-24 text-xs border-border/60">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">draft</SelectItem>
+                  <SelectItem value="active">active</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleRun}
+                  disabled={running || draft.status !== 'active' || draft.steps.length === 0}
+                  className="h-7 px-2.5 rounded-md border border-border bg-background/70 hover:bg-muted/40 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
+                >
+                  <PlayIcon className="w-3 h-3" />
+                  {running ? 'Running…' : 'Run'}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting || !draft.id}
+                  className="h-7 px-2.5 rounded-md border border-destructive/30 text-destructive/70 hover:text-destructive hover:bg-destructive/10 text-xs font-medium disabled:opacity-40 flex items-center gap-1.5 transition-colors"
+                >
+                  <Trash2Icon className="w-3 h-3" />
+                  {deleting ? 'Deleting…' : 'Delete'}
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || loadingDetail}
+                  className="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <SaveIcon className="w-3 h-3" />
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">Select a workflow or create a new one.</p>
+          )}
+        </div>
+
+        {/* Error banner */}
         {error ? (
-          <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+          <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex-shrink-0">
             {error}
           </div>
         ) : null}
 
-        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-5">
-          <WorkflowEditorPanel
-            value={draft}
-            agents={agents}
-            saving={saving || loadingDetail}
-            deleting={deleting}
-            running={running}
-            onChange={setDraft}
-            onSave={handleSave}
-            onDelete={handleDelete}
-            onRun={handleRun}
-          />
-
-          <div className="grid grid-rows-2 gap-5 min-h-0">
-            <WorkflowRunsPanel
-              runs={runs}
-              selectedRunId={selectedRunId}
-              loading={loadingRuns}
-              onSelect={setSelectedRunId}
+        {/* Description row */}
+        {draft && (
+          <div className="px-6 py-2 border-b border-border/30 flex-shrink-0">
+            <input
+              value={draft.description}
+              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+              placeholder="Add a description…"
+              className="w-full bg-transparent text-xs text-muted-foreground placeholder:text-muted-foreground/40 outline-none"
             />
-            <WorkflowRunDetailPanel run={selectedRun} loading={loadingRunDetail} />
           </div>
+        )}
+
+        {/* Pipeline canvas — fills remaining space */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          {draft ? (
+            <WorkflowPipelineCanvas draft={draft} agents={agents} onChange={setDraft} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+              Select a workflow or create a new one.
+            </div>
+          )}
         </div>
+
+        {/* Run history — collapsible bottom panel */}
+        {draft?.id && (
+          <WorkflowRunHistory
+            runs={runs}
+            selectedRunId={selectedRunId}
+            selectedRun={selectedRun}
+            loading={loadingRuns}
+            loadingDetail={loadingRunDetail}
+            onSelect={setSelectedRunId}
+          />
+        )}
       </div>
     </div>
   );

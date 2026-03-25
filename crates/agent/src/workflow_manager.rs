@@ -750,7 +750,7 @@ mod tests {
                     steps: vec![WorkflowStepInput {
                         name: "Classify".to_owned(),
                         instructions: "Classify input".to_owned(),
-                        agent_id: "general-assistant".to_owned(),
+                        agent_id: "software-engineer".to_owned(),
                         ..Default::default()
                     }],
                 },
@@ -780,7 +780,7 @@ mod tests {
                     steps: vec![WorkflowStepInput {
                         name: "Step".to_owned(),
                         instructions: "Do work".to_owned(),
-                        agent_id: "general-assistant".to_owned(),
+                        agent_id: "software-engineer".to_owned(),
                         ..Default::default()
                     }],
                 },
@@ -809,7 +809,7 @@ mod tests {
                     steps: vec![WorkflowStepInput {
                         name: "Step 1".to_owned(),
                         instructions: "Do task".to_owned(),
-                        agent_id: "general-assistant".to_owned(),
+                        agent_id: "software-engineer".to_owned(),
                         ..Default::default()
                     }],
                 },
@@ -844,7 +844,7 @@ mod tests {
                     steps: vec![WorkflowStepInput {
                         name: "Step 1".to_owned(),
                         instructions: "Do task".to_owned(),
-                        agent_id: "general-assistant".to_owned(),
+                        agent_id: "software-engineer".to_owned(),
                         ..Default::default()
                     }],
                 },

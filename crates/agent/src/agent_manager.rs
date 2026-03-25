@@ -21,10 +21,18 @@ pub struct AgentTemplate {
     /// overrides the engine's default model for this agent's requests.
     #[serde(default)]
     pub model: Option<String>,
+    /// Whether this agent participates in kanban auto-claim matching.
+    /// Defaults to `true`. Set to `false` for meta-agents that should never claim tasks.
+    #[serde(default = "default_claims_tasks")]
+    pub claims_tasks: bool,
     /// Optional sandbox policy loaded from `{agents_dir}/{name}/sandbox.yaml`.
     /// Present only when the file exists; absent for agents without a sandbox config.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sandbox_policy: Option<rushdino_security::policy::types::SandboxPolicy>,
+}
+
+fn default_claims_tasks() -> bool {
+    true
 }
 
 /// Parses an agent template from Markdown front-matter format.
@@ -66,6 +74,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
     let mut tools: Option<String> = None;
     let mut color: Option<String> = None;
     let mut model: Option<String> = None;
+    let mut claims_tasks: Option<bool> = None;
 
     for line in front_matter.lines() {
         if let Some(colon_pos) = line.find(':') {
@@ -78,6 +87,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
                 "tools" => tools = Some(value),
                 "color" => color = Some(value),
                 "model" => model = Some(value),
+                "claims_tasks" => claims_tasks = Some(value == "true"),
                 _ => {}
             }
         }
@@ -93,6 +103,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         tools,
         color,
         model,
+        claims_tasks: claims_tasks.unwrap_or(true),
         // sandbox_policy is populated by AgentManager::get/list after parsing.
         sandbox_policy: None,
     })
@@ -234,6 +245,9 @@ impl AgentManager {
         if let Some(model) = &template.model {
             content.push_str(&format!("model: {}\n", model));
         }
+        if !template.claims_tasks {
+            content.push_str("claims_tasks: false\n");
+        }
         content.push_str("---\n\n");
         content.push_str(&template.system_prompt);
 
@@ -285,6 +299,7 @@ mod tests {
             tools: None,
             color: None,
             model: None,
+            claims_tasks: true,
             sandbox_policy: None,
         }
     }

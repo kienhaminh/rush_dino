@@ -8,8 +8,9 @@ import type { AppConfigView, CredentialsView } from '@/lib/types';
 import { ConfigSectionProfiles } from './config-section-profiles';
 import { ConfigSectionCredentials } from './config-section-credentials';
 import { ConfigSectionServer } from './config-section-server';
+import { ConfigSectionCoreFiles } from './config-section-core-files';
 
-type Section = 'profiles' | 'credentials' | 'server';
+type Section = 'profiles' | 'credentials' | 'server' | 'core-files';
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   {
@@ -19,6 +20,11 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
   },
   { key: 'credentials', label: 'Credentials', description: 'API keys and bot tokens.' },
   { key: 'server', label: 'Server', description: 'Host, port, and security settings.' },
+  {
+    key: 'core-files',
+    label: 'Core Files',
+    description: 'View and edit the core memory files injected into every agent session.',
+  },
 ];
 
 type Status =
@@ -166,9 +172,10 @@ export function ConfigPage() {
             {activeSection === 'server' && (
               <ConfigSectionServer config={config} onChange={handleConfigChange} />
             )}
+            {activeSection === 'core-files' && <ConfigSectionCoreFiles />}
 
             {/* Footer */}
-            {activeSection !== 'profiles' && (
+            {activeSection !== 'profiles' && activeSection !== 'core-files' && (
               <div className="flex items-center justify-between border-t border-border/50 pt-4">
                 <div>
                   {status.kind === 'saving' && (

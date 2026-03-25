@@ -84,6 +84,7 @@ impl Tool for SpawnAgentTool {
             tools: None,
             color: None,
             model: None,
+            claims_tasks: true,
             sandbox_policy: None,
         };
 

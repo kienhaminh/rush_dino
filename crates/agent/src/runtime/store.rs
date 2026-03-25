@@ -371,6 +371,15 @@ impl RunStore {
 
         Ok(())
     }
+
+    /// Delete all runs belonging to a conversation (used when resetting a session).
+    pub async fn delete_by_conversation_id(&self, conversation_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM runtime_runs WHERE conversation_id = ?1")
+            .bind(conversation_id)
+            .execute(self.pool.as_ref())
+            .await?;
+        Ok(())
+    }
 }
 
 fn map_run_row(row: sqlx::sqlite::SqliteRow) -> Result<RunSnapshot> {

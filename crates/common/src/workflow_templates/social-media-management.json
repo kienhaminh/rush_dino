@@ -7,19 +7,19 @@
     {
       "position": 1,
       "name": "Content Strategy",
-      "agent_id": "social-network-assistant",
+      "agent_id": "writer",
       "instructions": "Based on the brand, product, or topic in the workflow input, define a social media content strategy. Specify: 3-4 content pillars (themes), target audience persona, recommended posting cadence per platform (LinkedIn, Twitter/X, Instagram), tone of voice guidelines, and 5 content ideas per pillar."
     },
     {
       "position": 2,
       "name": "Post Copywriting",
-      "agent_id": "content-creator",
+      "agent_id": "writer",
       "instructions": "Using the content strategy from step 1, write 5 complete social media posts. For each post: provide LinkedIn version (professional, 150-200 words), Twitter/X version (under 280 characters), Instagram caption (engaging, 100-150 words with line breaks). Vary the content pillars and formats (tips, stories, questions, announcements)."
     },
     {
       "position": 3,
       "name": "Hashtag & Engagement Strategy",
-      "agent_id": "social-network-assistant",
+      "agent_id": "writer",
       "instructions": "Using the content from step 2, optimize each post for engagement. For each of the 5 posts provide: 5-10 relevant hashtags (mix of broad and niche), best posting time recommendation, a call-to-action suggestion, and one engagement hook (question, poll idea, or conversation starter)."
     },
     {

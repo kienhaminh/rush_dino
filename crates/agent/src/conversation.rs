@@ -69,13 +69,46 @@ impl ConversationManager {
         Ok(conversation)
     }
 
+    /// Create an isolated conversation for a sub-agent delegation. These are marked
+    /// `kind = 'agent'` so they are excluded from the main session list.
+    pub async fn create_agent_conversation(&self, id: &str, title: &str) -> Result<Conversation> {
+        let now = Utc::now();
+        let conversation = Conversation {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        sqlx::query(
+            "INSERT OR IGNORE INTO conversations (id, title, created_at, updated_at, archived_at, kind) VALUES (?1, ?2, ?3, ?4, NULL, 'agent')",
+        )
+        .bind(&conversation.id)
+        .bind(&conversation.title)
+        .bind(conversation.created_at.to_rfc3339())
+        .bind(conversation.updated_at.to_rfc3339())
+        .execute(self.pool.as_ref())
+        .await?;
+
+        Ok(conversation)
+    }
+
     pub async fn list_conversations(&self) -> Result<Vec<Conversation>> {
         let rows = sqlx::query(
-            "SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
+            "SELECT id, title, created_at, updated_at FROM conversations WHERE kind = 'user' ORDER BY updated_at DESC",
         )
         .fetch_all(self.pool.as_ref())
         .await?;
 
+        rows.into_iter().map(map_conversation).collect()
+    }
+
+    pub async fn list_agent_conversations(&self) -> Result<Vec<Conversation>> {
+        let rows = sqlx::query(
+            "SELECT id, title, created_at, updated_at FROM conversations WHERE kind = 'agent' ORDER BY updated_at DESC LIMIT 50",
+        )
+        .fetch_all(self.pool.as_ref())
+        .await?;
         rows.into_iter().map(map_conversation).collect()
     }
 

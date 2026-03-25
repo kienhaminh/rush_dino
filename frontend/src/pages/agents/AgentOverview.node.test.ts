@@ -9,11 +9,11 @@ describe('AgentOverview', () => {
     const html = renderToStaticMarkup(
       createElement(AgentOverview, {
         agent: {
-          id: 'artist-designer',
-          name: 'Artist Designer',
+          id: 'designer',
+          name: 'Designer',
           emoji: '🎨',
           isDefault: false,
-          workspace: '/tmp/artist-designer.toml',
+          workspace: '/tmp/designer.md',
           description: 'Design specialist',
         },
       }),

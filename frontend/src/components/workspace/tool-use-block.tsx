@@ -13,6 +13,52 @@ function formatToolName(name: string) {
   return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Extract a short, human-readable hint from the tool's args to show inline. */
+function toolSummary(name: string, args: Record<string, unknown>): string | null {
+  const str = (key: string) => {
+    const v = args[key];
+    return typeof v === 'string' ? v : null;
+  };
+  const truncate = (s: string, max = 60) =>
+    s.length > max ? s.slice(0, max) + '…' : s;
+
+  switch (name) {
+    case 'read_file':
+    case 'read':
+      return str('path') ? truncate(str('path')!, 50) : null;
+    case 'write_file':
+    case 'write':
+      return str('path') ? truncate(str('path')!, 50) : null;
+    case 'edit_file':
+    case 'edit':
+      return str('path') ? truncate(str('path')!, 50) : null;
+    case 'shell_exec':
+    case 'exec':
+    case 'bash': {
+      const cmd = str('command') ?? str('cmd');
+      return cmd ? truncate(cmd) : null;
+    }
+    case 'web_search':
+      return str('query') ? truncate(str('query')!) : null;
+    case 'web_fetch':
+    case 'fetch':
+      return str('url') ? truncate(str('url')!) : null;
+    case 'delegate':
+    case 'delegate_to_agent': {
+      const agent = str('agent_name');
+      const task = str('task');
+      return agent ? (task ? `${agent} — ${truncate(task, 40)}` : agent) : null;
+    }
+    default: {
+      // Fall back to the first string-valued arg if there is one.
+      for (const v of Object.values(args)) {
+        if (typeof v === 'string' && v.length > 0) return truncate(v);
+      }
+      return null;
+    }
+  }
+}
+
 export function ToolUseBlock({ item }: ToolUseBlockProps) {
   const [expanded, setExpanded] = useState(false);
   const isDone = item.status === 'done';
@@ -40,10 +86,15 @@ export function ToolUseBlock({ item }: ToolUseBlockProps) {
         )}
         onClick={() => setExpanded((v) => !v)}
       >
-        <div className="flex items-center gap-2 px-3 py-2">
-          <span className="text-[12px] font-semibold text-foreground/80">
+        <div className="flex items-center gap-2 px-3 py-2 min-w-0">
+          <span className="text-[12px] font-semibold text-foreground/80 shrink-0">
             {formatToolName(item.tool_name)}
           </span>
+          {toolSummary(item.tool_name, item.args as Record<string, unknown>) && (
+            <span className="text-[11px] text-muted-foreground/50 truncate font-mono">
+              {toolSummary(item.tool_name, item.args as Record<string, unknown>)}
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-1.5">
             {isRunning && <Loader2 size={11} className="text-amber-400 animate-spin" />}
             {isDone && <CheckCircle2 size={11} className="text-emerald-400" />}

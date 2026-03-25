@@ -4,14 +4,14 @@ use uuid::Uuid;
 use rushdino_common::models::{Message, Role};
 
 use crate::{
-    agent_manager::AgentManager,
     engine::AgentConfig,
     memory::MemoryManager,
     memory_bootstrap::{
         build_bootstrap_context, build_truncation_warning_lines, clamp_to_char_boundary,
+        BootstrapFile,
     },
     skill_manager::SkillManager,
-    system_prompt::{build_system_prompt, AgentEntry, SkillEntry, SystemPromptParams},
+    system_prompt::{build_system_prompt, SkillEntry, SystemPromptParams},
     tool_registry::SessionToolContext,
 };
 
@@ -66,46 +66,44 @@ pub fn title_from(input: &str) -> &str {
 pub fn system_message(
     config: &AgentConfig,
     memory: &MemoryManager,
-    agent_manager: &AgentManager,
     skills: Vec<SkillEntry>,
     session_ctx: &SessionToolContext,
 ) -> Message {
     // BOOTSTRAP.md, if present, replaces the agent prompt but still gets the full
-    // system prompt (tooling, skills, agents) so the agent can use tools — including
+    // system prompt (tooling, skills) so the agent can use tools — including
     // shell_exec to delete BOOTSTRAP.md once first-run setup is complete.
     let agent_prompt = memory
         .read_named("BOOTSTRAP.md")
         .or_else(|_| memory.read_named("AGENTS.md"))
         .unwrap_or_else(|_| config.system_prompt.clone());
 
-    let startup_files = memory.collect_startup_files();
+    // Inject SOUL.md, USER.md, and MEMORY.md into the system prompt so the agent
+    // never needs to read them manually on startup. Missing files are silently skipped.
+    let bootstrap_files: Vec<BootstrapFile> = ["SOUL.md", "USER.md", "MEMORY.md"]
+        .iter()
+        .filter_map(|name| {
+            memory.read_named(name).ok().map(|content| BootstrapFile {
+                name: (*name).to_owned(),
+                path: memory.root().join(name),
+                content: Some(content),
+            })
+        })
+        .collect();
     let ctx_files = build_bootstrap_context(
-        startup_files,
+        bootstrap_files,
         config.bootstrap_max_chars,
         config.bootstrap_total_max_chars,
     );
     let truncation_warnings = build_truncation_warning_lines(&ctx_files);
-
-    let agents = agent_manager
-        .list()
-        .into_iter()
-        .map(|a| AgentEntry {
-            name: a.name,
-            icon: a.icon,
-            description: a.description,
-        })
-        .collect();
 
     let tool_defs = session_ctx.active_definitions(); // already sorted
 
     let content = build_system_prompt(SystemPromptParams {
         agent_prompt,
         tool_defs,
-        agents,
         skills,
         ctx_files,
         truncation_warnings,
-        boot: memory.read_named("BOOT.md").ok(),
         workspace_dir: Some(memory.root().display().to_string()),
     });
 

@@ -122,11 +122,12 @@ pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_jso
 
     let mapped = items
         .into_iter()
-        .map(|agent| AgentListItem {
+        .enumerate()
+        .map(|(idx, agent)| AgentListItem {
             id: agent.name.clone(),
             name: humanize_agent_name(&agent.name),
             emoji: agent.icon.unwrap_or_else(|| "🤖".to_owned()),
-            is_default: agent.name == "general-assistant",
+            is_default: idx == 0,
             workspace: config
                 .data_dir
                 .join("agents")
@@ -270,12 +271,6 @@ pub async fn delete_agent(
     let engine = state.engine()?;
     if !is_valid_agent_id(&agent_id) {
         return Err(AppError::Validation("invalid agent id".to_owned()));
-    }
-
-    if agent_id == "general-assistant" {
-        return Err(AppError::Validation(
-            "cannot delete the default general-assistant template".to_owned(),
-        ));
     }
 
     engine.delete_agent_template(&agent_id)?;

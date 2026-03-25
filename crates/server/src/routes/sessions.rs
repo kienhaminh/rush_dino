@@ -253,6 +253,16 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
     })
 }
 
+pub async fn list_agent_sessions(State(state): State<AppState>) -> Result<Json<SessionsResponse>> {
+    let engine = state.engine()?;
+    let conversations = engine.list_agent_conversations().await?;
+    let mut items = Vec::with_capacity(conversations.len());
+    for conversation in conversations {
+        items.push(build_session_summary(state.clone(), &conversation.id).await?);
+    }
+    Ok(Json(SessionsResponse { items }))
+}
+
 fn truncate_preview(content: &str) -> String {
     let trimmed = content.trim();
     if trimmed.chars().count() <= 100 {

@@ -41,22 +41,13 @@ pub fn default_claim_tags(agent_name: &str) -> Vec<String> {
         "code-reviewer" => &["review", "code-quality", "bugs", "security", "style"],
         "debugger" => &["debugging", "errors", "logs", "diagnosis", "root-cause"],
         "tester" => &["testing", "test-cases", "coverage", "regression", "quality"],
-        "ui-ux-designer" => &["design", "ui", "ux", "accessibility", "user-flow"],
-        "artist-designer" => &["design", "visual", "color", "layout", "graphics"],
+        "designer" => &["design", "ui", "ux", "accessibility", "user-flow", "visual", "color", "layout", "graphics"],
         "docs-manager" => &["documentation", "docs", "runbooks", "architecture-notes"],
-        "writer" => &["writing", "articles", "emails", "creative", "content"],
-        "content-creator" => &["content", "blog", "seo", "marketing", "copy"],
-        "project-manager" => &["planning", "scope", "milestones", "coordination"],
-        "planner" => &["planning", "task-breakdown", "timelines", "roadmap"],
+        "writer" => &["writing", "articles", "emails", "creative", "content", "blog", "seo", "marketing", "copy"],
+        "planner" => &["planning", "task-breakdown", "timelines", "roadmap", "scope", "milestones", "coordination", "ideation", "options", "concepts", "exploration"],
         "devops-engineer" => &["devops", "ci-cd", "docker", "infrastructure", "deployment"],
-        "git-manager" => &["git", "branches", "merge", "conflict-resolution"],
         "data-analyst" => &["data", "analytics", "statistics", "visualization"],
-        "brainstormer" => &["ideation", "options", "concepts", "exploration"],
         "code-simplifier" => &["refactoring", "simplification", "cleanup", "complexity"],
-        "journal-writer" => &["journal", "notes", "decisions", "lessons"],
-        "mcp-manager" => &["mcp", "integration", "tools", "servers"],
-        "social-network-assistant" => &["social-media", "engagement", "strategy"],
-        "workflow-generator" => &["workflow", "automation", "pipeline"],
         _ => &[],
     };
     tags.iter().map(|s| s.to_string()).collect()
@@ -94,8 +85,7 @@ pub fn tag_match_candidates(
     let mut scores: Vec<(String, f64)> = Vec::new();
 
     for agent in agents {
-        // Skip general-assistant — it's the orchestrator, not a worker.
-        if agent.name == "general-assistant" || agent.name == "spawn-agent" {
+        if !agent.claims_tasks {
             continue;
         }
 
@@ -168,7 +158,7 @@ fn description_keyword_match(
     let mut best: Option<(String, f64)> = None;
 
     for agent in agents {
-        if agent.name == "general-assistant" || agent.name == "spawn-agent" {
+        if !agent.claims_tasks {
             continue;
         }
 
@@ -260,6 +250,7 @@ mod tests {
                 tools: None,
                 color: None,
                 model: None,
+                claims_tasks: true,
                 sandbox_policy: None,
             },
             AgentTemplate {
@@ -270,16 +261,18 @@ mod tests {
                 tools: None,
                 color: None,
                 model: None,
+                claims_tasks: true,
                 sandbox_policy: None,
             },
             AgentTemplate {
-                name: "ui-ux-designer".into(),
+                name: "designer".into(),
                 description: "UI/UX designer".into(),
                 system_prompt: "You are a UI/UX designer.".into(),
                 icon: Some("🎨".into()),
                 tools: None,
                 color: None,
                 model: None,
+                claims_tasks: true,
                 sandbox_policy: None,
             },
         ]
@@ -333,6 +326,6 @@ mod tests {
         let task = make_task(vec!["design", "ui", "ux"]);
         let result = find_best_match(&task, &agents);
         assert!(result.is_some());
-        assert_eq!(result.unwrap().agent_name, "ui-ux-designer");
+        assert_eq!(result.unwrap().agent_name, "designer");
     }
 }

@@ -304,7 +304,7 @@ impl Tool for ReviewTaskTool {
 
     fn description(&self) -> &str {
         "Review a completed task. Approve to mark as done, or send back for revision with feedback. \
-         Only the orchestrator (general-assistant) should use this tool."
+         Only the main session agent should use this tool."
     }
 
     fn parameters(&self) -> Value {

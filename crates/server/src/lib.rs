@@ -381,6 +381,7 @@ pub async fn run_server() -> Result<()> {
             "/api/sessions",
             get(routes::sessions::list_sessions).post(routes::sessions::create_session),
         )
+        .route("/api/agent-sessions", get(routes::sessions::list_agent_sessions))
         .route(
             "/api/sessions/:id",
             get(routes::sessions::get_session).delete(routes::sessions::delete_session),
@@ -469,6 +470,10 @@ pub async fn run_server() -> Result<()> {
         .route(
             "/api/system/soul-memory",
             get(routes::soul_memory::get_soul_memory_state),
+        )
+        .route(
+            "/api/system/soul-memory/file",
+            patch(routes::soul_memory::patch_core_file),
         )
         .route(
             "/api/system/prompt",

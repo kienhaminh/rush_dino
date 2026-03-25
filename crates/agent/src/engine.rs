@@ -309,7 +309,6 @@ impl AgentEngine {
             system_message(
                 &self.config,
                 self.memory.as_ref(),
-                self.agent_manager.as_ref(),
                 skills,
                 self.session_ctx.as_ref(),
             ),
@@ -451,7 +450,6 @@ impl AgentEngine {
             system_message(
                 &self.config,
                 self.memory.as_ref(),
-                self.agent_manager.as_ref(),
                 skills,
                 self.session_ctx.as_ref(),
             ),
@@ -1031,7 +1029,6 @@ impl AgentEngine {
             system_message(
                 &self.config,
                 self.memory.as_ref(),
-                self.agent_manager.as_ref(),
                 skills,
                 self.session_ctx.as_ref(),
             ),
@@ -1083,6 +1080,10 @@ impl AgentEngine {
 
     pub async fn list_conversations(&self) -> Result<Vec<rushdino_common::models::Conversation>> {
         self.conversation.list_conversations().await
+    }
+
+    pub async fn list_agent_conversations(&self) -> Result<Vec<rushdino_common::models::Conversation>> {
+        self.conversation.list_agent_conversations().await
     }
 
     pub async fn list_usage_metrics(
@@ -1146,7 +1147,8 @@ impl AgentEngine {
     }
 
     pub async fn reset_session(&self, id: &str) -> Result<()> {
-        self.conversation.reset_conversation(id).await
+        self.conversation.reset_conversation(id).await?;
+        self.runtime.delete_session_runs(id).await
     }
 
     pub fn config(&self) -> &AgentConfig {

@@ -12,7 +12,6 @@ use rushdino_common::{
 use rushdino_providers::{types::ChatResponse, Provider};
 
 use crate::{
-    agent_manager::AgentManager,
     conversation::ConversationManager,
     engine::AgentConfig,
     engine_bootstrap::system_message,
@@ -33,7 +32,6 @@ struct SessionChatDeps {
     session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
-    agent_manager: Arc<AgentManager>,
     config: AgentConfig,
 }
 
@@ -75,7 +73,6 @@ async fn run_session_turn(
         system_message(
             &deps.config,
             deps.memory.as_ref(),
-            deps.agent_manager.as_ref(),
             skills,
             session_ctx.as_ref(),
         ),
@@ -229,7 +226,6 @@ impl SessionSendTool {
         session_ctx: Weak<SessionToolContext>,
         memory: Arc<MemoryManager>,
         skill_manager: Arc<SkillManager>,
-        agent_manager: Arc<AgentManager>,
         config: AgentConfig,
     ) -> Self {
         Self {
@@ -240,7 +236,6 @@ impl SessionSendTool {
                 session_ctx,
                 memory,
                 skill_manager,
-                agent_manager,
                 config,
             },
         }

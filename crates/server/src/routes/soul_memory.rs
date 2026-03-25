@@ -2,12 +2,13 @@ use std::{fs, path::Path};
 
 use axum::{extract::State, Json};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use rushdino_agent::engine_bootstrap::system_message;
+use rushdino_agent::engine_deps::CORE_TOOLS;
 use rushdino_agent::memory_bootstrap::{build_bootstrap_context, build_truncation_warning_lines};
 use rushdino_agent::system_prompt::SkillEntry;
-use rushdino_common::Result;
+use rushdino_common::{AppError, Result};
 
 use crate::state::AppState;
 
@@ -181,7 +182,6 @@ pub async fn get_system_prompt(
     let msg = system_message(
         engine.config(),
         engine.memory(),
-        engine.agent_manager(),
         skills,
         engine.session_ctx(),
     );
@@ -198,6 +198,8 @@ pub async fn get_system_prompt(
 pub struct RegisteredToolItem {
     pub name: String,
     pub description: String,
+    /// True if this tool is active from session start; false = pool-only, activated via tool_search.
+    pub is_core: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -215,12 +217,53 @@ pub async fn get_registered_tools(
         .definitions()
         .into_iter()
         .map(|def| RegisteredToolItem {
+            is_core: CORE_TOOLS.contains(&def.name.as_str()),
             name: def.name,
             description: def.description,
         })
         .collect();
     tools.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(Json(RegisteredToolsResponse { tools }))
+}
+
+/// Allowed core file names that can be written via the API.
+const ALLOWED_CORE_FILES: &[&str] = &[
+    "BOOTSTRAP.md",
+    "SOUL.md",
+    "MEMORY.md",
+    "IDENTITY.md",
+    "USER.md",
+    "AGENTS.md",
+    "TOOLS.md",
+    "HEARTBEAT.md",
+];
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PatchCoreFileRequest {
+    pub filename: String,
+    pub content: String,
+}
+
+pub async fn patch_core_file(
+    State(state): State<AppState>,
+    Json(req): Json<PatchCoreFileRequest>,
+) -> Result<Json<SoulMemoryFile>> {
+    // Validate that filename is in the allowed list (no path traversal)
+    if !ALLOWED_CORE_FILES.contains(&req.filename.as_str()) {
+        return Err(AppError::Validation(format!(
+            "filename '{}' is not an allowed core file",
+            req.filename
+        )));
+    }
+
+    let data_dir = state.config().data_dir.clone();
+    let path = data_dir.join(&req.filename);
+
+    fs::write(&path, &req.content)?;
+
+    let snapshot = read_file_snapshot(&path, &req.filename)?;
+    Ok(Json(snapshot))
 }
 
 #[cfg(test)]

@@ -149,7 +149,7 @@ mod tests {
                     steps: vec![WorkflowStepInput {
                         name: "Step".to_owned(),
                         instructions: "Do work".to_owned(),
-                        agent_id: "general-assistant".to_owned(),
+                        agent_id: "software-engineer".to_owned(),
                         ..Default::default()
                     }],
                 },

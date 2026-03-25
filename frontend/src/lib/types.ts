@@ -342,6 +342,8 @@ export interface SoulMemoryFile {
 export interface RegisteredTool {
   name: string;
   description: string;
+  /** True = active from session start. False = pool-only, activated on demand via tool_search. */
+  isCore: boolean;
 }
 
 export interface InjectedContextFile {
@@ -715,11 +717,6 @@ export type ConversationItem =
       args: Record<string, unknown>;
     }
   | { kind: 'error'; id: string; message: string };
-
-export interface ActiveAgent {
-  name: string;
-  role: 'orchestrator' | 'delegate';
-}
 
 // ---------------------------------------------------------------------------
 // Sandbox policy types — mirror the Rust SandboxPolicy YAML structs

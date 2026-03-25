@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
-import type { ActiveAgent, ConversationItem, RichContent, WsEvent } from '../lib/types';
+import type { ConversationItem, RichContent, WsEvent } from '../lib/types';
 
 // Callback invoked when a broadcast user_message arrives from a channel.
 // Provides { conversationId, channel } so the UI can auto-switch.
@@ -23,10 +23,6 @@ export function useWebSocket(
 ) {
   const { readyForProtectedRoutes } = useDashboardAuth();
   const [items, setItems] = useState<ConversationItem[]>([]);
-  const [activeAgent, setActiveAgent] = useState<ActiveAgent>({
-    name: 'Orchestrator',
-    role: 'orchestrator',
-  });
   const [isConnected, setIsConnected] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   // Track which conversation is currently streaming so we can ignore cross-conversation events
@@ -114,7 +110,6 @@ export function useWebSocket(
           lastStreamedConvIdRef.current = streamingConvIdRef.current;
           setIsStreaming(false);
           streamingConvIdRef.current = null;
-          setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
           return;
         }
         if (msg.thinking_delta) {
@@ -192,15 +187,10 @@ export function useWebSocket(
         );
         setIsStreaming(false);
         streamingConvIdRef.current = null;
-        setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
         return;
       }
 
       if (msg.type === 'tool_start') {
-        if (msg.tool_name === 'delegate_to_agent') {
-          const agentName = (msg.args as Record<string, string>).agent_name ?? 'Agent';
-          setActiveAgent({ name: agentName, role: 'delegate' });
-        }
         setItems((prev) => [
           ...prev,
           {
@@ -215,9 +205,6 @@ export function useWebSocket(
       }
 
       if (msg.type === 'tool_end') {
-        if (msg.tool_name === 'delegate_to_agent') {
-          setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
-        }
         setItems((prev) => {
           const reversedIdx = [...prev]
             .reverse()
@@ -268,7 +255,6 @@ export function useWebSocket(
         // Notify ChatPage so it can switch to / load that conversation.
         onChannelMessage?.(msg.conversation_id, msg.channel);
         setIsStreaming(true);
-        setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
         streamingConvIdRef.current = msg.conversation_id;
         setItems((prev) => [
           ...prev,
@@ -299,7 +285,6 @@ export function useWebSocket(
         { kind: 'user' as const, id: crypto.randomUUID(), content: text },
       ]);
       setIsStreaming(true);
-      setActiveAgent({ name: 'Orchestrator', role: 'orchestrator' });
       socketRef.current.send(
         JSON.stringify({ conversation_id: activeConversationId, message: text }),
       );
@@ -317,7 +302,6 @@ export function useWebSocket(
   return useMemo(
     () => ({
       items,
-      activeAgent,
       sendMessage,
       clearItems,
       resetWithItems,
@@ -325,6 +309,6 @@ export function useWebSocket(
       isStreaming,
       streamingConvId: streamingConvIdRef.current,
     }),
-    [items, activeAgent, sendMessage, clearItems, resetWithItems, isConnected, isStreaming],
+    [items, sendMessage, clearItems, resetWithItems, isConnected, isStreaming],
   );
 }

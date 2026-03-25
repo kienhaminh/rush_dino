@@ -26,12 +26,12 @@ export const MOCK_AGENTS: AgentRecord[] = [
     description: 'Focused on retrieval and web research tasks.',
   },
   {
-    id: 'brainstormer',
-    name: 'Brainstormer',
-    emoji: '💡',
+    id: 'planner',
+    name: 'Planner',
+    emoji: '📋',
     isDefault: false,
-    workspace: 'workspace/brainstormer',
-    description: 'Ideation specialist for generating options and concepts.',
+    workspace: 'workspace/planner',
+    description: 'Ideation, planning, and delivery specialist.',
   },
   {
     id: 'code-simplifier',
@@ -66,38 +66,6 @@ export const MOCK_AGENTS: AgentRecord[] = [
     description: 'Implements end-to-end features across frontend and backend.',
   },
   {
-    id: 'git-manager',
-    name: 'Git Manager',
-    emoji: '🌿',
-    isDefault: false,
-    workspace: 'workspace/git',
-    description: 'Handles branch strategy, rebases, and conflict resolution.',
-  },
-  {
-    id: 'journal-writer',
-    name: 'Journal Writer',
-    emoji: '📓',
-    isDefault: false,
-    workspace: 'workspace/journal',
-    description: 'Captures progress, decisions, and lessons learned.',
-  },
-  {
-    id: 'mcp-manager',
-    name: 'MCP Manager',
-    emoji: '🔌',
-    isDefault: false,
-    workspace: 'workspace/mcp',
-    description: 'Configures and troubleshoots MCP integrations.',
-  },
-  {
-    id: 'project-manager',
-    name: 'Project Manager',
-    emoji: '🗂️',
-    isDefault: false,
-    workspace: 'workspace/project',
-    description: 'Owns scope, milestones, and delivery coordination.',
-  },
-  {
     id: 'tester',
     name: 'Tester',
     emoji: '✅',
@@ -106,12 +74,20 @@ export const MOCK_AGENTS: AgentRecord[] = [
     description: 'Designs test strategy and regression coverage.',
   },
   {
-    id: 'ui-ux-designer',
-    name: 'UI/UX Designer',
-    emoji: '🧭',
+    id: 'designer',
+    name: 'Designer',
+    emoji: '🎨',
     isDefault: false,
     workspace: 'workspace/design',
-    description: 'Designs user flows, interaction patterns, and accessibility.',
+    description: 'Full-spectrum designer covering UX, visual, and creative direction.',
+  },
+  {
+    id: 'writer',
+    name: 'Writer',
+    emoji: '✍️',
+    isDefault: false,
+    workspace: 'workspace/writer',
+    description: 'All writing: docs, articles, marketing, SEO, and creative content.',
   },
 ];
 
@@ -185,39 +161,39 @@ const SOUL_RESEARCH: AgentSoulData = {
     'You are a research specialist. Your outputs must be grounded in evidence. Always attribute claims to sources. When synthesizing, distinguish between established fact, expert consensus, and minority view. Avoid filler.',
 };
 
-const SOUL_BRAINSTORMER: AgentSoulData = {
-  persona: 'An energetic creative partner who generates divergent ideas without self-censorship.',
-  tone: 'Enthusiastic, generative, and non-judgmental. Sparks > polish.',
+const SOUL_PLANNER: AgentSoulData = {
+  persona: 'A strategic thinker who brainstorms options, builds actionable plans, and drives delivery.',
+  tone: 'Structured, decisive, and action-oriented. Clarity > verbosity.',
   coreValues: [
-    'Quantity enables quality',
-    'Wild ideas are welcome',
-    'Defer evaluation',
-    "Build on others's ideas",
+    'Explore before committing',
+    'Plans must be actionable',
+    'Surface risks early',
+    'Deliver incrementally',
   ],
   traits: [
     {
       id: 't1',
       label: 'Generative',
-      description: 'Produces many varied options, not just safe ones.',
+      description: 'Produces diverse ideas and options before narrowing.',
     },
     {
       id: 't2',
-      label: 'Playful',
-      description: 'Uses analogies, hypotheticals and "what if" framing.',
+      label: 'Structured',
+      description: 'Organizes work into phases, milestones, and dependencies.',
     },
     {
       id: 't3',
-      label: 'Lateral',
-      description: 'Draws from unrelated domains to spark new angles.',
+      label: 'Decisive',
+      description: 'Recommends a path forward with clear reasoning.',
     },
     {
       id: 't4',
-      label: 'Non-judgmental',
-      description: 'Lists all ideas first, evaluates separately.',
+      label: 'Risk-aware',
+      description: 'Anticipates blockers and proposes mitigations.',
     },
   ],
   systemPrompt:
-    'You are a brainstorming partner. Your goal is to generate the maximum number of diverse, interesting ideas. Do not filter or self-censor. Present ideas in rapid-fire lists. Invite the user to build on what resonates.',
+    'You are a planning specialist. Cover the full lifecycle: brainstorm options, build actionable plans, and track delivery. Use structured formats. Recommend a path forward with tradeoffs.',
 };
 
 const SOUL_DEFAULT: AgentSoulData = {
@@ -654,8 +630,8 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
     ],
   },
 
-  brainstormer: {
-    soul: SOUL_BRAINSTORMER,
+  planner: {
+    soul: SOUL_PLANNER,
     memory: [
       makeMemory(
         'm1',
@@ -667,7 +643,7 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
       ),
       makeMemory(
         'm2',
-        'The product is an AI agent management dashboard called RushDino.',
+        'The product is an AI agent management platform called RushDino.',
         'context',
         'critical',
         'project',
@@ -701,10 +677,10 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
     files: [
       {
         name: 'AGENTS.md',
-        path: '/workspace/brainstormer/AGENTS.md',
+        path: '/workspace/planner/AGENTS.md',
         size: '3.1 KB',
         updatedAt: '30m ago',
-        content: '# Brainstormer\n\nGenerate diverse, creative concepts without self-filtering.',
+        content: '# Planner\n\nBrainstorm options, build plans, and drive delivery.',
       },
     ],
     toolsProfile: 'minimal',

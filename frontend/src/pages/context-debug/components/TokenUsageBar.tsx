@@ -1,14 +1,14 @@
-import type { Message, SessionSummary, SoulMemoryStateResponse } from '@/lib/types';
+import type { Message, RegisteredTool, SessionSummary } from '@/lib/types';
 
 interface Props {
   session: SessionSummary;
-  systemPromptTokens: number;  // fallback estimate when soulMemory absent
-  estimatedPromptTokens: number; // fallback estimate when server absent
+  systemPromptTokens: number;
+  estimatedPromptTokens: number; // fallback when server prompt tokens absent
   messages: Message[];
   messageCount: number;
   toolCallCount: number;
   runCount: number;
-  soulMemory?: SoulMemoryStateResponse | null;
+  registeredTools: RegisteredTool[];
 }
 
 function estTok(text: string): number {
@@ -95,7 +95,7 @@ export function TokenUsageBar({
   messageCount,
   toolCallCount,
   runCount,
-  soulMemory,
+  registeredTools,
 }: Props) {
   const cw = session.contextWindow;
 
@@ -106,15 +106,18 @@ export function TokenUsageBar({
   const limitTokens = cw?.limitTokens ?? null;
   const usageRatio = cw?.usageRatio ?? (limitTokens && serverPromptTok ? serverPromptTok / limitTokens : null);
 
-  // ── System prompt breakdown from injectedContext ─────────────────────────
-  const injectedSections = soulMemory?.injectedContext ?? [];
-  const sysFileToks: { label: string; tok: number }[] = injectedSections.map((f) => ({
-    label: f.label,
-    tok: estTok(f.content),
-  }));
-  const sysTokEst = sysFileToks.length > 0
-    ? sysFileToks.reduce((s, f) => s + f.tok, 0)
-    : systemPromptTokens;
+  // ── System prompt: use the actual full system prompt estimate.
+  // soulMemory.injectedContext shows what memory files exist, but system_message()
+  // passes ctx_files = vec![] so none of those files are actually in the prompt.
+  const sysTokEst = systemPromptTokens;
+
+  // ── Tool definitions: only core tools are sent to the model initially ────────
+  // Pool-only tools are deferred and activated on demand via tool_search.
+  const coreTools = registeredTools.filter((t) => t.isCore);
+  const toolDefsTokEst = coreTools.reduce(
+    (sum, t) => sum + estTok(t.name + ' ' + t.description),
+    0,
+  );
 
   // ── Messages breakdown ────────────────────────────────────────────────────
   const msgTokEst = messages.reduce((sum, m) => {
@@ -126,8 +129,8 @@ export function TokenUsageBar({
     return sum + contentTok + argsTok;
   }, 0);
 
-  // ── Inferred: tool definitions + message formatting overhead ─────────────
-  const knownEst = sysTokEst + msgTokEst;
+  // ── Inferred: formatting overhead (tool defs are now known) ──────────────
+  const knownEst = sysTokEst + toolDefsTokEst + msgTokEst;
   const inferredTok = serverPromptTok != null ? Math.max(0, serverPromptTok - knownEst) : null;
 
   // ── Display prompt total ──────────────────────────────────────────────────
@@ -142,23 +145,29 @@ export function TokenUsageBar({
     : 'bg-primary';
 
   const barBase = limitTokens && displayPromptTok ? displayPromptTok / limitTokens * 100 : null;
-  const segments: BarSegment[] = barBase != null && serverPromptTok != null ? [
+  const segmentDenominator = serverPromptTok ?? (knownEst || 1);
+  const segments: BarSegment[] = barBase != null ? [
     {
-      pct: Math.min(barBase, 100) * (sysTokEst / serverPromptTok),
+      pct: Math.min(barBase, 100) * (sysTokEst / segmentDenominator),
       color: 'bg-primary opacity-40',
       label: 'System prompt',
     },
     {
-      pct: Math.min(barBase, 100) * (msgTokEst / serverPromptTok),
+      pct: Math.min(barBase, 100) * (toolDefsTokEst / segmentDenominator),
+      color: 'bg-violet-500 opacity-60',
+      label: 'Tool definitions',
+    },
+    {
+      pct: Math.min(barBase, 100) * (msgTokEst / segmentDenominator),
       color: barColor,
       label: 'Messages',
     },
-    {
-      pct: Math.min(barBase, 100) * ((inferredTok ?? 0) / serverPromptTok),
+    ...(inferredTok != null ? [{
+      pct: Math.min(barBase, 100) * (inferredTok / segmentDenominator),
       color: 'bg-warning opacity-60',
-      label: 'Tool defs + overhead',
-    },
-  ] : barBase != null ? [{ pct: barBase, color: barColor, label: 'Prompt' }] : [];
+      label: 'Formatting overhead',
+    }] : []),
+  ] : [];
 
   return (
     <div className="flex-shrink-0 border border-border rounded-lg p-3 bg-card space-y-2">
@@ -181,22 +190,26 @@ export function TokenUsageBar({
       )}
 
       {/* Bar legend */}
-      {serverPromptTok != null && (
-        <div className="flex gap-3 text-[9px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-1.5 rounded-sm bg-primary opacity-40 inline-block" />
-            system
-          </span>
-          <span className="flex items-center gap-1">
-            <span className={`w-2 h-1.5 rounded-sm ${barColor} inline-block`} />
-            messages
-          </span>
+      <div className="flex gap-3 text-[9px] text-muted-foreground flex-wrap">
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-1.5 rounded-sm bg-primary opacity-40 inline-block" />
+          system
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-1.5 rounded-sm bg-violet-500 opacity-60 inline-block" />
+          tools ({coreTools.length} active / {registeredTools.length} total)
+        </span>
+        <span className="flex items-center gap-1">
+          <span className={`w-2 h-1.5 rounded-sm ${barColor} inline-block`} />
+          messages
+        </span>
+        {inferredTok != null && (
           <span className="flex items-center gap-1">
             <span className="w-2 h-1.5 rounded-sm bg-warning opacity-60 inline-block" />
-            tool defs + overhead
+            overhead
           </span>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Breakdown */}
       <div className="divide-y divide-border">
@@ -217,12 +230,14 @@ export function TokenUsageBar({
 
           {/* System prompt sub-breakdown */}
           <Row label="System prompt" value={`~${fmt(sysTokEst)}`} indent={1} note="est" />
-          {sysFileToks.length > 0
-            ? sysFileToks.map((f) => (
-                <Row key={f.label} label={f.label} value={`~${fmt(f.tok)}`} indent={2} dim />
-              ))
-            : <Row label="(no injected context)" value="—" indent={2} dim />
-          }
+
+          {/* Tool definitions sub-breakdown — only core (initially active) tools */}
+          <Row
+            label={`Tool definitions (${coreTools.length} active, ${registeredTools.length - coreTools.length} deferred)`}
+            value={`~${fmt(toolDefsTokEst)}`}
+            indent={1}
+            note="est"
+          />
 
           {/* Messages sub-breakdown */}
           <Row
@@ -232,10 +247,10 @@ export function TokenUsageBar({
             note="est"
           />
 
-          {/* Inferred remainder */}
+          {/* Inferred remainder: formatting overhead after known estimates */}
           {inferredTok != null && (
             <Row
-              label="Tool defs + formatting overhead"
+              label="Formatting overhead"
               value={`~${fmt(inferredTok)}`}
               indent={1}
               note="inferred"

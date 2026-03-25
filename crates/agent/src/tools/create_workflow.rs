@@ -176,13 +176,14 @@ mod tests {
         let manager = Arc::new(AgentManager::new(dir.clone()));
         manager
             .save(&AgentTemplate {
-                name: "general-assistant".to_owned(),
+                name: "software-engineer".to_owned(),
                 description: "default".to_owned(),
                 system_prompt: "You are helpful".to_owned(),
                 icon: None,
                 tools: None,
                 color: None,
                 model: None,
+                claims_tasks: true,
                 sandbox_policy: None,
             })
             .expect("save template");
@@ -200,7 +201,7 @@ mod tests {
                     {
                         "name": "Step 1",
                         "instructions": "Do thing",
-                        "agent_id": "general-assistant"
+                        "agent_id": "software-engineer"
                     }
                 ]
             }))

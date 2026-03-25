@@ -85,3 +85,4 @@ __pycache__
 # Git worktrees
 .worktrees/
 tasks/
+.gitnexus

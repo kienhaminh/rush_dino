@@ -15,8 +15,8 @@ use tower::util::ServiceExt;
 async fn create_test_app(home: &Path) -> axum::Router {
     init::ensure_rushdino_dir_at(home).expect("create rushdino home");
     std::fs::write(
-        home.join("agents").join("general-assistant.md"),
-        "---\nname: general-assistant\ndescription: Offline smoke agent\n---\n\nYou are the offline smoke-test agent.\n",
+        home.join("agents").join("software-engineer.md"),
+        "---\nname: software-engineer\ndescription: Offline smoke agent\n---\n\nYou are the offline smoke-test agent.\n",
     )
     .expect("seed default workflow agent");
 
@@ -166,7 +166,7 @@ async fn offline_app_smoke_covers_core_routes() {
                 {
                     "name": "Draft step",
                     "instructions": "Inspect the smoke suite.",
-                    "agentId": "general-assistant"
+                    "agentId": "software-engineer"
                 }
             ]
         }),

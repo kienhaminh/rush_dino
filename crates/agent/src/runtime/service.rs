@@ -589,6 +589,10 @@ impl AgentRuntime {
             .await
     }
 
+    pub async fn delete_session_runs(&self, conversation_id: &str) -> Result<()> {
+        self.store.delete_by_conversation_id(conversation_id).await
+    }
+
     pub async fn counts(&self) -> Result<RunCounts> {
         let runs = self
             .store

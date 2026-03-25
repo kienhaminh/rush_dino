@@ -9,7 +9,6 @@ use rushdino_common::{models::Message, models::Role, AppError, Result};
 use rushdino_providers::Provider;
 
 use crate::{
-    agent_manager::AgentManager,
     conversation::ConversationManager,
     cron_manager::{
         CreateCronJobInput, CronManager, CronRunStatus, CronTargetInput, UpdateCronJobInput,
@@ -37,7 +36,6 @@ async fn run_agent_turn(
     session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
-    agent_manager: Arc<AgentManager>,
     config: AgentConfig,
     conversation_id: &str,
     input: &str,
@@ -71,7 +69,6 @@ async fn run_agent_turn(
         system_message(
             &config,
             memory.as_ref(),
-            agent_manager.as_ref(),
             skills,
             session_ctx.as_ref(),
         ),
@@ -295,7 +292,6 @@ pub fn cron_run_now_tool(
     session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
-    agent_manager: Arc<AgentManager>,
     config: AgentConfig,
     workflow_manager: Arc<WorkflowManager>,
     workflow_runner: Arc<WorkflowRunner>,
@@ -315,7 +311,6 @@ pub fn cron_run_now_tool(
             let session_ctx = session_ctx.clone();
             let memory = memory.clone();
             let skill_manager = skill_manager.clone();
-            let agent_manager = agent_manager.clone();
             let config = config.clone();
             let workflow_manager = workflow_manager.clone();
             let workflow_runner = workflow_runner.clone();
@@ -388,7 +383,6 @@ pub fn cron_run_now_tool(
                             session_ctx.clone(),
                             memory.clone(),
                             skill_manager.clone(),
-                            agent_manager.clone(),
                             config.clone(),
                             &session_id,
                             message,

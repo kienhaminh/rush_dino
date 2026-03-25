@@ -19,6 +19,7 @@ import type {
   SandboxNetworkPolicy,
   SandboxPolicy,
   SessionSummary,
+  SoulMemoryFile,
   SoulMemoryStateResponse,
   RegisteredTool,
   SkillRecord,
@@ -227,6 +228,16 @@ export async function fetchSoulMemoryState(): Promise<SoulMemoryStateResponse> {
   return parseJsonOrThrow(response, endpoint);
 }
 
+export async function patchSoulMemoryFile(filename: string, content: string): Promise<SoulMemoryFile> {
+  const endpoint = '/api/system/soul-memory/file';
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ filename, content }),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
 export async function fetchConfig(): Promise<AppConfigView> {
   const response = await fetch('/api/config');
   if (!response.ok) throw new Error(`Failed to fetch config: ${response.statusText}`);
@@ -345,6 +356,13 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunDetail
 
 export async function fetchSessions(): Promise<SessionSummary[]> {
   const endpoint = '/api/sessions';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return (data.items ?? []).map(normalizeSessionSummary);
+}
+
+export async function fetchAgentSessions(): Promise<SessionSummary[]> {
+  const endpoint = '/api/agent-sessions';
   const response = await fetch(endpoint);
   const data = await parseJsonOrThrow(response, endpoint);
   return (data.items ?? []).map(normalizeSessionSummary);
