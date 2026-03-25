@@ -184,6 +184,7 @@ pub async fn get_system_prompt(
         engine.memory(),
         skills,
         engine.session_ctx(),
+        &[],
     );
     let content = msg.content.clone();
     let token_estimate = content.len() / 4;
