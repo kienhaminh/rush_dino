@@ -67,7 +67,7 @@ impl Default for AgentConfig {
             tool_timeout_secs: 30,
             model_override: None,
             system_prompt: "You are RushDino, a local-first AI agent.".to_owned(),
-            thinking_level: ThinkingLevel::Low,
+            thinking_level: ThinkingLevel::Medium,
             bootstrap_max_chars: crate::memory_bootstrap::DEFAULT_BOOTSTRAP_MAX_CHARS,
             bootstrap_total_max_chars: crate::memory_bootstrap::DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
         }
@@ -161,6 +161,12 @@ mod config_tests {
     use std::sync::{Arc, RwLock};
 
     #[test]
+    fn default_thinking_level_is_medium() {
+        let config = AgentConfig::default();
+        assert_eq!(config.thinking_level, ThinkingLevel::Medium);
+    }
+
+    #[test]
     fn default_context_budget_is_large_enough_for_longer_conversations() {
         let config = AgentConfig::default();
         assert_eq!(config.max_context_tokens, 8192);
@@ -171,7 +177,7 @@ mod config_tests {
     // override→fallback logic pattern that effective_thinking_level() implements.
     #[test]
     fn thinking_level_override_logic_prefers_override_over_config() {
-        let config = AgentConfig::default(); // default is ThinkingLevel::Low
+        let config = AgentConfig::default(); // default is ThinkingLevel::Medium
         let override_arc: Arc<RwLock<Option<ThinkingLevel>>> = Arc::new(RwLock::new(None));
 
         // No override → falls back to config
@@ -180,7 +186,7 @@ mod config_tests {
             .unwrap_or_else(|e| e.into_inner())
             .clone()
             .unwrap_or_else(|| config.thinking_level.clone());
-        assert_eq!(effective, ThinkingLevel::Low);
+        assert_eq!(effective, ThinkingLevel::Medium);
 
         // With override
         *override_arc.write().unwrap_or_else(|e| e.into_inner()) = Some(ThinkingLevel::High);
@@ -198,7 +204,7 @@ mod config_tests {
             .unwrap_or_else(|e| e.into_inner())
             .clone()
             .unwrap_or_else(|| config.thinking_level.clone());
-        assert_eq!(effective, ThinkingLevel::Low);
+        assert_eq!(effective, ThinkingLevel::Medium);
     }
 }
 
