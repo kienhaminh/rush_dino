@@ -102,6 +102,7 @@ pub fn system_message(
         agent_prompt,
         tool_defs,
         skills,
+        agents: vec![],
         ctx_files,
         truncation_warnings,
         workspace_dir: Some(memory.root().display().to_string()),

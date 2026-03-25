@@ -7,10 +7,17 @@ pub struct SkillEntry {
     pub description: String,
 }
 
+pub struct AgentEntry {
+    pub name: String,
+    pub description: String,
+    pub icon: Option<String>,
+}
+
 pub struct SystemPromptParams {
     pub agent_prompt: String,
     pub tool_defs: Vec<ToolDefinition>,
     pub skills: Vec<SkillEntry>,
+    pub agents: Vec<AgentEntry>,
     pub ctx_files: Vec<BootstrapContextFile>,
     pub truncation_warnings: Vec<String>,
     pub workspace_dir: Option<String>,
@@ -84,6 +91,23 @@ fn build_skills_section(skills: &[SkillEntry]) -> Vec<String> {
     lines
 }
 
+fn build_agents_section(agents: &[AgentEntry]) -> Vec<String> {
+    if agents.is_empty() {
+        return vec![];
+    }
+    let mut lines = vec![
+        "## Available Agents".to_owned(),
+        "Use `post_task` to delegate complex work. Use `delegate` for quick synchronous tasks.".to_owned(),
+        String::new(),
+    ];
+    for agent in agents {
+        let icon = agent.icon.as_deref().unwrap_or("🤖");
+        lines.push(format!("- **{}** {} — {}", agent.name, icon, agent.description));
+    }
+    lines.push(String::new());
+    lines
+}
+
 fn build_memory_recall_section(has_memory_search: bool) -> Vec<String> {
     if !has_memory_search {
         return vec![];
@@ -149,6 +173,7 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
     lines.extend(build_tool_call_style_section());
     lines.extend(build_safety_section());
     lines.extend(build_skills_section(&params.skills));
+    lines.extend(build_agents_section(&params.agents));
     lines.extend(build_memory_recall_section(has_memory_search));
     lines.extend(build_workspace_section(params.workspace_dir.as_deref()));
 
@@ -179,6 +204,7 @@ mod tests {
                 parameters: serde_json::Value::Null,
             }],
             skills: vec![],
+            agents: vec![],
             ctx_files: vec![],
             truncation_warnings: vec![],
             workspace_dir: Some("/home/user/.rushdino".to_owned()),
@@ -259,5 +285,27 @@ mod tests {
     fn tooling_hint_absent_without_tool_search() {
         let prompt = build_system_prompt(make_params()); // make_params() has memory_search, not tool_search
         assert!(!prompt.contains("Use `tool_search` to discover"));
+    }
+
+    #[test]
+    fn includes_agents_section_when_agents_present() {
+        let mut params = make_params();
+        params.agents = vec![
+            AgentEntry { name: "researcher".to_owned(), description: "Research specialist".to_owned(), icon: Some("📚".to_owned()) },
+            AgentEntry { name: "debugger".to_owned(), description: "Debug specialist".to_owned(), icon: None },
+        ];
+        let prompt = build_system_prompt(params);
+        assert!(prompt.contains("## Available Agents"));
+        assert!(prompt.contains("researcher"));
+        assert!(prompt.contains("Research specialist"));
+        assert!(prompt.contains("📚"));
+        assert!(prompt.contains("debugger"));
+    }
+
+    #[test]
+    fn omits_agents_section_when_empty() {
+        let params = make_params(); // agents defaults to vec![]
+        let prompt = build_system_prompt(params);
+        assert!(!prompt.contains("## Available Agents"));
     }
 }
