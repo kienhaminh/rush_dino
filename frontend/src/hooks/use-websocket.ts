@@ -262,6 +262,21 @@ export function useWebSocket(
         ]);
         return;
       }
+
+      if (msg.type === 'task_review_ready') {
+        // Inject the pre-formatted notification from the backend as an assistant item.
+        setItems((prev) => [
+          ...prev,
+          {
+            kind: 'assistant' as const,
+            id: crypto.randomUUID(),
+            content: msg.notification,
+            richContent: null,
+            runId: null,
+          },
+        ]);
+        return;
+      }
     };
   }, [activeConversationId, onChannelMessage, onConversationStarted, replaceAssistantItem]);
 

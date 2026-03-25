@@ -678,6 +678,17 @@ export interface WsUserMessageEvent {
   channel: string;
 }
 
+/** Emitted when a kanban task completes and is ready for review. */
+export interface WsTaskReviewReadyEvent {
+  type: 'task_review_ready';
+  task_id: string;
+  conversation_id: string;
+  agent_name: string;
+  title: string;
+  result: string;
+  notification: string;
+}
+
 export type WsEvent =
   | WsChatChunkEvent
   | WsAssistantResetEvent
@@ -688,7 +699,8 @@ export type WsEvent =
   | WsApprovalResultEvent
   | WsErrorEvent
   | WsRuntimeLogErrorEvent
-  | WsUserMessageEvent;
+  | WsUserMessageEvent
+  | WsTaskReviewReadyEvent;
 
 export type ConversationItem =
   | { kind: 'user'; id: string; content: string }
