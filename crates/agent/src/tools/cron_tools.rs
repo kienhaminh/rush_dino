@@ -71,6 +71,7 @@ async fn run_agent_turn(
             memory.as_ref(),
             skills,
             session_ctx.as_ref(),
+            &[],
         ),
     );
     let old_len = messages.len();

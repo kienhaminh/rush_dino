@@ -75,6 +75,7 @@ async fn run_session_turn(
             deps.memory.as_ref(),
             skills,
             session_ctx.as_ref(),
+            &[],
         ),
     );
 

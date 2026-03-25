@@ -68,6 +68,7 @@ pub fn system_message(
     memory: &MemoryManager,
     skills: Vec<SkillEntry>,
     session_ctx: &SessionToolContext,
+    agents: &[crate::agent_manager::AgentTemplate],
 ) -> Message {
     // BOOTSTRAP.md, if present, replaces the agent prompt but still gets the full
     // system prompt (tooling, skills) so the agent can use tools — including
@@ -98,11 +99,22 @@ pub fn system_message(
 
     let tool_defs = session_ctx.active_definitions(); // already sorted
 
+    // Map AgentTemplate slice → AgentEntry vec for the system prompt renderer.
+    use crate::system_prompt::AgentEntry;
+    let agent_entries: Vec<AgentEntry> = agents
+        .iter()
+        .map(|a| AgentEntry {
+            name: a.name.clone(),
+            description: a.description.clone(),
+            icon: a.icon.clone(),
+        })
+        .collect();
+
     let content = build_system_prompt(SystemPromptParams {
         agent_prompt,
         tool_defs,
         skills,
-        agents: vec![],
+        agents: agent_entries,
         ctx_files,
         truncation_warnings,
         workspace_dir: Some(memory.root().display().to_string()),
@@ -132,6 +144,29 @@ pub fn user_message(input: &str) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_message_includes_agents_when_provided() {
+        use crate::agent_manager::AgentTemplate;
+        let config = AgentConfig::default();
+        let temp = tempfile::tempdir().unwrap();
+        let memory = MemoryManager::new(temp.path().to_owned());
+        let session_ctx = SessionToolContext::new(vec![], &[]);
+        let agents = vec![AgentTemplate {
+            name: "researcher".to_owned(),
+            description: "Research specialist".to_owned(),
+            system_prompt: String::new(),
+            icon: Some("📚".to_owned()),
+            tools: None,
+            color: None,
+            model: None,
+            claims_tasks: true,
+            sandbox_policy: None,
+        }];
+        let msg = system_message(&config, &memory, vec![], &session_ctx, &agents);
+        assert!(msg.content.contains("researcher"));
+        assert!(msg.content.contains("Available Agents"));
+    }
 
     #[test]
     fn title_from_does_not_panic_on_multibyte_utf8() {

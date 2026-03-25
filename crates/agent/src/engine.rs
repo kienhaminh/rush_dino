@@ -311,6 +311,7 @@ impl AgentEngine {
                 self.memory.as_ref(),
                 skills,
                 self.session_ctx.as_ref(),
+                &self.agent_manager.list(),
             ),
         );
 
@@ -452,6 +453,7 @@ impl AgentEngine {
                 self.memory.as_ref(),
                 skills,
                 self.session_ctx.as_ref(),
+                &self.agent_manager.list(),
             ),
         );
 
@@ -1031,6 +1033,7 @@ impl AgentEngine {
                 self.memory.as_ref(),
                 skills,
                 self.session_ctx.as_ref(),
+                &self.agent_manager.list(),
             ),
         );
 
