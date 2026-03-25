@@ -300,6 +300,7 @@ mod tests {
         assert!(prompt.contains("Research specialist"));
         assert!(prompt.contains("📚"));
         assert!(prompt.contains("debugger"));
+        assert!(prompt.contains("🤖")); // fallback for icon: None
     }
 
     #[test]
