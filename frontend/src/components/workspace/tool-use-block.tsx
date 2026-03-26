@@ -54,9 +54,9 @@ function toolSummary(name: string, args: Record<string, unknown>): string | null
 /** Render a single arg value formatted by key name. */
 function ArgValue({ argKey, value }: { argKey: string; value: unknown }) {
   const key = argKey.toLowerCase();
-  const str = String(value);
 
   if (key === 'path' || key === 'file_path' || key === 'file') {
+    const str = String(value);
     return (
       <span className="flex items-center gap-1 font-mono text-[11px] text-foreground/70 break-all">
         <FileText size={10} className="shrink-0 text-muted-foreground/50" />
@@ -65,6 +65,7 @@ function ArgValue({ argKey, value }: { argKey: string; value: unknown }) {
     );
   }
   if (key === 'command' || key === 'cmd') {
+    const str = String(value);
     return (
       <code className="block font-mono text-[11px] text-foreground/70 bg-background/50 rounded px-1.5 py-0.5 whitespace-pre-wrap break-words">
         {str}
@@ -72,6 +73,7 @@ function ArgValue({ argKey, value }: { argKey: string; value: unknown }) {
     );
   }
   if (key === 'query' || key === 'search') {
+    const str = String(value);
     return <span className="text-[11px] text-muted-foreground/70">{str}</span>;
   }
   return (
@@ -111,7 +113,7 @@ export function ToolUseBlock({ item }: ToolUseBlockProps) {
         {/* Header — always visible, clickable */}
         <button
           type="button"
-          onClick={() => setUserOverride((v) => (v === null ? !isRunning : !v))}
+          onClick={() => setUserOverride(!isExpanded)}
           className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors text-left min-w-0"
         >
           <span className="font-mono text-sm font-medium text-foreground/80 shrink-0">
