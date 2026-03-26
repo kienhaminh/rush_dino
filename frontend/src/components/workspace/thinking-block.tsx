@@ -11,8 +11,9 @@ export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
   // Start expanded so content is visible during live streaming.
   const [expanded, setExpanded] = useState(true);
 
-  // Use useLayoutEffect to collapse synchronously before paint, preventing
-  // a one-frame flash of the done+expanded state.
+  // Client-only: useLayoutEffect is skipped in SSR (renderToStaticMarkup).
+  // We use it (not useEffect) to collapse synchronously before paint,
+  // preventing a one-frame flash of the done+expanded state.
   useLayoutEffect(() => {
     if (done) setExpanded(false);
   }, [done]);
@@ -23,7 +24,7 @@ export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
         {/* Header row — always visible */}
         <button
           type="button"
-          onClick={() => done && setExpanded((v) => !v)}
+          onClick={() => setExpanded((v) => !v)}
           disabled={!done}
           className={cn(
             'flex items-center gap-2 w-full text-left',
