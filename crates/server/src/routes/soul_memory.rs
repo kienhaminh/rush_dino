@@ -182,11 +182,7 @@ pub async fn get_system_prompt(
         engine.config(),
         engine.memory(),
         engine.agent_manager(),
-<<<<<<< HEAD
-        engine.skill_manager(),
-=======
         skills,
->>>>>>> 33bec94dcafa82189c71fcc9c2abe2ef058a5faa
         engine.session_ctx(),
     );
     let content = msg.content.clone();
