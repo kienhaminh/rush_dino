@@ -6,10 +6,7 @@ use rushdino_common::models::{Message, Role};
 use crate::{
     engine::AgentConfig,
     memory::MemoryManager,
-    memory_bootstrap::{
-        build_bootstrap_context, build_truncation_warning_lines, clamp_to_char_boundary,
-        BootstrapFile,
-    },
+    memory_bootstrap::clamp_to_char_boundary,
     skill_manager::SkillManager,
     system_prompt::{build_system_prompt, SkillEntry, SystemPromptParams},
     tool_registry::SessionToolContext,
@@ -78,25 +75,6 @@ pub fn system_message(
         .or_else(|_| memory.read_named("AGENTS.md"))
         .unwrap_or_else(|_| config.system_prompt.clone());
 
-    // Inject SOUL.md, USER.md, and MEMORY.md into the system prompt so the agent
-    // never needs to read them manually on startup. Missing files are silently skipped.
-    let bootstrap_files: Vec<BootstrapFile> = ["SOUL.md", "USER.md", "MEMORY.md"]
-        .iter()
-        .filter_map(|name| {
-            memory.read_named(name).ok().map(|content| BootstrapFile {
-                name: (*name).to_owned(),
-                path: memory.root().join(name),
-                content: Some(content),
-            })
-        })
-        .collect();
-    let ctx_files = build_bootstrap_context(
-        bootstrap_files,
-        config.bootstrap_max_chars,
-        config.bootstrap_total_max_chars,
-    );
-    let truncation_warnings = build_truncation_warning_lines(&ctx_files);
-
     let tool_defs = session_ctx.active_definitions(); // already sorted
 
     // Map AgentTemplate slice → AgentEntry vec for the system prompt renderer.
@@ -115,8 +93,8 @@ pub fn system_message(
         tool_defs,
         skills,
         agents: agent_entries,
-        ctx_files,
-        truncation_warnings,
+        ctx_files: vec![],
+        truncation_warnings: vec![],
         workspace_dir: Some(memory.root().display().to_string()),
     });
 
