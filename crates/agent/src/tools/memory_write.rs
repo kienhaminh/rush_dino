@@ -29,6 +29,8 @@ impl Tool for MemoryWriteTool {
          You MUST supply the full text as the 'content' parameter. \
          Use 'file' to target a specific file (e.g. SOUL.md, IDENTITY.md, USER.md, AGENTS.md, TOOLS.md); \
          omit 'file' to append to MEMORY.md. \
+         Use 'daily: true' to append to today's daily log (memory/daily/YYYY-MM-DD.md) — \
+         call this after completing any non-trivial task to log what was done and key findings. \
          Example: {\"content\": \"# Identity\\n\\nMy name is Aria.\", \"file\": \"IDENTITY.md\"}"
     }
 

@@ -42,8 +42,12 @@ impl Tool for PostTaskTool {
     }
 
     fn description(&self) -> &str {
-        "Create a new task on the kanban board. Used by the orchestrator to decompose requests, \
-         or by specialists to request help from other agents."
+        "Post a task to the kanban board for a specialist agent to handle asynchronously. \
+         Use this when a request requires 5+ tool calls, specialist expertise (research, code review, debugging), \
+         or is complex enough that losing context would hurt. \
+         Tags guide routing: [\"research\",\"web-search\"] → researcher, [\"code\",\"debugging\"] → debugger. \
+         Pass notify_conversation_id so you get notified when the task is done. \
+         After posting, tell the user what was queued and which agent will handle it."
     }
 
     fn parameters(&self) -> Value {
