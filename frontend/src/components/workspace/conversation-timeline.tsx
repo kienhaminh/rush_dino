@@ -22,7 +22,7 @@ interface TimelineItemProps {
 const TimelineItem = memo(function TimelineItem({ item, showCursor }: TimelineItemProps) {
   if (item.kind === 'user') {
     return (
-      <div className={cn('flex justify-end py-1', 'mt-6')}>
+      <div className="flex justify-end py-1 mt-6">
         <div className="max-w-[80%] flex flex-col items-end gap-1.5">
           <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 pr-1">
             You
