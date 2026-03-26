@@ -2,6 +2,8 @@ import type { AgentRecord, AgentRuntimeData, AgentSoulData, AgentMemoryEntry } f
 
 export const AGENT_PANELS = [
   'overview',
+  'progress',
+  'files',
   'tools',
   'skills',
   'channels',
