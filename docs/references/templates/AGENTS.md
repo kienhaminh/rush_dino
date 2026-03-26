@@ -13,8 +13,8 @@ This folder is home. Treat it that way.
 
 At the start of a new session:
 
-1. Read `memory/daily/YYYY-MM-DD.md` (today + yesterday) for recent context
-2. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+1. Read `MEMORY.md` to restore long-term context
+2. Read daily notes only when you need recent history or the user asks — not automatically
 
 Don't ask permission. Just do it.
 
@@ -33,10 +33,8 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 
 ### 🧠 MEMORY.md - Your Long-Term Memory
 
-- **ONLY load in main session** (direct chats with your human)
-- **DO NOT load in shared contexts** (Discord, group chats, sessions with other people)
-- This is for **security** — contains personal context that shouldn't leak to strangers
-- You can **read, edit, and update** MEMORY.md freely in main sessions
+- Read at the start of every session to restore who you are and what you know
+- You can **read, edit, and update** MEMORY.md freely
 - Write significant events, thoughts, decisions, opinions, lessons learned
 - This is your curated memory — the distilled essence, not raw logs
 - Over time, review your daily files and update MEMORY.md with what's worth keeping
