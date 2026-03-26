@@ -1,25 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AgentSidebar } from './AgentSidebar';
-<<<<<<< HEAD
 import { AgentFilesPanel } from './AgentFilesPanel';
 import { AgentToolsPanel } from './AgentToolsPanel';
 import { AgentSkillsPanel } from './AgentSkillsPanel';
 import { AgentChannelsPanel } from './AgentChannelsPanel';
 import { AgentCronPanel } from './AgentCronPanel';
 import { AgentProgressBoardPanel } from './AgentProgressBoardPanel';
-import { AGENT_PANELS } from './agent-mock-data';
-import type { AgentPanel, AgentRecord, AgentRuntimeData } from './agent-types';
-import { deleteAgent, fetchAgentRuntime, fetchAgents } from '@/lib/api';
-import { Badge } from '@/components/ui/badge';
-import { RefreshCwIcon, Trash2Icon } from 'lucide-react';
-import { useAgentProgressBoard } from './use-agent-progress-board';
-
-const PANELS: AgentPanel[] = [...AGENT_PANELS];
-=======
 import type { AgentRecord, AgentRuntimeData } from './agent-types';
 import { fetchAgentRuntime, fetchAgents } from '@/lib/api';
-import { AgentOverviewPanel } from './agent-overview-panel';
->>>>>>> 33bec94dcafa82189c71fcc9c2abe2ef058a5faa
+import { useAgentProgressBoard } from './use-agent-progress-board';
+
+const PANELS = ['overview', 'progress', 'files', 'tools', 'skills', 'channels', 'cron'] as const;
+type PagePanel = (typeof PANELS)[number];
+
+const PANEL_LABELS: Record<PagePanel, string> = {
+  overview: 'Overview',
+  progress: 'Progress',
+  files: 'Files',
+  tools: 'Tools',
+  skills: 'Skills',
+  channels: 'Channels',
+  cron: 'Cron',
+};
 
 const EMPTY_RUNTIME: AgentRuntimeData = {
   files: [],
@@ -105,13 +107,7 @@ function AgentOverviewPanel({
   }, []);
 
   const agentId = agent.id.slice(0, 16).toUpperCase();
-  const modelShort =
-    (agent.model || 'claude')
-      .split('/')
-      .pop()
-      ?.split('-')
-      .slice(0, 4)
-      .join('-') ?? 'claude';
+  const workspaceShort = agent.workspace?.split('/').pop() ?? agent.workspace ?? 'default';
 
   return (
     <div
@@ -340,7 +336,7 @@ function AgentOverviewPanel({
             <div className="space-y-2.5">
               {[
                 { label: 'Agent ID', value: agentId, color: 'rgb(99,179,237)' },
-                { label: 'Version', value: modelShort, color: null },
+                { label: 'Workspace', value: workspaceShort, color: null },
                 { label: 'Latency', value: '24ms', color: null },
               ].map(({ label, value, color }) => (
                 <div key={label} className="flex items-center justify-between gap-3">
@@ -482,6 +478,15 @@ export function AgentsPage() {
   const [loading, setLoading] = useState(false);
   const [runtimeLoading, setRuntimeLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<PagePanel>('overview');
+
+  const {
+    board: progressBoard,
+    loading: progressLoading,
+    refreshing: progressRefreshing,
+    error: progressError,
+    refresh: refreshProgressBoard,
+  } = useAgentProgressBoard(activePanel === 'progress');
 
   const loadAgents = useCallback(async () => {
     setLoading(true);
@@ -533,6 +538,10 @@ export function AgentsPage() {
     };
   }, [selectedId, runtimeByAgent]);
 
+  useEffect(() => {
+    setActivePanel('overview');
+  }, [selectedId]);
+
   const selectedAgent = agents.find((agent) => agent.id === selectedId) ?? null;
   const runtime = (selectedId && runtimeByAgent[selectedId]) || EMPTY_RUNTIME;
 
@@ -559,7 +568,6 @@ export function AgentsPage() {
           <p className="text-sm text-muted-foreground p-4">Loading agent runtime…</p>
         ) : null}
 
-<<<<<<< HEAD
         {/* Panel Navigation Tabs */}
         <div className="flex items-center overflow-x-auto border-b border-border bg-card/30 px-6 flex-shrink-0">
           {PANELS.map((panel) => (
@@ -618,15 +626,6 @@ export function AgentsPage() {
             </>
           )}
         </div>
-=======
-        {!selectedAgent ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <p className="text-muted-foreground text-sm">Select an agent from the directory.</p>
-          </div>
-        ) : (
-          <AgentOverviewPanel agent={selectedAgent} runtime={runtime} />
-        )}
->>>>>>> 33bec94dcafa82189c71fcc9c2abe2ef058a5faa
       </div>
     </div>
   );

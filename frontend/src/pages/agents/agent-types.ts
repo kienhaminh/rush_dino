@@ -2,6 +2,8 @@ import type { SandboxPolicy } from '@/lib/types';
 
 export type AgentPanel =
   | 'overview'
+  | 'progress'
+  | 'files'
   | 'tools'
   | 'skills'
   | 'channels'
