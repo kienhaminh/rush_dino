@@ -7,11 +7,19 @@ import { cn } from '@/lib/utils';
 interface AssistantRichContentProps {
   content: string;
   richContent?: RichContent | null;
+  showCursor?: boolean;
 }
 
-export function AssistantRichContent({ content, richContent }: AssistantRichContentProps) {
+export function AssistantRichContent({ content, richContent, showCursor }: AssistantRichContentProps) {
   if (!richContent || richContent.blocks.length === 0) {
-    return <MarkdownBlock content={content} />;
+    return (
+      <div>
+        <MarkdownBlock content={content} />
+        {showCursor && (
+          <span className="inline-block w-[2px] h-[14px] bg-foreground/60 animate-pulse ml-0.5 align-middle" />
+        )}
+      </div>
+    );
   }
 
   return (
