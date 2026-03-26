@@ -28,6 +28,7 @@ import type {
 import type {
   AgentRecord,
   AgentRuntimeData,
+  AgentSkillRecord,
   AgentFileRecord,
   AgentProgressBoardResponse,
 } from '@/pages/agents/agent-types';
@@ -134,6 +135,11 @@ export async function deleteConversation(id: string): Promise<void> {
   await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
 }
 
+export async function resetSession(id: string): Promise<void> {
+  const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/reset`, { method: 'POST' });
+  await parseJsonOrThrow(response, `/api/sessions/${id}/reset`);
+}
+
 export async function sendChat(conversationId: string | null, message: string) {
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -149,20 +155,35 @@ export async function fetchAgents(): Promise<AgentRecord[]> {
   return data.items ?? [];
 }
 
+function mergeSkills(runtimeSkills: AgentSkillRecord[], globalSkills: SkillRecord[]): AgentSkillRecord[] {
+  const runtimeNames = new Set(runtimeSkills.map((s) => s.name));
+  const fromGlobal: AgentSkillRecord[] = globalSkills
+    .filter((s) => !runtimeNames.has(s.name))
+    .map((s) => ({
+      name: s.name,
+      description: s.description,
+      group: s.isBuiltIn ? ('built-in' as const) : ('workspace' as const),
+      source: s.isBuiltIn ? 'builtin' : 'workspace',
+      enabled: true,
+    }));
+  return [...runtimeSkills, ...fromGlobal].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export async function fetchAgentRuntime(agentId: string): Promise<AgentRuntimeData> {
   const endpoint = `/api/agents/${encodeURIComponent(agentId)}/runtime`;
   try {
-    const response = await fetch(endpoint);
-    const data = await parseJsonOrThrow(response, endpoint);
-    // Merge soul + memory from mock layer until backend supports them
+    const [data, globalSkills] = await Promise.all([
+      fetch(endpoint).then((r) => parseJsonOrThrow(r, endpoint)),
+      fetchSkills().catch(() => [] as SkillRecord[]),
+    ]);
     const mockFallback = getMockRuntime(agentId);
     return {
       ...data,
+      skills: mergeSkills(data.skills ?? [], globalSkills),
       soul: data.soul ?? mockFallback.soul,
       memory: data.memory ?? mockFallback.memory,
     };
   } catch {
-    // Backend not reachable — use full mock runtime
     return getMockRuntime(agentId);
   }
 }
@@ -328,6 +349,7 @@ export async function fetchSessions(): Promise<SessionSummary[]> {
   const data = await parseJsonOrThrow(response, endpoint);
   return (data.items ?? []).map(normalizeSessionSummary);
 }
+
 
 export async function fetchLogs(params?: {
   level?: string[];
@@ -656,9 +678,32 @@ export async function deleteProfile(id: string): Promise<void> {
   await parseJsonOrThrow(response, endpoint);
 }
 
-export async function connectCodex(profileId: string): Promise<{ status: string }> {
-  const endpoint = `/api/providers/${encodeURIComponent(profileId)}/connect-oauth`;
+export type StartCodexConnectResponse = {
+  session_id: string;
+  auth_url: string;
+};
+
+export type CompleteCodexConnectRequest = {
+  session_id: string;
+  redirect_url: string;
+};
+
+export async function startCodexConnect(profileId: string): Promise<StartCodexConnectResponse> {
+  const endpoint = `/api/providers/${encodeURIComponent(profileId)}/connect-oauth/start`;
   const response = await fetch(endpoint, { method: 'POST' });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function completeCodexConnect(
+  profileId: string,
+  payload: CompleteCodexConnectRequest,
+): Promise<{ status: string }> {
+  const endpoint = `/api/providers/${encodeURIComponent(profileId)}/connect-oauth/complete`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
   return parseJsonOrThrow(response, endpoint);
 }
 

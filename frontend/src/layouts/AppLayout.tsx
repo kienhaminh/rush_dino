@@ -36,8 +36,12 @@ export function AppLayout() {
                   ) : null}
                   {shellView.id === 'workspace' ? (
                     <Badge
-                      variant={isConnected ? 'secondary' : 'destructive'}
-                      className="h-5 px-1.5 text-[10px] uppercase tracking-widest font-bold"
+                      variant="outline"
+                      className={`h-5 px-1.5 text-[10px] uppercase tracking-widest font-bold ${
+                        isConnected
+                          ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
+                          : 'border-red-500/40 bg-red-500/10 text-red-400'
+                      }`}
                     >
                       {isConnected ? 'Connected' : 'Disconnected'}
                     </Badge>

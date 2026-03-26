@@ -508,7 +508,139 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rushdino_common::models::{Message, Role};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn make_message(role: Role, content: &str) -> Message {
+        Message {
+            id: "msg-1".to_owned(),
+            role,
+            content: content.to_owned(),
+            tool_calls: None,
+            rich_content: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    fn no_providers() -> std::collections::HashSet<String> {
+        std::collections::HashSet::new()
+    }
+
+    fn default_opts() -> ConvertResponsesMessagesOptions {
+        ConvertResponsesMessagesOptions { include_system_prompt: true }
+    }
+
+    // -----------------------------------------------------------------------
+    // convert_responses_messages — empty-input edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn empty_messages_with_no_system_prompt_returns_empty_vec() {
+        // This is the pathological case: both conversation and system_prompt are
+        // absent.  The caller is responsible for guarding against an empty result.
+        let result = convert_responses_messages(
+            &[],
+            None,
+            false,
+            false,
+            &no_providers(),
+            "",
+            &default_opts(),
+        );
+        assert!(
+            result.is_empty(),
+            "no messages + no system prompt must produce an empty vec"
+        );
+    }
+
+    #[test]
+    fn empty_messages_with_system_prompt_returns_system_entry() {
+        // Even with no conversation messages, the system prompt should be
+        // emitted so `input` is non-empty for the Responses API.
+        let result = convert_responses_messages(
+            &[],
+            Some("You are helpful."),
+            false,
+            false,
+            &no_providers(),
+            "",
+            &default_opts(),
+        );
+        assert_eq!(result.len(), 1, "system prompt must produce one entry");
+        assert_eq!(result[0]["role"], "system");
+    }
+
+    #[test]
+    fn system_only_conversation_filters_to_just_system_prompt() {
+        // The conversation list may contain a System message (inline); it must
+        // be skipped because it is handled via the system_prompt parameter.
+        let messages = vec![make_message(Role::System, "inline system")];
+        let result = convert_responses_messages(
+            &messages,
+            Some("header prompt"),
+            false,
+            false,
+            &no_providers(),
+            "",
+            &default_opts(),
+        );
+        // The header prompt is emitted; the inline system message is skipped.
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["role"], "system");
+        assert_eq!(result[0]["content"], "header prompt");
+    }
+
+    #[test]
+    fn include_system_prompt_false_skips_system_entry() {
+        // Codex path: system prompt goes to `instructions`, not `input`.
+        let opts = ConvertResponsesMessagesOptions { include_system_prompt: false };
+        let result = convert_responses_messages(
+            &[],
+            Some("instructions"),
+            false,
+            false,
+            &no_providers(),
+            "",
+            &opts,
+        );
+        assert!(
+            result.is_empty(),
+            "with include_system_prompt=false and no other messages the result must be empty"
+        );
+    }
+
+    #[test]
+    fn user_message_is_converted_to_input_text_block() {
+        let messages = vec![make_message(Role::User, "hello world")];
+        let result = convert_responses_messages(
+            &messages,
+            None,
+            false,
+            false,
+            &no_providers(),
+            "",
+            &ConvertResponsesMessagesOptions { include_system_prompt: false },
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["role"], "user");
+        assert_eq!(result[0]["content"][0]["type"], "input_text");
+        assert_eq!(result[0]["content"][0]["text"], "hello world");
+    }
+
+    #[test]
+    fn reasoning_model_uses_developer_role_for_system_prompt() {
+        let result = convert_responses_messages(
+            &[],
+            Some("system text"),
+            true, // is_reasoning_model
+            false,
+            &no_providers(),
+            "",
+            &default_opts(),
+        );
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0]["role"], "developer");
+    }
 
     async fn spawn_sse_server(sse_body: String) -> String {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

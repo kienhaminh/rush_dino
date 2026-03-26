@@ -43,6 +43,12 @@ const DEFAULT_POLICY: SandboxPolicy = {
       deny_commands: ['sudo', 'rm -rf'],
     },
     network: { default: 'deny', on_block: 'prompt', allow: [] },
+    inference: {
+      enabled: true,
+      route_via: '',
+      strip_agent_credentials: false,
+      inject_provider: '',
+    },
   },
   providers: [],
 };

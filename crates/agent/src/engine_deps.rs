@@ -14,6 +14,7 @@ use crate::{
     cron_manager::CronManager,
     engine::AgentConfig,
     job_manager::{JobManager, JobResult},
+    kanban_store::KanbanStore,
     knowledge_graph::KnowledgeGraphAccess,
     memory::MemoryManager,
     orchestrator::Orchestrator,
@@ -31,6 +32,7 @@ use crate::{
         },
         delegate_to_agent::DelegateToAgentTool,
         delete_workflow::DeleteWorkflowTool,
+        kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
         file_edit::FileEditTool,
         file_read::FileReadTool,
         file_write::FileWriteTool,
@@ -66,6 +68,10 @@ const CORE_TOOLS: &[&str] = &[
     "read",
     "tool_search",
     "write",
+    "post_task",
+    "claim_task",
+    "update_task",
+    "review_task",
 ];
 
 pub struct EngineDeps {
@@ -78,6 +84,7 @@ pub struct EngineDeps {
     pub skill_manager: Arc<SkillManager>,
     pub agent_manager: Arc<AgentManager>,
     pub workflow_manager: Arc<WorkflowManager>,
+    pub kanban_store: Arc<KanbanStore>,
     pub cron_manager: Arc<CronManager>,
     pub workflow_runner: Arc<WorkflowRunner>,
     pub inbox_rx: mpsc::Receiver<JobResult>,
@@ -104,6 +111,7 @@ pub fn build_engine_deps(
     let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
     let cron_manager = Arc::new(CronManager::new(pool.clone()));
     let task_memory = Arc::new(AgentTaskMemory::new(home_dir.clone()));
+    let kanban_store = Arc::new(KanbanStore::new(pool.clone()));
 
     let (inbox_tx, inbox_rx) = mpsc::channel(256);
     let jobs = Arc::new(JobManager::new(pool.clone(), inbox_tx.clone()));
@@ -161,7 +169,7 @@ pub fn build_engine_deps(
             gemini_api_key,
             home_c.join("documents/images"),
         ));
-        r.register(FileReadTool::new(home_c.join("documents")));
+        r.register(FileReadTool::new(home_c.clone()));
         r.register(FileWriteTool::new(home_c.clone()));
         r.register(FileEditTool::new(home_c.clone()));
         r.register(shell_exec);
@@ -193,6 +201,7 @@ pub fn build_engine_deps(
             Weak::new(), // session_ctx unavailable here — upgraded lazily at execute time
             task_memory.clone(),
             conversation.clone(),
+            home_c.clone(),
         ));
         r.register(SpawnAgentTool::new(agent_manager_c2));
         r
@@ -213,6 +222,13 @@ pub fn build_engine_deps(
     registry.register(cron_pause_tool(cron_manager.clone()));
     registry.register(cron_resume_tool(cron_manager.clone()));
     registry.register(cron_delete_tool(cron_manager.clone()));
+
+    // Kanban task board tools for inter-agent collaboration.
+    registry.register(PostTaskTool::new(kanban_store.clone()));
+    registry.register(ClaimTaskTool::new(kanban_store.clone()));
+    registry.register(UpdateTaskTool::new(kanban_store.clone()));
+    registry.register(ReviewTaskTool::new(kanban_store.clone()));
+
     let _ = system_broker;
 
     // Use OnceLock so WorkflowRunner built inside the session_ctx closure can be
@@ -291,6 +307,7 @@ pub fn build_engine_deps(
         skill_manager: skills,
         agent_manager,
         workflow_manager,
+        kanban_store,
         cron_manager,
         workflow_runner,
         inbox_rx,

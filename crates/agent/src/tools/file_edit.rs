@@ -7,7 +7,10 @@ use tokio::fs;
 use rushdino_common::{AppError, Result};
 use rushdino_security::validation::validate_path;
 
-use crate::tool_registry::Tool;
+use crate::{
+    tool_registry::Tool,
+    tools::shell_exec::current_tool_execution_context,
+};
 
 pub struct FileEditTool {
     /// The workspace root. All edits are restricted to this directory.
@@ -69,14 +72,18 @@ impl Tool for FileEditTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("newText is required".to_owned()))?;
 
-        // Resolve relative paths from the workspace root.
+        // Use workspace_override from task-local context if set, otherwise self.workspace.
+        let effective_workspace = current_tool_execution_context()
+            .and_then(|ctx| ctx.workspace_override)
+            .unwrap_or_else(|| self.workspace.clone());
+
         let raw = if std::path::Path::new(path_str).is_absolute() {
             PathBuf::from(path_str)
         } else {
-            self.workspace.join(path_str)
+            effective_workspace.join(path_str)
         };
 
-        let target = validate_path(&raw, std::slice::from_ref(&self.workspace))
+        let target = validate_path(&raw, std::slice::from_ref(&effective_workspace))
             .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
 
         let content = fs::read_to_string(&target).await.map_err(AppError::Io)?;

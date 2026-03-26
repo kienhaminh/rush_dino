@@ -34,3 +34,7 @@ export function resolveProviderKindAndAuth(
   }
   return { provider_kind: 'ollama', auth_method: 'none' };
 }
+
+export function normalizeOAuthRedirectInput(input: string): string {
+  return input.trim();
+}

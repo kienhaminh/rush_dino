@@ -13,7 +13,7 @@ const GatewayRoute = lazy(() => import('./pages/gateway/GatewayRoute').then(m =>
 const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage').then(m => ({ default: m.ApprovalsPage })));
 const SessionsRoute = lazy(() => import('./pages/sessions/SessionsRoute').then(m => ({ default: m.SessionsRoute })));
 const MetricsPage = lazy(() => import('./pages/metrics/MetricsPage').then(m => ({ default: m.MetricsPage })));
-const AgentBoardPage = lazy(() => import('./pages/agent-board/AgentBoardPage').then(m => ({ default: m.AgentBoardPage })));
+const KanbanPage = lazy(() => import('./pages/kanban/KanbanPage').then(m => ({ default: m.KanbanPage })));
 const AgentsPage = lazy(() => import('./pages/agents/AgentsPage').then(m => ({ default: m.AgentsPage })));
 const WorkflowsPage = lazy(() => import('./pages/workflows/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
 const SkillsRoute = lazy(() => import('./pages/skills/SkillsRoute').then(m => ({ default: m.SkillsRoute })));
@@ -86,40 +86,43 @@ export default function App() {
                   <Route path="operations" element={<OperationsPage />}>
                     <Route index element={<Navigate to="summary" replace />} />
                     <Route path="summary" element={<OverviewPage />} />
-                    <Route path="approvals" element={<ApprovalsPage />} />
                     <Route path="diagnostics" element={<DiagnosticsPage />} />
                     <Route path="analytics" element={<Navigate to="/metrics" replace />} />
                   </Route>
+                  <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="metrics" element={<MetricsPage />} />
 
                   {/* Channels */}
-                  <Route path="channels" element={<GatewayRoute />} />
-                  <Route path="channels/:channel" element={<GatewayRoute />} />
+                  <Route path="gateway" element={<GatewayRoute />} />
+                  <Route path="gateway/:channel/*" element={<GatewayRoute />} />
 
                   {/* Sessions */}
                   <Route path="sessions" element={<SessionsRoute />} />
                   <Route path="sessions/:sessionId" element={<SessionsRoute />} />
 
                   {/* Config */}
-                  <Route path="config" element={<Navigate to="/config/profiles" replace />} />
-                  <Route path="config/:section" element={<ConfigPage />} />
+                  <Route path="config" element={<ConfigPage />} />
+                  <Route path="sandbox" element={<SandboxMonitorPage />} />
 
                   {/* Operations pages (flat) */}
                   <Route path="agents" element={<AgentsPage />} />
-                  <Route path="agent-board" element={<AgentBoardPage />} />
+                  <Route path="agent-board" element={<Navigate to="/kanban" replace />} />
+                  <Route path="kanban" element={<KanbanPage />} />
                   <Route path="workflows" element={<WorkflowsPage />} />
                   <Route path="skills" element={<SkillsRoute />} />
                   <Route path="coding-agents" element={<CodingAgentsPage />} />
                   <Route path="acp-sessions" element={<AcpSessionsPage />} />
 
                   {/* System */}
+                  <Route path="logs" element={<SystemPage />}>
+                    <Route index element={<LogsPage />} />
+                  </Route>
+                  <Route path="cron" element={<SystemPage />}>
+                    <Route index element={<CronPage />} />
+                  </Route>
                   <Route path="system" element={<SystemPage />}>
-                    <Route index element={<Navigate to="logs" replace />} />
-                    <Route path="logs" element={<LogsPage />} />
-                    <Route path="cron" element={<CronPage />} />
                     <Route path="nodes" element={<NodesPage />} />
                     <Route path="debug" element={<DebugPage />} />
-                    <Route path="sandbox" element={<SandboxMonitorPage />} />
                   </Route>
 
                   {/* Design system */}

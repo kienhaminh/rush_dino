@@ -21,7 +21,7 @@ export type ConfigSectionId = 'profiles' | 'credentials' | 'server' | 'identity'
 
 export type AdvancedViewId =
   | 'agents'
-  | 'agent-board'
+  | 'kanban'
   | 'workflows'
   | 'skills'
   | 'coding-agents'
@@ -87,7 +87,7 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     id: 'channels',
     label: 'Channels',
     description: 'Channel runtime, configuration, and infrastructure',
-    href: '/channels',
+    href: '/gateway',
     icon: Waypoints,
   },
   {
@@ -108,7 +108,7 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
     id: 'system',
     label: 'System',
     description: 'Logs, cron, nodes, and debug surfaces',
-    href: '/system',
+    href: '/logs',
     icon: Server,
   },
 ];
@@ -124,7 +124,7 @@ export const OPERATIONS_VIEWS: OperationsView[] = [
     id: 'approvals',
     label: 'Approvals',
     description: 'Pending decisions and recent approvals',
-    href: '/operations/approvals',
+    href: '/approvals',
   },
   {
     id: 'diagnostics',
@@ -145,7 +145,7 @@ export const CONFIG_SECTIONS: ConfigSection[] = [
     id: 'profiles',
     label: 'Profiles',
     description: 'Provider profiles and default model selection',
-    href: '/config/profiles',
+    href: '/config',
   },
   {
     id: 'credentials',
@@ -169,16 +169,16 @@ export const CONFIG_SECTIONS: ConfigSection[] = [
 
 export const ADVANCED_VIEWS: AdvancedView[] = [
   { id: 'agents',        label: 'Agents',        description: 'Manage reusable agent definitions',          href: '/agents' },
-  { id: 'agent-board',   label: 'Board',          description: 'Overview board for agent activity',          href: '/agent-board' },
+  { id: 'kanban',        label: 'Task Board',     description: 'Kanban board for inter-agent collaboration', href: '/kanban' },
   { id: 'workflows',     label: 'Workflows',      description: 'Build and run workflow graphs',              href: '/workflows' },
   { id: 'skills',        label: 'Skills',         description: 'Manage workspace skills',                    href: '/skills' },
   { id: 'coding-agents', label: 'Coding Agents',  description: 'Manage ACP coding agents',                   href: '/coding-agents' },
   { id: 'acp-sessions',  label: 'ACP Sessions',   description: 'Inspect ACP session activity',               href: '/acp-sessions' },
-  { id: 'logs',          label: 'Logs',           description: 'Inspect runtime logs',                       href: '/system/logs' },
-  { id: 'cron',          label: 'Cron',           description: 'Scheduled task management',                  href: '/system/cron' },
+  { id: 'logs',          label: 'Logs',           description: 'Inspect runtime logs',                       href: '/logs' },
+  { id: 'cron',          label: 'Cron',           description: 'Scheduled task management',                  href: '/cron' },
   { id: 'nodes',         label: 'Nodes',          description: 'Infrastructure and approval nodes',          href: '/system/nodes' },
   { id: 'debug',         label: 'Debug',          description: 'Low-level debugging surfaces',               href: '/system/debug' },
-  { id: 'sandbox',       label: 'Sandbox',        description: 'Audit log, pending approvals, and network hot-reload', href: '/system/sandbox' },
+  { id: 'sandbox',       label: 'Sandbox',        description: 'Full sandbox posture, policies, and live session audit', href: '/sandbox' },
 ];
 
 function normalizePath(pathname: string) {
@@ -198,13 +198,22 @@ export function resolvePageHeader(pathname: string): PageHeader {
     return { id: 'operations', title: 'Metrics', subtitle: 'Usage, cost, and activity analytics' };
   }
 
+  if (normalized === '/approvals') {
+    const view = OPERATIONS_VIEWS.find((v) => v.id === 'approvals');
+    return {
+      id: 'operations',
+      title: view?.label ?? 'Approvals',
+      subtitle: view?.description ?? 'Pending decisions and recent approvals',
+    };
+  }
+
   if (normalized.startsWith('/operations')) {
     const view = OPERATIONS_VIEWS.find((v) => normalized === v.href);
     if (view) return { id: 'operations', title: view.label, subtitle: view.description };
     return { id: 'operations', title: 'Operations', subtitle: 'Daily operator posture and action surfaces' };
   }
 
-  if (normalized.startsWith('/channels')) {
+  if (normalized.startsWith('/gateway')) {
     return { id: 'channels', title: 'Channels', subtitle: 'Channel runtime, settings, and infrastructure' };
   }
 
@@ -212,15 +221,23 @@ export function resolvePageHeader(pathname: string): PageHeader {
     return { id: 'sessions', title: 'Sessions', subtitle: 'Inspect prompt, context, run, and tool state' };
   }
 
+  if (normalized === '/config') {
+    return { id: 'config', title: 'Config', subtitle: 'Profiles, credentials, identity, and server policy' };
+  }
+
   if (normalized.startsWith('/config')) {
     const section = CONFIG_SECTIONS.find((s) => normalized === s.href);
     return { id: 'config', title: 'Config', subtitle: 'Profiles, credentials, identity, and server policy', detail: section?.label };
   }
 
-  if (normalized.startsWith('/system')) {
+  if (normalized === '/logs' || normalized === '/cron' || normalized.startsWith('/system')) {
     const view = ADVANCED_VIEWS.find((v) => normalized.startsWith(v.href));
     if (view) return { id: 'system', title: view.label, subtitle: view.description };
     return { id: 'system', title: 'System', subtitle: 'Logs, cron, nodes, and debug surfaces' };
+  }
+
+  if (normalized === '/kanban') {
+    return { id: 'system', title: 'Task Board', subtitle: 'Kanban board for inter-agent collaboration' };
   }
 
   // Flat operation routes (agents, board, workflows, skills, etc.)

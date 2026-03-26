@@ -361,13 +361,13 @@ export function ChannelsRoute() {
 
   const openChannelConfig = useCallback(
     (channel: ChannelKey) => {
-      navigate(`/channels/${channel}/settings`);
+      navigate(`/gateway/${channel}/settings`);
     },
     [navigate],
   );
 
   const closeChannelConfig = useCallback(() => {
-    navigate('/channels');
+    navigate('/gateway');
   }, [navigate]);
 
   const refreshPairingChannel = useCallback(async (channel: PairingChannel) => {
@@ -408,7 +408,7 @@ export function ChannelsRoute() {
   );
 
   if (routeChannel && !isChannelKey(routeChannel)) {
-    return <Navigate to="/channels" replace />;
+    return <Navigate to="/gateway" replace />;
   }
 
   if (routeChannel && isChannelKey(routeChannel)) {

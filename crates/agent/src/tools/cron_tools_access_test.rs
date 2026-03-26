@@ -37,8 +37,8 @@ mod tests {
                 session_id: None,
                 conversation_id: Some("conv-1".to_owned()),
                 run_id: None,
-                agent_id: Some("researcher".to_owned()),
                 delegation_depth: 1,
+                workspace_override: None,
             },
             tool.execute(json!({
                 "name": "Nightly digest",

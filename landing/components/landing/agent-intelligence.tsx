@@ -52,6 +52,11 @@ export function AgentIntelligence() {
 
         {/* Request lifecycle flow */}
         <RequestLifecycle />
+
+        {/* Parallel agents benchmark */}
+        <div className="mt-4">
+          <ParallelAgentsBenchmark />
+        </div>
       </div>
     </section>
   );
@@ -366,6 +371,184 @@ function ContextWindowCard() {
         <span className="font-mono text-xs text-white/25 ml-2 uppercase tracking-widest">
           budget used · auto-trim active
         </span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Parallel Agents Benchmark ── */
+const BENCHMARK_ROWS = [
+  { concurrency: 1,  throughput: 1.0,  avgMs: 1820 },
+  { concurrency: 2,  throughput: 1.97, avgMs: 924  },
+  { concurrency: 4,  throughput: 3.88, avgMs: 469  },
+  { concurrency: 8,  throughput: 7.71, avgMs: 236  },
+  { concurrency: 16, throughput: 15.1, avgMs: 121  },
+  { concurrency: 32, throughput: 28.9, avgMs:  63  },
+];
+
+const TASK_POOL = [
+  "web_search", "summarize", "code_review", "translate",
+  "analyze_data", "generate_img", "fact_check", "embed_docs",
+  "run_tool", "parse_pdf", "query_db", "call_api",
+];
+
+const NUM_SLOTS = 8;
+
+type AgentSlot = { id: number; task: string; progress: number };
+
+function ParallelAgentsBenchmark() {
+  const [slots, setSlots] = useState<AgentSlot[]>(() =>
+    Array.from({ length: NUM_SLOTS }, (_, i) => ({
+      id: i,
+      task: TASK_POOL[i % TASK_POOL.length],
+      progress: Math.floor(Math.random() * 80),
+    }))
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSlots((prev) =>
+        prev.map((slot) => {
+          const next = slot.progress + Math.random() * 14 + 5;
+          if (next >= 100) {
+            return {
+              ...slot,
+              progress: 0,
+              task: TASK_POOL[Math.floor(Math.random() * TASK_POOL.length)],
+            };
+          }
+          return { ...slot, progress: next };
+        })
+      );
+    }, 200);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="border border-white/[0.08] bg-[#0d1117] p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="section-label">Parallel Agent Benchmark</div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-[#22d3c8] animate-subtle-pulse" />
+            <span className="font-mono text-xs text-white/25 tracking-widest">
+              SIMULATING
+            </span>
+          </div>
+          <span className="font-mono text-xs text-white/20 border border-white/[0.08] px-2 py-0.5">
+            {NUM_SLOTS} agents · parallel
+          </span>
+        </div>
+      </div>
+
+      {/* Live agent slots */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-8">
+        {slots.map((slot) => (
+          <div
+            key={slot.id}
+            className="bg-[#080c10] border border-white/[0.06] p-3"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-mono text-xs text-white/30">
+                agent_{String(slot.id).padStart(2, "0")}
+              </span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#22d3c8]/70 animate-pulse" />
+            </div>
+            <div className="font-mono text-xs text-[#22d3c8]/70 mb-2 truncate">
+              {slot.task}
+            </div>
+            <div className="h-0.5 bg-white/[0.06] rounded overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-[#22d3c8]/50 to-[#22d3c8] transition-all duration-150 rounded"
+                style={{ width: `${slot.progress}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Scaling table */}
+      <div className="border border-white/[0.06] overflow-hidden mb-6">
+        <div className="grid grid-cols-3 px-4 py-2 bg-[#080c10] border-b border-white/[0.06]">
+          <span className="font-mono text-xs text-white/25 uppercase tracking-widest">
+            Concurrency
+          </span>
+          <span className="font-mono text-xs text-white/25 uppercase tracking-widest text-center">
+            Throughput
+          </span>
+          <span className="font-mono text-xs text-white/25 uppercase tracking-widest text-right">
+            Avg latency
+          </span>
+        </div>
+        {BENCHMARK_ROWS.map((row) => {
+          const isHighlighted = row.concurrency === NUM_SLOTS;
+          return (
+            <div
+              key={row.concurrency}
+              className={`grid grid-cols-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 transition-colors ${
+                isHighlighted ? "bg-[#22d3c8]/[0.04]" : ""
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-white/60 w-8">
+                  {row.concurrency}×
+                </span>
+                <div
+                  className="h-1 rounded bg-[#22d3c8]/20"
+                  style={{ width: `${(row.concurrency / 32) * 72}px` }}
+                >
+                  <div
+                    className="h-full rounded bg-[#22d3c8]/55"
+                    style={{ width: "100%" }}
+                  />
+                </div>
+              </div>
+              <div className="text-center">
+                <span
+                  className={`font-mono text-xs font-bold ${
+                    isHighlighted ? "text-[#22d3c8]" : "text-white/50"
+                  }`}
+                >
+                  {row.throughput.toFixed(1)}×
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="font-mono text-xs text-white/40">
+                  {row.avgMs}ms
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Summary stats */}
+      <div className="flex flex-wrap gap-6 pt-4 border-t border-white/[0.06]">
+        <div>
+          <span className="font-mono font-bold text-2xl text-[#22d3c8]">
+            32
+          </span>
+          <span className="font-mono text-xs text-white/25 ml-2 uppercase tracking-widest">
+            max parallel agents
+          </span>
+        </div>
+        <div>
+          <span className="font-mono font-bold text-2xl text-[#4ade80]">
+            28.9×
+          </span>
+          <span className="font-mono text-xs text-white/25 ml-2 uppercase tracking-widest">
+            peak throughput
+          </span>
+        </div>
+        <div>
+          <span className="font-mono font-bold text-2xl text-white/55">
+            ~linear
+          </span>
+          <span className="font-mono text-xs text-white/25 ml-2 uppercase tracking-widest">
+            scaling curve
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -118,14 +118,14 @@ export function Channels() {
 // viewBox: 0 0 860 256 — three balanced columns
 const CH_Y = [44, 100, 156, 212] as const;
 const CHANNELS = ["Telegram", "Discord", "Slack", "Web"] as const;
-const PROVIDERS = ["GPT-5.4", "Claude 4.6", "Kimi 2.5", "Ollama"] as const;
+const PROVIDERS = ["GPT", "Claude", "Kimi", "Gemini"] as const;
 
-const MID_Y  = 128; // vertical centre
+const MID_Y = 128; // vertical centre
 const MERGE_X = 252; // x where all branch verticals converge
 
 // Right-angle (PCB-style) L-paths: channel right → merge column → centre → gateway
 const BRANCH_PATHS = CH_Y.map(
-  (y) => `M 136,${y} H ${MERGE_X} V ${MID_Y} H 300`
+  (y) => `M 136,${y} H ${MERGE_X} V ${MID_Y} H 300`,
 );
 // Straight shot: Gateway right-edge → Agent left-edge
 const MAIN_PATH = `M 480,${MID_Y} H 568`;
@@ -141,7 +141,10 @@ function ArchitectureDiagram() {
   const CHIP_W = 52;
   const CHIP_GAP = 4;
   const CHIP_STRIDE = CHIP_W + CHIP_GAP;
-  const CHIP_X0 = AG.x + (AG.w - (PROVIDERS.length * CHIP_W + (PROVIDERS.length - 1) * CHIP_GAP)) / 2;
+  const CHIP_X0 =
+    AG.x +
+    (AG.w - (PROVIDERS.length * CHIP_W + (PROVIDERS.length - 1) * CHIP_GAP)) /
+      2;
   const CHIP_Y = MID_Y + 24;
 
   return (
@@ -160,13 +163,31 @@ function ArchitectureDiagram() {
         {/* ── Channel boxes ── */}
         {CHANNELS.map((ch, i) => (
           <g key={ch}>
-            <rect x={20} y={CH_Y[i] - 20} width={116} height={40}
-              fill="#080c10" stroke="rgba(255,255,255,0.14)" strokeWidth={1} />
+            <rect
+              x={20}
+              y={CH_Y[i] - 20}
+              width={116}
+              height={40}
+              fill="#080c10"
+              stroke="rgba(255,255,255,0.14)"
+              strokeWidth={1}
+            />
             {/* left accent bar */}
-            <rect x={20} y={CH_Y[i] - 20} width={3} height={40}
-              fill="rgba(34,211,200,0.35)" />
-            <text x={84} y={CH_Y[i] + 5} textAnchor="middle"
-              fill="rgba(255,255,255,0.65)" fontSize={12} fontFamily={FONT}>
+            <rect
+              x={20}
+              y={CH_Y[i] - 20}
+              width={3}
+              height={40}
+              fill="rgba(34,211,200,0.35)"
+            />
+            <text
+              x={84}
+              y={CH_Y[i] + 5}
+              textAnchor="middle"
+              fill="rgba(255,255,255,0.65)"
+              fontSize={12}
+              fontFamily={FONT}
+            >
               {ch}
             </text>
           </g>
@@ -174,91 +195,201 @@ function ArchitectureDiagram() {
 
         {/* ── Branch track lines (right-angle / PCB style) ── */}
         {BRANCH_PATHS.map((d, i) => (
-          <path key={i} d={d} fill="none"
-            stroke="rgba(34,211,200,0.18)" strokeWidth={1.5} />
+          <path
+            key={i}
+            d={d}
+            fill="none"
+            stroke="rgba(34,211,200,0.18)"
+            strokeWidth={1.5}
+          />
         ))}
 
         {/* Corner dots at the horizontal→vertical bend (MERGE_X, CH_Y[i]) */}
         {CH_Y.map((y, i) => (
-          <rect key={i} x={MERGE_X - 3} y={y - 3} width={6} height={6}
-            fill="rgba(34,211,200,0.55)" />
+          <rect
+            key={i}
+            x={MERGE_X - 3}
+            y={y - 3}
+            width={6}
+            height={6}
+            fill="rgba(34,211,200,0.55)"
+          />
         ))}
         {/* Convergence dot where all verticals meet (MERGE_X, MID_Y) */}
-        <circle cx={MERGE_X} cy={MID_Y} r={5}
-          fill="none" stroke="rgba(34,211,200,0.65)" strokeWidth={1.5} />
+        <circle
+          cx={MERGE_X}
+          cy={MID_Y}
+          r={5}
+          fill="none"
+          stroke="rgba(34,211,200,0.65)"
+          strokeWidth={1.5}
+        />
         <circle cx={MERGE_X} cy={MID_Y} r={2.5} fill="#22d3c8" opacity={0.9} />
 
         {/* "adapters" label */}
-        <text x={194} y={MID_Y - 12} textAnchor="middle"
-          fill="rgba(255,255,255,0.25)" fontSize={10} fontFamily={FONT}
-          letterSpacing={1}>
+        <text
+          x={194}
+          y={MID_Y - 12}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.25)"
+          fontSize={10}
+          fontFamily={FONT}
+          letterSpacing={1}
+        >
           adapters
         </text>
 
         {/* ── Gateway box ── */}
-        <rect x={GW.x} y={GW.y} width={GW.w} height={GW.h}
-          fill="#081210" stroke="#22d3c8" strokeWidth={1.5} strokeOpacity={0.65} />
+        <rect
+          x={GW.x}
+          y={GW.y}
+          width={GW.w}
+          height={GW.h}
+          fill="#081210"
+          stroke="#22d3c8"
+          strokeWidth={1.5}
+          strokeOpacity={0.65}
+        />
         {/* top accent line */}
-        <line x1={GW.x} y1={GW.y} x2={GW.x + GW.w} y2={GW.y}
-          stroke="#22d3c8" strokeWidth={2.5} strokeOpacity={0.8} />
+        <line
+          x1={GW.x}
+          y1={GW.y}
+          x2={GW.x + GW.w}
+          y2={GW.y}
+          stroke="#22d3c8"
+          strokeWidth={2.5}
+          strokeOpacity={0.8}
+        />
         {/* breathing glow */}
-        <rect x={GW.x} y={GW.y} width={GW.w} height={GW.h}
-          fill="none" stroke="#22d3c8" strokeWidth={8} strokeOpacity={0.08}>
-          <animate attributeName="stroke-opacity"
-            values="0.08;0.22;0.08" dur="2.4s" repeatCount="indefinite" />
+        <rect
+          x={GW.x}
+          y={GW.y}
+          width={GW.w}
+          height={GW.h}
+          fill="none"
+          stroke="#22d3c8"
+          strokeWidth={8}
+          strokeOpacity={0.08}
+        >
+          <animate
+            attributeName="stroke-opacity"
+            values="0.08;0.22;0.08"
+            dur="2.4s"
+            repeatCount="indefinite"
+          />
         </rect>
-        <text x={GW.cx} y={MID_Y - 7} textAnchor="middle"
-          fill="#22d3c8" fontSize={15} fontWeight="bold"
-          fontFamily={FONT} letterSpacing={3}>
+        <text
+          x={GW.cx}
+          y={MID_Y - 7}
+          textAnchor="middle"
+          fill="#22d3c8"
+          fontSize={15}
+          fontWeight="bold"
+          fontFamily={FONT}
+          letterSpacing={3}
+        >
           GATEWAY
         </text>
-        <text x={GW.cx} y={MID_Y + 13} textAnchor="middle"
-          fill="rgba(255,255,255,0.30)" fontSize={10} fontFamily={FONT}>
+        <text
+          x={GW.cx}
+          y={MID_Y + 13}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.30)"
+          fontSize={10}
+          fontFamily={FONT}
+        >
           ChannelAdapter trait
         </text>
 
         {/* ── Main path track ── */}
-        <path d={MAIN_PATH} fill="none"
-          stroke="rgba(34,211,200,0.22)" strokeWidth={1.5} />
+        <path
+          d={MAIN_PATH}
+          fill="none"
+          stroke="rgba(34,211,200,0.22)"
+          strokeWidth={1.5}
+        />
 
         {/* Arrow tip at Agent entrance */}
         <polygon
           points={`${568},${MID_Y - 5} ${568},${MID_Y + 5} ${576},${MID_Y}`}
-          fill="rgba(34,211,200,0.50)" />
+          fill="rgba(34,211,200,0.50)"
+        />
 
         {/* "routes to" label */}
-        <text x={524} y={MID_Y - 12} textAnchor="middle"
-          fill="rgba(255,255,255,0.25)" fontSize={10} fontFamily={FONT}
-          letterSpacing={1}>
+        <text
+          x={524}
+          y={MID_Y - 12}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.25)"
+          fontSize={10}
+          fontFamily={FONT}
+          letterSpacing={1}
+        >
           routes to
         </text>
 
         {/* ── Agent box ── */}
-        <rect x={AG.x} y={AG.y} width={AG.w} height={AG.h}
-          fill="#0d1117" stroke="rgba(255,255,255,0.16)" strokeWidth={1} />
+        <rect
+          x={AG.x}
+          y={AG.y}
+          width={AG.w}
+          height={AG.h}
+          fill="#0d1117"
+          stroke="rgba(255,255,255,0.16)"
+          strokeWidth={1}
+        />
         {/* top accent line */}
-        <line x1={AG.x} y1={AG.y} x2={AG.x + AG.w} y2={AG.y}
-          stroke="rgba(255,255,255,0.35)" strokeWidth={2} />
-        <text x={AG.cx} y={MID_Y - 14} textAnchor="middle"
-          fill="rgba(255,255,255,0.88)" fontSize={15} fontWeight="bold"
-          fontFamily={FONT} letterSpacing={2}>
+        <line
+          x1={AG.x}
+          y1={AG.y}
+          x2={AG.x + AG.w}
+          y2={AG.y}
+          stroke="rgba(255,255,255,0.35)"
+          strokeWidth={2}
+        />
+        <text
+          x={AG.cx}
+          y={MID_Y - 14}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.88)"
+          fontSize={15}
+          fontWeight="bold"
+          fontFamily={FONT}
+          letterSpacing={2}
+        >
           AGENT
         </text>
-        <text x={AG.cx} y={MID_Y + 6} textAnchor="middle"
-          fill="rgba(255,255,255,0.30)" fontSize={10} fontFamily={FONT}>
+        <text
+          x={AG.cx}
+          y={MID_Y + 6}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.30)"
+          fontSize={10}
+          fontFamily={FONT}
+        >
           AgentEngine
         </text>
 
         {/* Provider chips — evenly centred */}
         {PROVIDERS.map((p, i) => (
           <g key={p}>
-            <rect x={CHIP_X0 + i * CHIP_STRIDE} y={CHIP_Y}
-              width={CHIP_W} height={18}
-              fill="rgba(34,211,200,0.04)" stroke="rgba(255,255,255,0.12)"
-              strokeWidth={1} />
-            <text x={CHIP_X0 + i * CHIP_STRIDE + CHIP_W / 2} y={CHIP_Y + 12}
-              textAnchor="middle" fill="rgba(255,255,255,0.40)"
-              fontSize={9} fontFamily={FONT}>
+            <rect
+              x={CHIP_X0 + i * CHIP_STRIDE}
+              y={CHIP_Y}
+              width={CHIP_W}
+              height={18}
+              fill="rgba(34,211,200,0.04)"
+              stroke="rgba(255,255,255,0.12)"
+              strokeWidth={1}
+            />
+            <text
+              x={CHIP_X0 + i * CHIP_STRIDE + CHIP_W / 2}
+              y={CHIP_Y + 12}
+              textAnchor="middle"
+              fill="rgba(255,255,255,0.40)"
+              fontSize={9}
+              fontFamily={FONT}
+            >
               {p}
             </text>
           </g>
@@ -267,7 +398,11 @@ function ArchitectureDiagram() {
         {/* ── Animated dots: branch paths ── */}
         {BRANCH_PATHS.map((_, i) => (
           <circle key={i} r={3.5} fill="#22d3c8" opacity={0.95}>
-            <animateMotion dur="1.7s" repeatCount="indefinite" begin={`${i * 0.38}s`}>
+            <animateMotion
+              dur="1.7s"
+              repeatCount="indefinite"
+              begin={`${i * 0.38}s`}
+            >
               <mpath href={`#bp${i}`} />
             </animateMotion>
           </circle>

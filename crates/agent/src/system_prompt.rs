@@ -120,7 +120,6 @@ fn build_agents_section(agents: &[AgentEntry]) -> Vec<String> {
 fn build_project_context_section(
     ctx_files: &[BootstrapContextFile],
     truncation_warnings: &[String],
-    has_soul: bool,
 ) -> Vec<String> {
     let has_files = ctx_files.iter().any(|f| f.original_len > 0 || !f.truncated);
     if !has_files && truncation_warnings.is_empty() {
@@ -130,13 +129,6 @@ fn build_project_context_section(
     let mut lines = vec!["# Project Context".to_owned(), String::new()];
 
     lines.push("The following project context files have been loaded:".to_owned());
-    if has_soul {
-        lines.push(
-            "If SOUL.md is present, embody its persona and tone. \
-            Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it."
-            .to_owned(),
-        );
-    }
     lines.push(String::new());
 
     if !truncation_warnings.is_empty() {
@@ -171,10 +163,6 @@ fn build_workspace_section(workspace_dir: Option<&str>) -> Vec<String> {
 }
 
 pub fn build_system_prompt(params: SystemPromptParams) -> String {
-    let has_soul = params
-        .ctx_files
-        .iter()
-        .any(|f| f.label == "SOUL.md" && f.original_len > 0);
     let has_memory_search = params.tool_defs.iter().any(|t| t.name == "memory_search");
 
     let mut lines = vec![params.agent_prompt, String::new()];
@@ -195,7 +183,6 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
     lines.extend(build_project_context_section(
         &params.ctx_files,
         &params.truncation_warnings,
-        has_soul,
     ));
 
     while lines.last().is_some_and(|l| l.is_empty()) {
@@ -259,28 +246,15 @@ mod tests {
     fn includes_project_context_when_files_present() {
         let mut params = make_params();
         params.ctx_files = vec![BootstrapContextFile {
-            label: "SOUL.md".to_owned(),
+            label: "USER.md".to_owned(),
             content: "Be helpful.".to_owned(),
             truncated: false,
             original_len: 11,
         }];
         let prompt = build_system_prompt(params);
         assert!(prompt.contains("# Project Context"));
-        assert!(prompt.contains("## SOUL.md"));
+        assert!(prompt.contains("## USER.md"));
         assert!(prompt.contains("Be helpful."));
-    }
-
-    #[test]
-    fn soul_guidance_only_when_soul_present() {
-        let mut params = make_params();
-        params.ctx_files = vec![BootstrapContextFile {
-            label: "USER.md".to_owned(),
-            content: "User prefs".to_owned(),
-            truncated: false,
-            original_len: 10,
-        }];
-        let prompt = build_system_prompt(params);
-        assert!(!prompt.contains("embody its persona"));
     }
 
     #[test]

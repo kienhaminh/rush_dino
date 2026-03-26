@@ -14,6 +14,7 @@ use crate::runtime_log_store::RuntimeLogStore;
 use crate::runtime_state::{RuntimeState, RuntimeStatus};
 use crate::webchat::WebChatAdapter;
 use rushdino_agent::AgentEngine;
+use rushdino_auth::oauth_pkce::PendingOAuthLogin;
 use rushdino_common::dashboard_auth::DashboardAuthService;
 use rushdino_common::{AppConfig, Result};
 
@@ -35,6 +36,65 @@ pub struct SandboxRegistry {
     pub pool: Arc<sqlx::SqlitePool>,
     /// Base directory under which `{agent_id}/sandbox.yaml` files live.
     pub agents_dir: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingOAuthSession {
+    pub profile_id: String,
+    pub verifier: String,
+    pub state: String,
+    pub auth_url: String,
+    pub created_at: Instant,
+}
+
+impl PendingOAuthSession {
+    pub fn from_login(profile_id: String, login: PendingOAuthLogin, created_at: Instant) -> Self {
+        Self {
+            profile_id,
+            verifier: login.verifier,
+            state: login.state,
+            auth_url: login.auth_url,
+            created_at,
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct PendingOAuthStore {
+    sessions: RwLock<HashMap<String, PendingOAuthSession>>,
+}
+
+impl PendingOAuthStore {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self::default())
+    }
+
+    pub async fn insert(&self, session_id: String, session: PendingOAuthSession) {
+        self.sessions.write().await.insert(session_id, session);
+    }
+
+    pub async fn get(&self, session_id: &str) -> Option<PendingOAuthSession> {
+        self.sessions.read().await.get(session_id).cloned()
+    }
+
+    pub async fn remove(&self, session_id: &str) -> Option<PendingOAuthSession> {
+        self.sessions.write().await.remove(session_id)
+    }
+
+    pub async fn take_if_fresh(
+        &self,
+        session_id: &str,
+        max_age: std::time::Duration,
+        now: Instant,
+    ) -> Option<PendingOAuthSession> {
+        let mut sessions = self.sessions.write().await;
+        let session = sessions.get(session_id)?.clone();
+        if now.duration_since(session.created_at) > max_age {
+            sessions.remove(session_id);
+            return None;
+        }
+        sessions.remove(session_id)
+    }
 }
 
 impl SandboxRegistry {
@@ -98,6 +158,10 @@ pub struct AppState {
     pub dashboard_auth: Arc<DashboardAuthService>,
     /// Sandbox registry: maps session IDs to their egress proxies and approval gates.
     pub sandbox_registry: Arc<SandboxRegistry>,
+    /// Temporary OAuth PKCE sessions for UI-driven headless login.
+    pub pending_oauth: Arc<PendingOAuthStore>,
+    /// Skill graph service for keyword-based skill routing.
+    pub skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
 }
 
 impl AppState {
@@ -118,6 +182,8 @@ impl AppState {
         channel_pairing: Arc<ChannelPairingService>,
         dashboard_auth: Arc<DashboardAuthService>,
         sandbox_registry: Arc<SandboxRegistry>,
+        pending_oauth: Arc<PendingOAuthStore>,
+        skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
     ) -> Self {
         Self {
             runtime,
@@ -136,6 +202,8 @@ impl AppState {
             channel_pairing,
             dashboard_auth,
             sandbox_registry,
+            pending_oauth,
+            skill_graph,
         }
     }
 
@@ -159,7 +227,79 @@ impl AppState {
         self.runtime.knowledge_graph()
     }
 
+    pub fn skill_graph(&self) -> &Arc<rushdino_skill_graph::SkillGraphService> {
+        &self.skill_graph
+    }
+
     pub fn runtime_status(&self) -> RuntimeStatus {
         self.runtime.status()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use rushdino_auth::oauth_pkce::PendingOAuthLogin;
+
+    use super::{PendingOAuthSession, PendingOAuthStore};
+
+    fn pending_login() -> PendingOAuthLogin {
+        PendingOAuthLogin {
+            verifier: "verifier".to_owned(),
+            state: "state".to_owned(),
+            auth_url: "https://example.test/oauth".to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn pending_oauth_store_returns_fresh_session() {
+        let store = PendingOAuthStore::new();
+        let created_at = std::time::Instant::now();
+        store
+            .insert(
+                "session-1".to_owned(),
+                PendingOAuthSession::from_login(
+                    "profile-1".to_owned(),
+                    pending_login(),
+                    created_at,
+                ),
+            )
+            .await;
+
+        let session = store
+            .take_if_fresh("session-1", Duration::from_secs(300), created_at)
+            .await
+            .expect("fresh session should exist");
+
+        assert_eq!(session.profile_id, "profile-1");
+        assert!(store.get("session-1").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn pending_oauth_store_expires_old_session() {
+        let store = PendingOAuthStore::new();
+        let created_at = std::time::Instant::now();
+        store
+            .insert(
+                "session-1".to_owned(),
+                PendingOAuthSession::from_login(
+                    "profile-1".to_owned(),
+                    pending_login(),
+                    created_at,
+                ),
+            )
+            .await;
+
+        let session = store
+            .take_if_fresh(
+                "session-1",
+                Duration::from_secs(300),
+                created_at + Duration::from_secs(301),
+            )
+            .await;
+
+        assert!(session.is_none());
+        assert!(store.get("session-1").await.is_none());
     }
 }

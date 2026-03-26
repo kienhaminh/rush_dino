@@ -103,23 +103,47 @@ impl SessionToolContext {
         }
     }
 
-    /// Search the pool by name, description, and keywords (case-insensitive substring).
-    /// Returns matching tool definitions. Empty query returns nothing.
+    /// Search the pool by name, description, and keywords (case-insensitive).
+    /// The query is split into words; a tool matches if **any** word appears in its
+    /// name, description, or keywords. Results are ranked by the number of matching
+    /// words (descending).
     pub fn search_pool(&self, query: &str) -> Vec<ToolDefinition> {
-        let q = query.trim().to_lowercase();
-        if q.is_empty() {
+        let words: Vec<String> = query
+            .split_whitespace()
+            .map(|w| w.to_lowercase())
+            .collect();
+        if words.is_empty() {
             return vec![];
         }
-        self.pool
+
+        let mut scored: Vec<(usize, &Arc<dyn Tool>)> = self
+            .pool
             .iter()
-            .filter(|t| {
+            .filter_map(|t| {
                 let name = t.name().to_lowercase();
                 let desc = t.description().to_lowercase();
-                name.contains(&q)
-                    || desc.contains(&q)
-                    || t.keywords().iter().any(|k| k.to_lowercase().contains(&q))
+                let kws: Vec<String> =
+                    t.keywords().iter().map(|k| k.to_lowercase()).collect();
+
+                let hits = words
+                    .iter()
+                    .filter(|w| {
+                        name.contains(w.as_str())
+                            || desc.contains(w.as_str())
+                            || kws.iter().any(|k| k.contains(w.as_str()))
+                    })
+                    .count();
+
+                if hits > 0 { Some((hits, t)) } else { None }
             })
-            .map(|t| ToolDefinition {
+            .collect();
+
+        // Best matches first.
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+
+        scored
+            .into_iter()
+            .map(|(_, t)| ToolDefinition {
                 name: t.name().to_owned(),
                 description: t.description().to_owned(),
                 parameters: t.parameters(),
@@ -138,6 +162,30 @@ impl SessionToolContext {
             .write()
             .expect("active set lock poisoned")
             .insert(name.to_owned())
+    }
+
+    /// Create a scoped context that only includes tools whose names are in `allowed`.
+    /// If `allowed` is empty, all pool tools are included (unrestricted agent).
+    /// All included tools start active.
+    pub fn scoped(pool: &[Arc<dyn Tool>], allowed: &[&str]) -> Self {
+        let filtered: Vec<Arc<dyn Tool>> = if allowed.is_empty() {
+            pool.to_vec()
+        } else {
+            pool.iter()
+                .filter(|t| allowed.contains(&t.name()))
+                .cloned()
+                .collect()
+        };
+        let active: HashSet<String> = filtered.iter().map(|t| t.name().to_owned()).collect();
+        Self {
+            pool: filtered,
+            active: RwLock::new(active),
+        }
+    }
+
+    /// Returns a reference to the full tool pool (active and inactive).
+    pub fn pool_tools(&self) -> &[Arc<dyn Tool>] {
+        &self.pool
     }
 
     /// Definitions for currently active tools, sorted by name.
@@ -245,5 +293,59 @@ mod session_ctx_tests {
         let ctx = SessionToolContext::new(make_pool(), &[]);
         let results = ctx.search_pool("");
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn multi_word_query_matches_any_word() {
+        let ctx = SessionToolContext::new(make_pool(), &[]);
+        // "web" matches web_search, "browse" matches its keyword, "research" matches nothing extra
+        let results = ctx.search_pool("web search browser research internet");
+        assert!(results.iter().any(|d| d.name == "web_search"));
+    }
+
+    #[test]
+    fn multi_word_results_ranked_by_hits() {
+        let ctx = SessionToolContext::new(make_pool(), &[]);
+        // "web internet" — both words match web_search (name + keyword), only "web" matches via desc
+        let results = ctx.search_pool("web internet");
+        assert!(!results.is_empty());
+        assert_eq!(results[0].name, "web_search");
+    }
+
+    #[test]
+    fn scoped_filters_pool() {
+        let pool = make_pool();
+        let ctx = SessionToolContext::scoped(&pool, &["read", "web_search"]);
+        let names: Vec<String> = ctx.pool_tools().iter().map(|t| t.name().to_owned()).collect();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"read".to_owned()));
+        assert!(names.contains(&"web_search".to_owned()));
+        assert!(!names.contains(&"cron_create".to_owned()));
+    }
+
+    #[test]
+    fn scoped_empty_allows_all() {
+        let pool = make_pool();
+        let ctx = SessionToolContext::scoped(&pool, &[]);
+        assert_eq!(ctx.pool_tools().len(), 3);
+    }
+
+    #[test]
+    fn scoped_all_tools_active() {
+        let pool = make_pool();
+        let ctx = SessionToolContext::scoped(&pool, &["read", "cron_create"]);
+        let defs = ctx.active_definitions();
+        assert_eq!(defs.len(), 2);
+        let names: Vec<&str> = defs.iter().map(|d| d.name.as_str()).collect();
+        assert!(names.contains(&"read"));
+        assert!(names.contains(&"cron_create"));
+    }
+
+    #[test]
+    fn pool_tools_returns_full_pool() {
+        let ctx = SessionToolContext::new(make_pool(), &["read"]);
+        // pool_tools returns all 3, even though only 1 is active
+        assert_eq!(ctx.pool_tools().len(), 3);
+        assert_eq!(ctx.active_definitions().len(), 1);
     }
 }

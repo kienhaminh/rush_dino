@@ -1,7 +1,7 @@
+import type { SandboxPolicy } from '@/lib/types';
+
 export type AgentPanel =
   | 'overview'
-  | 'progress'
-  | 'files'
   | 'tools'
   | 'skills'
   | 'channels'
@@ -13,8 +13,8 @@ export type AgentRecord = {
   emoji: string;
   isDefault: boolean;
   workspace: string;
-  model: string;
   description: string;
+  sandboxPolicy?: SandboxPolicy | null;
 };
 
 export type AgentFileRecord = {

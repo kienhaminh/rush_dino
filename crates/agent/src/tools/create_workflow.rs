@@ -180,9 +180,9 @@ mod tests {
                 description: "default".to_owned(),
                 system_prompt: "You are helpful".to_owned(),
                 icon: None,
-                model: None,
                 tools: None,
                 color: None,
+                model: None,
                 sandbox_policy: None,
             })
             .expect("save template");

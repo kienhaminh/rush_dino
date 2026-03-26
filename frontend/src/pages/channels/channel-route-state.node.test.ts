@@ -19,12 +19,12 @@ describe('channel route state', () => {
   });
 
   it('builds channel paths that preserve the selected panel', () => {
-    expect(buildChannelsPath({ channel: null, panel: 'overview' })).toBe('/channels');
+    expect(buildChannelsPath({ channel: null, panel: 'overview' })).toBe('/gateway');
     expect(buildChannelsPath({ channel: null, panel: 'instances' })).toBe(
-      '/channels?panel=instances',
+      '/gateway?panel=instances',
     );
     expect(buildChannelsPath({ channel: 'telegram', panel: 'settings' })).toBe(
-      '/channels/telegram?panel=settings',
+      '/gateway/telegram?panel=settings',
     );
   });
 });

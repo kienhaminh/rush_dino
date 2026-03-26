@@ -147,17 +147,6 @@ export function Hero() {
               privacy-preserving.
             </p>
 
-            {/* Tech badges */}
-            <div className="flex flex-wrap gap-2 mb-8 animate-fade-in-up animate-delay-2">
-              {["Rust", "Async/Tokio", "GPT-5.4", "Claude Opus 4.6", "Kimi 2.5", "Ollama"].map((tech) => (
-                <span
-                  key={tech}
-                  className="font-mono text-xs border border-white/[0.10] text-white/30 px-3 py-1 hover:border-[#22d3c8]/40 hover:text-white/70 transition-colors"
-                >
-                  {tech}
-                </span>
-              ))}
-            </div>
 
             {/* Install command */}
             <div className="animate-fade-in-up animate-delay-3 mb-7">

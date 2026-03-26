@@ -561,11 +561,7 @@ impl WorkflowRunner {
             conversation_id: Some(conversation_id.to_owned()),
             run_id: Some(run_id.to_owned()),
             delegation_depth: 0,
-        };
-
-        let step_config = AgentConfig {
-            model_override: template.model.clone(),
-            ..self.config.clone()
+            workspace_override: None,
         };
 
         let session_ctx = self
@@ -579,7 +575,7 @@ impl WorkflowRunner {
                 self.tool_registry.clone(),
                 session_ctx,
                 messages,
-                &step_config,
+                &self.config,
                 None,
             ),
         )

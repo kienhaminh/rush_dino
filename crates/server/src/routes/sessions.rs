@@ -181,12 +181,17 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
         .filter(|run| run.state == rushdino_agent::RunState::Queued)
         .count();
     let last_message = messages.last();
+    let latest_run = runs.first();
+    // Usage metrics are stored under the run's conversation UUID, which may differ
+    // from the session ID (e.g. "main"). Fall back to the session ID if no run exists.
+    let usage_conversation_id = latest_run
+        .and_then(|r| r.conversation_id.as_deref())
+        .unwrap_or(conversation_id);
     let latest_usage = engine
-        .latest_usage_metric(conversation_id)
+        .latest_usage_metric(usage_conversation_id)
         .await
         .ok()
         .flatten();
-    let latest_run = runs.first();
     let model = latest_usage
         .as_ref()
         .map(|usage| usage.model.clone())

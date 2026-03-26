@@ -23,6 +23,7 @@ walkdir.workspace = true
 rushdino-common = { path = "../common" }
 rushdino-providers = { path = "../providers" }
 rushdino-security = { path = "../security" }
+rushdino-skill-graph = { path = "../skill-graph" }
 
 [dev-dependencies]
 tempfile = "3"

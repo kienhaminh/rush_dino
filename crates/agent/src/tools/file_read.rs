@@ -9,13 +9,15 @@ use rushdino_security::validation::validate_path;
 use crate::tool_registry::Tool;
 
 pub struct FileReadTool {
-    /// The allowed root directory. Relative paths are resolved under this path.
-    docs_dir: PathBuf,
+    /// Home directory (~/.rushdino). Relative paths are resolved here so that
+    /// sub-paths like `memory/daily/YYYY-MM-DD.md` or `documents/foo.txt` work
+    /// without requiring the caller to supply an absolute path.
+    home_dir: PathBuf,
 }
 
 impl FileReadTool {
-    pub fn new(docs_dir: PathBuf) -> Self {
-        Self { docs_dir }
+    pub fn new(home_dir: PathBuf) -> Self {
+        Self { home_dir }
     }
 }
 
@@ -26,7 +28,9 @@ impl Tool for FileReadTool {
     }
 
     fn description(&self) -> &str {
-        "Read a file. Provide an absolute path to read any file on the filesystem, or a relative path to read from the workspace documents directory."
+        "Read a file. Provide an absolute path to read any file on the filesystem, \
+         or a relative path resolved from the rushdino home directory \
+         (e.g. `documents/notes.txt`, `memory/daily/2026-03-21.md`, `MEMORY.md`)."
     }
 
     fn parameters(&self) -> Value {
@@ -35,7 +39,9 @@ impl Tool for FileReadTool {
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Absolute path to any file on the filesystem, or a relative path resolved from the workspace documents directory."
+                    "description": "Absolute path to any file on the filesystem, or a relative path \
+                                    resolved from the rushdino home directory \
+                                    (e.g. `documents/notes.txt`, `memory/daily/2026-03-21.md`)."
                 }
             },
             "required": ["path"]
@@ -54,12 +60,15 @@ impl Tool for FileReadTool {
         // The agent is trusted — the operator controls which agents run and what
         // they can access. This is not exposed to untrusted external input.
         if path.is_absolute() {
-            // Absolute paths bypass docs_dir restriction — read directly from the filesystem.
+            // Absolute paths bypass home_dir restriction — read directly from the filesystem.
             Ok(fs::read_to_string(path)?)
         } else {
-            // Relative paths are canonicalized and verified to be under docs_dir.
-            let target = self.docs_dir.join(path_str);
-            let canonical = validate_path(&target, std::slice::from_ref(&self.docs_dir))
+            // Relative paths always resolve under home_dir (~/.rushdino).
+            // workspace_override is intentionally ignored here — memory files and
+            // other home-relative paths must not shift when a delegated agent has
+            // a project workspace set.
+            let target = self.home_dir.join(path_str);
+            let canonical = validate_path(&target, std::slice::from_ref(&self.home_dir))
                 .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
             Ok(fs::read_to_string(canonical)?)
         }
@@ -76,19 +85,19 @@ mod tests {
 
     use super::*;
 
-    fn make_tool(docs_dir: PathBuf) -> FileReadTool {
-        FileReadTool::new(docs_dir)
+    fn make_tool(home_dir: PathBuf) -> FileReadTool {
+        FileReadTool::new(home_dir)
     }
 
     #[tokio::test]
-    async fn reads_absolute_path_outside_docs_dir() {
-        // Create a temp file completely outside docs_dir.
+    async fn reads_absolute_path_outside_home_dir() {
+        // Create a temp file completely outside home_dir.
         let mut tmp = NamedTempFile::new().expect("create temp file");
         let expected = "hello from absolute path";
         write!(tmp, "{expected}").unwrap();
 
-        let docs_dir = tempfile::tempdir().unwrap();
-        let tool = make_tool(docs_dir.path().to_path_buf());
+        let home_dir = tempfile::tempdir().unwrap();
+        let tool = make_tool(home_dir.path().to_path_buf());
 
         let abs_path = tmp.path().to_str().unwrap().to_owned();
         let result = tool.execute(json!({"path": abs_path})).await;
@@ -98,13 +107,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn relative_path_still_resolves_under_docs_dir() {
-        let docs_dir = tempfile::tempdir().unwrap();
-        let file_path = docs_dir.path().join("notes.txt");
+    async fn relative_path_resolves_under_home_dir() {
+        let home_dir = tempfile::tempdir().unwrap();
+        let file_path = home_dir.path().join("notes.txt");
         let expected = "relative content";
         fs::write(&file_path, expected).unwrap();
 
-        let tool = make_tool(docs_dir.path().to_path_buf());
+        let tool = make_tool(home_dir.path().to_path_buf());
 
         let result = tool.execute(json!({"path": "notes.txt"})).await;
 
@@ -113,9 +122,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn relative_path_resolves_daily_memory() {
+        let home_dir = tempfile::tempdir().unwrap();
+        let daily_dir = home_dir.path().join("memory").join("daily");
+        fs::create_dir_all(&daily_dir).unwrap();
+        fs::write(daily_dir.join("2026-03-21.md"), "today's note").unwrap();
+
+        let tool = make_tool(home_dir.path().to_path_buf());
+
+        let result = tool
+            .execute(json!({"path": "memory/daily/2026-03-21.md"}))
+            .await;
+
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert_eq!(result.unwrap(), "today's note");
+    }
+
+    #[tokio::test]
     async fn absolute_path_nonexistent_returns_io_error() {
-        let docs_dir = tempfile::tempdir().unwrap();
-        let tool = make_tool(docs_dir.path().to_path_buf());
+        let home_dir = tempfile::tempdir().unwrap();
+        let tool = make_tool(home_dir.path().to_path_buf());
 
         let result = tool
             .execute(json!({"path": "/tmp/__rushdino_nonexistent_file_xyz__.txt"}))
@@ -126,8 +152,8 @@ mod tests {
 
     #[tokio::test]
     async fn relative_traversal_is_rejected() {
-        let docs = tempfile::tempdir().unwrap();
-        let tool = FileReadTool::new(docs.path().to_path_buf());
+        let home = tempfile::tempdir().unwrap();
+        let tool = FileReadTool::new(home.path().to_path_buf());
 
         let result = tool
             .execute(serde_json::json!({ "path": "../../../etc/passwd" }))

@@ -12,6 +12,7 @@ members = [
   "crates/cli",
   "crates/auth",
   "crates/knowledge-graph",
+  "crates/skill-graph",
   "crates/desktop-native",
 ]
 resolver = "2"

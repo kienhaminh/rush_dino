@@ -209,6 +209,17 @@ impl ResponsesProvider {
         // Resolve cache retention
         let cache_retention = stream_opts.cache_retention.unwrap_or_default();
 
+        // Guard: OpenAI Responses API rejects empty `input` arrays with
+        // "missing_required_parameter". Ensure at least one user input exists.
+        let messages = if messages.is_empty() {
+            vec![json!({
+                "role": "user",
+                "content": [{ "type": "input_text", "text": "Continue." }]
+            })]
+        } else {
+            messages
+        };
+
         // Build request body
         let mut body = json!({
             "model": model_id,
@@ -343,5 +354,165 @@ impl ResponsesProvider {
         });
 
         Ok(rx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::ChatRequest;
+    use rushdino_common::models::{Message, Role};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn user_message(text: &str) -> Message {
+        Message {
+            id: "user-1".to_owned(),
+            role: Role::User,
+            content: text.to_owned(),
+            tool_calls: None,
+            rich_content: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    fn system_message(text: &str) -> Message {
+        Message {
+            id: "system-1".to_owned(),
+            role: Role::System,
+            content: text.to_owned(),
+            tool_calls: None,
+            rich_content: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Empty-input guard
+    // -----------------------------------------------------------------------
+
+    /// When only a system message is present the conversation list is filtered
+    /// to nothing. The guard must inject a "Continue." user turn so the
+    /// Responses API does not reject the request with "missing_required_parameter".
+    #[tokio::test]
+    async fn empty_input_guard_injects_continue_message_for_system_only_conversation() {
+        // Capture the raw request body to verify `input` is non-empty.
+        // We do this by intercepting via the mock server's read buffer.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (body_tx, mut body_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 16384];
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            let _ = body_tx.send(buf[..n].to_vec()).await;
+            let response_body = concat!(
+                "data: {\"type\":\"response.output_text.delta\",\"delta\":\"ok\"}\n\n",
+                "data: {\"type\":\"response.completed\"}\n\n",
+            );
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let provider = ResponsesProvider::new(
+            format!("http://127.0.0.1:{port}"),
+            "gpt-4o".to_owned(),
+            None,
+            None,
+            false,
+        );
+
+        // No messages at all — system_prompt is None and conversation is empty,
+        // so convert_responses_messages returns [] and the guard must fire.
+        let request = ChatRequest {
+            messages: vec![],
+            tools: None,
+            temperature: None,
+            max_tokens: None,
+            model: None,
+            thinking_level: None,
+        };
+
+        let _ = provider.chat(request).await;
+
+        // Read the raw HTTP request and verify `"input"` is non-empty.
+        let raw = body_rx.recv().await.expect("should receive request body");
+        let raw_str = String::from_utf8_lossy(&raw);
+        // Extract the JSON body (after headers).
+        if let Some(json_start) = raw_str.find('{') {
+            let json_str = &raw_str[json_start..];
+            let body: serde_json::Value =
+                serde_json::from_str(json_str).expect("request body must be valid JSON");
+            let input = body["input"].as_array().expect("input must be an array");
+            assert!(!input.is_empty(), "input must not be empty — guard should inject a user turn");
+            // The injected turn must be a user role with "Continue." text.
+            let injected = &input[0];
+            assert_eq!(injected["role"], "user");
+            assert_eq!(injected["content"][0]["text"], "Continue.");
+        }
+    }
+
+    /// Normal conversation (user message present) must NOT inject the fallback.
+    #[tokio::test]
+    async fn normal_conversation_does_not_inject_continue_message() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (body_tx, mut body_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(1);
+        tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 16384];
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            let _ = body_tx.send(buf[..n].to_vec()).await;
+            let response_body = "data: {\"type\":\"response.completed\"}\n\n";
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response_body.len(),
+                response_body
+            );
+            stream.write_all(response.as_bytes()).await.unwrap();
+        });
+
+        let provider = ResponsesProvider::new(
+            format!("http://127.0.0.1:{port}"),
+            "gpt-4o".to_owned(),
+            None,
+            None,
+            false,
+        );
+
+        let request = ChatRequest {
+            messages: vec![
+                system_message("You are helpful."),
+                user_message("What is 2+2?"),
+            ],
+            tools: None,
+            temperature: None,
+            max_tokens: None,
+            model: None,
+            thinking_level: None,
+        };
+
+        let _ = provider.chat(request).await;
+
+        let raw = body_rx.recv().await.expect("should receive request body");
+        let raw_str = String::from_utf8_lossy(&raw);
+        if let Some(json_start) = raw_str.find('{') {
+            let json_str = &raw_str[json_start..];
+            let body: serde_json::Value =
+                serde_json::from_str(json_str).expect("request body must be valid JSON");
+            let input = body["input"].as_array().expect("input must be an array");
+            // Must not contain the synthetic "Continue." turn.
+            let has_continue = input.iter().any(|entry| {
+                entry["content"]
+                    .as_array()
+                    .and_then(|c| c.first())
+                    .and_then(|b| b["text"].as_str())
+                    == Some("Continue.")
+            });
+            assert!(!has_continue, "real conversation must not contain synthetic Continue. turn");
+        }
     }
 }

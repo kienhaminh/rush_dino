@@ -438,7 +438,7 @@ impl CredentialsConfig {
     pub fn load() -> Result<Self> {
         let home = init::default_home_dir();
         let path = home.join("credentials.toml");
-        Self::load_from_path(&path)
+        Ok(Self::load_from_path(&path)?.with_env_fallbacks())
     }
 
     pub fn load_from_path(path: &Path) -> Result<Self> {
@@ -447,6 +447,27 @@ impl CredentialsConfig {
         }
         let figment = Figment::from(Serialized::defaults(Self::default())).merge(Toml::file(path));
         Ok(figment.extract()?)
+    }
+
+    /// Fill in missing credential values from well-known environment variables.
+    /// Call this after `load` / `load_from_path` to support `BRAVE_API_KEY`,
+    /// `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` env vars as
+    /// fallbacks when `credentials.toml` doesn't contain them.
+    pub fn with_env_fallbacks(mut self) -> Self {
+        let env_fallback = |field: &mut Option<String>, var: &str| {
+            if field.as_deref().unwrap_or_default().is_empty() {
+                if let Ok(val) = std::env::var(var) {
+                    if !val.is_empty() {
+                        *field = Some(val);
+                    }
+                }
+            }
+        };
+        env_fallback(&mut self.brave_api_key, "BRAVE_API_KEY");
+        env_fallback(&mut self.openai_api_key, "OPENAI_API_KEY");
+        env_fallback(&mut self.anthropic_api_key, "ANTHROPIC_API_KEY");
+        env_fallback(&mut self.gemini_api_key, "GEMINI_API_KEY");
+        self
     }
 
     pub fn save_to_path(&self, path: &Path) -> Result<()> {

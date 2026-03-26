@@ -67,6 +67,8 @@ impl Tool for CreateSkillTool {
             description: description.to_owned(),
             instructions: instructions.to_owned(),
             tools,
+            category: None,
+            tags: None,
         })?;
 
         Ok(format!("skill saved: {}", path.display()))

@@ -473,6 +473,8 @@ export interface SkillRecord {
   instructions: string;
   path: string;
   tools: string[];
+  /** Bundled / system skills — not editable or deletable via the dashboard. */
+  isBuiltIn: boolean;
 }
 
 export type RunKind = 'assistant' | 'workflow';
@@ -753,6 +755,13 @@ export interface SandboxNetworkPolicy {
   allow: NetworkRule[];
 }
 
+export interface SandboxInferencePolicy {
+  enabled: boolean;
+  route_via: string;
+  strip_agent_credentials: boolean;
+  inject_provider: string;
+}
+
 export interface CredentialProvider {
   name: string;
   inject: Record<string, string>;
@@ -764,6 +773,7 @@ export interface SandboxPolicy {
     filesystem: SandboxFilesystemPolicy;
     process: SandboxProcessPolicy;
     network: SandboxNetworkPolicy;
+    inference: SandboxInferencePolicy;
   };
   providers: CredentialProvider[];
 }

@@ -19,6 +19,7 @@ use crate::{
     memory::MemoryManager,
     react_loop::run_react_loop,
     skill_manager::SkillManager,
+    system_prompt::SkillEntry,
     tool_registry::{SessionToolContext, Tool, ToolRegistry},
     tools::shell_exec::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
@@ -60,13 +61,22 @@ async fn run_session_turn(
             .create_conversation_with_id(conversation_id, input)
             .await?;
     }
+    let skills = deps.skill_manager
+        .list()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| SkillEntry {
+            name: s.name,
+            description: s.description,
+        })
+        .collect();
     messages.insert(
         0,
         system_message(
             &deps.config,
             deps.memory.as_ref(),
             deps.agent_manager.as_ref(),
-            deps.skill_manager.as_ref(),
+            skills,
             session_ctx.as_ref(),
         ),
     );
@@ -90,6 +100,7 @@ async fn run_session_turn(
         conversation_id: None,
         run_id: None,
         delegation_depth: 0,
+        workspace_override: None,
     });
     let tool_ctx = ToolExecutionContext {
         conversation_id: Some(conversation_id.to_owned()),

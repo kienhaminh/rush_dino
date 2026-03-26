@@ -16,6 +16,9 @@ pub struct ToolExecutionContext {
     pub conversation_id: Option<String>,
     pub run_id: Option<String>,
     pub delegation_depth: u8,
+    /// Per-agent workspace directory override. When set, file tools resolve
+    /// relative paths against this directory instead of the engine's default.
+    pub workspace_override: Option<PathBuf>,
 }
 
 tokio::task_local! {
@@ -187,6 +190,7 @@ mod tests {
                 conversation_id: Some("conv-1".to_owned()),
                 run_id: Some("run-1".to_owned()),
                 delegation_depth: 0,
+                workspace_override: None,
             },
             tool.execute(json!({
                 "command": "pwd",
@@ -229,6 +233,7 @@ mod tests {
             conversation_id: None,
             run_id: None,
             delegation_depth: 0,
+            workspace_override: None,
         };
         assert_eq!(ctx.delegation_depth, 0);
     }

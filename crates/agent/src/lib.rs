@@ -6,6 +6,8 @@ pub mod conversation;
 mod conversation_mapper;
 pub mod cron_manager;
 pub mod engine;
+pub mod kanban_matching_engine;
+pub mod kanban_store;
 pub mod engine_bootstrap;
 pub mod engine_deps;
 pub mod job_manager;
@@ -49,4 +51,9 @@ pub use workflow_types::{
     CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem, WorkflowRunDetail,
     WorkflowRunListItem, WorkflowRunStartResponse, WorkflowSource, WorkflowStatus,
     WorkflowStepInput,
+};
+
+pub use kanban_store::{
+    CreateTaskInput, KanbanBoardStats, KanbanStore, KanbanTask, ReviewVerdict, TaskPriority,
+    TaskStatus, UpdateTaskInput,
 };
