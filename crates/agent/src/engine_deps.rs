@@ -1,8 +1,6 @@
 use std::{path::PathBuf, sync::{Arc, Weak}};
 
 use sqlx::SqlitePool;
-use tokio::sync::mpsc;
-
 use rushdino_common::Result;
 use rushdino_providers::Provider;
 use rushdino_security::egress_proxy::EgressProxy;
@@ -13,46 +11,35 @@ use crate::{
     conversation::ConversationManager,
     cron_manager::CronManager,
     engine::AgentConfig,
-    job_manager::{JobManager, JobResult},
     kanban_store::KanbanStore,
     knowledge_graph::KnowledgeGraphAccess,
     memory::MemoryManager,
-    orchestrator::Orchestrator,
     runtime::AgentRuntime,
     skill_manager::SkillManager,
     system_broker::SharedSystemBroker,
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
-        create_job::CreateJobTool,
-        create_skill::CreateSkillTool,
-        create_workflow::CreateWorkflowTool,
-        cron_tools::{
-            cron_create_tool, cron_delete_tool, cron_get_tool, cron_list_tool, cron_pause_tool,
-            cron_resume_tool, cron_run_now_tool, cron_update_tool,
-        },
+        cron_tools::{cron_list_tool, cron_manage_tool},
         delegate_to_agent::DelegateToAgentTool,
-        delete_workflow::DeleteWorkflowTool,
         kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
         file_edit::FileEditTool,
         file_read::FileReadTool,
         file_write::FileWriteTool,
+        glob_search::GlobSearchTool,
+        grep_search::GrepSearchTool,
         image::ImageTool,
-        inspect_workflow::InspectWorkflowTool,
         knowledge_graph_query::KnowledgeGraphQueryTool,
-        list_skills::ListSkillsTool,
         memory_search::MemorySearchTool,
         memory_write::MemoryWriteTool,
         present_message::PresentMessageTool,
-        read_skill::ReadSkillTool,
         run_workflow::RunWorkflowTool,
-        session_tools::{SessionCreateTool, SessionGetTool, SessionSendTool},
-        shell_exec::ShellExecTool,
+        session_tools::{SessionManageTool, SessionSendTool},
+        bash::ShellExecTool,
         spawn_agent::SpawnAgentTool,
-        spawn_sub_agent::SpawnSubAgentTool,
-        update_workflow::UpdateWorkflowTool,
         tool_search::ToolSearchTool,
         web_fetch::WebFetchTool,
         web_search::WebSearchTool,
+        workflow_manage::WorkflowManageTool,
     },
     workflow_manager::WorkflowManager,
     workflow_runner::WorkflowRunner,
@@ -61,25 +48,28 @@ use crate::{
 pub const CORE_TOOLS: &[&str] = &[
     "delegate",
     "edit",
-    "exec",
+    "bash",
+    "glob",
+    "grep",
     "memory_search",
     "memory_write",
     "message",
     "read",
     "tool_search",
+    "web_search",
+    "web_fetch",
     "write",
     "post_task",
     "claim_task",
     "update_task",
     "review_task",
+    "session_manage",
 ];
 
 pub struct EngineDeps {
     pub pool: Arc<SqlitePool>,
     pub conversation: Arc<ConversationManager>,
     pub tool_registry: Arc<ToolRegistry>,
-    pub job_manager: Arc<JobManager>,
-    pub orchestrator: Arc<Orchestrator>,
     pub memory: Arc<MemoryManager>,
     pub skill_manager: Arc<SkillManager>,
     pub agent_manager: Arc<AgentManager>,
@@ -87,7 +77,6 @@ pub struct EngineDeps {
     pub kanban_store: Arc<KanbanStore>,
     pub cron_manager: Arc<CronManager>,
     pub workflow_runner: Arc<WorkflowRunner>,
-    pub inbox_rx: mpsc::Receiver<JobResult>,
     pub task_memory: Arc<AgentTaskMemory>,
     pub session_ctx: Arc<SessionToolContext>,
     pub home_dir: std::path::PathBuf,
@@ -116,15 +105,6 @@ pub fn build_engine_deps(
     let task_memory = Arc::new(AgentTaskMemory::new(home_dir.clone()));
     let kanban_store = Arc::new(KanbanStore::new(pool.clone()));
 
-    let (inbox_tx, inbox_rx) = mpsc::channel(256);
-    let jobs = Arc::new(JobManager::new(pool.clone(), inbox_tx.clone()));
-    let orchestrator = Arc::new(Orchestrator::new(
-        provider.clone(),
-        pool.clone(),
-        memory.clone(),
-        inbox_tx,
-    ));
-
     let agent_manager = Arc::new(AgentManager::new(home_dir.join("agents")));
 
     // ConversationManager is constructed before the cyclic closure because
@@ -133,15 +113,10 @@ pub fn build_engine_deps(
 
     // Clone all variables needed inside Arc::new_cyclic closures before they
     // capture them. The closures are SYNC so all construction inside must be sync.
-    let provider_c = provider.clone();
     let agent_manager_c2 = agent_manager.clone();
     let agent_manager_c3 = agent_manager.clone();
     let memory_c = memory.clone();
-    let skills_c = skills.clone();
-    let jobs_c = jobs.clone();
-    let orchestrator_c = orchestrator.clone();
     let workflow_manager_c = workflow_manager.clone();
-    let workflow_manager_c2 = workflow_manager.clone();
     let workflow_manager_c3 = workflow_manager.clone();
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
@@ -151,11 +126,10 @@ pub fn build_engine_deps(
     let tool_timeout = config.tool_timeout_secs;
 
     // First Arc::new_cyclic builds the ToolRegistry. DelegateToAgentTool is
-    // constructed here so it can receive a Weak<ToolRegistry> to avoid a cycle:
-    // ToolRegistry → DelegateToAgentTool → Weak<ToolRegistry>.
-    // session_ctx is not yet available here; DelegateToAgentTool will receive a
-    // Weak<SessionToolContext> later via the second Arc::new_cyclic.
-    let registry = Arc::new_cyclic(|weak_registry| {
+    // NOT registered here because it also needs Weak<SessionToolContext>, which
+    // is only available in the second Arc::new_cyclic below. It is registered
+    // there alongside SessionSendTool.
+    let registry = Arc::new_cyclic(|_weak_registry| {
         let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
 
         let r = ToolRegistry::new();
@@ -175,56 +149,31 @@ pub fn build_engine_deps(
         r.register(FileReadTool::new(home_c.clone()));
         r.register(FileWriteTool::new(home_c.clone()));
         r.register(FileEditTool::new(home_c.clone()));
+        r.register(GlobSearchTool::new(home_c.clone()));
+        r.register(GrepSearchTool::new(home_c.clone()));
         r.register(shell_exec);
         r.register(PresentMessageTool::new());
         r.register(MemorySearchTool::new(memory_c.clone()));
         r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
-        r.register(CreateJobTool::new(jobs_c));
-        r.register(CreateWorkflowTool::new(
+        r.register(WorkflowManageTool::new(
             workflow_manager_c,
             agent_manager_c3,
         ));
-        r.register(UpdateWorkflowTool::new(workflow_manager_c2.clone()));
-        r.register(DeleteWorkflowTool::new(workflow_manager_c2.clone()));
-        r.register(InspectWorkflowTool::new(workflow_manager_c2.clone()));
-        r.register(SpawnSubAgentTool::new(orchestrator_c));
-        r.register(ReadSkillTool::new(skills_c.clone()));
-        r.register(CreateSkillTool::new(skills_c.clone()));
-        r.register(ListSkillsTool::new(skills_c));
         if let Some(graph) = graph_c {
             r.register(KnowledgeGraphQueryTool::new(graph));
         }
-        // session_ctx is not yet constructed here; Weak::new() is a dead sentinel
-        // that upgrades correctly at execute-time once session_ctx is live.
-        r.register(DelegateToAgentTool::new(
-            agent_manager.clone(),
-            provider_c.clone(),
-            config.clone(),
-            weak_registry.clone(),
-            Weak::new(), // session_ctx unavailable here — upgraded lazily at execute time
-            task_memory.clone(),
-            conversation.clone(),
-            home_c.clone(),
-        ));
         r.register(SpawnAgentTool::new(agent_manager_c2));
         r
     });
 
-    // Build WebFetchTool, optionally attaching the sandbox egress proxy.
-    let mut web_fetch = WebFetchTool::new();
+    // Build WebFetchTool, optionally attaching the sandbox egress proxy and provider.
+    let mut web_fetch = WebFetchTool::new().with_provider(provider.clone());
     if let Some(proxy) = &egress_proxy {
         web_fetch = web_fetch.with_egress_proxy(proxy.clone());
     }
     registry.register(web_fetch);
-    registry.register(SessionCreateTool::new(conversation.clone()));
-    registry.register(SessionGetTool::new(conversation.clone()));
+    registry.register(SessionManageTool::new(conversation.clone()));
     registry.register(cron_list_tool(cron_manager.clone()));
-    registry.register(cron_get_tool(cron_manager.clone()));
-    registry.register(cron_create_tool(cron_manager.clone()));
-    registry.register(cron_update_tool(cron_manager.clone()));
-    registry.register(cron_pause_tool(cron_manager.clone()));
-    registry.register(cron_resume_tool(cron_manager.clone()));
-    registry.register(cron_delete_tool(cron_manager.clone()));
 
     // Kanban task board tools for inter-agent collaboration.
     registry.register(PostTaskTool::new(kanban_store.clone()));
@@ -241,12 +190,12 @@ pub fn build_engine_deps(
 
     // Build SessionToolContext with Arc::new_cyclic so that tools which need a
     // Weak<SessionToolContext> back-reference (ToolSearchTool, SessionSendTool,
-    // cron_run_now_tool, WorkflowRunner) can be registered/constructed inside the
+    // cron_manage_tool, WorkflowRunner) can be registered/constructed inside the
     // closure without a retain cycle:
     //   SessionToolContext.pool → Arc<Tool> → Weak<SessionToolContext>
     let workflow_runner_once_c = workflow_runner_once.clone();
     let session_ctx = Arc::new_cyclic(|weak: &Weak<SessionToolContext>| {
-        // WorkflowRunner and cron_run_now need session_ctx; build WorkflowRunner here.
+        // WorkflowRunner and cron_manage need session_ctx; build WorkflowRunner here.
         let workflow_runner = Arc::new(WorkflowRunner::new(
             provider.clone(),
             registry.clone(),
@@ -272,7 +221,21 @@ pub fn build_engine_deps(
             skills.clone(),
             config.clone(),
         ));
-        registry.register(cron_run_now_tool(
+        // DelegateToAgentTool needs both Weak<ToolRegistry> and Weak<SessionToolContext>.
+        // Registered here (inside session_ctx's Arc::new_cyclic) so that `weak` is the
+        // live back-reference rather than the permanently-dead Weak::new() sentinel that
+        // was previously used when the tool was registered in the registry closure.
+        registry.register(DelegateToAgentTool::new(
+            agent_manager.clone(),
+            provider.clone(),
+            config.clone(),
+            Arc::downgrade(&registry),
+            weak.clone(),
+            task_memory.clone(),
+            conversation.clone(),
+            home_dir.clone(),
+        ));
+        registry.register(cron_manage_tool(
             cron_manager.clone(),
             conversation.clone(),
             provider.clone(),
@@ -302,8 +265,6 @@ pub fn build_engine_deps(
         pool: pool.clone(),
         conversation,
         tool_registry: registry,
-        job_manager: jobs,
-        orchestrator,
         memory,
         skill_manager: skills,
         agent_manager,
@@ -311,7 +272,6 @@ pub fn build_engine_deps(
         kanban_store,
         cron_manager,
         workflow_runner,
-        inbox_rx,
         task_memory,
         session_ctx,
         home_dir,

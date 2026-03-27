@@ -53,11 +53,16 @@ impl ShellExecTool {
 #[async_trait]
 impl Tool for ShellExecTool {
     fn name(&self) -> &str {
-        "exec"
+        "bash"
     }
 
     fn description(&self) -> &str {
-        "Execute shell command through the local RushDino system broker"
+        "Execute a bash command and return its output (exit status, stdout, stderr). \
+         Use for shell operations, running tests, git commands, build tools, and system tasks."
+    }
+
+    fn keywords(&self) -> Vec<&str> {
+        vec!["shell", "exec", "command", "terminal", "run"]
     }
 
     fn parameters(&self) -> Value {
@@ -66,7 +71,7 @@ impl Tool for ShellExecTool {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "The shell command to execute"
+                    "description": "The bash command to execute"
                 },
                 "cwd": {
                     "type": "string",

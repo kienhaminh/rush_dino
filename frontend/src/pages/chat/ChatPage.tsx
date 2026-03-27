@@ -3,6 +3,7 @@ import { Send, RefreshCw } from 'lucide-react';
 
 import { ConversationTimeline } from '@/components/workspace/conversation-timeline';
 import { SubAgentPanel } from '@/components/workspace/sub-agent-panel';
+import { ResizeHandle } from '@/components/workspace/resize-handle';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useSubAgentSessions } from '@/hooks/use-sub-agent-sessions';
 import { fetchConversation } from '@/lib/api';
@@ -20,7 +21,8 @@ export function ChatPage() {
   const { items, sendMessage, resetWithItems, isConnected, isStreaming } =
     useWebSocket(MAIN_SESSION_ID, undefined);
 
-  const { sessions: agentSessions, liveRuns } = useSubAgentSessions(items);
+  const { sessions: agentSessions, liveRuns, refresh: refreshAgentSessions } = useSubAgentSessions(items);
+  const [panelWidth, setPanelWidth] = useState(260);
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -113,8 +115,11 @@ export function ChatPage() {
         </div>
       </div>
 
+      {/* Resize handle */}
+      <ResizeHandle panelWidth={panelWidth} onResize={setPanelWidth} min={200} max={500} />
+
       {/* Sub-agent side panel — always visible, shows empty state when idle */}
-      <SubAgentPanel sessions={agentSessions} liveRuns={liveRuns} />
+      <SubAgentPanel sessions={agentSessions} liveRuns={liveRuns} width={panelWidth} onSessionDeleted={refreshAgentSessions} />
     </div>
   );
 }

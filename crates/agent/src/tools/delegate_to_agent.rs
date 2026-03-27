@@ -22,7 +22,7 @@ use crate::{
     engine_bootstrap::title_from,
     react_loop::run_react_loop,
     tool_registry::{SessionToolContext, Tool, ToolRegistry},
-    tools::shell_exec::{
+    tools::bash::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
 };
@@ -314,6 +314,17 @@ impl Tool for DelegateToAgentTool {
             tracing::warn!(agent = agent_name, error = %e, "failed to write agent task log");
         }
 
+        // Archive the agent conversation so it no longer appears in the active
+        // sessions list. The conversation history is preserved for traceability.
+        if let Err(e) = self.conversation.archive_conversation(&conv_id_str).await {
+            tracing::warn!(
+                agent = agent_name,
+                conv_id = %conv_id_str,
+                error = %e,
+                "failed to archive agent conversation"
+            );
+        }
+
         Ok(response.content)
     }
 }
@@ -453,10 +464,10 @@ mod tests {
 
     #[test]
     fn parse_tool_list_parses_csv() {
-        let result = parse_tool_list(&Some("read, write, exec".to_owned()));
+        let result = parse_tool_list(&Some("read, write, bash".to_owned()));
         assert!(result.contains(&"read".to_owned()));
         assert!(result.contains(&"write".to_owned()));
-        assert!(result.contains(&"exec".to_owned()));
+        assert!(result.contains(&"bash".to_owned()));
     }
 
     #[test]

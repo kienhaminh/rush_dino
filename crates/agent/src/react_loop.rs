@@ -17,7 +17,8 @@ use tokio::sync::mpsc;
 use rushdino_security::{taint::TaintLevel, validation::scan_prompt_injection};
 
 use crate::{
-    context::{estimate_tokens, truncate_messages},
+    compaction::{compact_messages, needs_compaction},
+    context::estimate_tokens,
     engine::AgentConfig,
     tool_registry::{SessionToolContext, ToolRegistry},
 };
@@ -62,12 +63,14 @@ pub async fn run_react_loop(
     let mut last_presented_content: Option<RichContent> = None;
 
     for _ in 0..config.max_iterations {
-        let input = truncate_messages(&messages, config.max_context_tokens);
+        if needs_compaction(&messages, config.max_context_tokens) {
+            messages = compact_messages(&*provider, messages, config.max_context_tokens).await;
+        }
         let response = provider
-            .chat(build_chat_request(input.clone(), &session_ctx, config))
+            .chat(build_chat_request(messages.clone(), &session_ctx, config))
             .await?;
         let iteration_usage = response.usage.clone().unwrap_or_else(|| {
-            estimate_turn_usage(&input, &response.content, &response.tool_calls)
+            estimate_turn_usage(&messages, &response.content, &response.tool_calls)
         });
         accumulate_usage(&mut total_usage, &iteration_usage);
         let mut response = response;
@@ -132,9 +135,11 @@ pub async fn run_react_loop_streaming(
     let mut last_presented_content: Option<RichContent> = None;
 
     for _ in 0..config.max_iterations {
-        let input = truncate_messages(&messages, config.max_context_tokens);
+        if needs_compaction(&messages, config.max_context_tokens) {
+            messages = compact_messages(&*provider, messages, config.max_context_tokens).await;
+        }
         let mut stream = provider
-            .stream_chat(build_chat_request(input.clone(), &session_ctx, config))
+            .stream_chat(build_chat_request(messages.clone(), &session_ctx, config))
             .await?;
 
         let mut content = String::new();
@@ -183,7 +188,7 @@ pub async fn run_react_loop_streaming(
             }
         }
 
-        let iteration_usage = estimate_turn_usage(&input, &content, &tool_calls);
+        let iteration_usage = estimate_turn_usage(&messages, &content, &tool_calls);
         accumulate_usage(&mut total_usage, &iteration_usage);
 
         if tool_calls.is_empty() {

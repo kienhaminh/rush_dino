@@ -18,7 +18,7 @@ use crate::{
     react_loop::run_react_loop,
     runtime::AgentRuntime,
     tool_registry::{SessionToolContext, ToolRegistry},
-    tools::shell_exec::{with_tool_execution_context, ToolExecutionContext},
+    tools::bash::{with_tool_execution_context, ToolExecutionContext},
     workflow_manager::WorkflowManager,
     workflow_types::WorkflowRunExecutionStep,
 };

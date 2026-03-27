@@ -51,7 +51,6 @@ async fn create_test_app(home: &Path) -> axum::Router {
         config_path,
         credentials_path,
         pool,
-        true,
     )
     .await
     .expect("build app")
@@ -148,7 +147,16 @@ async fn offline_app_smoke_covers_core_routes() {
 
     let (status, sessions) = send_empty(&app, Method::GET, "/api/sessions").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(sessions["items"].as_array().expect("session items").len(), 1);
+    let session_ids: Vec<&str> = sessions["items"]
+        .as_array()
+        .expect("session items")
+        .iter()
+        .filter_map(|s| s["id"].as_str())
+        .collect();
+    assert!(
+        session_ids.contains(&created_session["id"].as_str().unwrap()),
+        "created session must appear in list"
+    );
 
     let (status, workflows_before) = send_empty(&app, Method::GET, "/api/workflows").await;
     assert_eq!(status, StatusCode::OK);
@@ -199,7 +207,7 @@ async fn offline_app_smoke_covers_core_routes() {
         "/api/runs",
         "/api/cron",
         "/api/gateway/summary",
-        "/api/gateway/infrastructure",
+        "/api/gateway/adapters",
         "/api/approvals",
         "/api/system/summary",
         "/api/system/soul-memory",

@@ -346,9 +346,9 @@ export const MOCK_AGENT_RUNTIME: Record<string, AgentRuntimeData> = {
             source: 'core',
           },
           {
-            id: 'exec',
-            label: 'Exec',
-            description: 'Run shell commands in workspace.',
+            id: 'bash',
+            label: 'Bash',
+            description: 'Execute bash commands in workspace.',
             enabled: true,
             source: 'core',
           },

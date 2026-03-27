@@ -17,6 +17,8 @@ pub mod ws;
 
 use std::sync::Arc;
 
+use sqlx::SqlitePool;
+
 use axum::{
     middleware as axum_middleware,
     routing::{get, patch, post},
@@ -49,35 +51,19 @@ use crate::{
     webchat::WebChatAdapter,
 };
 
-pub async fn run_server() -> Result<()> {
-    init::ensure_rushdino_dir()?;
-
-    let home = init::default_home_dir();
-    let config_path = home.join("config.toml");
-    let credentials_path = home.join("credentials.toml");
-    let config = Arc::new(AppConfig::load_and_reconcile()?);
-    let credentials = Arc::new(CredentialsConfig::load()?);
-
-    let pool = db::init_pool(&config.db_path).await?;
-    db::run_migrations(&pool).await?;
-
-    let pool = Arc::new(pool);
+/// Build the Axum application router with all state wired up.
+pub async fn build_app(
+    config: Arc<AppConfig>,
+    credentials: Arc<CredentialsConfig>,
+    config_path: std::path::PathBuf,
+    credentials_path: std::path::PathBuf,
+    pool: Arc<SqlitePool>,
+) -> Result<Router> {
     let chat_broadcast = Arc::new(ChatBroadcastHub::new());
     let runtime_logs = Arc::new(RuntimeLogStore::new(
         pool.clone(),
         Some(chat_broadcast.clone()),
     ));
-    let _ = log_runtime(
-        &runtime_logs,
-        "info",
-        "server",
-        "server startup initialized",
-        Some(serde_json::json!({
-            "dbPath": config.db_path.display().to_string(),
-            "dataDir": config.data_dir.display().to_string(),
-        })),
-    )
-    .await;
     let gate = ApprovalGate::new();
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
     runtime.reconcile_incomplete_runs().await?;
@@ -92,16 +78,15 @@ pub async fn run_server() -> Result<()> {
         credentials_path.clone(),
         chat_broadcast.sender(),
     ));
+
     spawn_cron_runtime(runtime_state.clone());
 
-    // Background heavy runtime initialization for fast boot.
     let runtime_state_bg = runtime_state.clone();
     let runtime_logs_bg = runtime_logs.clone();
     tokio::spawn(async move {
         if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref()).await {
             tracing::error!("failed to perform initial runtime refresh: {err}");
         }
-
         if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
             let _ = log_runtime(
                 &runtime_logs_bg,
@@ -112,11 +97,8 @@ pub async fn run_server() -> Result<()> {
             )
             .await;
         }
-
         if let Some(engine) = runtime_state_bg.engine_opt() {
-            // Seed example workflows on first startup (skipped if any workflows already exist).
             engine.seed_initial_workflows().await;
-            // Ensure the single main workspace session exists.
             engine.ensure_main_session().await.ok();
         }
     });
@@ -634,20 +616,27 @@ pub async fn run_server() -> Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
+    Ok(app)
+}
+
+pub async fn run_server() -> Result<()> {
+    init::ensure_rushdino_dir()?;
+
+    let home = init::default_home_dir();
+    let config_path = home.join("config.toml");
+    let credentials_path = home.join("credentials.toml");
+    let config = Arc::new(AppConfig::load_and_reconcile()?);
+    let credentials = Arc::new(CredentialsConfig::load()?);
+
+    let pool = Arc::new(db::init_pool(&config.db_path).await?);
+    db::run_migrations(pool.as_ref()).await?;
+
+    let app = build_app(config.clone(), credentials, config_path, credentials_path, pool).await?;
+
     let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
-
     tracing::info!("rushdino server listening on http://{addr}");
-    let _ = log_runtime(
-        &runtime_logs,
-        "info",
-        "server",
-        "server listening",
-        Some(serde_json::json!({ "addr": addr })),
-    )
-    .await;
 
-    // Spawn background download of agent/skill templates (first-run only; skips existing files).
     let asset_home = init::default_home_dir();
     tokio::spawn(async move {
         if let Err(e) = asset_sync::seed_bundled_assets(&asset_home).await {

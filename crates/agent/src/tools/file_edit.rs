@@ -9,7 +9,7 @@ use rushdino_security::validation::validate_path;
 
 use crate::{
     tool_registry::Tool,
-    tools::shell_exec::current_tool_execution_context,
+    tools::bash::current_tool_execution_context,
 };
 
 pub struct FileEditTool {
@@ -50,6 +50,11 @@ impl Tool for FileEditTool {
                 "newText": {
                     "type": "string",
                     "description": "New text to replace the old text with"
+                },
+                "replaceAll": {
+                    "type": "boolean",
+                    "description": "When true, replace ALL occurrences of oldText. When false (default), \
+                                    oldText must appear exactly once or the edit fails."
                 }
             },
             "required": ["path", "oldText", "newText"]
@@ -71,6 +76,11 @@ impl Tool for FileEditTool {
             .get("newText")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("newText is required".to_owned()))?;
+
+        let replace_all = args
+            .get("replaceAll")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
 
         // Use workspace_override from task-local context if set, otherwise self.workspace.
         let effective_workspace = current_tool_execution_context()
@@ -96,9 +106,11 @@ impl Tool for FileEditTool {
         }
 
         let occurrences = content.matches(old_text).count();
-        if occurrences > 1 {
+
+        if !replace_all && occurrences > 1 {
             return Err(AppError::Validation(format!(
-                "oldText appears {} times in file '{}'. Use a more specific oldText that matches exactly once.",
+                "oldText appears {} times in file '{}'. Use a more specific oldText that matches exactly once, \
+                 or set replaceAll to true to replace all occurrences.",
                 occurrences,
                 target.display()
             )));

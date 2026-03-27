@@ -290,16 +290,14 @@ export function SessionsPage({
   thinkingLevelOverride,
   onThinkingLevelChange,
 }: SessionsPageProps) {
-  const [testMessages, setTestMessages] = useState<Message[]>([]);
   const [activeTab, setActiveTab] = useState<'overview' | 'prompts' | 'runs' | 'tools'>('overview');
 
   // Reset when session changes
   useEffect(() => {
-    setTestMessages([]);
     setActiveTab('overview');
   }, [selectedSessionId]);
 
-  const allMessages = useMemo(() => [...messages, ...testMessages], [messages, testMessages]);
+  const allMessages = messages;
 
   const allToolCalls = useMemo(() => {
     const calls: { msgIndex: number; call: ToolCall }[] = [];
@@ -315,17 +313,7 @@ export function SessionsPage({
     [systemPromptTokens, allMessages],
   );
 
-  const handleAddTestMessage = (role: 'user' | 'assistant', content: string) => {
-    const newMessage: Message = {
-      id: `test-${Date.now()}`,
-      role,
-      content,
-      created_at: new Date().toISOString(),
-    };
-    setTestMessages((prev) => [...prev, newMessage]);
-  };
-
-const activeCount = sessions.filter((s) => s.status === 'active').length;
+  const activeCount = sessions.filter((s) => s.status === 'active').length;
   const awaitingCount = sessions.filter((s) => s.status === 'awaiting_approval').length;
   const session = sessions.find((s) => s.id === selectedSessionId);
 
@@ -483,7 +471,6 @@ const activeCount = sessions.filter((s) => s.status === 'active').length;
                   messages={allMessages}
                   systemPrompt={systemPrompt}
                   actualPromptTokens={session?.contextWindow?.promptTokens}
-                  onAddTestMessage={handleAddTestMessage}
                 />
                 <div className="overflow-y-auto pr-1">
                   <ToolCallSummaryPanel toolCalls={allToolCalls} />

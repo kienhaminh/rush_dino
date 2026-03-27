@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Bot, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
+import { Bot, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, MessageSquare, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { fetchConversation } from '@/lib/api';
+import { fetchConversation, deleteConversation } from '@/lib/api';
+import { agentColor } from './agent-colors';
+import { SubAgentMarkdown } from './sub-agent-markdown';
 import type { SessionSummary } from '@/lib/types';
 import type { ConversationItem } from '@/lib/types';
 
@@ -16,20 +18,7 @@ interface LiveRun {
 interface SubAgentPanelProps {
   sessions: SessionSummary[];
   liveRuns: LiveRun[];
-}
-
-// ── Agent name → pastel accent colour ────────────────────────────────────────
-const AGENT_COLORS: Record<string, string> = {
-  researcher: 'text-sky-400 bg-sky-400/10',
-  coder: 'text-violet-400 bg-violet-400/10',
-  writer: 'text-amber-400 bg-amber-400/10',
-  reviewer: 'text-emerald-400 bg-emerald-400/10',
-  planner: 'text-rose-400 bg-rose-400/10',
-};
-
-function agentColor(name: string) {
-  const key = name.toLowerCase().split(/[-_\s]/)[0];
-  return AGENT_COLORS[key] ?? 'text-primary/80 bg-primary/10';
+  width?: number;
 }
 
 // ── Session detail modal (simple inline expand) ───────────────────────────────
@@ -77,7 +66,7 @@ function SessionDetail({ sessionId, onClose }: { sessionId: string; onClose: () 
               )}
             >
               {item.kind !== 'tool_use' && item.kind !== 'thinking' && item.kind !== 'error' && item.kind !== 'approval'
-                ? item.content
+                ? <SubAgentMarkdown content={item.content} />
                 : null}
             </div>
           ))}
@@ -119,7 +108,9 @@ function LiveRunRow({ run }: { run: LiveRun }) {
       </button>
       {expanded && run.result && (
         <div className="border-t border-border/20 px-3 py-2 max-h-40 overflow-y-auto scrollbar-thin">
-          <pre className="text-[11px] text-muted-foreground/70 whitespace-pre-wrap break-words">{run.result}</pre>
+          <div className="text-[11px] text-muted-foreground/70">
+            <SubAgentMarkdown content={run.result} />
+          </div>
         </div>
       )}
     </div>
@@ -127,7 +118,7 @@ function LiveRunRow({ run }: { run: LiveRun }) {
 }
 
 // ── Persisted session row ─────────────────────────────────────────────────────
-function SessionRow({ session }: { session: SessionSummary }) {
+function SessionRow({ session, onDelete }: { session: SessionSummary; onDelete: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
   // Derive agent name from title e.g. "researcher: find info about X"
@@ -137,22 +128,33 @@ function SessionRow({ session }: { session: SessionSummary }) {
   const isActive = session.activeRunCount > 0;
 
   return (
-    <div className="border border-border/20 rounded-xl overflow-hidden">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors text-left"
-      >
-        <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0', agentColor(agentName))}>
-          {agentName}
-        </span>
-        <span className="text-[11px] text-foreground/60 truncate flex-1">{task || session.title}</span>
-        {isActive
-          ? <Loader2 size={11} className="text-amber-400 animate-spin shrink-0" />
-          : <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
-        {expanded
-          ? <ChevronDown size={10} className="text-muted-foreground/40 shrink-0" />
-          : <ChevronUp size={10} className="text-muted-foreground/40 shrink-0" />}
-      </button>
+    <div className="border border-border/20 rounded-xl overflow-hidden group">
+      <div className="flex items-center">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex-1 flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors text-left min-w-0"
+        >
+          <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-md shrink-0', agentColor(agentName))}>
+            {agentName}
+          </span>
+          <span className="text-[11px] text-foreground/60 truncate flex-1">{task || session.title}</span>
+          {isActive
+            ? <Loader2 size={11} className="text-amber-400 animate-spin shrink-0" />
+            : <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />}
+          {expanded
+            ? <ChevronDown size={10} className="text-muted-foreground/40 shrink-0" />
+            : <ChevronUp size={10} className="text-muted-foreground/40 shrink-0" />}
+        </button>
+        {!isActive && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(session.id); }}
+            className="opacity-0 group-hover:opacity-100 px-2 py-2 text-muted-foreground/30 hover:text-red-400 transition-all shrink-0"
+            title="Delete agent session"
+          >
+            <Trash2 size={11} />
+          </button>
+        )}
+      </div>
       {expanded && (
         <SessionDetail sessionId={session.id} onClose={() => setExpanded(false)} />
       )}
@@ -161,14 +163,19 @@ function SessionRow({ session }: { session: SessionSummary }) {
 }
 
 // ── Main panel ────────────────────────────────────────────────────────────────
-export function SubAgentPanel({ sessions, liveRuns }: SubAgentPanelProps) {
+export function SubAgentPanel({ sessions, liveRuns, width, onSessionDeleted }: SubAgentPanelProps & { onSessionDeleted?: () => void }) {
   const [collapsed, setCollapsed] = useState(false);
+
+  const handleDelete = async (id: string) => {
+    await deleteConversation(id);
+    onSessionDeleted?.();
+  };
 
   const hasRunning = liveRuns.some((r) => r.status === 'running');
   const totalCount = liveRuns.length + sessions.length;
 
   return (
-    <div className="w-[260px] shrink-0 border-l border-border/20 flex flex-col h-full bg-background/40">
+    <div className="shrink-0 flex flex-col h-full bg-background/40" style={{ width: width ?? 260 }}>
       {/* Header */}
       <button
         onClick={() => setCollapsed((v) => !v)}
@@ -200,7 +207,7 @@ export function SubAgentPanel({ sessions, liveRuns }: SubAgentPanelProps) {
 
           {/* Persisted sessions */}
           {sessions.map((s) => (
-            <SessionRow key={s.id} session={s} />
+            <SessionRow key={s.id} session={s} onDelete={handleDelete} />
           ))}
 
           {totalCount === 0 && (

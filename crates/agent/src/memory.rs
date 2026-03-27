@@ -171,7 +171,7 @@ impl MemoryManager {
     pub fn collect_startup_files(&self) -> Vec<BootstrapFile> {
         let mut files = Vec::new();
 
-        for name in ["USER.md", "TOOLS.md", "IDENTITY.md"] {
+        for name in ["SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"] {
             let path = self.resolve_named_path(name);
             let content = fs::read_to_string(&path).ok();
             files.push(BootstrapFile {

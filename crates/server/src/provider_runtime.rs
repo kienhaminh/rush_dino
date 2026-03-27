@@ -148,6 +148,10 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
                             .bootstrap
                             .max_total_chars
                             .unwrap_or(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS),
+                        max_context_tokens: config
+                            .agent
+                            .max_context_tokens
+                            .unwrap_or(200_000),
                         ..AgentConfig::default()
                     }
                 },

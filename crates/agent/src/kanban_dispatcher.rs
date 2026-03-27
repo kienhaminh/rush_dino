@@ -28,7 +28,7 @@ use crate::{
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
         delegate_to_agent::parse_tool_list,
-        shell_exec::{with_tool_execution_context, ToolExecutionContext},
+        bash::{with_tool_execution_context, ToolExecutionContext},
     },
 };
 

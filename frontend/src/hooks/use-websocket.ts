@@ -110,6 +110,12 @@ export function useWebSocket(
           lastStreamedConvIdRef.current = streamingConvIdRef.current;
           setIsStreaming(false);
           streamingConvIdRef.current = null;
+          // Mark all open thinking blocks as done so they collapse.
+          setItems((prev) =>
+            prev.map((item) =>
+              item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
+            ),
+          );
           return;
         }
         if (msg.thinking_delta) {

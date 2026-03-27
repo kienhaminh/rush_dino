@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ThinkingBlockProps {
@@ -8,62 +8,56 @@ interface ThinkingBlockProps {
 }
 
 export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
-  // Start expanded so content is visible during live streaming.
   const [expanded, setExpanded] = useState(true);
 
-  // Client-only: useLayoutEffect is skipped in SSR (renderToStaticMarkup).
-  // We use it (not useEffect) to collapse synchronously before paint,
-  // preventing a one-frame flash of the done+expanded state.
+  // Collapse synchronously before paint to avoid a flash of the expanded state.
   useLayoutEffect(() => {
     if (done) setExpanded(false);
   }, [done]);
 
   return (
-    <div className="py-1 animate-in fade-in duration-200">
-      <div className="border-l-2 border-muted-foreground/20 pl-3 py-1">
-        {/* Header row — always visible */}
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          disabled={!done}
-          className={cn(
-            'flex items-center gap-2 w-full text-left',
-            done ? 'cursor-pointer' : 'cursor-default',
-          )}
-        >
-          <span className="text-[10px] text-muted-foreground/50 select-none">
-            {done ? 'Thought for a moment' : 'Thinking\u2026'}
+    <div className="py-0.5 animate-in fade-in duration-200 ml-9">
+      <button
+        type="button"
+        onClick={() => done && setExpanded((v) => !v)}
+        className={cn(
+          'flex items-center gap-2 text-left group rounded-lg px-2 py-1 -ml-2 transition-colors',
+          done ? 'cursor-pointer hover:bg-muted/20' : 'cursor-default',
+        )}
+      >
+        {/* Animated pulse ring while thinking */}
+        {!done && (
+          <span className="relative flex items-center justify-center w-3.5 h-3.5" aria-hidden>
+            <span className="absolute inset-0 rounded-full bg-[hsl(var(--brand-cyan)/0.15)] animate-ping" />
+            <span className="relative w-1.5 h-1.5 rounded-full bg-[hsl(var(--brand-cyan)/0.6)]" />
           </span>
-          {/* Inline dot animation — header only, shown while live */}
-          {!done && (
-            <span className="flex items-center gap-0.5" aria-hidden>
-              {[0, 1, 2].map((i) => (
-                <span
-                  key={i}
-                  className="w-1 h-1 rounded-full bg-muted-foreground/30 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </span>
-          )}
-          {/* Chevron — shown only when done */}
-          {done && (
-            expanded
-              ? <ChevronUp size={10} className="text-muted-foreground/40 ml-auto" />
-              : <ChevronDown size={10} className="text-muted-foreground/40 ml-auto" />
-          )}
-        </button>
+        )}
 
-        {/* Content area — visible when expanded and content is non-empty */}
-        {expanded && content && (
-          <p className={cn(
-            'text-sm text-muted-foreground/60 leading-relaxed whitespace-pre-wrap mt-1.5',
-            done && 'max-h-60 overflow-y-auto scrollbar-thin',
-          )}>
+        {done && (
+          <span className="w-3.5 h-3.5 flex items-center justify-center">
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
+          </span>
+        )}
+
+        <span className="text-[11px] text-muted-foreground/40 italic select-none group-hover:text-muted-foreground/60 transition-colors">
+          {done ? 'Thought for a moment' : 'Thinking\u2026'}
+        </span>
+
+        {done && (
+          expanded
+            ? <ChevronDown size={10} className="text-muted-foreground/30" />
+            : <ChevronRight size={10} className="text-muted-foreground/30" />
+        )}
+      </button>
+
+      {/* Content — only visible when expanded */}
+      {expanded && content && (
+        <div className="mt-1 ml-1.5 pl-3 border-l border-[hsl(var(--brand-cyan)/0.15)] max-h-52 overflow-y-auto scrollbar-thin">
+          <p className="text-[12px] text-muted-foreground/45 leading-relaxed whitespace-pre-wrap italic">
             {content}
           </p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -105,7 +105,9 @@ impl ConversationManager {
 
     pub async fn list_agent_conversations(&self) -> Result<Vec<Conversation>> {
         let rows = sqlx::query(
-            "SELECT id, title, created_at, updated_at FROM conversations WHERE kind = 'agent' ORDER BY updated_at DESC LIMIT 50",
+            "SELECT id, title, created_at, updated_at FROM conversations \
+             WHERE kind = 'agent' AND archived_at IS NULL \
+             ORDER BY updated_at DESC LIMIT 50",
         )
         .fetch_all(self.pool.as_ref())
         .await?;
@@ -150,6 +152,28 @@ impl ConversationManager {
             .bind(id)
             .execute(self.pool.as_ref())
             .await?;
+        Ok(())
+    }
+
+    /// Delete specific messages by ID from a conversation. Used to persist compaction: when the
+    /// react loop compacts old messages into a summary, the original rows are removed here.
+    pub async fn delete_messages_by_ids(
+        &self,
+        conversation_id: &str,
+        ids: &[String],
+    ) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "DELETE FROM messages WHERE conversation_id = ? AND id IN ({placeholders})"
+        );
+        let mut q = sqlx::query(&sql).bind(conversation_id);
+        for id in ids {
+            q = q.bind(id.as_str());
+        }
+        q.execute(self.pool.as_ref()).await?;
         Ok(())
     }
 

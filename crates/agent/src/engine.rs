@@ -24,16 +24,14 @@ use crate::{
     },
     engine_bootstrap::{resolve_skills_for_prompt, system_message, title_from, user_message},
     engine_deps::build_engine_deps,
-    job_manager::{JobManager, JobResult},
     knowledge_graph::KnowledgeGraphAccess,
     memory::MemoryManager,
-    orchestrator::Orchestrator,
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
     skill_manager::Skill,
     system_broker::SharedSystemBroker,
     tool_registry::{SessionToolContext, ToolRegistry},
-    tools::shell_exec::{with_tool_execution_context, ToolExecutionContext},
+    tools::bash::{with_tool_execution_context, ToolExecutionContext},
     usage_metrics_store::UsageMetricsStore,
     workflow_manager::WorkflowManager,
     workflow_runner::WorkflowRunner,
@@ -63,7 +61,7 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             max_iterations: 10,
-            max_context_tokens: 8192,
+            max_context_tokens: 200_000,
             tool_timeout_secs: 30,
             model_override: None,
             system_prompt: "You are RushDino, a local-first AI agent.".to_owned(),
@@ -78,8 +76,6 @@ pub struct AgentEngine {
     provider: Arc<Provider>,
     conversation: Arc<ConversationManager>,
     pub tool_registry: Arc<ToolRegistry>,
-    _job_manager: Arc<JobManager>,
-    _orchestrator: Arc<Orchestrator>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<crate::skill_manager::SkillManager>,
     agent_manager: Arc<AgentManager>,
@@ -96,7 +92,6 @@ pub struct AgentEngine {
     config: AgentConfig,
     /// Shared runtime override — same Arc as RuntimeState.thinking_level_override.
     thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
-    inbox_rx: Arc<Mutex<mpsc::Receiver<JobResult>>>,
     runtime: Arc<AgentRuntime>,
     pending_assistant_runs: Arc<Mutex<HashMap<String, AssistantRunJob>>>,
 }
@@ -169,7 +164,7 @@ mod config_tests {
     #[test]
     fn default_context_budget_is_large_enough_for_longer_conversations() {
         let config = AgentConfig::default();
-        assert_eq!(config.max_context_tokens, 8192);
+        assert_eq!(config.max_context_tokens, 200_000);
     }
 
     // Note: constructing AgentEngine in a unit test requires the full dependency graph
@@ -264,8 +259,6 @@ impl AgentEngine {
             provider,
             conversation: deps.conversation,
             tool_registry: deps.tool_registry,
-            _job_manager: deps.job_manager,
-            _orchestrator: deps.orchestrator,
             memory: deps.memory,
             skill_manager: deps.skill_manager,
             agent_manager: deps.agent_manager,
@@ -281,7 +274,6 @@ impl AgentEngine {
             session_ctx: deps.session_ctx,
             config,
             thinking_level_override: Arc::new(RwLock::new(None)),
-            inbox_rx: Arc::new(Mutex::new(deps.inbox_rx)),
             runtime,
             pending_assistant_runs: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -341,22 +333,34 @@ impl AgentEngine {
             ),
         );
 
-        let old_len = messages.len();
+        // Track which message IDs are already persisted in the DB so we can detect
+        // compaction (messages that disappear) and new messages (messages to save).
+        // The system prompt is ephemeral (rebuilt each turn) and never stored.
+        let sys_prompt_id = messages[0].id.clone();
+        let persisted_ids: std::collections::HashSet<String> =
+            messages[1..].iter().map(|m| m.id.clone()).collect();
+
         let user_msg = user_message(user_input);
         self.conversation
             .save_message(conversation_id, &user_msg)
             .await?;
         self.maybe_ingest_message("conversation_message", &user_msg)
             .await;
+        let user_msg_id = user_msg.id.clone();
         messages.push(user_msg);
 
-        let mut injected_graph_context = false;
+        // Collect all IDs the DB knows about before the react loop.
+        let mut all_pre_loop_db_ids = persisted_ids;
+        all_pre_loop_db_ids.insert(user_msg_id);
+
+        let mut graph_ctx_id: Option<String> = None;
         if let Some(graph_message) = self
             .build_graph_context_message(user_input, Some(conversation_id))
             .await
         {
+            // Graph context is ephemeral — injected for LLM context only, never stored.
+            graph_ctx_id = Some(graph_message.id.clone());
             messages.push(graph_message);
-            injected_graph_context = true;
         }
 
         let context = ToolExecutionContext {
@@ -392,13 +396,35 @@ impl AgentEngine {
             self.memory.delete_named("BOOTSTRAP.md");
         }
 
-        let persist_offset = old_len + 1 + usize::from(injected_graph_context);
-        for message in all_messages.iter().skip(persist_offset) {
+        // Persist compaction: if any previously-saved message ID is absent from
+        // all_messages, the react loop compacted it away. Delete those rows so the DB
+        // matches what the agent actually used as context.
+        let current_ids: std::collections::HashSet<&str> =
+            all_messages.iter().map(|m| m.id.as_str()).collect();
+        let dropped: Vec<String> = all_pre_loop_db_ids
+            .iter()
+            .filter(|id| !current_ids.contains(id.as_str()))
+            .cloned()
+            .collect();
+        if !dropped.is_empty() {
             self.conversation
-                .save_message(conversation_id, message)
+                .delete_messages_by_ids(conversation_id, &dropped)
                 .await?;
-            self.maybe_ingest_message("conversation_message", message)
-                .await;
+        }
+
+        // Save every message that is not already in the DB and not an ephemeral
+        // message (system prompt or graph context).
+        let is_ephemeral = |id: &str| -> bool {
+            id == sys_prompt_id || graph_ctx_id.as_deref() == Some(id)
+        };
+        for message in &all_messages {
+            if !all_pre_loop_db_ids.contains(&message.id) && !is_ephemeral(&message.id) {
+                self.conversation
+                    .save_message(conversation_id, message)
+                    .await?;
+                self.maybe_ingest_message("conversation_message", message)
+                    .await;
+            }
         }
         self.persist_usage_metric(conversation_id, &response).await;
 
@@ -1100,11 +1126,6 @@ impl AgentEngine {
         }
         self.persist_usage_metric(conversation_id, response).await;
         Ok(())
-    }
-
-    pub async fn poll_inbox(&self) -> Option<JobResult> {
-        let mut rx = self.inbox_rx.lock().await;
-        rx.try_recv().ok()
     }
 
     pub async fn list_conversations(&self) -> Result<Vec<rushdino_common::models::Conversation>> {

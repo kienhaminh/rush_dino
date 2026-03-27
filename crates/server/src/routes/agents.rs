@@ -281,12 +281,12 @@ pub async fn delete_agent(
 fn tool_section_id(tool_id: &str) -> &'static str {
     match tool_id {
         "read" | "write" | "edit" => "fs",
-        "exec" => "runtime",
+        "bash" => "runtime",
         "web_search" | "web_fetch" => "web",
         "memory_search" | "memory_write" | "knowledge_graph" => "memory",
         "sessions_list" | "sessions_history" | "sessions_send" | "sessions_spawn"
         | "session_status" => "sessions",
-        "list_agents" | "delegate" | "spawn_agents" | "subagents" => "agents",
+        "list_agents" | "delegate" | "spawn_agents" => "agents",
         "list_skills" | "read_skill" | "create_skill" => "skills",
         "message" => "messaging",
         "cron" | "workflow" => "automation",

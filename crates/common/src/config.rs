@@ -212,6 +212,12 @@ pub struct ExecutionConfig {
     pub shell_exec_sandbox: ShellExecSandboxConfig,
 }
 
+/// Agent runtime settings (e.g. context window size).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentSection {
+    pub max_context_tokens: Option<usize>,
+}
+
 /// Bootstrap file injection limits for the system prompt.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BootstrapConfig {
@@ -272,6 +278,8 @@ pub struct AppConfig {
     pub knowledge_graph: KnowledgeGraphConfig,
     #[serde(default)]
     pub bootstrap: BootstrapConfig,
+    #[serde(default)]
+    pub agent: AgentSection,
 }
 
 impl Default for AppConfig {
@@ -304,6 +312,7 @@ impl Default for AppConfig {
             execution: ExecutionConfig::default(),
             knowledge_graph: KnowledgeGraphConfig::default(),
             bootstrap: BootstrapConfig::default(),
+            agent: AgentSection::default(),
         }
     }
 }

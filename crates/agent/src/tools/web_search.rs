@@ -50,7 +50,8 @@ impl Tool for WebSearchTool {
     }
 
     fn description(&self) -> &str {
-        "Search web via Brave Search API"
+        "Search the web via Brave Search API. Returns structured results with titles, URLs, \
+         and descriptions. Use `maxResults` to control how many results are returned (default 5)."
     }
 
     fn keywords(&self) -> Vec<&str> {
@@ -60,7 +61,18 @@ impl Tool for WebSearchTool {
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
-            "properties": {"query": {"type": "string"}},
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query string"
+                },
+                "maxResults": {
+                    "type": "integer",
+                    "description": "Maximum number of results to return (default 5, max 20)",
+                    "minimum": 1,
+                    "maximum": 20
+                }
+            },
             "required": ["query"]
         })
     }
@@ -70,6 +82,12 @@ impl Tool for WebSearchTool {
             .get("query")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("query is required".to_owned()))?;
+
+        let max_results = args
+            .get("maxResults")
+            .and_then(Value::as_u64)
+            .unwrap_or(5)
+            .min(20) as usize;
 
         let api_key = self
             .api_key
@@ -112,7 +130,7 @@ impl Tool for WebSearchTool {
         let payload: Value = reqwest::Client::new()
             .get(&self.endpoint)
             .header("x-subscription-token", api_key)
-            .query(&[("q", query)])
+            .query(&[("q", query), ("count", &max_results.to_string())])
             .send()
             .await
             .map_err(|e| AppError::Agent(format!("web search failed: {e}")))?
@@ -122,26 +140,50 @@ impl Tool for WebSearchTool {
             .await
             .map_err(|e| AppError::Agent(format!("web search parse error: {e}")))?;
 
-        let summary = payload
+        let results: Vec<Value> = payload
             .pointer("/web/results")
             .and_then(Value::as_array)
             .map(|items| {
                 items
                     .iter()
-                    .take(5)
+                    .take(max_results)
                     .map(|item| {
                         let title = item
                             .get("title")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
                         let url = item.get("url").and_then(Value::as_str).unwrap_or_default();
-                        format!("- {title}: {url}")
+                        let description = item
+                            .get("description")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let age = item
+                            .get("age")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default();
+                        let mut result = json!({
+                            "title": title,
+                            "url": url,
+                        });
+                        if !description.is_empty() {
+                            result["description"] = json!(description);
+                        }
+                        if !age.is_empty() {
+                            result["age"] = json!(age);
+                        }
+                        result
                     })
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                    .collect()
             })
             .unwrap_or_default();
 
-        Ok(summary)
+        let output = json!({
+            "query": query,
+            "count": results.len(),
+            "results": results,
+        });
+
+        serde_json::to_string_pretty(&output)
+            .map_err(|e| AppError::Agent(format!("json serialization failed: {e}")))
     }
 }
