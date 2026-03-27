@@ -54,23 +54,25 @@ export function ConversationItem({
           {dateStr} • {timeStr}
         </span>
 
-        <div
-          role="button"
-          tabIndex={0}
-          className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 hover:text-destructive ${active ? "text-primary/70" : "text-muted-foreground"}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
+        {conversation.id !== 'main' && (
+          <div
+            role="button"
+            tabIndex={0}
+            className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/10 hover:text-destructive ${active ? "text-primary/70" : "text-muted-foreground"}`}
+            onClick={(e) => {
               e.stopPropagation();
               onDelete();
-            }
-          }}
-        >
-          <Trash2 size={12} />
-        </div>
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.stopPropagation();
+                onDelete();
+              }
+            }}
+          >
+            <Trash2 size={12} />
+          </div>
+        )}
       </div>
     </button>
   );
