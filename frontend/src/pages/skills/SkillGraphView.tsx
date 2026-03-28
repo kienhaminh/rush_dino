@@ -8,8 +8,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { fetchSkillGraph } from './skill-graph-api';
-import type { GraphSnapshot } from './skill-graph-types';
+import type { GraphSnapshot, SkillNode as SkillNodeType } from './skill-graph-types';
 import { getCategoryColor } from './skill-graph-types';
 import { CategoryNode } from './nodes/category-node';
 import { SkillNode } from './nodes/skill-node';
@@ -23,7 +22,12 @@ const nodeTypes = {
 /**
  * Compute a radial layout: categories on a circle, skills clustered around their category.
  */
-function computeLayout(snapshot: GraphSnapshot): { nodes: Node[]; edges: Edge[] } {
+function computeLayout(
+  snapshot: GraphSnapshot,
+  selectedSkillId: string | undefined,
+  highlightedIds: string[] | undefined,
+  filter: 'all' | 'core' | 'custom' | undefined,
+): { nodes: Node[]; edges: Edge[] } {
   const categories = snapshot.nodes.filter((n) => n.nodeType === 'category');
   const skills = snapshot.nodes.filter((n) => n.nodeType === 'skill');
 
@@ -43,6 +47,15 @@ function computeLayout(snapshot: GraphSnapshot): { nodes: Node[]; edges: Edge[] 
   const centerY = 500;
   const categoryRadius = 380;
   const skillRadius = 140;
+
+  // Build a lookup for skill data by id
+  const skillById: Record<string, SkillNodeType> = {};
+  for (const s of skills) {
+    skillById[s.id] = s;
+  }
+
+  // Determine which IDs to dim based on highlights and filter
+  const hasHighlights = highlightedIds && highlightedIds.length > 0;
 
   const flowNodes: Node[] = [];
   const flowEdges: Edge[] = [];
@@ -68,8 +81,21 @@ function computeLayout(snapshot: GraphSnapshot): { nodes: Node[]; edges: Edge[] 
 
     // Place skills around their category
     childIds.forEach((skillId, j) => {
-      const skill = skills.find((s) => s.id === skillId);
+      const skill = skillById[skillId];
       if (!skill) return;
+
+      const isCustom = skill.tags.includes('workspace');
+      const isSelected = skill.id === selectedSkillId;
+
+      // Determine if this node should be dimmed
+      let isDimmed = false;
+      if (hasHighlights) {
+        isDimmed = !highlightedIds!.includes(skill.id);
+      } else if (filter === 'core') {
+        isDimmed = isCustom;
+      } else if (filter === 'custom') {
+        isDimmed = !isCustom;
+      }
 
       const skillAngle = angle + ((j - (childIds.length - 1) / 2) * 0.35);
       const sx = catX + skillRadius * Math.cos(skillAngle) - 80;
@@ -83,6 +109,9 @@ function computeLayout(snapshot: GraphSnapshot): { nodes: Node[]; edges: Edge[] 
           label: skill.name,
           description: skill.description,
           accentColor: color,
+          isSelected,
+          isDimmed,
+          isCustom,
         },
       });
 
@@ -91,7 +120,11 @@ function computeLayout(snapshot: GraphSnapshot): { nodes: Node[]; edges: Edge[] 
         id: `edge-${skill.id}-${cat.id}`,
         source: skill.id,
         target: cat.id,
-        style: { stroke: `${color}50`, strokeWidth: 1.5 },
+        style: {
+          stroke: `${color}50`,
+          strokeWidth: 1.5,
+          opacity: isDimmed ? 0.2 : 1,
+        },
         animated: false,
       });
     });
@@ -113,32 +146,55 @@ function computeLayout(snapshot: GraphSnapshot): { nodes: Node[]; edges: Edge[] 
   return { nodes: flowNodes, edges: flowEdges };
 }
 
-interface SkillGraphViewProps {
+export interface SkillGraphViewProps {
   className?: string;
+  /** External graph snapshot — if provided, internal fetch is skipped */
+  snapshot?: GraphSnapshot | null;
+  /** Called when a skill node is clicked */
+  onSkillSelect?: (skill: SkillNodeType) => void;
+  /** Highlight the selected node with a glow border */
+  selectedSkillId?: string;
+  /** When set and non-empty, dim nodes not in the set */
+  highlightedIds?: string[];
+  /** Dim nodes that don't match the active filter tab */
+  filter?: 'all' | 'core' | 'custom';
 }
 
-export function SkillGraphView({ className }: SkillGraphViewProps) {
-  const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
+export function SkillGraphView({
+  className,
+  snapshot: externalSnapshot,
+  onSkillSelect,
+  selectedSkillId,
+  highlightedIds,
+  filter = 'all',
+}: SkillGraphViewProps) {
+  const [internalSnapshot, setInternalSnapshot] = useState<GraphSnapshot | null>(null);
+  const [loading, setLoading] = useState(externalSnapshot === undefined);
   const [error, setError] = useState<string | null>(null);
 
+  // Only fetch internally when no external snapshot is provided
   useEffect(() => {
-    setLoading(true);
-    fetchSkillGraph()
-      .then((data) => {
-        setSnapshot(data);
-        setError(null);
-      })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load skill graph');
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    if (externalSnapshot !== undefined) return;
+    import('./skill-graph-api').then(({ fetchSkillGraph }) => {
+      setLoading(true);
+      fetchSkillGraph()
+        .then((data) => {
+          setInternalSnapshot(data);
+          setError(null);
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : 'Failed to load skill graph');
+        })
+        .finally(() => setLoading(false));
+    });
+  }, [externalSnapshot]);
+
+  const snapshot = externalSnapshot !== undefined ? externalSnapshot : internalSnapshot;
 
   const layout = useMemo(() => {
     if (!snapshot) return { nodes: [], edges: [] };
-    return computeLayout(snapshot);
-  }, [snapshot]);
+    return computeLayout(snapshot, selectedSkillId, highlightedIds, filter);
+  }, [snapshot, selectedSkillId, highlightedIds, filter]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
   const [edges, , onEdgesChange] = useEdgesState(layout.edges);
@@ -148,11 +204,13 @@ export function SkillGraphView({ className }: SkillGraphViewProps) {
     setNodes(layout.nodes);
   }, [layout.nodes, setNodes]);
 
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    setSelectedNode(node.id);
-  }, []);
+    if (!snapshot || node.type !== 'skill') return;
+    const skillNode = snapshot.nodes.find((n) => n.id === node.id);
+    if (skillNode && onSkillSelect) {
+      onSkillSelect(skillNode);
+    }
+  }, [snapshot, onSkillSelect]);
 
   if (loading) {
     return (
@@ -187,7 +245,7 @@ export function SkillGraphView({ className }: SkillGraphViewProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
-        onPaneClick={() => setSelectedNode(null)}
+        onPaneClick={() => onSkillSelect && onSkillSelect(null as unknown as SkillNodeType)}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.3}

@@ -1,229 +1,223 @@
-import { Pencil, SearchIcon, Trash2, X, Check } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { SearchIcon, LayoutGridIcon, NetworkIcon } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { fetchAgents } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import type { SkillRecord } from '@/lib/types';
+import type { AgentRecord } from '@/pages/agents/agent-types';
 
-type SkillsPageProps = {
-  skills: SkillRecord[];
-  loading: boolean;
-  error: string | null;
-  filter: string;
-  onFilterChange: (next: string) => void;
-  saving: boolean;
-  onSave: (name: string, patch: { description: string; instructions: string; tools: string[] }) => void;
-  onRefresh: () => void;
-  onDelete: (name: string) => void;
-};
+import type { SkillNode, GraphSnapshot } from './skill-graph-types';
+import { fetchSkillGraph, querySkillGraph } from './skill-graph-api';
+import { SkillGraphView } from './SkillGraphView';
+import { SkillDetailPanel } from './SkillDetailPanel';
 
-export function SkillsPage({
-  skills,
-  loading,
-  error,
-  filter,
-  onFilterChange,
-  saving,
-  onSave,
-  onRefresh,
-  onDelete,
-}: SkillsPageProps) {
-  const [editingName, setEditingName] = useState<string | null>(null);
-  const [draft, setDraft] = useState({ description: '', instructions: '', tools: '' });
+type FilterTab = 'all' | 'core' | 'custom';
 
-  const startEdit = (skill: SkillRecord) => {
-    if (skill.isBuiltIn) return;
-    setEditingName(skill.name);
-    setDraft({
-      description: skill.description,
-      instructions: skill.instructions,
-      tools: skill.tools.join(', '),
-    });
-  };
+/** Debounce a callback by `delay` ms */
+function useDebounced<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
 
-  const cancelEdit = () => {
-    setEditingName(null);
-    setDraft({ description: '', instructions: '', tools: '' });
-  };
+export function SkillsPage() {
+  // Data
+  const [graph, setGraph] = useState<GraphSnapshot | null>(null);
+  const [graphLoading, setGraphLoading] = useState(true);
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
 
-  const commitEdit = (name: string) => {
-    const target = skills.find((s) => s.name === name);
-    if (target?.isBuiltIn) return;
-    onSave(name, {
-      description: draft.description,
-      instructions: draft.instructions,
-      tools: draft.tools.split(',').map((t) => t.trim()).filter(Boolean),
-    });
-    setEditingName(null);
-  };
+  // Selection & UI state
+  const [selectedSkill, setSelectedSkill] = useState<SkillNode | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<FilterTab>('all');
 
-  const query = filter.trim().toLowerCase();
-  const filtered = query
-    ? skills.filter((skill) =>
-        [skill.name, skill.description, skill.tools.join(' ')].join(' ').toLowerCase().includes(query),
-      )
-    : skills;
+  // Highlighted IDs from semantic search results
+  const [highlightedIds, setHighlightedIds] = useState<string[]>([]);
 
-  const baseSkills = filtered.filter((s) => s.isBuiltIn);
-  const customSkills = filtered.filter((s) => !s.isBuiltIn);
+  // Track inflight search to avoid race conditions
+  const searchAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const renderSkillCard = (skill: SkillRecord) => {
-    const isEditing = editingName === skill.name && !skill.isBuiltIn;
+  const debouncedSearch = useDebounced(searchQuery, 300);
 
-    return (
-      <div
-        key={skill.name}
-        className={cn(
-          'group rounded-xl border bg-card/40 transition-all duration-300',
-          isEditing
-            ? 'border-primary/40 shadow-lg shadow-primary/5'
-            : 'border-border/40 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5',
-        )}
-      >
-        {isEditing ? (
-          <div className="p-5 space-y-3">
-            <p className="text-sm font-semibold">{skill.name}</p>
-            <Input
-              value={draft.description}
-              onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-              placeholder="Short description"
-            />
-            <Input
-              value={draft.tools}
-              onChange={(e) => setDraft((d) => ({ ...d, tools: e.target.value }))}
-              placeholder="tool_a, tool_b (optional)"
-            />
-            <Textarea
-              value={draft.instructions}
-              onChange={(e) => setDraft((d) => ({ ...d, instructions: e.target.value }))}
-              placeholder="Detailed skill instructions"
-              className="min-h-[140px]"
-            />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => commitEdit(skill.name)} disabled={saving}>
-                <Check className="mr-1.5 h-3.5 w-3.5" />
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
-              <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
-                <X className="mr-1.5 h-3.5 w-3.5" />
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="p-5 flex flex-col gap-3 h-full">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2 min-w-0">
-                <p className="text-sm font-semibold leading-tight">{skill.name}</p>
-                {skill.isBuiltIn ? (
-                  <Badge variant="secondary" className="text-[10px] uppercase tracking-wider shrink-0">
-                    Base
-                  </Badge>
-                ) : null}
-              </div>
-              {!skill.isBuiltIn ? (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => startEdit(skill)}
-                    className="p-1.5 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors"
-                    title="Edit"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDelete(skill.name)}
-                    className="p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive transition-colors"
-                    title="Delete"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ) : null}
-            </div>
+  // Fetch graph on mount
+  useEffect(() => {
+    setGraphLoading(true);
+    fetchSkillGraph()
+      .then((data) => setGraph(data))
+      .catch((err) => console.error('Failed to load skill graph:', err))
+      .finally(() => setGraphLoading(false));
+  }, []);
 
-            <p className="text-xs text-muted-foreground leading-relaxed flex-1">
-              {skill.description || <span className="italic opacity-50">No description</span>}
-            </p>
+  // Fetch agents on mount
+  useEffect(() => {
+    fetchAgents()
+      .then((data) => setAgents(data))
+      .catch((err) => console.error('Failed to load agents:', err));
+  }, []);
 
-            <div className="space-y-2">
-              <p className="font-mono text-[10px] text-muted-foreground/60 truncate">{skill.path}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {skill.tools.length ? (
-                  skill.tools.map((tool) => (
-                    <Badge key={tool} variant="secondary" className="text-[10px] uppercase tracking-wider">
-                      {tool}
-                    </Badge>
-                  ))
-                ) : (
-                  <Badge variant="outline" className="text-[10px] uppercase tracking-wider opacity-50">
-                    no tool constraints
-                  </Badge>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+  // Run semantic search when debounced query changes
+  useEffect(() => {
+    if (searchAbortRef.current) {
+      clearTimeout(searchAbortRef.current);
+    }
+
+    if (!debouncedSearch.trim()) {
+      setHighlightedIds([]);
+      return;
+    }
+
+    // Query the skill graph with the search term
+    querySkillGraph(debouncedSearch, 20)
+      .then((scored) => {
+        if (!graph) return;
+        // Map scored skill names back to node IDs
+        const nameToId: Record<string, string> = {};
+        for (const node of graph.nodes) {
+          if (node.nodeType === 'skill') {
+            nameToId[node.name.toLowerCase()] = node.id;
+          }
+        }
+        const ids = scored
+          .map((s) => nameToId[s.name.toLowerCase()])
+          .filter(Boolean) as string[];
+        setHighlightedIds(ids);
+      })
+      .catch((err) => {
+        console.error('Skill graph query failed:', err);
+        setHighlightedIds([]);
+      });
+  }, [debouncedSearch, graph]);
+
+  // Assign/unassign stubs with optimistic local state
+  // TODO: wire up real API calls when assign/unassign endpoints exist
+  const [assignedBySkill, setAssignedBySkill] = useState<Record<string, string[]>>({});
+
+  const getAssignedAgentIds = (skillId: string) => assignedBySkill[skillId] ?? [];
+
+  const handleAssign = useCallback((skillId: string, agentId: string) => {
+    console.log('TODO: assign skill', skillId, 'to agent', agentId);
+    // Optimistic local update
+    setAssignedBySkill((prev) => ({
+      ...prev,
+      [skillId]: [...(prev[skillId] ?? []), agentId],
+    }));
+  }, []);
+
+  const handleUnassign = useCallback((skillId: string, agentId: string) => {
+    console.log('TODO: unassign skill', skillId, 'from agent', agentId);
+    // Optimistic local update
+    setAssignedBySkill((prev) => ({
+      ...prev,
+      [skillId]: (prev[skillId] ?? []).filter((id) => id !== agentId),
+    }));
+  }, []);
+
+  const handleSkillSelect = useCallback((skill: SkillNode | null) => {
+    setSelectedSkill(skill);
+  }, []);
+
+  const filterTabs: { key: FilterTab; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'core', label: 'Core' },
+    { key: 'custom', label: 'Custom' },
+  ];
 
   return (
-    <div className="flex-1 min-w-0 h-full overflow-y-auto bg-background px-6 py-6 md:px-8 md:py-8 flex flex-col gap-6 w-full">
-      {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
+    <div className="relative flex-1 min-w-0 h-full flex flex-col overflow-hidden bg-background">
+      {/* Header bar */}
+      <div
+        className="flex items-center gap-3 px-6 py-4 flex-shrink-0 flex-wrap"
+        style={{ borderBottom: '1px solid hsl(var(--border) / 0.4)' }}
+      >
+        {/* Title */}
+        <div className="flex items-center gap-2 mr-2">
+          <NetworkIcon className="w-4 h-4 text-primary opacity-70" />
+          <span className="text-sm font-bold text-foreground">Skill Pool</span>
+          {graph && (
+            <span className="text-xs text-muted-foreground">
+              ({graph.nodes.filter((n) => n.nodeType === 'skill').length})
+            </span>
+          )}
         </div>
-      ) : null}
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative max-w-md flex-1 min-w-[260px]">
-          <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            value={filter}
-            onChange={(e) => onFilterChange(e.target.value)}
-            className="pl-9"
-            placeholder="Search skills..."
+        {/* Filter tabs */}
+        <div className="flex items-center rounded-lg border border-border/50 p-0.5 flex-shrink-0">
+          {filterTabs.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                filter === key
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Search input */}
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Semantic search…"
+            className={cn(
+              'w-full pl-8 pr-3 py-1.5 text-xs rounded-lg outline-none transition-colors',
+              'bg-muted/40 border border-border/50 text-foreground placeholder:text-muted-foreground/60',
+              'focus:border-primary/50 focus:bg-muted/60',
+            )}
           />
         </div>
-        <span className="text-sm text-muted-foreground">{filtered.length} shown</span>
-        <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading}>
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </Button>
+
+        {/* Search active hint */}
+        {highlightedIds.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {highlightedIds.length} match{highlightedIds.length !== 1 ? 'es' : ''}
+          </span>
+        )}
+
+        {/* Loading indicator */}
+        {graphLoading && (
+          <div
+            className="w-4 h-4 rounded-full animate-spin flex-shrink-0"
+            style={{
+              border: '2px solid rgba(99,102,241,0.2)',
+              borderTopColor: 'rgba(99,102,241,0.8)',
+            }}
+          />
+        )}
       </div>
 
-      {/* Skill grids — base (read-only) vs custom */}
-      {filtered.length ? (
-        <div className="flex flex-col gap-10">
-          {baseSkills.length > 0 ? (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-foreground tracking-tight">Base skills</h2>
-              <p className="text-xs text-muted-foreground -mt-1">
-                Bundled with the system. They cannot be edited or deleted here.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{baseSkills.map(renderSkillCard)}</div>
-            </section>
-          ) : null}
-          {customSkills.length > 0 ? (
-            <section className="flex flex-col gap-3">
-              <h2 className="text-sm font-semibold text-foreground tracking-tight">Custom skills</h2>
-              <p className="text-xs text-muted-foreground -mt-1">Created in your workspace — you can edit or delete them.</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {customSkills.map(renderSkillCard)}
-              </div>
-            </section>
-          ) : null}
+      {/* Graph area + overlapping detail panel */}
+      <div className="relative flex-1 min-h-0">
+        <div className="h-full overflow-auto px-4 py-4">
+          <SkillGraphView
+            snapshot={graph}
+            onSkillSelect={handleSkillSelect}
+            selectedSkillId={selectedSkill?.id}
+            highlightedIds={debouncedSearch.trim() ? highlightedIds : undefined}
+            filter={filter}
+          />
         </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center py-20 rounded-xl border-2 border-dashed border-border/40 bg-card/20 text-sm text-muted-foreground">
-          No workspace skills found.
-        </div>
-      )}
+
+        {/* Detail panel overlays on the right */}
+        <SkillDetailPanel
+          skill={selectedSkill}
+          agents={agents}
+          assignedAgentIds={selectedSkill ? getAssignedAgentIds(selectedSkill.id) : []}
+          onClose={() => setSelectedSkill(null)}
+          onAssign={(agentId) => selectedSkill && handleAssign(selectedSkill.id, agentId)}
+          onUnassign={(agentId) => selectedSkill && handleUnassign(selectedSkill.id, agentId)}
+        />
+      </div>
     </div>
   );
 }

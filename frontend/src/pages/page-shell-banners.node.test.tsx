@@ -31,26 +31,7 @@ function renderDiagnosticsPage() {
 function renderSkillsPage() {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <SkillsPage
-        skills={[]}
-        loading={false}
-        error={null}
-        filter=""
-        onFilterChange={() => undefined}
-        draft={{
-          name: '',
-          description: '',
-          instructions: '',
-          tools: '',
-        }}
-        saving={false}
-        onDraftChange={() => undefined}
-        onSave={() => undefined}
-        onResetDraft={() => undefined}
-        onEdit={() => undefined}
-        onRefresh={() => undefined}
-        onDelete={() => undefined}
-      />
+      <SkillsPage />
     </MemoryRouter>,
   );
 }
