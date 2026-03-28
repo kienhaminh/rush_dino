@@ -1064,69 +1064,105 @@ export function SandboxMonitorPage() {
   );
 
   const handleMcpPolicyChange = useCallback(
-    async (agentId: string, mcp: SandboxMcpPolicy) => {
-      const agent = agents.find((a) => a.id === agentId);
-      if (!agent?.sandboxPolicy) return;
-      const updated: SandboxPolicy = {
-        ...agent.sandboxPolicy,
-        sandbox: { ...agent.sandboxPolicy.sandbox, mcp },
-      };
-      await putAgentSandbox(agentId, updated);
+    (agentId: string, mcp: SandboxMcpPolicy) => {
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agentId && a.sandboxPolicy
+            ? { ...a, sandboxPolicy: { ...a.sandboxPolicy, sandbox: { ...a.sandboxPolicy.sandbox, mcp } } }
+            : a,
+        ),
+      );
     },
-    [agents],
+    [],
   );
 
   const handleApplyMcpPolicy = useCallback(
     async (agentId: string, mcp: SandboxMcpPolicy) => {
-      if (!selectedSessionId) return;
-      await patchSessionMcpPolicy(selectedSessionId, mcp);
-      toast.success('MCP policy applied.');
+      try {
+        const agent = agents.find((a) => a.id === agentId);
+        if (agent?.sandboxPolicy) {
+          await putAgentSandbox(agentId, {
+            ...agent.sandboxPolicy,
+            sandbox: { ...agent.sandboxPolicy.sandbox, mcp },
+          });
+        }
+        if (selectedSessionId) {
+          await patchSessionMcpPolicy(selectedSessionId, mcp);
+        }
+        toast.success('MCP policy applied.');
+      } catch {
+        toast.error('Failed to apply MCP policy.');
+      }
     },
-    [selectedSessionId],
+    [agents, selectedSessionId],
   );
 
   const handleNetworkPolicyChange = useCallback(
-    async (agentId: string, network: SandboxNetworkPolicy) => {
-      const agent = agents.find((a) => a.id === agentId);
-      if (!agent?.sandboxPolicy) return;
-      const updated: SandboxPolicy = {
-        ...agent.sandboxPolicy,
-        sandbox: { ...agent.sandboxPolicy.sandbox, network },
-      };
-      await putAgentSandbox(agentId, updated);
+    (agentId: string, network: SandboxNetworkPolicy) => {
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agentId && a.sandboxPolicy
+            ? { ...a, sandboxPolicy: { ...a.sandboxPolicy, sandbox: { ...a.sandboxPolicy.sandbox, network } } }
+            : a,
+        ),
+      );
     },
-    [agents],
+    [],
   );
 
   const handleBashPolicyChange = useCallback(
-    async (agentId: string, process: SandboxProcessPolicy) => {
-      const agent = agents.find((a) => a.id === agentId);
-      if (!agent?.sandboxPolicy) return;
-      const updated: SandboxPolicy = {
-        ...agent.sandboxPolicy,
-        sandbox: { ...agent.sandboxPolicy.sandbox, process },
-      };
-      await putAgentSandbox(agentId, updated);
+    (agentId: string, process: SandboxProcessPolicy) => {
+      setAgents((prev) =>
+        prev.map((a) =>
+          a.id === agentId && a.sandboxPolicy
+            ? { ...a, sandboxPolicy: { ...a.sandboxPolicy, sandbox: { ...a.sandboxPolicy.sandbox, process } } }
+            : a,
+        ),
+      );
     },
-    [agents],
+    [],
   );
 
   const handleApplyBashPolicy = useCallback(
-    async (_agentId: string, process: SandboxProcessPolicy) => {
-      if (!selectedSessionId) return;
-      await patchSessionBashPolicy(selectedSessionId, process);
-      toast.success('Bash policy applied.');
+    async (agentId: string, process: SandboxProcessPolicy) => {
+      try {
+        const agent = agents.find((a) => a.id === agentId);
+        if (agent?.sandboxPolicy) {
+          await putAgentSandbox(agentId, {
+            ...agent.sandboxPolicy,
+            sandbox: { ...agent.sandboxPolicy.sandbox, process },
+          });
+        }
+        if (selectedSessionId) {
+          await patchSessionBashPolicy(selectedSessionId, process);
+        }
+        toast.success('Bash policy applied.');
+      } catch {
+        toast.error('Failed to apply Bash policy.');
+      }
     },
-    [selectedSessionId],
+    [agents, selectedSessionId],
   );
 
   const handleApplyNetworkPolicyForAgent = useCallback(
-    async (_agentId: string, network: SandboxNetworkPolicy) => {
-      if (!selectedSessionId) return;
-      await patchSessionNetworkPolicy(selectedSessionId, network);
-      toast.success('Network policy applied.');
+    async (agentId: string, network: SandboxNetworkPolicy) => {
+      try {
+        const agent = agents.find((a) => a.id === agentId);
+        if (agent?.sandboxPolicy) {
+          await putAgentSandbox(agentId, {
+            ...agent.sandboxPolicy,
+            sandbox: { ...agent.sandboxPolicy.sandbox, network },
+          });
+        }
+        if (selectedSessionId) {
+          await patchSessionNetworkPolicy(selectedSessionId, network);
+        }
+        toast.success('Network policy applied.');
+      } catch {
+        toast.error('Failed to apply network policy.');
+      }
     },
-    [selectedSessionId],
+    [agents, selectedSessionId],
   );
 
   return (
