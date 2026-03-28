@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import type { AuditEntry } from '@/lib/types';
 
@@ -5,7 +6,7 @@ import type { AuditEntry } from '@/lib/types';
 export interface AuditFeedColumn {
   key: string;
   label: string;
-  render: (entry: AuditEntry) => React.ReactNode;
+  render: (entry: AuditEntry) => ReactNode;
 }
 
 interface SandboxAuditFeedProps {
