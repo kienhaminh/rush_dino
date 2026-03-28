@@ -272,10 +272,11 @@ export type SandboxOverviewContentProps = {
   onTabChange: (tab: 'overview' | 'mcp' | 'network' | 'bash') => void;
   mcpServers: McpServerStatus[];
   onMcpPolicyChange: (agentId: string, mcp: SandboxMcpPolicy) => Promise<void>;
-  onApplyMcpPolicy: (agentId: string) => Promise<void>;
+  onApplyMcpPolicy: (agentId: string, policy: SandboxMcpPolicy) => Promise<void>;
   onNetworkPolicyChange: (agentId: string, network: SandboxNetworkPolicy) => Promise<void>;
+  onApplyNetworkPolicyForAgent: (agentId: string, network: SandboxNetworkPolicy) => Promise<void>;
   onBashPolicyChange: (agentId: string, process: SandboxProcessPolicy) => Promise<void>;
-  onApplyBashPolicy: (agentId: string) => Promise<void>;
+  onApplyBashPolicy: (agentId: string, policy: SandboxProcessPolicy) => Promise<void>;
 };
 
 const DEFAULT_STRIP_PATTERNS = [
@@ -310,6 +311,7 @@ export function SandboxOverviewContent({
   onMcpPolicyChange,
   onApplyMcpPolicy,
   onNetworkPolicyChange,
+  onApplyNetworkPolicyForAgent,
   onBashPolicyChange,
   onApplyBashPolicy,
 }: SandboxOverviewContentProps) {
@@ -888,7 +890,7 @@ export function SandboxOverviewContent({
             auditEntries={auditEntries}
             loadingAudit={loadingEntries}
             onPolicyChange={(mcp) => void onMcpPolicyChange(selectedAgentId, mcp)}
-            onApply={() => onApplyMcpPolicy(selectedAgentId)}
+            onApply={(policy) => onApplyMcpPolicy(selectedAgentId, policy)}
           />
         )}
         {activeTab === 'network' && selectedAgentId && (
@@ -904,11 +906,7 @@ export function SandboxOverviewContent({
             loadingAudit={loadingEntries}
             sessionId={selectedSessionId}
             onPolicyChange={(network) => void onNetworkPolicyChange(selectedAgentId, network)}
-            onApply={() =>
-              selectedSessionId
-                ? onApplyNetworkPolicy(selectedSessionId, selectedAgent?.sandboxPolicy?.sandbox.network ?? { default: 'deny', on_block: 'prompt', allow: [] })
-                : Promise.resolve()
-            }
+            onApply={(policy) => onApplyNetworkPolicyForAgent(selectedAgentId, policy)}
           />
         )}
         {activeTab === 'bash' && selectedAgentId && (
@@ -924,8 +922,14 @@ export function SandboxOverviewContent({
             auditEntries={auditEntries}
             loadingAudit={loadingEntries}
             onPolicyChange={(process) => void onBashPolicyChange(selectedAgentId, process)}
-            onApply={() => onApplyBashPolicy(selectedAgentId)}
+            onApply={(policy) => onApplyBashPolicy(selectedAgentId, policy)}
           />
+        )}
+        {/* Empty state when a policy tab is active but no agent is selected */}
+        {activeTab !== 'overview' && !selectedAgentId && (
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            Select an agent to configure this policy.
+          </div>
         )}
       </div>
     </div>
@@ -1073,15 +1077,12 @@ export function SandboxMonitorPage() {
   );
 
   const handleApplyMcpPolicy = useCallback(
-    async (agentId: string) => {
+    async (agentId: string, mcp: SandboxMcpPolicy) => {
       if (!selectedSessionId) return;
-      const agent = agents.find((a) => a.id === agentId);
-      const mcp = agent?.sandboxPolicy?.sandbox.mcp;
-      if (!mcp) return;
       await patchSessionMcpPolicy(selectedSessionId, mcp);
       toast.success('MCP policy applied.');
     },
-    [agents, selectedSessionId],
+    [selectedSessionId],
   );
 
   const handleNetworkPolicyChange = useCallback(
@@ -1111,15 +1112,21 @@ export function SandboxMonitorPage() {
   );
 
   const handleApplyBashPolicy = useCallback(
-    async (agentId: string) => {
+    async (_agentId: string, process: SandboxProcessPolicy) => {
       if (!selectedSessionId) return;
-      const agent = agents.find((a) => a.id === agentId);
-      const process = agent?.sandboxPolicy?.sandbox.process;
-      if (!process) return;
       await patchSessionBashPolicy(selectedSessionId, process);
       toast.success('Bash policy applied.');
     },
-    [agents, selectedSessionId],
+    [selectedSessionId],
+  );
+
+  const handleApplyNetworkPolicyForAgent = useCallback(
+    async (_agentId: string, network: SandboxNetworkPolicy) => {
+      if (!selectedSessionId) return;
+      await patchSessionNetworkPolicy(selectedSessionId, network);
+      toast.success('Network policy applied.');
+    },
+    [selectedSessionId],
   );
 
   return (
@@ -1152,6 +1159,7 @@ export function SandboxMonitorPage() {
       onMcpPolicyChange={handleMcpPolicyChange}
       onApplyMcpPolicy={handleApplyMcpPolicy}
       onNetworkPolicyChange={handleNetworkPolicyChange}
+      onApplyNetworkPolicyForAgent={handleApplyNetworkPolicyForAgent}
       onBashPolicyChange={handleBashPolicyChange}
       onApplyBashPolicy={handleApplyBashPolicy}
     />

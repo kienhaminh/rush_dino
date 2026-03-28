@@ -9,7 +9,7 @@ interface SandboxMcpTabProps {
   auditEntries: AuditEntry[];
   loadingAudit: boolean;
   onPolicyChange: (policy: SandboxMcpPolicy) => void;
-  onApply: () => Promise<void>;
+  onApply: (policy: SandboxMcpPolicy) => Promise<void>;
 }
 
 function ServerToggle({
@@ -120,7 +120,7 @@ export function SandboxMcpTab({
           />
         </div>
 
-        <Button size="sm" className="w-full text-xs" onClick={() => void onApply()}>
+        <Button size="sm" className="w-full text-xs" onClick={() => void onApply(policy)}>
           Apply Policy
         </Button>
       </div>

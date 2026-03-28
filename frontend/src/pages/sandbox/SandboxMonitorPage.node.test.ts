@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 
 import { SandboxOverviewContent, type SandboxOverviewContentProps } from './SandboxMonitorPage';
-import type { SandboxNetworkPolicy } from '@/lib/types';
+import type { SandboxMcpPolicy, SandboxNetworkPolicy, SandboxProcessPolicy } from '@/lib/types';
 
 function buildProps(overrides: Partial<SandboxOverviewContentProps> = {}): SandboxOverviewContentProps {
   return {
@@ -170,10 +170,11 @@ function buildProps(overrides: Partial<SandboxOverviewContentProps> = {}): Sandb
     mcpServers: [],
     onTabChange: () => undefined,
     onMcpPolicyChange: async () => undefined,
-    onApplyMcpPolicy: async () => undefined,
+    onApplyMcpPolicy: async (_agentId: string, _policy: SandboxMcpPolicy) => undefined,
     onNetworkPolicyChange: async () => undefined,
+    onApplyNetworkPolicyForAgent: async (_agentId: string, _policy: SandboxNetworkPolicy) => undefined,
     onBashPolicyChange: async () => undefined,
-    onApplyBashPolicy: async () => undefined,
+    onApplyBashPolicy: async (_agentId: string, _policy: SandboxProcessPolicy) => undefined,
     ...overrides,
   };
 }
@@ -220,5 +221,27 @@ describe('SandboxOverviewContent', () => {
       createElement(SandboxOverviewContent, buildProps()),
     );
     expect(html).toContain('Overview');
+  });
+
+  it('renders MCP tab content when activeTab is mcp', () => {
+    const html = renderToStaticMarkup(
+      createElement(SandboxOverviewContent, {
+        ...buildProps(),
+        activeTab: 'mcp' as const,
+      }),
+    );
+    // MCP tab renders server list or "No MCP servers" message
+    // Overview-only content (like "Active Sessions") should NOT appear
+    expect(html).not.toContain('Active Sessions');
+  });
+
+  it('renders Bash tab content when activeTab is bash', () => {
+    const html = renderToStaticMarkup(
+      createElement(SandboxOverviewContent, {
+        ...buildProps(),
+        activeTab: 'bash' as const,
+      }),
+    );
+    expect(html).not.toContain('Active Sessions');
   });
 });

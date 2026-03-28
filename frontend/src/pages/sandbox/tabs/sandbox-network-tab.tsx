@@ -18,7 +18,7 @@ interface SandboxNetworkTabProps {
   loadingAudit: boolean;
   sessionId: string | null;
   onPolicyChange: (policy: SandboxNetworkPolicy) => void;
-  onApply: () => Promise<void>;
+  onApply: (policy: SandboxNetworkPolicy) => Promise<void>;
 }
 
 const DEFAULT_INBOUND = {
@@ -225,7 +225,7 @@ export function SandboxNetworkTab({
           </div>
         </div>
 
-        <Button size="sm" className="w-full text-xs" onClick={() => void onApply()}>
+        <Button size="sm" className="w-full text-xs" onClick={() => void onApply(policy)}>
           Apply (Hot-reload)
         </Button>
       </div>

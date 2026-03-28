@@ -18,7 +18,7 @@ interface SandboxBashTabProps {
   auditEntries: AuditEntry[];
   loadingAudit: boolean;
   onPolicyChange: (policy: SandboxProcessPolicy) => void;
-  onApply: () => Promise<void>;
+  onApply: (policy: SandboxProcessPolicy) => Promise<void>;
 }
 
 export function SandboxBashTab({
@@ -169,7 +169,7 @@ export function SandboxBashTab({
           />
         </div>
 
-        <Button size="sm" className="w-full text-xs" onClick={() => void onApply()}>
+        <Button size="sm" className="w-full text-xs" onClick={() => void onApply(policy)}>
           Apply Policy
         </Button>
       </div>
