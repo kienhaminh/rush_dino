@@ -841,15 +841,17 @@ export interface SandboxProcessPolicy {
   inbound?: SandboxInboundFilter;
 }
 
+export interface SandboxNetworkInboundFilter {
+  max_size_kb: number;
+  strip_headers: string[];
+  allowed_content_types: string[];
+}
+
 export interface SandboxNetworkPolicy {
   default: 'allow' | 'deny';
   on_block: 'prompt' | 'deny' | 'hard-stop';
   allow: NetworkRule[];
-  inbound?: {
-    max_size_kb: number;
-    strip_headers: string[];
-    allowed_content_types: string[];
-  };
+  inbound?: SandboxNetworkInboundFilter;
 }
 
 export interface SandboxInferencePolicy {

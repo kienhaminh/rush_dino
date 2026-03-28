@@ -1,6 +1,7 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import type {
   SandboxInboundFilter,
+  SandboxNetworkInboundFilter,
   SandboxMcpPolicy,
   SandboxPolicy,
   AuditEntry,
@@ -35,5 +36,11 @@ describe('Extended sandbox types', () => {
     expectTypeOf<McpServerStatus>().toHaveProperty('name');
     expectTypeOf<McpServerStatus>().toHaveProperty('connected');
     expectTypeOf<McpServerStatus>().toHaveProperty('tool_count');
+  });
+
+  it('SandboxNetworkInboundFilter has max_size_kb, strip_headers, allowed_content_types', () => {
+    expectTypeOf<SandboxNetworkInboundFilter>().toHaveProperty('max_size_kb');
+    expectTypeOf<SandboxNetworkInboundFilter>().toHaveProperty('strip_headers');
+    expectTypeOf<SandboxNetworkInboundFilter>().toHaveProperty('allowed_content_types');
   });
 });
