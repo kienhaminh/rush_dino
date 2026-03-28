@@ -4,8 +4,10 @@
 /// can expose version-check API endpoints without depending on the CLI crate.
 use std::cmp::Ordering;
 use std::env::consts::{ARCH, OS};
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
+
+use tokio::sync::Mutex;
 
 use self_update::{backends::github::ReleaseList, update::Release};
 use semver::Version;
@@ -52,16 +54,13 @@ pub struct ResolvedRelease {
 /// Result returned by [`cached_version_check`].
 #[derive(Debug, Clone, Serialize)]
 pub struct VersionCheckResult {
-    /// Version tag of the latest stable release (e.g. `"v1.2.3"`).
-    pub latest_stable: String,
-    /// Version tag of the latest beta release, if one exists.
-    pub latest_beta: Option<String>,
-    /// Whether the running binary is behind the latest stable release.
-    pub update_available: bool,
-    /// Whether the release body contains `[CRITICAL]` or `[HOTFIX]`.
-    pub is_critical: bool,
-    /// The version string currently running.
     pub current_version: String,
+    pub latest_version: String,
+    pub has_update: bool,
+    pub is_critical: bool,
+    pub release_notes: Option<String>,
+    pub release_url: String,
+    pub skipped: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -79,73 +78,83 @@ fn version_cache() -> &'static Mutex<Option<CachedCheck>> {
 }
 
 /// Invalidate the in-process version-check cache (useful after an upgrade).
-pub fn invalidate_cache() {
-    if let Ok(mut guard) = version_cache().lock() {
-        *guard = None;
-    }
+pub async fn invalidate_cache() {
+    let mut guard = version_cache().lock().await;
+    *guard = None;
 }
 
 /// Return a cached [`VersionCheckResult`], refreshing when the 1-hour TTL
-/// expires.  `skipped_versions` is informational only — it does not affect
-/// resolution but is threaded through to callers that want to suppress
-/// notifications for already-skipped versions.
-pub fn cached_version_check(_skipped_versions: &[String]) -> Result<VersionCheckResult> {
-    // Check cache under lock first
-    {
-        let guard = version_cache()
-            .lock()
-            .map_err(|_| AppError::Agent("version check cache lock poisoned".to_string()))?;
+/// expires.  `skipped_versions` is used to set the `skipped` field:
+/// a non-critical update is marked skipped if it appears in the list.
+pub async fn cached_version_check(skipped_versions: &[String]) -> Result<VersionCheckResult> {
+    let mut guard = version_cache().lock().await;
 
-        if let Some(cached) = guard.as_ref() {
-            if cached.fetched_at.elapsed() < CACHE_TTL {
-                return Ok(cached.result.clone());
-            }
+    if let Some(cached) = guard.as_ref() {
+        if cached.fetched_at.elapsed() < CACHE_TTL {
+            let mut result = cached.result.clone();
+            // Re-evaluate skipped on every call with the current list
+            result.skipped =
+                !result.is_critical && skipped_versions.contains(&result.latest_version);
+            return Ok(result);
         }
     }
 
     // Cache miss or expired — fetch from GitHub
-    let result = fetch_version_check_result()?;
-
-    {
-        let mut guard = version_cache()
-            .lock()
-            .map_err(|_| AppError::Agent("version check cache lock poisoned".to_string()))?;
-
-        *guard = Some(CachedCheck {
-            result: result.clone(),
-            fetched_at: Instant::now(),
-        });
-    }
+    let result = check_for_update_inner(skipped_versions)?;
+    *guard = Some(CachedCheck {
+        result: result.clone(),
+        fetched_at: Instant::now(),
+    });
 
     Ok(result)
 }
 
-fn fetch_version_check_result() -> Result<VersionCheckResult> {
+fn check_for_update_inner(skipped_versions: &[String]) -> Result<VersionCheckResult> {
     let releases = fetch_releases()?;
-    let current = current_version().to_string();
+    let current = current_version();
 
-    let stable = resolve_latest_stable(&releases)?;
-    let stable_tag = stable.tag.clone();
+    let resolved = match resolve_latest_stable(&releases) {
+        Ok(r) => r,
+        // No stable release for this platform — return a safe no-update result
+        Err(_) => {
+            return Ok(VersionCheckResult {
+                current_version: current.to_string(),
+                latest_version: current.to_string(),
+                has_update: false,
+                is_critical: false,
+                release_notes: None,
+                release_url: format!(
+                    "https://github.com/{REPO_OWNER}/{REPO_NAME}/releases"
+                ),
+                skipped: false,
+            });
+        }
+    };
 
-    let beta = resolve_latest_beta(&releases).ok().map(|r| r.tag);
-
-    let current_semver = Version::parse(&current)
+    let latest_semver = parse_release_version(&resolved.tag)?;
+    let current_semver = Version::parse(current)
         .map_err(|e| AppError::Validation(format!("invalid current version {current}: {e}")))?;
-    let stable_semver = parse_release_version(&stable_tag)?;
-    let update_available = stable_semver > current_semver;
-
-    let is_critical = stable
+    let has_update = latest_semver > current_semver;
+    let is_critical = resolved
         .release
         .body
         .as_deref()
-        .is_some_and(is_critical_release);
+        .map(is_critical_release)
+        .unwrap_or(false);
+    let latest_ver = resolved.release.version.clone();
+    let skipped = !is_critical && skipped_versions.contains(&latest_ver);
 
     Ok(VersionCheckResult {
-        latest_stable: stable_tag,
-        latest_beta: beta,
-        update_available,
+        current_version: current.to_string(),
+        latest_version: latest_ver,
+        has_update,
         is_critical,
-        current_version: current,
+        release_notes: resolved.release.body.clone(),
+        release_url: format!(
+            "https://github.com/{REPO_OWNER}/{REPO_NAME}/releases/tag/{}",
+            resolved.tag
+        ),
+        skipped,
     })
 }
 
@@ -163,7 +172,7 @@ pub fn resolve_latest_stable(releases: &[Release]) -> Result<ResolvedRelease> {
             r.asset_for(&platform_target(), Some(&platform_asset_identifier()))
                 .is_some()
         })
-        .max_by(|l, r| compare_releases_desc(l, r))
+        .max_by(|l, r| compare_releases(l, r))
         .cloned()
         .ok_or_else(|| {
             AppError::NotFound("no stable release found for this platform".to_string())
@@ -186,7 +195,7 @@ pub fn resolve_latest_beta(releases: &[Release]) -> Result<ResolvedRelease> {
             r.asset_for(&platform_target(), Some(&platform_asset_identifier()))
                 .is_some()
         })
-        .max_by(|l, r| compare_releases_desc(l, r))
+        .max_by(|l, r| compare_releases(l, r))
         .cloned()
         .ok_or_else(|| {
             AppError::NotFound("no beta release found for this platform".to_string())
@@ -367,7 +376,7 @@ fn tag_for_release(release: &Release) -> String {
     format!("v{}", release.version)
 }
 
-fn compare_releases_desc(left: &Release, right: &Release) -> Ordering {
+fn compare_releases(left: &Release, right: &Release) -> Ordering {
     let left_tag = tag_for_release(left);
     let right_tag = tag_for_release(right);
     let left_version = parse_release_version(&left_tag).expect("release tag should parse");

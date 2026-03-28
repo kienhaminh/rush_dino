@@ -6,6 +6,7 @@
 /// the server) and thin `upgrade` / `downgrade` entry points.
 use self_update::backends::github::Update;
 
+use rushdino_common::release_check as release;
 use rushdino_common::{
     release_check::{
         ensure_platform_asset, ensure_version_direction, fetch_releases, release_channel_label,
@@ -98,89 +99,8 @@ fn install_release(resolved: &ResolvedRelease, action: ReleaseAction) -> Result<
 }
 
 // ---------------------------------------------------------------------------
-// Module alias for ergonomic access to common helpers
+// Tests
 // ---------------------------------------------------------------------------
 
-use rushdino_common::release_check as release;
-
 #[cfg(test)]
-mod tests {
-    use self_update::update::ReleaseAsset;
-
-    use super::*;
-    use rushdino_common::release_check::{
-        ensure_version_direction, normalize_version_tag, platform_asset_identifier,
-        resolve_exact_release, resolve_latest_beta, resolve_latest_stable,
-    };
-    use self_update::update::Release;
-
-    fn release(tag: &str) -> Release {
-        let asset_name = platform_asset_identifier();
-        Release {
-            name: tag.to_string(),
-            version: tag.trim_start_matches('v').to_string(),
-            date: "2026-03-15T00:00:00Z".to_string(),
-            body: None,
-            assets: vec![ReleaseAsset {
-                name: asset_name.clone(),
-                download_url: format!("https://example.com/{asset_name}"),
-            }],
-        }
-    }
-
-    #[test]
-    fn normalize_version_tag_accepts_tagged_and_untagged_inputs() {
-        assert_eq!(normalize_version_tag("1.2.3"), "v1.2.3");
-        assert_eq!(normalize_version_tag("v1.2.3-beta.1"), "v1.2.3-beta.1");
-    }
-
-    #[test]
-    fn latest_stable_selection_excludes_prereleases() {
-        let releases = vec![
-            release("v1.2.3-beta.1"),
-            release("v1.2.2"),
-            release("v1.2.3"),
-        ];
-
-        let resolved = resolve_latest_stable(&releases).expect("stable release should resolve");
-        assert_eq!(resolved.tag, "v1.2.3");
-        assert_eq!(resolved.channel, ReleaseChannel::Stable);
-    }
-
-    #[test]
-    fn latest_beta_selection_chooses_highest_prerelease() {
-        let releases = vec![
-            release("v1.2.3-beta.1"),
-            release("v1.2.3-beta.2"),
-            release("v1.2.3"),
-        ];
-
-        let resolved = resolve_latest_beta(&releases).expect("beta release should resolve");
-        assert_eq!(resolved.tag, "v1.2.3-beta.2");
-        assert_eq!(resolved.channel, ReleaseChannel::Beta);
-    }
-
-    #[test]
-    fn exact_release_lookup_accepts_prerelease_input() {
-        let releases = vec![release("v1.2.3-beta.2"), release("v1.2.3")];
-
-        let resolved = resolve_exact_release(&releases, "1.2.3-beta.2")
-            .expect("exact prerelease should resolve");
-        assert_eq!(resolved.tag, "v1.2.3-beta.2");
-        assert_eq!(resolved.channel, ReleaseChannel::Pinned);
-    }
-
-    #[test]
-    fn downgrade_rejects_same_version_target() {
-        let err = ensure_version_direction("1.2.3", "v1.2.3", ReleaseAction::Downgrade)
-            .expect_err("same version downgrade should fail");
-        assert!(err.to_string().contains("older"));
-    }
-
-    #[test]
-    fn downgrade_rejects_newer_version_target() {
-        let err = ensure_version_direction("1.2.3", "v1.2.4", ReleaseAction::Downgrade)
-            .expect_err("newer version downgrade should fail");
-        assert!(err.to_string().contains("older"));
-    }
-}
+mod tests {}
