@@ -1,17 +1,25 @@
 import { useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { ArrowUpCircle } from 'lucide-react';
 
 import { Sidebar } from '@/components/sidebar/sidebar';
 import { ThemeToggle } from '@/components/sidebar/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { resolvePageHeader } from '@/lib/dashboard-routes';
 import { useChatWsConnection } from '@/hooks/use-chat-ws';
+import { useVersionCheck } from '@/hooks/use-version-check';
+import { VersionUpdateDialog } from '@/components/version-update-dialog';
 
 export function AppLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
   const location = useLocation();
   const shellView = resolvePageHeader(location.pathname);
   const { isConnected } = useChatWsConnection();
+  const { data: versionData } = useVersionCheck();
+
+  const showUpdateIcon = versionData?.has_update && !versionData.skipped;
+  const isCritical = versionData?.is_critical ?? false;
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background font-body text-foreground">
@@ -54,6 +62,22 @@ export function AppLayout() {
             </div>
 
             <div className="flex items-center gap-3">
+              {showUpdateIcon && (
+                <button
+                  onClick={() => setIsUpdateDialogOpen(true)}
+                  className="relative flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:bg-muted"
+                  title={`Update available: v${versionData?.latest_version}`}
+                >
+                  <ArrowUpCircle
+                    className={`h-4.5 w-4.5 ${isCritical ? 'text-red-500' : 'text-emerald-500'}`}
+                  />
+                  <span
+                    className={`absolute right-1 top-1 h-2 w-2 rounded-full animate-pulse ${
+                      isCritical ? 'bg-red-500' : 'bg-emerald-500'
+                    }`}
+                  />
+                </button>
+              )}
               <ThemeToggle />
               <div className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary ring-1 ring-primary/20 shadow-sm transition-colors hover:bg-primary/20">
                 KH
@@ -66,6 +90,7 @@ export function AppLayout() {
           </div>
         </main>
       </div>
+      <VersionUpdateDialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen} />
     </div>
   );
 }
