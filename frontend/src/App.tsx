@@ -28,6 +28,7 @@ const DebugPage = lazy(() => import('./pages/debug/DebugPage').then(m => ({ defa
 const LogsPage = lazy(() => import('./pages/logs/LogsPage').then(m => ({ default: m.LogsPage })));
 const SystemPage = lazy(() => import('./pages/system/SystemPage').then(m => ({ default: m.SystemPage })));
 const SandboxMonitorPage = lazy(() => import('./pages/sandbox/SandboxMonitorPage').then(m => ({ default: m.SandboxMonitorPage })));
+const KnowledgeGraphPage = lazy(() => import('./pages/knowledge-graph/KnowledgeGraphPage').then(m => ({ default: m.KnowledgeGraphPage })));
 const NotFoundPage = lazy(() => import('./pages/not-found/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 const DesignSystemPage = lazy(() => import('./pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
 const LoginPage = lazy(() => import('./pages/login/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -114,6 +115,7 @@ export default function App() {
                   <Route path="skills" element={<SkillsRoute />} />
                   <Route path="coding-agents" element={<CodingAgentsPage />} />
                   <Route path="acp-sessions" element={<AcpSessionsPage />} />
+                  <Route path="knowledge-graph" element={<KnowledgeGraphPage />} />
 
                   {/* System */}
                   <Route path="logs" element={<SystemPage />}>

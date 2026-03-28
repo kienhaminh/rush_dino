@@ -1,53 +1,29 @@
-// AgentsPage — pure overview board. No detail panel or runtime fetching here.
-// Clicking an agent card navigates to /agents/:id (handled inside AgentBoardCanvas).
-import { useCallback, useEffect, useState } from 'react';
-import type { AgentRecord } from './agent-types';
+// AgentsPage — entry point for /agents.
+// Loads the agent list and redirects to the default agent (or first agent)
+// so the user always lands on a focused orbital view.
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchAgents } from '@/lib/api';
-import { AgentBoardCanvas } from './agent-board-canvas';
 
 export function AgentsPage() {
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadAgents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const nextAgents = await fetchAgents();
-      setAgents(nextAgents);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agents');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    void loadAgents();
-  }, [loadAgents]);
+    fetchAgents().then((agents) => {
+      if (agents.length === 0) return;
+      const target = agents.find((a) => a.isDefault) ?? agents[0];
+      navigate(`/agents/${target.id}`, { replace: true });
+    });
+  }, [navigate]);
 
   return (
-    <div className="relative flex h-full w-full overflow-hidden">
-      {/* Error toast */}
-      {error && (
-        <div
-          className="absolute top-4 left-1/2 -translate-x-1/2 z-30 rounded-lg px-4 py-2 text-xs"
-          style={{
-            background: 'rgba(220,38,38,0.15)',
-            border: '1px solid rgba(220,38,38,0.35)',
-            color: 'rgba(252,165,165,0.9)',
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      {/* Canvas board — click navigates to /agents/:id */}
-      <AgentBoardCanvas
-        agents={agents}
-        loading={loading}
-        onRefresh={() => void loadAgents()}
+    <div className="flex items-center justify-center h-full">
+      <div
+        className="w-6 h-6 rounded-full animate-spin"
+        style={{
+          border: '2px solid rgba(99,102,241,0.15)',
+          borderTopColor: 'rgba(99,102,241,0.75)',
+        }}
       />
     </div>
   );
