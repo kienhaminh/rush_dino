@@ -616,6 +616,11 @@ pub async fn build_app(
             "/api/sessions/:session_id/sandbox/deny",
             post(routes::sandbox::deny_session_request),
         )
+        // Version update API
+        .route("/api/version/check", get(routes::version::check_version))
+        .route("/api/version/upgrade", post(routes::version::trigger_upgrade))
+        .route("/api/version/restart", post(routes::version::trigger_restart))
+        .route("/api/version/skip", post(routes::version::skip_version))
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),
