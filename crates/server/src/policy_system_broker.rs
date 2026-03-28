@@ -53,7 +53,7 @@ impl PolicySystemBroker {
     /// * `policy`       — Sandbox policy; fixed for the lifetime of this broker.
     /// * `audit`        — Shared audit log for recording policy decisions.
     /// * `secrets`      — Secret values available for credential injection
-    ///                    (`${secret:KEY}` references in provider templates).
+    ///   (`${secret:KEY}` references in provider templates).
     pub fn new(
         policy: SandboxPolicy,
         audit: Arc<AuditLog>,
