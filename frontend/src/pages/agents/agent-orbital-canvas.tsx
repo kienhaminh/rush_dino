@@ -5,6 +5,7 @@
 // Skills: indigo color scheme — core=solid, custom=dashed, all removable
 // Tools: cyan color scheme — core=solid, discovered=dashed, discovered not removable
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type React from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -68,16 +69,18 @@ interface BuildNodesOptions {
   agent: AgentRecord;
   skills: AgentSkillRecord[];
   tools: AgentToolRecord[];
-  onRemoveSkill: (name: string) => void;
-  onRemoveTool: (id: string) => void;
+  // Refs are passed directly so callbacks are always current without
+  // creating new closure instances on every rebuild (avoids defeating ReactFlow diffing)
+  removeSkillRef: React.MutableRefObject<(name: string) => void>;
+  removeToolRef: React.MutableRefObject<(id: string) => void>;
 }
 
 function buildNodes({
   agent,
   skills,
   tools,
-  onRemoveSkill,
-  onRemoveTool,
+  removeSkillRef,
+  removeToolRef,
 }: BuildNodesOptions): Node[] {
   const totalSatellites = skills.length + tools.length;
 
@@ -101,8 +104,10 @@ function buildNodes({
     data: {
       name: skill.name,
       emoji: skill.emoji ?? '🔷',
-      isCustom: skill.group === 'workspace',
-      onRemove: () => onRemoveSkill(skill.name),
+      // isAutoAdded: true when the skill was added from the workspace (group === 'workspace')
+      isAutoAdded: skill.group === 'workspace',
+      // Stable ref-forwarded callback — same object identity across rebuilds
+      onRemove: () => removeSkillRef.current(skill.name),
     },
     draggable: true,
   }));
@@ -116,7 +121,8 @@ function buildNodes({
       name: tool.label,
       emoji: tool.source === 'plugin' ? '🔌' : '🔧',
       isDiscovered: tool.source === 'plugin',
-      onRemove: tool.source === 'plugin' ? undefined : () => onRemoveTool(tool.id),
+      // Stable ref-forwarded callback; undefined for plugin-discovered tools (not removable)
+      onRemove: tool.source === 'plugin' ? undefined : () => removeToolRef.current(tool.id),
     },
     draggable: true,
   }));
@@ -206,7 +212,7 @@ function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette }: InnerCan
   const removeSkillRef = useRef<(name: string) => void>(() => undefined);
   const removeToolRef = useRef<(id: string) => void>(() => undefined);
 
-  // Core layout builder — reads from refs, calls remove handlers via refs.
+  // Core layout builder — reads from refs, passes remove-handler refs directly.
   // Stable across renders as long as the agent identity doesn't change.
   const rebuildCanvas = useCallback(() => {
     const skills = skillsRef.current;
@@ -216,8 +222,8 @@ function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette }: InnerCan
       agent,
       skills,
       tools,
-      onRemoveSkill: (name) => removeSkillRef.current(name),
-      onRemoveTool: (id) => removeToolRef.current(id),
+      removeSkillRef,
+      removeToolRef,
     });
 
     const newEdges = buildEdges(skills, tools);
@@ -243,12 +249,14 @@ function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette }: InnerCan
     [rebuildCanvas],
   );
 
-  // Sync refs and rebuild canvas when runtime data changes (agent switch / refresh)
+  // Sync refs and rebuild canvas when runtime data changes (agent switch / refresh).
+  // Use full memoized arrays (not .length) so the effect re-runs when content
+  // changes even if the count stays the same.
   useEffect(() => {
     skillsRef.current = [...enabledSkills];
     toolsRef.current = [...allTools];
     rebuildCanvas();
-  }, [agent.id, enabledSkills.length, allTools.length, rebuildCanvas]);
+  }, [agent.id, enabledSkills, allTools, rebuildCanvas]);
 
   return (
     <div className="absolute inset-0 bg-background overflow-hidden">

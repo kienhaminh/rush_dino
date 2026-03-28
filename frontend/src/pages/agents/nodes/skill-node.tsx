@@ -1,6 +1,6 @@
 // SkillNode — orbital satellite node for an individual agent skill.
-// Shown as an indigo-bordered card; custom skills (group === 'custom' or source !== 'built-in')
-// get a dashed border + "auto" badge. All skill nodes are removable.
+// Shown as an indigo-bordered card; auto-added skills (group === 'workspace')
+// get a dashed border + "AUTO" badge. All skill nodes are removable.
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 export interface SkillNodeData {
@@ -8,22 +8,22 @@ export interface SkillNodeData {
   name: string;
   /** Emoji icon */
   emoji: string;
-  /** True when this is a workspace/custom skill (not a built-in bundled skill) */
-  isCustom: boolean;
+  /** True when this skill was auto-added from the workspace (group === 'workspace') */
+  isAutoAdded: boolean;
   /** Called when user clicks the ✕ remove button */
   onRemove: () => void;
   [key: string]: unknown;
 }
 
 export function SkillNode({ data }: NodeProps) {
-  const { name, emoji, isCustom, onRemove } = data as SkillNodeData;
+  const { name, emoji, isAutoAdded, onRemove } = data as SkillNodeData;
 
   return (
     <div
       className="relative rounded-xl px-3 py-2.5 flex items-center gap-2.5 transition-shadow duration-150 cursor-default"
       style={{
         background: 'hsl(var(--card))',
-        border: `1.5px ${isCustom ? 'dashed' : 'solid'} #4f46e5`,
+        border: `1.5px ${isAutoAdded ? 'dashed' : 'solid'} #4f46e5`,
         boxShadow: '0 2px 14px rgba(79,70,229,0.22)',
         minWidth: '140px',
         maxWidth: '180px',
@@ -48,7 +48,7 @@ export function SkillNode({ data }: NodeProps) {
         >
           {name}
         </div>
-        {isCustom && (
+        {isAutoAdded && (
           <span
             className="inline-block mt-0.5 text-[8px] font-bold tracking-widest px-1.5 py-0.5 rounded"
             style={{

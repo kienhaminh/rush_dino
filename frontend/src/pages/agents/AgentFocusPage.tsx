@@ -150,8 +150,6 @@ export function AgentFocusPage() {
   const [runtime, setRuntime] = useState<AgentRuntimeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Palette open state — stub for Phase 3
-  const [, setPaletteOpen] = useState(false);
 
   // Load agents list (for tab bar) + current agent runtime in parallel
   const load = useCallback(async () => {
@@ -179,10 +177,8 @@ export function AgentFocusPage() {
   // Find the current agent record from the list
   const currentAgent = agents.find((a) => a.id === agentId);
 
-  const handleOpenPalette = useCallback(() => {
-    // Phase 3 will implement the skill/tool pool palette
-    setPaletteOpen(true);
-  }, []);
+  // No-op for now — Phase 3 will add the real palette state and component
+  const handleOpenPalette = useCallback(() => {}, []);
 
   const handleEdit = useCallback(() => {
     // Edit stub — to be wired in a later phase
