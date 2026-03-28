@@ -42,10 +42,20 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v5
         with:
           path: release-dist
           merge-multiple: true
+      - name: Extract tag message
+        id: tag_message
+        run: |
+          TAG_MSG=$(git tag -l --format='%(contents)' "${{ github.ref_name }}" 2>/dev/null || echo "")
+          echo "message<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TAG_MSG" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
       - name: Publish beta release
         if: contains(github.ref_name, '-beta.')
         uses: softprops/action-gh-release@v2
@@ -53,9 +63,11 @@ jobs:
           files: release-dist/**
           prerelease: true
           make_latest: false
+          body: ${{ steps.tag_message.outputs.message }}
       - name: Publish stable release
         if: ${{ !contains(github.ref_name, '-beta.') }}
         uses: softprops/action-gh-release@v2
         with:
           files: release-dist/**
           make_latest: true
+          body: ${{ steps.tag_message.outputs.message }}
