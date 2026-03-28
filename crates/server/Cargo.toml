@@ -31,6 +31,9 @@ rust-embed.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
 reqwest.workspace = true
+anyhow.workspace = true
+url.workspace = true
+bytes = "1"
 rushdino-common = { path = "../common" }
 rushdino-auth = { path = "../auth" }
 rushdino-providers = { path = "../providers" }
