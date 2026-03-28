@@ -2,14 +2,16 @@ import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import type { SandboxInboundFilter } from '@/lib/types';
 
 interface SandboxInboundFilterEditorProps {
   value: SandboxInboundFilter;
   onChange: (value: SandboxInboundFilter) => void;
+  disabled?: boolean;
 }
 
-export function SandboxInboundFilterEditor({ value, onChange }: SandboxInboundFilterEditorProps) {
+export function SandboxInboundFilterEditor({ value, onChange, disabled }: SandboxInboundFilterEditorProps) {
   const [newPattern, setNewPattern] = useState('');
 
   function addPattern() {
@@ -38,8 +40,12 @@ export function SandboxInboundFilterEditor({ value, onChange }: SandboxInboundFi
             type="number"
             min={1}
             value={value.max_size_kb}
-            onChange={(e) => onChange({ ...value, max_size_kb: Number(e.target.value) })}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              onChange({ ...value, max_size_kb: v < 1 ? 1 : v });
+            }}
             className="h-7 w-24 text-xs"
+            disabled={disabled}
           />
           <span className="text-[11px] text-muted-foreground">· truncate on exceed</span>
         </div>
@@ -64,6 +70,7 @@ export function SandboxInboundFilterEditor({ value, onChange }: SandboxInboundFi
                   size="icon"
                   className="h-5 w-5 text-muted-foreground hover:text-destructive"
                   onClick={() => removePattern(i)}
+                  disabled={disabled}
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -78,8 +85,9 @@ export function SandboxInboundFilterEditor({ value, onChange }: SandboxInboundFi
             onKeyDown={(e) => e.key === 'Enter' && addPattern()}
             placeholder="e.g. AKIA[A-Z0-9]{16}"
             className="h-7 text-xs font-mono"
+            disabled={disabled}
           />
-          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addPattern}>
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addPattern} disabled={disabled}>
             <Plus className="mr-1 h-3 w-3" />
             Add
           </Button>
@@ -92,20 +100,12 @@ export function SandboxInboundFilterEditor({ value, onChange }: SandboxInboundFi
           <div className="text-[11px] text-foreground">Block on match</div>
           <div className="text-[10px] text-muted-foreground">Hard-stop session if pattern matched</div>
         </div>
-        <button
-          role="switch"
-          aria-checked={value.block_on_match}
-          onClick={() => onChange({ ...value, block_on_match: !value.block_on_match })}
-          className={`relative h-5 w-9 rounded-full transition-colors ${
-            value.block_on_match ? 'bg-green-500' : 'bg-muted'
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-              value.block_on_match ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        <Switch
+          checked={value.block_on_match}
+          onCheckedChange={(checked) => onChange({ ...value, block_on_match: checked })}
+          disabled={disabled}
+          aria-label="Block on match"
+        />
       </div>
     </div>
   );
