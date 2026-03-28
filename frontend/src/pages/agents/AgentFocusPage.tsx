@@ -7,9 +7,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeftIcon, PencilIcon } from 'lucide-react';
 
-import type { AgentRecord, AgentRuntimeData } from './agent-types';
+import type { AgentRecord, AgentRuntimeData, AgentToolRecord } from './agent-types';
+import type { SkillNode } from '../skills/skill-graph-types';
 import { fetchAgents, fetchAgentRuntime } from '@/lib/api';
 import { AgentOrbitalCanvas } from './agent-orbital-canvas';
+import { AgentPoolPalette } from './agent-pool-palette';
 
 // ── Max tabs shown before +N overflow indicator ───────────────────────────────
 const MAX_VISIBLE_TABS = 6;
@@ -150,6 +152,7 @@ export function AgentFocusPage() {
   const [runtime, setRuntime] = useState<AgentRuntimeData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Load agents list (for tab bar) + current agent runtime in parallel
   const load = useCallback(async () => {
@@ -177,8 +180,21 @@ export function AgentFocusPage() {
   // Find the current agent record from the list
   const currentAgent = agents.find((a) => a.id === agentId);
 
-  // No-op for now — Phase 3 will add the real palette state and component
-  const handleOpenPalette = useCallback(() => {}, []);
+  const handleOpenPalette = useCallback(() => setPaletteOpen(true), []);
+
+  // Skill assignment stub — close palette and add node to canvas.
+  // TODO: call real API to persist skill assignment.
+  const handleAssignSkill = useCallback((skill: SkillNode) => {
+    console.log('[AgentFocusPage] TODO: assign skill', skill.name, 'to agent', agentId);
+    setPaletteOpen(false);
+  }, [agentId]);
+
+  // Tool assignment stub — close palette and add node to canvas.
+  // TODO: call real API to persist tool assignment.
+  const handleAssignTool = useCallback((tool: AgentToolRecord) => {
+    console.log('[AgentFocusPage] TODO: assign tool', tool.id, 'to agent', agentId);
+    setPaletteOpen(false);
+  }, [agentId]);
 
   const handleEdit = useCallback(() => {
     // Edit stub — to be wired in a later phase
@@ -256,6 +272,19 @@ export function AgentFocusPage() {
           </div>
         )}
       </div>
+
+      {/* Pool palette — floating + panel for assigning skills / tools */}
+      {paletteOpen && runtime && (
+        <AgentPoolPalette
+          agentId={agentId}
+          agentName={agent.name}
+          assignedSkills={runtime.skills.filter((s) => s.enabled)}
+          assignedTools={runtime.toolSections}
+          onAssignSkill={handleAssignSkill}
+          onAssignTool={handleAssignTool}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </div>
   );
 }
