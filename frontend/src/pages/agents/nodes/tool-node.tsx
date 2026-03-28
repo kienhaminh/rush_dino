@@ -57,7 +57,7 @@ export function ToolNode({ data }: NodeProps) {
               color: 'rgba(103,232,249,0.85)',
             }}
           >
-            AUTO
+            auto
           </span>
         )}
       </div>

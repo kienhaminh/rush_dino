@@ -182,18 +182,30 @@ interface InnerCanvasProps {
   agent: AgentRecord;
   runtimeData: AgentRuntimeData;
   onOpenPalette: () => void;
+  extraSkills?: AgentSkillRecord[];
+  extraTools?: AgentToolRecord[];
 }
 
-function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette }: InnerCanvasProps) {
-  // Flatten enabled skills and all tools from sections
+function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette, extraSkills = [], extraTools = [] }: InnerCanvasProps) {
+  // Flatten enabled skills and all tools from sections, then merge locally-added extras
   const enabledSkills = useMemo(
-    () => runtimeData.skills.filter((s) => s.enabled),
-    [runtimeData.skills],
+    () => {
+      const base = runtimeData.skills.filter((s) => s.enabled);
+      // Merge extra skills, skipping duplicates by name
+      const baseNames = new Set(base.map((s) => s.name));
+      return [...base, ...extraSkills.filter((s) => !baseNames.has(s.name))];
+    },
+    [runtimeData.skills, extraSkills],
   );
 
   const allTools = useMemo(
-    () => runtimeData.toolSections.flatMap((section) => section.tools).filter((t) => t.enabled),
-    [runtimeData.toolSections],
+    () => {
+      const base = runtimeData.toolSections.flatMap((section) => section.tools).filter((t) => t.enabled);
+      // Merge extra tools, skipping duplicates by id
+      const baseIds = new Set(base.map((t) => t.id));
+      return [...base, ...extraTools.filter((t) => !baseIds.has(t.id))];
+    },
+    [runtimeData.toolSections, extraTools],
   );
 
   // Explicit generics avoid the 'never[]' inference issue with empty initial arrays
@@ -310,13 +322,17 @@ export interface AgentOrbitalCanvasProps {
   agent: AgentRecord;
   runtimeData: AgentRuntimeData;
   onOpenPalette: () => void;
+  /** Extra skills added locally (e.g. from palette) before the API persists them */
+  extraSkills?: AgentSkillRecord[];
+  /** Extra tools added locally (e.g. from palette) before the API persists them */
+  extraTools?: AgentToolRecord[];
 }
 
 /** Wraps the inner canvas with ReactFlowProvider (required by @xyflow/react). */
-export function AgentOrbitalCanvas(props: AgentOrbitalCanvasProps) {
+export function AgentOrbitalCanvas({ extraSkills, extraTools, ...rest }: AgentOrbitalCanvasProps) {
   return (
     <ReactFlowProvider>
-      <AgentOrbitalCanvasInner {...props} />
+      <AgentOrbitalCanvasInner {...rest} extraSkills={extraSkills} extraTools={extraTools} />
     </ReactFlowProvider>
   );
 }

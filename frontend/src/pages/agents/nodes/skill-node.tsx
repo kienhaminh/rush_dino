@@ -57,7 +57,7 @@ export function SkillNode({ data }: NodeProps) {
               color: 'rgba(165,180,252,0.85)',
             }}
           >
-            AUTO
+            auto
           </span>
         )}
       </div>

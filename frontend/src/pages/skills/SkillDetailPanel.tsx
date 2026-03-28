@@ -1,4 +1,5 @@
 import { XIcon, UserPlusIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import type { SkillNode } from './skill-graph-types';
 import type { AgentRecord } from '@/pages/agents/agent-types';
 
@@ -132,16 +133,10 @@ export function SkillDetailPanel({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 transition-colors"
+                className="flex items-center justify-center w-6 h-6 rounded-md flex-shrink-0 transition-colors hover:bg-white/[0.08]"
                 style={{ color: 'rgba(255,255,255,0.35)' }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.08)';
-                  (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.8)';
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                  (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)';
-                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.8)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.35)'; }}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -198,27 +193,34 @@ export function SkillDetailPanel({
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {assignedAgents.map((agent) => (
-                      <div
+                      <Link
                         key={agent.id}
+                        to={`/agents/${agent.id}`}
                         className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
                         style={{
                           background: 'rgba(99,102,241,0.12)',
                           border: '1px solid rgba(99,102,241,0.3)',
                           color: '#a5b4fc',
+                          textDecoration: 'none',
                         }}
                       >
                         <span>{agent.emoji || '🤖'}</span>
                         <span className="max-w-[100px] truncate">{agent.name}</span>
+                        {/* Unassign button — stops propagation so click doesn't navigate */}
                         <button
                           type="button"
                           title={`Unassign ${agent.name}`}
-                          onClick={() => onUnassign(agent.id)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onUnassign(agent.id);
+                          }}
                           className="ml-0.5 opacity-50 hover:opacity-100 transition-opacity"
                           style={{ color: '#a5b4fc', lineHeight: 1 }}
                         >
                           <XIcon className="w-2.5 h-2.5" />
                         </button>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}
@@ -239,21 +241,11 @@ export function SkillDetailPanel({
                         key={agent.id}
                         type="button"
                         onClick={() => onAssign(agent.id)}
-                        className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-xs text-left transition-colors"
+                        className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-xs text-left transition-colors hover:bg-[rgba(99,102,241,0.1)] hover:border-[rgba(99,102,241,0.3)] hover:text-[#a5b4fc]"
                         style={{
                           background: 'rgba(255,255,255,0.03)',
                           border: '1px solid rgba(255,255,255,0.06)',
                           color: 'rgba(255,255,255,0.6)',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(99,102,241,0.1)';
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(99,102,241,0.3)';
-                          (e.currentTarget as HTMLButtonElement).style.color = '#a5b4fc';
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)';
-                          (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.06)';
-                          (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)';
                         }}
                       >
                         <span>{agent.emoji || '🤖'}</span>

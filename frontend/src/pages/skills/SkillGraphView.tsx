@@ -25,7 +25,7 @@ const nodeTypes = {
 function computeLayout(
   snapshot: GraphSnapshot,
   selectedSkillId: string | undefined,
-  highlightedIds: string[] | undefined,
+  highlightedIds: Set<string> | undefined,
   filter: 'all' | 'core' | 'custom' | undefined,
 ): { nodes: Node[]; edges: Edge[] } {
   const categories = snapshot.nodes.filter((n) => n.nodeType === 'category');
@@ -55,7 +55,7 @@ function computeLayout(
   }
 
   // Determine which IDs to dim based on highlights and filter
-  const hasHighlights = highlightedIds && highlightedIds.length > 0;
+  const hasHighlights = highlightedIds && highlightedIds.size > 0;
 
   const flowNodes: Node[] = [];
   const flowEdges: Edge[] = [];
@@ -90,7 +90,7 @@ function computeLayout(
       // Determine if this node should be dimmed
       let isDimmed = false;
       if (hasHighlights) {
-        isDimmed = !highlightedIds!.includes(skill.id);
+        isDimmed = !highlightedIds!.has(skill.id);
       } else if (filter === 'core') {
         isDimmed = isCustom;
       } else if (filter === 'custom') {
@@ -155,7 +155,7 @@ export interface SkillGraphViewProps {
   /** Highlight the selected node with a glow border */
   selectedSkillId?: string;
   /** When set and non-empty, dim nodes not in the set */
-  highlightedIds?: string[];
+  highlightedIds?: Set<string>;
   /** Dim nodes that don't match the active filter tab */
   filter?: 'all' | 'core' | 'custom';
 }

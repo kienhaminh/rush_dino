@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ChevronLeftIcon, PencilIcon } from 'lucide-react';
 
-import type { AgentRecord, AgentRuntimeData, AgentToolRecord } from './agent-types';
+import type { AgentRecord, AgentRuntimeData, AgentSkillRecord, AgentToolRecord } from './agent-types';
 import type { SkillNode } from '../skills/skill-graph-types';
 import { fetchAgents, fetchAgentRuntime } from '@/lib/api';
 import { AgentOrbitalCanvas } from './agent-orbital-canvas';
@@ -154,6 +154,17 @@ export function AgentFocusPage() {
   const [error, setError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
+  // Locally-added skills/tools from the palette — persisted to canvas immediately,
+  // actual API call is a known gap (TODO below).
+  const [extraSkills, setExtraSkills] = useState<AgentSkillRecord[]>([]);
+  const [extraTools, setExtraTools] = useState<AgentToolRecord[]>([]);
+
+  // Reset locally-added extras when navigating to a different agent
+  useEffect(() => {
+    setExtraSkills([]);
+    setExtraTools([]);
+  }, [agentId]);
+
   // Load agents list (for tab bar) + current agent runtime in parallel
   const load = useCallback(async () => {
     if (!agentId) return;
@@ -182,17 +193,27 @@ export function AgentFocusPage() {
 
   const handleOpenPalette = useCallback(() => setPaletteOpen(true), []);
 
-  // Skill assignment stub — close palette and add node to canvas.
+  // Skill assignment stub — add node to orbital canvas + close palette.
   // TODO: call real API to persist skill assignment.
   const handleAssignSkill = useCallback((skill: SkillNode) => {
-    console.log('[AgentFocusPage] TODO: assign skill', skill.name, 'to agent', agentId);
+    console.log('[AgentFocusPage] TODO: call API — assign skill', skill.name, 'to agent', agentId);
+    // Convert SkillNode (graph type) to AgentSkillRecord (canvas type) and add to local state
+    const record: AgentSkillRecord = {
+      name: skill.name,
+      description: skill.description ?? '',
+      group: skill.tags.includes('workspace') ? 'workspace' : 'built-in',
+      source: 'graph',
+      enabled: true,
+    };
+    setExtraSkills((prev) => [...prev, record]);
     setPaletteOpen(false);
   }, [agentId]);
 
-  // Tool assignment stub — close palette and add node to canvas.
+  // Tool assignment stub — add node to orbital canvas + close palette.
   // TODO: call real API to persist tool assignment.
   const handleAssignTool = useCallback((tool: AgentToolRecord) => {
-    console.log('[AgentFocusPage] TODO: assign tool', tool.id, 'to agent', agentId);
+    console.log('[AgentFocusPage] TODO: call API — assign tool', tool.id, 'to agent', agentId);
+    setExtraTools((prev) => [...prev, tool]);
     setPaletteOpen(false);
   }, [agentId]);
 
@@ -258,6 +279,8 @@ export function AgentFocusPage() {
             agent={agent}
             runtimeData={runtime}
             onOpenPalette={handleOpenPalette}
+            extraSkills={extraSkills}
+            extraTools={extraTools}
           />
         ) : (
           // Skeleton while runtime loads after agent list arrives

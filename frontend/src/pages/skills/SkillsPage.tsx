@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { SearchIcon, LayoutGridIcon, NetworkIcon } from 'lucide-react';
+import { SearchIcon, NetworkIcon } from 'lucide-react';
 
 import { fetchAgents } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -55,7 +55,16 @@ export function SkillsPage() {
     let cancelled = false;
     querySkillGraph(debouncedSearch, 20)
       .then((results) => {
-        if (!cancelled) setHighlightedIds(new Set(results.map((r) => r.name)));
+        if (!cancelled && graph) {
+          // Map scored result names back to node IDs — search returns names, graph dims by ID
+          const nameSet = new Set(results.map((r) => r.name.toLowerCase()));
+          const ids = new Set(
+            graph.nodes
+              .filter((n) => n.nodeType === 'skill' && nameSet.has(n.name.toLowerCase()))
+              .map((n) => n.id),
+          );
+          setHighlightedIds(ids);
+        }
       })
       .catch(() => {
         if (!cancelled) setHighlightedIds(null);
@@ -63,7 +72,7 @@ export function SkillsPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch]);
+  }, [debouncedSearch, graph]);
 
   // Assign/unassign stubs with optimistic local state
   // TODO: wire up real API calls when assign/unassign endpoints exist
@@ -178,7 +187,7 @@ export function SkillsPage() {
             snapshot={graph}
             onSkillSelect={handleSkillSelect}
             selectedSkillId={selectedSkill?.id}
-            highlightedIds={debouncedSearch.trim() && highlightedIds ? [...highlightedIds] : undefined}
+            highlightedIds={debouncedSearch.trim() && highlightedIds ? highlightedIds : undefined}
             filter={filter}
           />
         </div>
