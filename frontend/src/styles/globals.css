@@ -40,6 +40,16 @@ html.theme-transition::view-transition-new(root) {
   to   { clip-path: circle(150% at var(--theme-switch-x, 50%) var(--theme-switch-y, 50%)); }
 }
 
+/* Hide ReactFlow connection handles — agents canvas uses invisible handles */
+.react-flow__handle-invisible {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
 /* Agent board node — selected pulse animation */
 @keyframes agent-node-pulse {
   0%, 100% { box-shadow: 0 0 0 2px rgba(99,102,241,0.8), 0 0 16px rgba(99,102,241,0.3); }

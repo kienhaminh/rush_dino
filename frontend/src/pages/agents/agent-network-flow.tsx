@@ -16,7 +16,6 @@ import { AgentGlowEdge } from './edges/agent-glow-edge';
 
 export type SelectedNode = 'skills' | 'tools' | 'knowledge' | null;
 
-// Defined outside component to prevent re-renders (xyflow requirement)
 const nodeTypes = {
   satellite: AgentSatelliteNode,
   core: AgentCoreNode,
@@ -45,8 +44,8 @@ function buildNodes(agent: AgentRecord, runtime: AgentRuntimeData): Node[] {
       data: {
         label: 'SKILLS',
         icon: '◑',
-        subtitle: `${skillCount} Active Capacities`,
-        accentColor: '#6366f1',
+        subtitle: `${skillCount} active`,
+        accentColor: 'hsl(var(--primary))',
         handlePosition: Position.Bottom,
       },
     },
@@ -57,8 +56,8 @@ function buildNodes(agent: AgentRecord, runtime: AgentRuntimeData): Node[] {
       data: {
         label: 'TOOLS',
         icon: '🔧',
-        subtitle: `${toolCount} Integrated APIs`,
-        accentColor: '#8b5cf6',
+        subtitle: `${toolCount} enabled`,
+        accentColor: 'hsl(var(--brand-teal))',
         handlePosition: Position.Bottom,
       },
     },
@@ -76,8 +75,8 @@ function buildNodes(agent: AgentRecord, runtime: AgentRuntimeData): Node[] {
       data: {
         label: 'KNOWLEDGE',
         icon: '🗄',
-        subtitle: `${knowledgeCount} Indexed Entries`,
-        accentColor: '#14b8a6',
+        subtitle: `${knowledgeCount} indexed`,
+        accentColor: 'hsl(var(--brand-mint))',
         handlePosition: Position.Top,
       },
     },
@@ -91,7 +90,7 @@ const EDGES: Edge[] = [
     target: 'core',
     targetHandle: 'top-left',
     type: 'glow',
-    data: { color: 'rgba(99,102,241,0.7)' },
+    data: { color: 'rgba(14,196,222,0.7)' },
   },
   {
     id: 'tools-core',
@@ -99,7 +98,7 @@ const EDGES: Edge[] = [
     target: 'core',
     targetHandle: 'top-right',
     type: 'glow',
-    data: { color: 'rgba(139,92,246,0.7)' },
+    data: { color: 'rgba(26,168,190,0.7)' },
   },
   {
     id: 'knowledge-core',
@@ -107,32 +106,32 @@ const EDGES: Edge[] = [
     target: 'core',
     targetHandle: 'bottom',
     type: 'glow',
-    data: { color: 'rgba(20,184,166,0.7)' },
+    data: { color: 'rgba(61,189,131,0.7)' },
   },
 ];
 
 interface AgentNetworkFlowProps {
   agent: AgentRecord;
   runtime: AgentRuntimeData;
+  selectedNode: SelectedNode;
   onNodeSelect: (node: SelectedNode) => void;
 }
 
-export function AgentNetworkFlow({ agent, runtime, onNodeSelect }: AgentNetworkFlowProps) {
+export function AgentNetworkFlow({ agent, runtime, selectedNode, onNodeSelect }: AgentNetworkFlowProps) {
   const initialNodes = useMemo(() => buildNodes(agent, runtime), [agent, runtime]);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState(EDGES);
 
-  // Sync node data (counts) when runtime loads or agent changes,
-  // while preserving positions the user may have dragged to.
   useEffect(() => {
     const updated = buildNodes(agent, runtime);
     setNodes((prev) =>
       prev.map((node) => {
         const fresh = updated.find((n) => n.id === node.id);
-        return fresh ? { ...node, data: fresh.data } : node;
+        if (!fresh) return node;
+        return { ...node, data: { ...fresh.data, isSelected: node.id === selectedNode } };
       }),
     );
-  }, [agent, runtime, setNodes]);
+  }, [agent, runtime, selectedNode, setNodes]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
