@@ -4,7 +4,7 @@
 //   - Compact sticky tab bar (← All agents | agent tabs | metadata + Edit)
 //   - Orbital ReactFlow canvas filling remaining height
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { ChevronLeftIcon, PencilIcon } from 'lucide-react';
 
 import type { AgentRecord, AgentRuntimeData } from './agent-types';
@@ -42,8 +42,6 @@ interface TabBarProps {
 }
 
 function AgentTabBar({ agents, activeId, runtime, onEdit }: TabBarProps) {
-  const navigate = useNavigate();
-
   const visibleAgents = agents.slice(0, MAX_VISIBLE_TABS);
   const overflowCount = agents.length - MAX_VISIBLE_TABS;
 
@@ -85,9 +83,9 @@ function AgentTabBar({ agents, activeId, runtime, onEdit }: TabBarProps) {
         {visibleAgents.map((agent) => {
           const isActive = agent.id === activeId;
           return (
-            <button
+            <Link
               key={agent.id}
-              onClick={() => navigate(`/agents/${agent.id}`)}
+              to={`/agents/${agent.id}`}
               className="flex items-center gap-1.5 px-2.5 h-full text-[11px] font-medium whitespace-nowrap transition-colors duration-100 cursor-pointer relative flex-shrink-0"
               style={{
                 color: isActive ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
@@ -96,7 +94,7 @@ function AgentTabBar({ agents, activeId, runtime, onEdit }: TabBarProps) {
             >
               <span>{agent.emoji}</span>
               <span className="hidden sm:inline max-w-[100px] truncate">{agent.name}</span>
-            </button>
+            </Link>
           );
         })}
 
