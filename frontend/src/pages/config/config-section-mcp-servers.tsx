@@ -105,6 +105,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
 
   function addServer() {
     if (!newServer.name.trim() || !newServer.url.trim()) return;
+    if (servers.some((s) => s.name === newServer.name.trim())) return;
     const entry: McpServerConfig = {
       name: newServer.name.trim(),
       url: newServer.url.trim(),
@@ -263,6 +264,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
                   Auth Header <span className="opacity-50">(optional)</span>
                 </Label>
                 <Input
+                  type="password"
                   placeholder="Bearer ..."
                   value={newServer.auth_header}
                   onChange={(e) =>

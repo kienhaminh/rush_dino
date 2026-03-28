@@ -120,15 +120,20 @@ impl McpManager {
 
         // Connect to each server
         for cfg in servers {
-            // Mark as connecting
+            // Mark as connecting for new servers; reset to connecting if config changed.
             {
                 let mut map = self.state.write().expect("mcp state lock poisoned");
-                map.entry(cfg.name.clone()).or_insert_with(|| McpServerState {
+                let entry = map.entry(cfg.name.clone()).or_insert_with(|| McpServerState {
                     config: cfg.clone(),
                     status: McpConnectionStatus::Connecting,
                     tools: vec![],
                     last_seen_at: None,
                 });
+                // Reset status when url or auth_header has changed so stale status is not shown.
+                if entry.config != *cfg {
+                    entry.status = McpConnectionStatus::Connecting;
+                    entry.config = cfg.clone();
+                }
             }
 
             let name = cfg.name.clone();
@@ -206,17 +211,19 @@ impl McpManager {
         }
     }
 
-    /// Return a snapshot of all server statuses.
+    /// Return a snapshot of all server statuses, sorted by name for stable UI ordering.
     pub fn status_snapshot(&self) -> Vec<McpServerStatus> {
         let map = self.state.read().expect("mcp state lock poisoned");
-        map.values()
+        let mut result: Vec<McpServerStatus> = map.values()
             .map(|s| McpServerStatus {
                 name: s.config.name.clone(),
                 status: s.status.clone(),
                 tool_count: s.tools.len(),
                 last_seen_secs: s.last_seen_at.map(|t| t.elapsed().as_secs()),
             })
-            .collect()
+            .collect();
+        result.sort_by(|a, b| a.name.cmp(&b.name));
+        result
     }
 }
 
