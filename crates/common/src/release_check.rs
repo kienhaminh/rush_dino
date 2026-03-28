@@ -304,6 +304,36 @@ pub fn is_critical_release(body: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// Skip persistence
+// ---------------------------------------------------------------------------
+
+use std::path::{Path, PathBuf};
+
+pub fn skipped_versions_path(home: &Path) -> PathBuf {
+    home.join("skipped_versions.json")
+}
+
+pub fn load_skipped_versions(home: &Path) -> Vec<String> {
+    let path = skipped_versions_path(home);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub fn add_skipped_version(home: &Path, version: &str) -> Result<()> {
+    let mut skipped = load_skipped_versions(home);
+    let normalized = version.trim_start_matches('v').to_string();
+    if !skipped.contains(&normalized) {
+        skipped.push(normalized);
+    }
+    let json = serde_json::to_string_pretty(&skipped)
+        .map_err(|e| AppError::Agent(format!("failed to serialize skipped versions: {e}")))?;
+    std::fs::write(skipped_versions_path(home), json)?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Platform helpers
 // ---------------------------------------------------------------------------
 
@@ -542,6 +572,23 @@ mod tests {
     fn upgrade_accepts_newer_version_target() {
         ensure_version_direction("1.2.3", "v1.2.4", ReleaseAction::Upgrade)
             .expect("newer version should be a valid upgrade target");
+    }
+
+    // --- skip persistence ---
+
+    #[test]
+    fn skip_persistence_roundtrips() {
+        let tmp = tempfile::tempdir().unwrap();
+        let home = tmp.path();
+
+        assert!(load_skipped_versions(home).is_empty());
+
+        add_skipped_version(home, "0.2.0").unwrap();
+        add_skipped_version(home, "v0.3.0").unwrap();
+        add_skipped_version(home, "0.2.0").unwrap(); // duplicate
+
+        let skipped = load_skipped_versions(home);
+        assert_eq!(skipped, vec!["0.2.0", "0.3.0"]);
     }
 
     // --- is_critical_release via release body ---
