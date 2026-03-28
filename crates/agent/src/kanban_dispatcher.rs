@@ -15,6 +15,7 @@ use rushdino_common::{
 use rushdino_providers::Provider;
 
 use crate::{
+    agent_health_store::AgentHealthStore,
     agent_manager::AgentManager,
     agent_task_memory::AgentTaskMemory,
     conversation::ConversationManager,
@@ -32,8 +33,10 @@ use crate::{
     },
 };
 
-/// How often (in seconds) the dispatcher polls the backlog for unclaimed tasks.
-pub const POLL_INTERVAL_SECS: u64 = 5;
+/// Heartbeat interval (in seconds) — fallback poll in case a notification is
+/// missed. Much longer than the old 5-second poll since `Notify` handles the
+/// hot path.
+pub const HEARTBEAT_INTERVAL_SECS: u64 = 30;
 
 /// Formats a completed task as a daily-note Markdown entry.
 ///
@@ -68,8 +71,13 @@ pub struct KanbanDispatcher {
     pub skill_manager: Arc<SkillManager>,
     pub conversation: Arc<ConversationManager>,
     pub task_memory: Arc<AgentTaskMemory>,
+    pub health_store: Arc<AgentHealthStore>,
     pub home_dir: PathBuf,
     pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+    /// Shared with `KanbanStore` — woken when a task is created or sent back
+    /// for revision, so the dispatcher reacts immediately instead of waiting
+    /// for the next heartbeat tick.
+    pub task_notify: Arc<tokio::sync::Notify>,
 }
 
 impl KanbanDispatcher {
@@ -85,8 +93,10 @@ impl KanbanDispatcher {
         skill_manager: Arc<SkillManager>,
         conversation: Arc<ConversationManager>,
         task_memory: Arc<AgentTaskMemory>,
+        health_store: Arc<AgentHealthStore>,
         home_dir: PathBuf,
         broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+        task_notify: Arc<tokio::sync::Notify>,
     ) -> Self {
         Self {
             store,
@@ -99,18 +109,29 @@ impl KanbanDispatcher {
             skill_manager,
             conversation,
             task_memory,
+            health_store,
             home_dir,
             broadcast_tx,
+            task_notify,
         }
     }
 
-    /// Spawns the background polling loop. The loop runs indefinitely until
-    /// the process exits; errors in individual polls are logged and skipped.
+    /// Spawns the background dispatch loop. The loop wakes immediately when
+    /// `task_notify` fires (a task was created or sent back for revision) and
+    /// also runs a heartbeat poll every [`HEARTBEAT_INTERVAL_SECS`] as a
+    /// safety net.
     pub fn start(self: Arc<Self>) {
         tokio::spawn(async move {
-            let mut interval = time::interval(Duration::from_secs(POLL_INTERVAL_SECS));
+            let mut heartbeat = time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
             loop {
-                interval.tick().await;
+                tokio::select! {
+                    _ = self.task_notify.notified() => {
+                        // Immediate wakeup — a task was just posted or returned.
+                    }
+                    _ = heartbeat.tick() => {
+                        // Periodic fallback in case a notification was missed.
+                    }
+                }
                 if let Err(e) = self.poll_once().await {
                     tracing::warn!(error = %e, "kanban dispatcher poll error");
                 }
@@ -129,7 +150,7 @@ impl KanbanDispatcher {
                 continue;
             }
 
-            if let Some(matched) = find_best_match(&task, &agents) {
+            if let Some(matched) = find_best_match(&task, &agents, Some(&self.health_store)).await {
                 if let Err(e) = self.execute_task(&task, &matched.agent_name).await {
                     tracing::warn!(
                         task_id = %task.id,
@@ -137,6 +158,10 @@ impl KanbanDispatcher {
                         error = %e,
                         "task execution failed"
                     );
+                    // Record failure for circuit breaker / matching feedback.
+                    let _ = self.health_store.record_outcome(
+                        &matched.agent_name, &task.id, &task.tags, false,
+                    ).await;
                     // Best-effort status update; ignore secondary failures.
                     let _ = self.store.update_task_status(&UpdateTaskInput {
                         task_id: task.id.clone(),
@@ -234,6 +259,27 @@ impl KanbanDispatcher {
             system_content.push_str(&format!("\n\n## Your Task History\n\n{log}"));
         }
 
+        // Inject parent task context if this is a subtask.
+        if let Some(ref parent_id) = task.parent_task_id {
+            if let Ok(parent) = self.store.get_task(parent_id).await {
+                if let Some(ref result) = parent.result {
+                    let preview = if result.len() > 500 { &result[..500] } else { result };
+                    system_content.push_str(&format!(
+                        "\n\n## Parent Task Result\n\nParent task \"{}\" produced:\n{}",
+                        parent.title, preview
+                    ));
+                }
+            }
+        }
+
+        // Inject review feedback for retry tasks.
+        if let Some(ref feedback) = task.review_feedback {
+            system_content.push_str(&format!(
+                "\n\n## Previous Review Feedback\n\nYour previous attempt was rejected with this feedback:\n{}",
+                feedback
+            ));
+        }
+
         // 9. Build initial messages.
         let task_description = format!(
             "**Task**: {}\n\n{}\n\n**Task ID**: {}",
@@ -270,6 +316,7 @@ impl KanbanDispatcher {
             run_id: None,
             delegation_depth: 0,
             workspace_override: Some(agent_workspace),
+            parent_context: None,
         };
 
         let (response, all_messages) = with_tool_execution_context(
@@ -334,6 +381,11 @@ impl KanbanDispatcher {
             let _ = self.broadcast_tx.send(notification);
         }
 
+        // 16. Record success for matching feedback / circuit breaker.
+        if let Err(e) = self.health_store.record_outcome(agent_name, &task.id, &task.tags, true).await {
+            tracing::warn!(task_id = %task.id, error = %e, "failed to record health outcome");
+        }
+
         tracing::info!(
             task_id = %task.id,
             agent = agent_name,
@@ -350,9 +402,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn poll_interval_is_reasonable() {
-        assert!(POLL_INTERVAL_SECS >= 5);
-        assert!(POLL_INTERVAL_SECS <= 60);
+    fn heartbeat_interval_is_reasonable() {
+        assert!(HEARTBEAT_INTERVAL_SECS >= 10);
+        assert!(HEARTBEAT_INTERVAL_SECS <= 120);
     }
 
     #[test]

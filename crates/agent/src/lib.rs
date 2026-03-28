@@ -1,4 +1,6 @@
+pub mod agent_health_store;
 pub mod agent_manager;
+pub mod agent_message_store;
 pub mod agent_progress;
 pub mod agent_task_memory;
 pub mod compaction;
@@ -7,6 +9,11 @@ pub mod conversation;
 mod conversation_mapper;
 pub mod cron_manager;
 pub mod engine;
+mod engine_assistant_runs;
+mod engine_chat;
+mod engine_cron;
+mod engine_mgmt;
+mod engine_workflows;
 pub mod kanban_dispatcher;
 pub mod kanban_matching_engine;
 pub mod kanban_store;
@@ -28,7 +35,9 @@ pub mod workflow_manager;
 pub mod workflow_runner;
 pub mod workflow_types;
 
+pub use agent_health_store::AgentHealthStore;
 pub use agent_manager::{AgentManager, AgentTemplate};
+pub use agent_message_store::{AgentMessage, AgentMessageStore};
 pub use agent_progress::{
     AgentProgressAgentIdentity, AgentProgressCard, AgentProgressCardStatus, AgentProgressColumns,
     AgentProgressEvent, AgentProgressLane, AgentProgressSummary,

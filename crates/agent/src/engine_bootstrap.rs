@@ -139,6 +139,7 @@ mod tests {
             color: None,
             model: None,
             claims_tasks: true,
+            claim_tags: Vec::new(),
             sandbox_policy: None,
         }];
         let msg = system_message(&config, &memory, vec![], &session_ctx, &agents);

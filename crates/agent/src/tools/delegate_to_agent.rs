@@ -39,7 +39,7 @@ pub const MAX_DELEGATION_DEPTH: u8 = 3;
 /// `ToolRegistry → DelegateToAgentTool → ToolRegistry`.
 /// Tools that are always available to every delegated agent, regardless of
 /// the agent template's `tools` field.
-const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search"];
+const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search", "post_task", "claim_task", "update_task"];
 
 /// Parses the agent template's `tools` field (comma-separated) into a list of
 /// tool names, merging in the always-available base tools.
@@ -149,6 +149,7 @@ impl Tool for DelegateToAgentTool {
             run_id: None,
             delegation_depth: 0,
             workspace_override: None,
+            parent_context: None,
         });
         let current_depth = parent_ctx.delegation_depth;
 
@@ -231,6 +232,19 @@ impl Tool for DelegateToAgentTool {
             system_content.push_str(&format!("\n\n## Your Task History\n\n{log}"));
         }
 
+        // Inject parent context summary so the child agent knows what the delegating agent was doing.
+        if let Some(parent_ctx_str) = current_tool_execution_context()
+            .and_then(|ctx| ctx.parent_context.clone())
+        {
+            system_content.push_str(&format!("\n\n## Parent Context\n\n{parent_ctx_str}"));
+        }
+
+        // Build parent context for the child: what we're doing and why we're delegating
+        let child_parent_context = Some(format!(
+            "Delegated by parent agent. Task: {}",
+            if task.len() > 500 { &task[..500] } else { task }
+        ));
+
         // Create an isolated conversation for this delegation so the sub-agent's
         // message history is persisted and traceable independently.
         let conv_id = Uuid::new_v4();
@@ -279,6 +293,7 @@ impl Tool for DelegateToAgentTool {
             run_id: None,
             delegation_depth: current_depth + 1,
             workspace_override: Some(agent_workspace),
+            parent_context: child_parent_context,
         };
 
         let (response, all_messages) = with_tool_execution_context(
@@ -415,6 +430,7 @@ mod tests {
                 color: None,
                 model: None,
                 claims_tasks: true,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             })
             .unwrap();
@@ -438,6 +454,7 @@ mod tests {
             delegation_depth: MAX_DELEGATION_DEPTH,
             run_id: None,
             workspace_override: None,
+            parent_context: None,
         };
 
         let result = with_tool_execution_context(

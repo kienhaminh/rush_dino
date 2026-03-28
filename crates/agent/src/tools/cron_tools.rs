@@ -93,6 +93,7 @@ async fn run_agent_turn(
         run_id: None,
         delegation_depth: 0,
         workspace_override: None,
+        parent_context: None,
     });
     let tool_ctx = ToolExecutionContext {
         conversation_id: Some(conversation_id.to_owned()),

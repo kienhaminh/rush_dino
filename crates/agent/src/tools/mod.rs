@@ -1,3 +1,4 @@
+pub mod agent_inbox;
 pub mod cron_tools;
 pub mod delegate_to_agent;
 pub mod kanban_tools;
@@ -15,6 +16,7 @@ pub mod run_workflow;
 pub mod session_tools;
 pub mod bash;
 pub mod spawn_agent;
+pub mod team_status;
 pub mod tool_search;
 pub mod web_fetch;
 pub mod web_search;

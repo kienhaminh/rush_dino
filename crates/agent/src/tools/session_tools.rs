@@ -99,6 +99,7 @@ async fn run_session_turn(
         run_id: None,
         delegation_depth: 0,
         workspace_override: None,
+        parent_context: None,
     });
     let tool_ctx = ToolExecutionContext {
         conversation_id: Some(conversation_id.to_owned()),
@@ -414,6 +415,7 @@ mod tests {
                 color: None,
                 model: None,
                 claims_tasks: false,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             })
             .unwrap();

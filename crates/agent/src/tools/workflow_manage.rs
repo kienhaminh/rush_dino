@@ -330,33 +330,28 @@ impl WorkflowManageTool {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::{fs, sync::Arc};
+#[path = "workflow_manage_tests.rs"]
+mod tests;
 
-    use serde_json::json;
-    use sqlx::SqlitePool;
-    use uuid::Uuid;
-
-    use crate::{
-        agent_manager::{AgentManager, AgentTemplate},
-        workflow_manager::WorkflowManager,
-        workflow_types::{CreateWorkflowInput, WorkflowSource, WorkflowStatus, WorkflowStepInput},
-    };
-
-    use super::*;
-
-    /// Shared setup: in-memory SQLite + agent manager with one known agent.
-    async fn setup() -> (Arc<WorkflowManager>, WorkflowManageTool) {
+#[cfg(test)]
+mod tests_unused_marker {
+    async fn setup() -> () {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        for statement in include_str!("../../../common/migrations/001_init.sql").split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
+        let migrations: &[&str] = &[
+            include_str!("../../../common/migrations/001_init.sql"),
+            include_str!("../../../common/migrations/010_workflow_step_type.sql"),
+        ];
+        for migration in migrations {
+            for statement in migration.split(';') {
+                let sql: &str = statement.trim();
+                if sql.is_empty() {
+                    continue;
+                }
+                sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .expect("run statement");
             }
-            sqlx::query(sql)
-                .execute(&pool)
-                .await
-                .expect("run statement");
         }
 
         let dir = std::env::temp_dir().join(format!("workflow-manage-{}", Uuid::new_v4()));
@@ -373,6 +368,7 @@ mod tests {
                 color: None,
                 model: None,
                 claims_tasks: true,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             })
             .expect("save template");

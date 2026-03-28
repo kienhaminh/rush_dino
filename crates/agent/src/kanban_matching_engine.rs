@@ -8,6 +8,7 @@
 
 use serde::Serialize;
 
+use crate::agent_health_store::AgentHealthStore;
 use crate::agent_manager::AgentTemplate;
 use crate::kanban_store::KanbanTask;
 
@@ -85,7 +86,11 @@ pub fn tag_match_candidates(
             continue;
         }
 
-        let agent_tags = default_claim_tags(&agent.name);
+        let agent_tags = if agent.claim_tags.is_empty() {
+            default_claim_tags(&agent.name)
+        } else {
+            agent.claim_tags.clone()
+        };
         let score = tag_overlap_score(&task.tags, &agent_tags);
         if score > 0.0 {
             scores.push((agent.name.clone(), score));
@@ -98,12 +103,17 @@ pub fn tag_match_candidates(
 
 /// Run the matching engine for a single task.
 ///
-/// Returns the best match, or None if no suitable agent is found.
-pub fn find_best_match(
+/// When `health_store` is provided, agents with an open circuit breaker are
+/// excluded and candidates' scores are weighted by their historical success
+/// rate.  Pass `None` to skip health-aware filtering (useful in tests).
+pub async fn find_best_match(
     task: &KanbanTask,
     agents: &[AgentTemplate],
+    health_store: Option<&AgentHealthStore>,
 ) -> Option<MatchResult> {
-    let candidates = tag_match_candidates(task, agents);
+    let raw_candidates = tag_match_candidates(task, agents);
+
+    let candidates = filter_by_health(raw_candidates, health_store).await;
 
     if candidates.is_empty() {
         // Fall back to description-based keyword matching.
@@ -138,6 +148,30 @@ pub fn find_best_match(
             best_name, best_score
         ),
     })
+}
+
+/// Filter out unhealthy agents and adjust scores by historical success rate.
+///
+/// When `health_store` is `None`, candidates pass through unchanged.
+async fn filter_by_health(
+    candidates: Vec<(String, f64)>,
+    health_store: Option<&AgentHealthStore>,
+) -> Vec<(String, f64)> {
+    let Some(store) = health_store else {
+        return candidates;
+    };
+
+    let mut healthy: Vec<(String, f64)> = Vec::new();
+    for (name, score) in candidates {
+        if store.is_circuit_open(&name).await.unwrap_or(false) {
+            tracing::info!(agent = %name, "skipping agent — circuit breaker open");
+            continue;
+        }
+        let rate = store.get_success_rate(&name).await.unwrap_or(1.0);
+        healthy.push((name, score * rate));
+    }
+    healthy.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    healthy
 }
 
 /// Fallback: match task description keywords against agent descriptions.
@@ -245,6 +279,7 @@ mod tests {
                 color: None,
                 model: None,
                 claims_tasks: true,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             },
             AgentTemplate {
@@ -256,6 +291,7 @@ mod tests {
                 color: None,
                 model: None,
                 claims_tasks: true,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             },
             AgentTemplate {
@@ -267,6 +303,7 @@ mod tests {
                 color: None,
                 model: None,
                 claims_tasks: true,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             },
         ]
@@ -293,34 +330,60 @@ mod tests {
             updated_at: "2026-01-01T00:00:00Z".into(),
             claimed_at: None,
             completed_at: None,
+            revision_count: 0,
             notify_conversation_id: None,
         }
     }
 
-    #[test]
-    fn finds_software_engineer_for_code_tags() {
+    #[tokio::test]
+    async fn finds_software_engineer_for_code_tags() {
         let agents = make_test_agents();
         let task = make_task(vec!["code", "architecture"]);
-        let result = find_best_match(&task, &agents);
+        let result = find_best_match(&task, &agents, None).await;
         assert!(result.is_some());
         assert_eq!(result.unwrap().agent_name, "software-engineer");
     }
 
-    #[test]
-    fn finds_researcher_for_research_tags() {
+    #[tokio::test]
+    async fn finds_researcher_for_research_tags() {
         let agents = make_test_agents();
         let task = make_task(vec!["research", "analysis"]);
-        let result = find_best_match(&task, &agents);
+        let result = find_best_match(&task, &agents, None).await;
         assert!(result.is_some());
         assert_eq!(result.unwrap().agent_name, "researcher");
     }
 
-    #[test]
-    fn finds_designer_for_ui_tags() {
+    #[tokio::test]
+    async fn finds_designer_for_ui_tags() {
         let agents = make_test_agents();
         let task = make_task(vec!["design", "ui", "ux"]);
-        let result = find_best_match(&task, &agents);
+        let result = find_best_match(&task, &agents, None).await;
         assert!(result.is_some());
         assert_eq!(result.unwrap().agent_name, "designer");
+    }
+
+    #[tokio::test]
+    async fn custom_agent_with_claim_tags_routes_correctly() {
+        let agents = vec![AgentTemplate {
+            name: "sql-optimizer".into(),
+            description: "SQL query optimizer".into(),
+            system_prompt: "You optimize SQL queries.".into(),
+            icon: None,
+            tools: None,
+            color: None,
+            model: None,
+            claims_tasks: true,
+            claim_tags: vec![
+                "sql".into(),
+                "database".into(),
+                "query".into(),
+                "optimization".into(),
+            ],
+            sandbox_policy: None,
+        }];
+        let task = make_task(vec!["sql", "optimization"]);
+        let result = find_best_match(&task, &agents, None).await;
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().agent_name, "sql-optimizer");
     }
 }

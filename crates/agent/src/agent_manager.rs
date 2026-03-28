@@ -25,6 +25,11 @@ pub struct AgentTemplate {
     /// Defaults to `true`. Set to `false` for meta-agents that should never claim tasks.
     #[serde(default = "default_claims_tasks")]
     pub claims_tasks: bool,
+    /// Tags used by the kanban matching engine to route tasks to this agent.
+    /// Comma-separated in the Markdown front-matter (e.g. "code, debugging, api").
+    /// Falls back to `default_claim_tags()` in the matching engine when empty.
+    #[serde(default)]
+    pub claim_tags: Vec<String>,
     /// Optional sandbox policy loaded from `{agents_dir}/{name}/sandbox.yaml`.
     /// Present only when the file exists; absent for agents without a sandbox config.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -75,6 +80,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
     let mut color: Option<String> = None;
     let mut model: Option<String> = None;
     let mut claims_tasks: Option<bool> = None;
+    let mut claim_tags: Option<String> = None;
 
     for line in front_matter.lines() {
         if let Some(colon_pos) = line.find(':') {
@@ -88,12 +94,22 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
                 "color" => color = Some(value),
                 "model" => model = Some(value),
                 "claims_tasks" => claims_tasks = Some(value == "true"),
+                "claim_tags" => claim_tags = Some(value),
                 _ => {}
             }
         }
     }
 
     let name = name?; // name is required
+
+    let claim_tags: Vec<String> = claim_tags
+        .map(|s| {
+            s.split(',')
+                .map(|t| t.trim().to_owned())
+                .filter(|t| !t.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
 
     Some(AgentTemplate {
         name,
@@ -104,6 +120,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         color,
         model,
         claims_tasks: claims_tasks.unwrap_or(true),
+        claim_tags,
         // sandbox_policy is populated by AgentManager::get/list after parsing.
         sandbox_policy: None,
     })
@@ -248,6 +265,9 @@ impl AgentManager {
         if !template.claims_tasks {
             content.push_str("claims_tasks: false\n");
         }
+        if !template.claim_tags.is_empty() {
+            content.push_str(&format!("claim_tags: {}\n", template.claim_tags.join(", ")));
+        }
         content.push_str("---\n\n");
         content.push_str(&template.system_prompt);
 
@@ -300,6 +320,7 @@ mod tests {
             color: None,
             model: None,
             claims_tasks: true,
+            claim_tags: Vec::new(),
             sandbox_policy: None,
         }
     }

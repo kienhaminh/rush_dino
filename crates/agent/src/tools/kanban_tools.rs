@@ -4,7 +4,7 @@
 //! - `post_task` — create a new task on the board (any agent)
 //! - `claim_task` — pick up a backlog task (any agent)
 //! - `update_task` — update task status/result during execution (any agent)
-//! - `review_task` — approve or reject completed work (orchestrator only)
+//! - `review_task` — approve or reject completed work (any agent)
 
 use std::sync::Arc;
 
@@ -317,8 +317,8 @@ impl Tool for ReviewTaskTool {
     }
 
     fn description(&self) -> &str {
-        "Review a completed task. Approve to mark as done, or send back for revision with feedback. \
-         Only the main session agent should use this tool."
+        "Review a completed task. Approve to mark it done, or reject with feedback \
+         for the agent to revise. Any agent can review tasks."
     }
 
     fn parameters(&self) -> Value {
@@ -337,6 +337,10 @@ impl Tool for ReviewTaskTool {
                 "feedback": {
                     "type": "string",
                     "description": "Feedback for the agent (required when verdict is needs_revision)"
+                },
+                "reassign_to": {
+                    "type": "string",
+                    "description": "Optional: reassign the task to a different agent on rejection"
                 }
             },
             "required": ["task_id", "verdict"]
@@ -364,26 +368,29 @@ impl Tool for ReviewTaskTool {
         };
 
         let feedback = args.get("feedback").and_then(Value::as_str);
+        let reassign_to = args.get("reassign_to").and_then(Value::as_str);
 
         let task = self.store.review_task(task_id, verdict, feedback).await?;
+
+        // If rejected and reassign_to is provided, update the assigned agent so
+        // the dispatcher routes the retry to the specified agent.
+        if matches!(verdict, ReviewVerdict::NeedsRevision) {
+            if let Some(agent) = reassign_to {
+                self.store.reassign_task(task_id, agent).await?;
+                // Re-fetch after reassignment to return accurate state.
+                let updated = self.store.get_task(task_id).await?;
+                return Ok(serde_json::to_string_pretty(&updated)
+                    .unwrap_or_else(|_| format!("Task reviewed and reassigned: {}", updated.id)));
+            }
+        }
+
         Ok(serde_json::to_string_pretty(&task).unwrap_or_else(|_| format!("Task reviewed: {}", task.id)))
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use std::str::FromStr;
-    use std::sync::Arc;
-
-    use sqlx::sqlite::SqliteConnectOptions;
-    use sqlx::SqlitePool;
-
-    use super::*;
-    use crate::agent_manager::AgentTemplate;
-    use crate::kanban_matching_engine::find_best_match;
-    use crate::kanban_store::{KanbanStore, TaskStatus, MAX_CONCURRENT_TASKS_PER_AGENT, MAX_TASK_DEPTH};
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
+#[path = "kanban_tools_tests.rs"]
+mod tests;
 
     async fn make_store() -> Arc<KanbanStore> {
         let opts = SqliteConnectOptions::from_str("sqlite::memory:")
@@ -404,6 +411,7 @@ mod tests {
             color: None,
             model: None,
             claims_tasks: claims,
+            claim_tags: Vec::new(),
             sandbox_policy: None,
         }
     }
@@ -628,9 +636,9 @@ mod tests {
         assert_eq!(task["status"], "done");
     }
 
-    /// Orchestrator sends task back — moves from in_review to in_progress.
+    /// Reviewer sends task back — moves from in_review to backlog for re-dispatch.
     #[tokio::test]
-    async fn review_task_needs_revision_resets_to_in_progress() {
+    async fn review_task_needs_revision_resets_to_backlog() {
         let store = make_store().await;
         let task_id = post(&store, "Design landing page", &["design", "ui"]).await;
         store.claim_task(&task_id, "designer").await.unwrap();
@@ -655,8 +663,48 @@ mod tests {
             .unwrap();
 
         let task: serde_json::Value = serde_json::from_str(&result).unwrap();
-        assert_eq!(task["status"], "in_progress");
+        // Task returns to backlog so the dispatcher can re-assign it.
+        assert_eq!(task["status"], "backlog");
         assert_eq!(task["reviewFeedback"], "Color contrast fails WCAG AA. Please revise palette.");
+        // assigned_agent is cleared so any agent can pick it up.
+        assert!(task["assignedAgent"].is_null());
+        // revision_count is incremented.
+        assert_eq!(task["revisionCount"], 1);
+    }
+
+    /// After 3 rejections (revision_count > 2), task is auto-failed.
+    #[tokio::test]
+    async fn review_task_auto_fails_after_max_revisions() {
+        let store = make_store().await;
+        let task_id = post(&store, "Flaky task", &["code"]).await;
+
+        for i in 0..3 {
+            // Claim and complete.
+            if i == 0 {
+                store.claim_task(&task_id, "engineer").await.unwrap();
+            } else {
+                // Task is in backlog after rejection; re-claim it.
+                store.claim_task(&task_id, "engineer").await.unwrap();
+            }
+            store
+                .update_task_status(&crate::kanban_store::UpdateTaskInput {
+                    task_id: task_id.clone(),
+                    status: TaskStatus::Done,
+                    result: Some(format!("Attempt {}", i + 1)),
+                    block_reason: None,
+                })
+                .await
+                .unwrap();
+            // Reject.
+            store
+                .review_task(&task_id, crate::kanban_store::ReviewVerdict::NeedsRevision, Some("Try again"))
+                .await
+                .unwrap();
+        }
+
+        let task = store.get_task(&task_id).await.unwrap();
+        assert_eq!(task.status, TaskStatus::Failed);
+        assert!(task.result.unwrap().contains("maximum revision"));
     }
 
     // ── Group 5: Full pipeline ────────────────────────────────────────────────
@@ -747,7 +795,7 @@ mod tests {
         let task_id = post(&store, "Refactor auth service", &["code", "architecture", "api"]).await;
         let task = store.get_task(&task_id).await.unwrap();
 
-        let m = find_best_match(&task, &agents).unwrap();
+        let m = find_best_match(&task, &agents, None).await.unwrap();
         assert_eq!(m.agent_name, "software-engineer");
         assert!(m.confidence >= 0.7, "confidence={}", m.confidence);
     }
@@ -764,7 +812,7 @@ mod tests {
         let task_id = post(&store, "Market analysis", &["research", "analysis", "facts"]).await;
         let task = store.get_task(&task_id).await.unwrap();
 
-        let m = find_best_match(&task, &agents).unwrap();
+        let m = find_best_match(&task, &agents, None).await.unwrap();
         assert_eq!(m.agent_name, "researcher");
     }
 
@@ -777,7 +825,7 @@ mod tests {
         let task_id = post(&store, "Add tests", &["code", "testing"]).await;
         let task = store.get_task(&task_id).await.unwrap();
 
-        let m = find_best_match(&task, &agents);
+        let m = find_best_match(&task, &agents, None).await;
         assert!(m.is_none(), "non-claiming agent must not be auto-routed");
     }
 
@@ -794,7 +842,7 @@ mod tests {
         let task = store.get_task(&task_id).await.unwrap();
 
         // Matching engine selects the best agent.
-        let m = find_best_match(&task, &agents).unwrap();
+        let m = find_best_match(&task, &agents, None).await.unwrap();
         assert_eq!(m.agent_name, "software-engineer");
 
         // That agent then claims the task (as the dispatcher would).

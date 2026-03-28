@@ -6,7 +6,9 @@ use rushdino_providers::Provider;
 use rushdino_security::egress_proxy::EgressProxy;
 
 use crate::{
+    agent_health_store::AgentHealthStore,
     agent_manager::AgentManager,
+    agent_message_store::AgentMessageStore,
     agent_task_memory::AgentTaskMemory,
     conversation::ConversationManager,
     cron_manager::CronManager,
@@ -19,9 +21,11 @@ use crate::{
     system_broker::SharedSystemBroker,
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
+        agent_inbox::AgentInboxTool,
         cron_tools::{cron_list_tool, cron_manage_tool},
         delegate_to_agent::DelegateToAgentTool,
         kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
+        team_status::TeamStatusTool,
         file_edit::FileEditTool,
         file_read::FileReadTool,
         file_write::FileWriteTool,
@@ -77,6 +81,9 @@ pub const CORE_TOOLS: &[&str] = &[
     "post_task",
     "review_task",
     "update_task",
+    "team_status",
+    // Inter-agent messaging
+    "agent_inbox",
     // Tool discovery
     "tool_search",
 ];
@@ -93,9 +100,12 @@ pub struct EngineDeps {
     pub cron_manager: Arc<CronManager>,
     pub workflow_runner: Arc<WorkflowRunner>,
     pub task_memory: Arc<AgentTaskMemory>,
+    pub health_store: Arc<AgentHealthStore>,
+    pub message_store: Arc<AgentMessageStore>,
     pub session_ctx: Arc<SessionToolContext>,
     pub home_dir: std::path::PathBuf,
     pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+    pub task_notify: Arc<tokio::sync::Notify>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -118,7 +128,10 @@ pub fn build_engine_deps(
     let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
     let cron_manager = Arc::new(CronManager::new(pool.clone()));
     let task_memory = Arc::new(AgentTaskMemory::new(home_dir.clone()));
-    let kanban_store = Arc::new(KanbanStore::new(pool.clone()));
+    let task_notify = Arc::new(tokio::sync::Notify::new());
+    let kanban_store = Arc::new(KanbanStore::with_notify(pool.clone(), task_notify.clone()));
+    let health_store = Arc::new(AgentHealthStore::new(pool.clone()));
+    let message_store = Arc::new(AgentMessageStore::new(pool.clone()));
 
     let agent_manager = Arc::new(AgentManager::new(home_dir.join("agents")));
 
@@ -195,6 +208,10 @@ pub fn build_engine_deps(
     registry.register(ClaimTaskTool::new(kanban_store.clone()));
     registry.register(UpdateTaskTool::new(kanban_store.clone()));
     registry.register(ReviewTaskTool::new(kanban_store.clone()));
+    registry.register(TeamStatusTool::new(kanban_store.clone()));
+
+    // Inter-agent messaging tool.
+    registry.register(AgentInboxTool::new(message_store.clone()));
 
     let _ = system_broker;
 
@@ -285,11 +302,14 @@ pub fn build_engine_deps(
         agent_manager,
         workflow_manager,
         kanban_store,
+        health_store,
+        message_store,
         cron_manager,
         workflow_runner,
         task_memory,
         session_ctx,
         home_dir,
         broadcast_tx,
+        task_notify,
     })
 }

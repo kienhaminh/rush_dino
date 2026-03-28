@@ -7,10 +7,10 @@ use uuid::Uuid;
 use rushdino_common::{AppError, Result};
 
 use crate::workflow_types::{
-    CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem, WorkflowRunDetail,
-    WorkflowRunExecutionContext, WorkflowRunExecutionStep, WorkflowRunListItem,
-    WorkflowRunStartResponse, WorkflowRunStatus, WorkflowRunStepDetail, WorkflowRunStepStatus,
-    WorkflowSource, WorkflowStatus, WorkflowStep,
+    CreateWorkflowInput, StepType, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem,
+    WorkflowRunDetail, WorkflowRunExecutionContext, WorkflowRunExecutionStep,
+    WorkflowRunListItem, WorkflowRunStartResponse, WorkflowRunStatus, WorkflowRunStepDetail,
+    WorkflowRunStepStatus, WorkflowSource, WorkflowStatus, WorkflowStep,
 };
 
 #[derive(Clone)]
@@ -63,8 +63,8 @@ impl WorkflowManager {
 
         let step_rows = sqlx::query(
             r#"
-            SELECT id, workflow_id, position, name, instructions, agent_id, created_at, updated_at,
-                   depends_on, max_retries, timeout_secs, condition
+            SELECT id, workflow_id, position, name, instructions, agent_id, step_type,
+                   created_at, updated_at, depends_on, max_retries, timeout_secs, condition
             FROM workflow_steps
             WHERE workflow_id = ?1
             ORDER BY position ASC
@@ -129,9 +129,9 @@ impl WorkflowManager {
             sqlx::query(
                 r#"
                 INSERT INTO workflow_steps
-                  (id, workflow_id, position, name, instructions, agent_id, created_at, updated_at,
-                   depends_on, max_retries, timeout_secs, condition)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                  (id, workflow_id, position, name, instructions, agent_id, step_type,
+                   created_at, updated_at, depends_on, max_retries, timeout_secs, condition)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                 "#,
             )
             .bind(Uuid::new_v4().to_string())
@@ -140,6 +140,7 @@ impl WorkflowManager {
             .bind(step.name.trim())
             .bind(step.instructions.trim())
             .bind(step.agent_id.trim())
+            .bind(step.step_type.as_str())
             .bind(&now)
             .bind(&now)
             .bind(depends_on_json)
@@ -208,9 +209,9 @@ impl WorkflowManager {
                 sqlx::query(
                     r#"
                     INSERT INTO workflow_steps
-                      (id, workflow_id, position, name, instructions, agent_id, created_at, updated_at,
-                       depends_on, max_retries, timeout_secs, condition)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                      (id, workflow_id, position, name, instructions, agent_id, step_type,
+                       created_at, updated_at, depends_on, max_retries, timeout_secs, condition)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
                     "#,
                 )
                 .bind(Uuid::new_v4().to_string())
@@ -219,6 +220,7 @@ impl WorkflowManager {
                 .bind(step.name.trim())
                 .bind(step.instructions.trim())
                 .bind(step.agent_id.trim())
+                .bind(step.step_type.as_str())
                 .bind(&now)
                 .bind(&now)
                 .bind(depends_on_json)
@@ -427,6 +429,7 @@ impl WorkflowManager {
               rs.agent_id    AS agent_id,
               rs.retry_count AS retry_count,
               ws.instructions  AS instructions,
+              ws.step_type     AS step_type,
               ws.depends_on    AS depends_on,
               ws.max_retries   AS max_retries,
               ws.timeout_secs  AS timeout_secs,
@@ -452,6 +455,10 @@ impl WorkflowManager {
             let depends_on: Option<Vec<String>> = row
                 .get::<Option<String>, _>("depends_on")
                 .and_then(|json| serde_json::from_str(&json).ok());
+            let step_type = row
+                .get::<Option<String>, _>("step_type")
+                .map(|s| StepType::from_str_loose(&s))
+                .unwrap_or_default();
             steps.push(WorkflowRunExecutionStep {
                 run_step_id: row.get::<String, _>("run_step_id"),
                 step_id: row.get::<String, _>("step_id"),
@@ -459,6 +466,7 @@ impl WorkflowManager {
                 step_name: row.get::<String, _>("step_name"),
                 instructions,
                 agent_id: row.get::<String, _>("agent_id"),
+                step_type,
                 depends_on,
                 max_retries: u8::try_from(row.get::<i64, _>("max_retries")).unwrap_or(0),
                 timeout_secs: row.get::<Option<i64>, _>("timeout_secs").map(|t| t as u64),
@@ -648,6 +656,7 @@ fn map_workflow_step(row: sqlx::sqlite::SqliteRow) -> Result<WorkflowStep> {
     let depends_on: Option<Vec<String>> = row
         .get::<Option<String>, _>("depends_on")
         .and_then(|json| serde_json::from_str(&json).ok());
+    let step_type = StepType::from_str_loose(&row.get::<String, _>("step_type"));
     Ok(WorkflowStep {
         id: row.get::<String, _>("id"),
         workflow_id: row.get::<String, _>("workflow_id"),
@@ -655,6 +664,7 @@ fn map_workflow_step(row: sqlx::sqlite::SqliteRow) -> Result<WorkflowStep> {
         name: row.get::<String, _>("name"),
         instructions: row.get::<String, _>("instructions"),
         agent_id: row.get::<String, _>("agent_id"),
+        step_type,
         created_at: row.get::<String, _>("created_at"),
         updated_at: row.get::<String, _>("updated_at"),
         depends_on,
@@ -725,15 +735,21 @@ mod tests {
         let pool = SqlitePool::connect(":memory:")
             .await
             .expect("memory sqlite");
-        for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
+        let migrations: &[&str] = &[
+            include_str!("../../common/migrations/001_init.sql"),
+            include_str!("../../common/migrations/010_workflow_step_type.sql"),
+        ];
+        for migration in migrations {
+            for statement in migration.split(';') {
+                let sql: &str = statement.trim();
+                if sql.is_empty() {
+                    continue;
+                }
+                sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .expect("run migration statement");
             }
-            sqlx::query(sql)
-                .execute(&pool)
-                .await
-                .expect("run migration statement");
         }
         WorkflowManager::new(Arc::new(pool))
     }

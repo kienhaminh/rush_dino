@@ -98,12 +98,18 @@ mod tests {
 
     async fn setup_pool() -> Arc<SqlitePool> {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        for statement in include_str!("../../../common/migrations/001_init.sql").split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
+        let migrations: &[&str] = &[
+            include_str!("../../../common/migrations/001_init.sql"),
+            include_str!("../../../common/migrations/010_workflow_step_type.sql"),
+        ];
+        for migration in migrations {
+            for statement in migration.split(';') {
+                let sql: &str = statement.trim();
+                if sql.is_empty() {
+                    continue;
+                }
+                sqlx::query(sql).execute(&pool).await.expect("migration");
             }
-            sqlx::query(sql).execute(&pool).await.expect("migration");
         }
         Arc::new(pool)
     }
