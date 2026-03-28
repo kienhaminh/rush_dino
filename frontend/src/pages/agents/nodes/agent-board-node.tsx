@@ -105,6 +105,12 @@ export function AgentBoardNode({ data }: NodeProps) {
         position={Position.Right}
         className="!bg-transparent !border-0 !w-0 !h-0"
       />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="sat-out"
+        className="!bg-transparent !border-0 !w-0 !h-0"
+      />
     </div>
   );
 }

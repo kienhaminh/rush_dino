@@ -1,52 +1,37 @@
-import { useState } from 'react';
+// AgentSatelliteNode — small pill node orbiting each agent on the overview board.
+// Used for Skills (indigo), Tools (cyan), and Knowledge (purple) satellites.
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 
 export interface SatelliteNodeData {
   label: string;
   icon: string;
-  subtitle: string;
-  accentColor: string;
-  handlePosition?: Position;
+  color: string;
+  bgColor: string;
+  onClick: () => void;
   [key: string]: unknown;
 }
 
-export function AgentSatelliteNode({ data, selected }: NodeProps) {
-  const [hovered, setHovered] = useState(false);
-  const { label, icon, subtitle, accentColor, handlePosition } = data as SatelliteNodeData;
-  const isSelected = !!selected;
+export function AgentSatelliteNode({ data }: NodeProps) {
+  const { label, icon, color, bgColor, onClick } = data as SatelliteNodeData;
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="rounded-xl p-3.5 flex items-center gap-3 text-left transition-all duration-150 cursor-grab active:cursor-grabbing"
+      onClick={onClick}
+      className="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer select-none transition-all duration-150 hover:brightness-110"
       style={{
-        background: isSelected ? `${accentColor}14` : hovered ? `${accentColor}0a` : 'hsl(var(--card))',
-        border: `1px solid ${isSelected ? accentColor : `${accentColor}50`}`,
-        boxShadow: isSelected
-          ? `0 4px 20px ${accentColor}35`
-          : `0 4px 16px ${accentColor}18`,
-        minWidth: '158px',
-        width: '210px',
+        background: bgColor,
+        border: `1px solid ${color}`,
+        minWidth: '96px',
+        boxShadow: `0 0 10px ${color}22`,
       }}
     >
-      <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base"
-        style={{
-          background: `${accentColor}${isSelected ? '28' : '18'}`,
-          border: `1px solid ${accentColor}40`,
-        }}
-      >
-        {icon}
-      </div>
-      <div>
-        <div className="text-[10px] font-bold tracking-[0.16em] text-foreground/85">{label}</div>
-        <div className="text-[9px] text-muted-foreground mt-0.5">{subtitle}</div>
-      </div>
-
+      <span className="text-xs">{icon}</span>
+      <span className="text-[10px] font-semibold tracking-wide" style={{ color }}>
+        {label}
+      </span>
       <Handle
-        type="source"
-        position={handlePosition ?? Position.Bottom}
+        type="target"
+        position={Position.Top}
         className="!bg-transparent !border-0 !w-0 !h-0"
       />
     </div>
