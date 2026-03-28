@@ -187,6 +187,19 @@ export interface KnowledgeGraphConfig {
   extract_from_documents: boolean;
 }
 
+export interface McpServerConfig {
+  name: string;
+  url: string;
+  auth_header?: string | null;
+}
+
+export interface McpServerStatus {
+  name: string;
+  status: { kind: 'connecting' } | { kind: 'connected' } | { kind: 'error'; message: string };
+  tool_count: number;
+  last_seen_secs?: number | null;
+}
+
 export interface AppConfigView {
   host: string;
   port: number;
@@ -206,6 +219,7 @@ export interface AppConfigView {
   security: SecurityConfig;
   execution: ExecutionConfig;
   knowledge_graph: KnowledgeGraphConfig;
+  mcp_servers: McpServerConfig[];
   [key: string]: unknown;
 }
 
