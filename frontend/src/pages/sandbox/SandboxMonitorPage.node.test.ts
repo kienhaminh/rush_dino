@@ -160,6 +160,7 @@ function buildProps(overrides: Partial<SandboxOverviewContentProps> = {}): Sandb
     fetchError: null,
     actionInProgress: null,
     onSelectSession: () => undefined,
+    onSelectAgent: () => undefined,
     onRefreshOverview: () => undefined,
     onRefreshEntries: () => undefined,
     onApprove: () => undefined,
