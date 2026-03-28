@@ -39,6 +39,7 @@ use rushdino_security::rate_limit::EndpointLimiters;
 use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
+    mcp_manager::McpManager,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
     cron_runtime::spawn_cron_runtime,
     middleware::{
@@ -322,6 +323,16 @@ pub async fn build_app(
     }
     runtime_state.set_skill_graph(skill_graph_service.clone());
 
+    // MCP: initialize manager and connect to configured servers.
+    let mcp_manager = McpManager::new();
+    {
+        let mcp = mcp_manager.clone();
+        let servers = config.mcp_servers.clone();
+        tokio::spawn(async move {
+            mcp.reconcile(&servers).await;
+        });
+    }
+
     let state = AppState::new(
         runtime_state.clone(),
         config_path,
@@ -340,6 +351,7 @@ pub async fn build_app(
         sandbox_registry,
         pending_oauth,
         skill_graph_service,
+        mcp_manager.clone(),
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -562,6 +574,7 @@ pub async fn build_app(
         .route("/api/skill-graph/edges/:id", axum::routing::delete(routes::skill_graph::delete_edge))
         .route("/api/skill-graph/assign", post(routes::skill_graph::assign_category))
         .route("/api/skill-graph/reseed", post(routes::skill_graph::reseed))
+        .route("/api/mcp/status", get(routes::mcp::get_mcp_status))
         .route(
             "/api/profiles/:id",
             axum::routing::put(routes::providers::update_profile)
