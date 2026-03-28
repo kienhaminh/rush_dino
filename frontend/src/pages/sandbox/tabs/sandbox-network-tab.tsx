@@ -31,6 +31,7 @@ export function SandboxNetworkTab({
   policy,
   auditEntries,
   loadingAudit,
+  sessionId: _sessionId, // reserved for future session-scoped audit filtering
   onPolicyChange,
   onApply,
 }: SandboxNetworkTabProps) {
