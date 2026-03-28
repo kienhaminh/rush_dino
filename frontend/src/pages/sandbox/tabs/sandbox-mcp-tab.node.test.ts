@@ -51,22 +51,50 @@ describe('SandboxMcpTab', () => {
     expect(html).toContain('browser-mcp');
   });
 
-  it('renders ALLOW for filesystem-mcp and DENY for browser-mcp', () => {
-    const html = renderToStaticMarkup(
+  it('renders ALLOW toggle for filesystem-mcp (allowed) and DENY toggle for browser-mcp (denied)', () => {
+    const allAllowPolicy: SandboxMcpPolicy = {
+      ...policy,
+      servers: { 'filesystem-mcp': 'allow', 'browser-mcp': 'allow' },
+    };
+    const allDenyHtml = renderToStaticMarkup(
       createElement(SandboxMcpTab, {
         servers,
-        policy,
-        auditEntries,
+        policy: { ...policy, servers: { 'filesystem-mcp': 'deny', 'browser-mcp': 'deny' } },
+        auditEntries: [],
         loadingAudit: false,
         onPolicyChange: () => {},
         onApply: async () => {},
       }),
     );
-    expect(html.toLowerCase()).toContain('allow');
-    expect(html.toLowerCase()).toContain('deny');
+    const allAllowHtml = renderToStaticMarkup(
+      createElement(SandboxMcpTab, {
+        servers,
+        policy: allAllowPolicy,
+        auditEntries: [],
+        loadingAudit: false,
+        onPolicyChange: () => {},
+        onApply: async () => {},
+      }),
+    );
+    // All-deny render has DENY buttons, all-allow render has ALLOW buttons
+    expect(allDenyHtml).toContain('DENY');
+    expect(allAllowHtml).toContain('ALLOW');
+    // Mixed policy renders both
+    const mixedHtml = renderToStaticMarkup(
+      createElement(SandboxMcpTab, {
+        servers,
+        policy,
+        auditEntries: [],
+        loadingAudit: false,
+        onPolicyChange: () => {},
+        onApply: async () => {},
+      }),
+    );
+    expect(mixedHtml).toContain('ALLOW');
+    expect(mixedHtml).toContain('DENY');
   });
 
-  it('renders audit entry destination', () => {
+  it('renders audit entry tool name from the audit feed extra column', () => {
     const html = renderToStaticMarkup(
       createElement(SandboxMcpTab, {
         servers,
@@ -77,6 +105,7 @@ describe('SandboxMcpTab', () => {
         onApply: async () => {},
       }),
     );
-    expect(html).toContain('filesystem-mcp');
+    // 'read_file' only appears via the audit feed extraColumns render path, not in server toggles
+    expect(html).toContain('read_file');
   });
 });
