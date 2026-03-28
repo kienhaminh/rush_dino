@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -11,7 +12,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { ZoomInIcon, ZoomOutIcon, MaximizeIcon, RefreshCwIcon, SearchIcon } from 'lucide-react';
 
-import type { AgentRecord, AgentRuntimeData } from './agent-types';
+import type { AgentRecord } from './agent-types';
 import { AgentBoardNode } from './nodes/agent-board-node';
 import { useCanvasAnimation } from './canvas/use-canvas-animation';
 import { createGridRenderer } from './canvas/canvas-grid-renderer';
@@ -24,9 +25,7 @@ const edgeTypes = {};
 // ── Pure helper — stable reference, defined outside component ─────────────────
 function buildBoardNodes(
   agents: AgentRecord[],
-  selectedId: string | null,
-  runtimeByAgent: Record<string, AgentRuntimeData>,
-  onSelect: (id: string) => void,
+  onNavigate: (id: string) => void,
 ): Node[] {
   return agents.map((agent, i) => ({
     id: agent.id,
@@ -34,9 +33,7 @@ function buildBoardNodes(
     position: { x: (i % 3) * 320, y: Math.floor(i / 3) * 220 },
     data: {
       agent,
-      runtime: runtimeByAgent[agent.id],
-      isSelected: agent.id === selectedId,
-      onSelect,
+      onNavigate,
     },
     draggable: true,
   }));
@@ -51,6 +48,32 @@ function AmbientCanvas() {
   );
   useCanvasAnimation({ canvasRef, renderers });
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+}
+
+// ── Shared toolbar button — centralises hover styling ─────────────────────────
+interface ToolbarButtonProps {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}
+
+function ToolbarButton({ onClick, title, children }: ToolbarButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={[
+        'flex items-center justify-center',
+        'w-7 h-7 rounded-[7px]',
+        'border-none bg-transparent',
+        'text-muted-foreground cursor-pointer',
+        'transition-colors duration-150',
+        'hover:bg-accent hover:text-foreground',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  );
 }
 
 // ── Floating toolbar (uses useReactFlow — must be inside ReactFlowProvider) ───
@@ -74,20 +97,6 @@ function CanvasToolbar({ loading, onRefresh, onSearch }: ToolbarProps) {
     border: '1px solid hsl(var(--border))',
     backdropFilter: 'blur(8px)',
     borderRadius: '10px',
-  };
-
-  const btnStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '28px',
-    height: '28px',
-    borderRadius: '7px',
-    color: 'hsl(var(--muted-foreground))',
-    cursor: 'pointer',
-    transition: 'background 0.15s, color 0.15s',
-    border: 'none',
-    background: 'transparent',
   };
 
   return (
@@ -118,50 +127,26 @@ function CanvasToolbar({ loading, onRefresh, onSearch }: ToolbarProps) {
       <div style={{ width: '1px', height: '20px', background: 'hsl(var(--border))' }} />
 
       {/* Zoom controls */}
-      <button
-        style={btnStyle}
-        onClick={() => zoomIn()}
-        title="Zoom in"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      <ToolbarButton onClick={() => zoomIn()} title="Zoom in">
         <ZoomInIcon className="w-3.5 h-3.5" />
-      </button>
-      <button
-        style={btnStyle}
-        onClick={() => zoomOut()}
-        title="Zoom out"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      </ToolbarButton>
+      <ToolbarButton onClick={() => zoomOut()} title="Zoom out">
         <ZoomOutIcon className="w-3.5 h-3.5" />
-      </button>
-      <button
-        style={btnStyle}
-        onClick={() => fitView({ padding: 0.25 })}
-        title="Fit view"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      </ToolbarButton>
+      <ToolbarButton onClick={() => fitView({ padding: 0.25 })} title="Fit view">
         <MaximizeIcon className="w-3.5 h-3.5" />
-      </button>
+      </ToolbarButton>
 
       {/* Divider */}
       <div style={{ width: '1px', height: '20px', background: 'hsl(var(--border))' }} />
 
       {/* Refresh */}
-      <button
-        style={btnStyle}
-        onClick={onRefresh}
-        title="Refresh"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      <ToolbarButton onClick={onRefresh} title="Refresh">
         <RefreshCwIcon
           className="w-3.5 h-3.5"
           style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}
         />
-      </button>
+      </ToolbarButton>
     </div>
   );
 }
@@ -169,28 +154,21 @@ function CanvasToolbar({ loading, onRefresh, onSearch }: ToolbarProps) {
 // ── Inner canvas (inside ReactFlowProvider so useReactFlow works) ─────────────
 interface InnerProps {
   agents: AgentRecord[];
-  selectedId: string | null;
-  runtimeByAgent: Record<string, AgentRuntimeData>;
   loading: boolean;
-  onAgentSelect: (id: string | null) => void;
   onRefresh: () => void;
 }
 
-function AgentBoardCanvasInner({
-  agents,
-  selectedId,
-  runtimeByAgent,
-  loading,
-  onAgentSelect,
-  onRefresh,
-}: InnerProps) {
-  const handleSelect = useCallback(
-    (id: string) => onAgentSelect(id),
-    [onAgentSelect],
+function AgentBoardCanvasInner({ agents, loading, onRefresh }: InnerProps) {
+  const navigate = useNavigate();
+
+  // Stable navigate callback — avoids re-building nodes on every render
+  const handleNavigate = useCallback(
+    (id: string) => navigate(`/agents/${id}`),
+    [navigate],
   );
 
   const initialNodes = useMemo(
-    () => buildBoardNodes(agents, selectedId, runtimeByAgent, handleSelect),
+    () => buildBoardNodes(agents, handleNavigate),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [], // Only for initial render; updates managed by effects below
   );
@@ -198,7 +176,7 @@ function AgentBoardCanvasInner({
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, , onEdgesChange] = useEdgesState([]);
 
-  // Sync data (selection, runtime) without resetting dragged positions
+  // Sync agent list data without resetting dragged positions
   useEffect(() => {
     setNodes((prev) =>
       prev.map((node) => {
@@ -209,14 +187,12 @@ function AgentBoardCanvasInner({
           data: {
             ...node.data,
             agent,
-            runtime: runtimeByAgent[agent.id],
-            isSelected: agent.id === selectedId,
-            onSelect: handleSelect,
+            onNavigate: handleNavigate,
           },
         };
       }),
     );
-  }, [selectedId, runtimeByAgent, agents, handleSelect, setNodes]);
+  }, [agents, handleNavigate, setNodes]);
 
   // Handle agent list changes (adds / removes)
   useEffect(() => {
@@ -237,12 +213,10 @@ function AgentBoardCanvasInner({
           return {
             id: agent.id,
             type: 'agentBoard',
-            position: { x: col * 320 + idx * 0, y: row * 220 },
+            position: { x: col * 320, y: row * 220 },
             data: {
               agent,
-              runtime: runtimeByAgent[agent.id],
-              isSelected: agent.id === selectedId,
-              onSelect: handleSelect,
+              onNavigate: handleNavigate,
             },
             draggable: true,
           };
@@ -282,7 +256,6 @@ function AgentBoardCanvasInner({
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
-          onPaneClick={() => onAgentSelect(null)}
           fitView
           fitViewOptions={{ padding: 0.3 }}
           minZoom={0.3}
@@ -336,10 +309,7 @@ function AgentBoardCanvasInner({
 // ── Public export — wraps inner component with ReactFlowProvider ───────────────
 export interface AgentBoardCanvasProps {
   agents: AgentRecord[];
-  selectedId: string | null;
-  runtimeByAgent: Record<string, AgentRuntimeData>;
   loading: boolean;
-  onAgentSelect: (id: string | null) => void;
   onRefresh: () => void;
 }
 

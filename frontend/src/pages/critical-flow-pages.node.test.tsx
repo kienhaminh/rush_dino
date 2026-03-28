@@ -55,34 +55,7 @@ describe('critical flow page coverage', () => {
           onNostrProfileToggleAdvanced={() => undefined}
         />
 
-        <SkillsPage
-          skills={[
-            {
-              name: 'smoke-skill',
-              description: 'Smoke coverage skill',
-              instructions: 'Do the smoke-test task.',
-              path: '/tmp/smoke-skill.toml',
-              tools: ['shell_exec', 'file_read'],
-            },
-          ]}
-          loading={false}
-          error={null}
-          filter=""
-          onFilterChange={() => undefined}
-          draft={{
-            name: '',
-            description: '',
-            instructions: '',
-            tools: '',
-          }}
-          saving={false}
-          onDraftChange={() => undefined}
-          onSave={() => undefined}
-          onResetDraft={() => undefined}
-          onEdit={() => undefined}
-          onRefresh={() => undefined}
-          onDelete={() => undefined}
-        />
+        <SkillsPage />
 
         <CronPage />
         <KanbanPage />
@@ -91,7 +64,7 @@ describe('critical flow page coverage', () => {
 
     expect(html).toContain('Last success');
     expect(html).toContain('Telegram');
-    expect(html).toContain('smoke-skill');
+    expect(html).toContain('Skill Pool');
     expect(html).toContain('Active Jobs');
     expect(html).toContain('Task Board');
   });
