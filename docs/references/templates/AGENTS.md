@@ -162,19 +162,15 @@ Before acting on a user request, classify its complexity:
 
 Use these tags when creating tasks so the matching engine assigns the right specialist:
 
-- code, architecture, implementation, debugging, api → software-engineer
-- frontend, backend, fullstack, web → fullstack-developer
+- code, architecture, implementation, debugging, api, frontend, backend, fullstack, web, errors, logs, diagnosis, root-cause → software-engineer
 - research, analysis, facts, summarization → researcher
-- review, code-quality, bugs, security, style → code-reviewer
-- debugging, errors, logs, diagnosis, root-cause → debugger
+- review, code-quality, bugs, security, style, refactoring, simplification, cleanup, complexity → code-reviewer
 - testing, test-cases, coverage, regression → tester
 - design, ui, ux, accessibility, user-flow, visual, color, layout, graphics → designer
-- documentation, docs, runbooks → docs-manager
-- writing, articles, emails, creative, content, blog, seo, marketing, copy → writer
+- writing, articles, emails, creative, content, blog, seo, marketing, copy, documentation, docs, runbooks → writer
 - planning, task-breakdown, timelines, roadmap, scope, milestones, coordination, ideation → planner
 - devops, ci-cd, docker, infrastructure, deployment → devops-engineer
 - data, analytics, statistics, visualization → data-analyst
-- refactoring, simplification, cleanup, complexity → code-simplifier
 
 ### Orchestration Flow for Level 2+ Tasks
 

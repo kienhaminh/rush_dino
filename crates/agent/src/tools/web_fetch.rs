@@ -222,8 +222,9 @@ impl Tool for WebFetchTool {
                     serde_json::to_string_pretty(&parsed).unwrap_or_else(|_| extracted.clone());
             }
         } else if content_type.contains("text/html") {
-            // Strip HTML tags to plain text, then use LLM to extract key information.
-            let plain = strip_html(&extracted);
+            // Extract <main> or <body> content first, then strip HTML tags.
+            let scoped = extract_main_content(&extracted);
+            let plain = strip_html(&scoped);
             extracted = if let Some(provider) = &self.provider {
                 match extract_with_llm(provider, url_str, &plain).await {
                     Ok(summary) => summary,
@@ -263,6 +264,37 @@ impl Tool for WebFetchTool {
 
         serde_json::to_string_pretty(&result).map_err(|e| AppError::Agent(e.to_string()))
     }
+}
+
+/// Extract the content inside `<main>` or `<body>`, whichever is found first.
+/// Falls back to the full HTML if neither tag is present.
+fn extract_main_content(html: &str) -> String {
+    let lower = html.to_lowercase();
+
+    // Try <main> first — it's the most focused content region.
+    if let Some(content) = extract_tag_content(html, &lower, "main") {
+        return content;
+    }
+    // Fall back to <body>.
+    if let Some(content) = extract_tag_content(html, &lower, "body") {
+        return content;
+    }
+    // No recognizable structure — return as-is.
+    html.to_owned()
+}
+
+/// Find the first occurrence of `<tag ...>` and its matching `</tag>`, returning
+/// the inner content. Uses the pre-lowercased `lower` for case-insensitive
+/// matching while slicing from the original `html` to preserve casing.
+fn extract_tag_content(html: &str, lower: &str, tag: &str) -> Option<String> {
+    let open_pattern = format!("<{tag}");
+    let close_pattern = format!("</{tag}>");
+
+    let open_start = lower.find(&open_pattern)?;
+    // Skip past the opening tag's `>`.
+    let after_open = lower[open_start..].find('>')? + open_start + 1;
+    let close_start = lower[after_open..].find(&close_pattern)? + after_open;
+    Some(html[after_open..close_start].to_owned())
 }
 
 /// Strip HTML tags and return plain text.
@@ -356,27 +388,37 @@ async fn extract_with_llm(provider: &Provider, url: &str, text: &str) -> Result<
         text
     };
 
-    let prompt = format!(
-        "Extract the key information from this web page.\n\
+    let system_instructions = "You are a web content extraction assistant. \
+         Extract the key information from web pages. \
+         Remove navigation menus, headers, footers, ads, cookie notices, and other boilerplate. \
+         Keep the main article or page content. \
+         Preserve important facts, data, dates, and details. \
+         Write in clean, readable prose. \
+         Be comprehensive but concise.";
+
+    let user_prompt = format!("Extract the key information from this web page.\n\
          URL: {url}\n\n\
-         Instructions:\n\
-         - Remove navigation menus, headers, footers, ads, cookie notices, and other boilerplate\n\
-         - Keep the main article or page content\n\
-         - Preserve important facts, data, dates, and details\n\
-         - Write in clean, readable prose\n\
-         - Be comprehensive but concise\n\n\
-         Page content:\n{truncated_text}"
-    );
+         Page content:\n{truncated_text}");
 
     let request = ChatRequest {
-        messages: vec![Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::User,
-            content: prompt,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        }],
+        messages: vec![
+            Message {
+                id: Uuid::new_v4().to_string(),
+                role: Role::System,
+                content: system_instructions.to_owned(),
+                tool_calls: None,
+                rich_content: None,
+                created_at: Utc::now(),
+            },
+            Message {
+                id: Uuid::new_v4().to_string(),
+                role: Role::User,
+                content: user_prompt,
+                tool_calls: None,
+                rich_content: None,
+                created_at: Utc::now(),
+            },
+        ],
         tools: None,
         temperature: Some(0.1),
         max_tokens: Some(LLM_EXTRACT_MAX_TOKENS),
@@ -386,4 +428,51 @@ async fn extract_with_llm(provider: &Provider, url: &str, text: &str) -> Result<
 
     let response = provider.chat(request).await?;
     Ok(response.content)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_main_tag_preferred_over_body() {
+        let html = r#"<html><body><nav>Menu</nav><main><h1>Article</h1><p>Content</p></main><footer>Foot</footer></body></html>"#;
+        let result = extract_main_content(html);
+        assert!(result.contains("<h1>Article</h1>"));
+        assert!(result.contains("<p>Content</p>"));
+        assert!(!result.contains("Menu"), "nav should be excluded");
+        assert!(!result.contains("Foot"), "footer should be excluded");
+    }
+
+    #[test]
+    fn extract_falls_back_to_body() {
+        let html = r#"<html><body><h1>Title</h1><p>Body content</p></body></html>"#;
+        let result = extract_main_content(html);
+        assert!(result.contains("<h1>Title</h1>"));
+        assert!(result.contains("Body content"));
+    }
+
+    #[test]
+    fn extract_returns_full_html_when_no_tags() {
+        let html = "<h1>No body or main</h1><p>Just fragments</p>";
+        let result = extract_main_content(html);
+        assert_eq!(result, html);
+    }
+
+    #[test]
+    fn extract_main_case_insensitive() {
+        let html = r#"<HTML><BODY><MAIN class="content"><p>Hello</p></MAIN></BODY></HTML>"#;
+        let result = extract_main_content(html);
+        assert!(result.contains("<p>Hello</p>"));
+        assert!(!result.contains("<BODY>"));
+    }
+
+    #[test]
+    fn strip_html_removes_script_and_style() {
+        let html = "<div><script>alert('x')</script><style>.a{}</style><p>Hello</p></div>";
+        let plain = strip_html(html);
+        assert!(plain.contains("Hello"));
+        assert!(!plain.contains("alert"));
+        assert!(!plain.contains(".a{}"));
+    }
 }

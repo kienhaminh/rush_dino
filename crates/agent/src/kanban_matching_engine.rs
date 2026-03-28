@@ -35,19 +35,15 @@ pub enum MatchMethod {
 /// Default claim_tags for built-in agents (used when the template doesn't specify them).
 pub fn default_claim_tags(agent_name: &str) -> Vec<String> {
     let tags: &[&str] = match agent_name {
-        "software-engineer" => &["code", "architecture", "implementation", "debugging", "api"],
-        "fullstack-developer" => &["frontend", "backend", "fullstack", "implementation", "web"],
+        "software-engineer" => &["code", "architecture", "implementation", "debugging", "api", "frontend", "backend", "fullstack", "web", "errors", "logs", "diagnosis", "root-cause"],
         "researcher" => &["research", "analysis", "facts", "summarization", "web-search"],
-        "code-reviewer" => &["review", "code-quality", "bugs", "security", "style"],
-        "debugger" => &["debugging", "errors", "logs", "diagnosis", "root-cause"],
+        "code-reviewer" => &["review", "code-quality", "bugs", "security", "style", "refactoring", "simplification", "cleanup", "complexity"],
         "tester" => &["testing", "test-cases", "coverage", "regression", "quality"],
         "designer" => &["design", "ui", "ux", "accessibility", "user-flow", "visual", "color", "layout", "graphics"],
-        "docs-manager" => &["documentation", "docs", "runbooks", "architecture-notes"],
-        "writer" => &["writing", "articles", "emails", "creative", "content", "blog", "seo", "marketing", "copy"],
+        "writer" => &["writing", "articles", "emails", "creative", "content", "blog", "seo", "marketing", "copy", "documentation", "docs", "runbooks", "architecture-notes"],
         "planner" => &["planning", "task-breakdown", "timelines", "roadmap", "scope", "milestones", "coordination", "ideation", "options", "concepts", "exploration"],
         "devops-engineer" => &["devops", "ci-cd", "docker", "infrastructure", "deployment"],
         "data-analyst" => &["data", "analytics", "statistics", "visualization"],
-        "code-simplifier" => &["refactoring", "simplification", "cleanup", "complexity"],
         _ => &[],
     };
     tags.iter().map(|s| s.to_string()).collect()

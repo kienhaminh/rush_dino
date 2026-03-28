@@ -7,7 +7,7 @@ pub mod file_write;
 pub mod glob_search;
 pub mod grep_search;
 pub mod image;
-pub mod knowledge_graph_query;
+pub mod knowledge_graph;
 pub mod memory_search;
 pub mod memory_write;
 pub mod present_message;

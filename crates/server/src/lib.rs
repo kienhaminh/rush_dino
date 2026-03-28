@@ -517,7 +517,7 @@ pub async fn build_app(
         // Kanban task board
         .route("/api/kanban/board", get(routes::kanban::get_kanban_board))
         .route("/api/kanban/tasks", get(routes::kanban::list_kanban_tasks))
-        .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task))
+        .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task).delete(routes::kanban::delete_kanban_task))
         .route("/api/kanban/stats", get(routes::kanban::get_kanban_stats))
         .route("/api/graph/search", get(routes::graph::search))
         .route("/api/graph/facts", get(routes::graph::facts))

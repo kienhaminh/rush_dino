@@ -435,6 +435,23 @@ impl KanbanStore {
         Ok(row.0 == 0)
     }
 
+    /// Delete a task by ID. Also deletes any child subtasks.
+    pub async fn delete_task(&self, task_id: &str) -> Result<()> {
+        // Delete subtasks first (parent_task_id FK is SET NULL, but we want full cleanup).
+        sqlx::query("DELETE FROM kanban_tasks WHERE parent_task_id = ?1")
+            .bind(task_id)
+            .execute(self.pool.as_ref())
+            .await?;
+        let result = sqlx::query("DELETE FROM kanban_tasks WHERE id = ?1")
+            .bind(task_id)
+            .execute(self.pool.as_ref())
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound(format!("task {task_id} not found")));
+        }
+        Ok(())
+    }
+
     /// Get board summary statistics.
     pub async fn get_board_stats(&self) -> Result<KanbanBoardStats> {
         let rows = sqlx::query_as::<_, StatusCountRow>(

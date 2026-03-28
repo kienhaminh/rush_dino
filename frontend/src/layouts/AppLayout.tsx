@@ -5,13 +5,13 @@ import { Sidebar } from '@/components/sidebar/sidebar';
 import { ThemeToggle } from '@/components/sidebar/theme-toggle';
 import { Badge } from '@/components/ui/badge';
 import { resolvePageHeader } from '@/lib/dashboard-routes';
-import { useWsStatus } from '@/hooks/use-ws-status';
+import { useChatWsConnection } from '@/hooks/use-chat-ws';
 
 export function AppLayout() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const location = useLocation();
   const shellView = resolvePageHeader(location.pathname);
-  const { isConnected } = useWsStatus();
+  const { isConnected } = useChatWsConnection();
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background font-body text-foreground">

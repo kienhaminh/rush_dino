@@ -45,7 +45,7 @@ impl Tool for PostTaskTool {
         "Post a task to the kanban board for a specialist agent to handle asynchronously. \
          Use this when a request requires 5+ tool calls, specialist expertise (research, code review, debugging), \
          or is complex enough that losing context would hurt. \
-         Tags guide routing: [\"research\",\"web-search\"] → researcher, [\"code\",\"debugging\"] → debugger. \
+         Tags guide routing: [\"research\",\"web-search\"] → researcher, [\"code\",\"debugging\"] → software-engineer. \
          Pass notify_conversation_id so you get notified when the task is done. \
          After posting, tell the user what was queued and which agent will handle it."
     }
@@ -504,7 +504,7 @@ mod tests {
         // First claim succeeds.
         tool.execute(serde_json::json!({
             "task_id": task_id,
-            "agent_name": "docs-manager",
+            "agent_name": "writer",
         }))
         .await
         .unwrap();
@@ -513,7 +513,7 @@ mod tests {
         let err = tool
             .execute(serde_json::json!({
                 "task_id": task_id,
-                "agent_name": "writer",
+                "agent_name": "researcher",
             }))
             .await;
         assert!(err.is_err());
@@ -556,7 +556,7 @@ mod tests {
     async fn update_task_done_auto_transitions_to_in_review() {
         let store = make_store().await;
         let task_id = post(&store, "Fix memory leak", &["debugging"]).await;
-        store.claim_task(&task_id, "debugger").await.unwrap();
+        store.claim_task(&task_id, "software-engineer").await.unwrap();
 
         let tool = UpdateTaskTool::new(store.clone());
         let result = tool
@@ -604,7 +604,7 @@ mod tests {
     async fn review_task_approved_marks_done() {
         let store = make_store().await;
         let task_id = post(&store, "Write API docs", &["documentation"]).await;
-        store.claim_task(&task_id, "docs-manager").await.unwrap();
+        store.claim_task(&task_id, "writer").await.unwrap();
         store
             .update_task_status(&crate::kanban_store::UpdateTaskInput {
                 task_id: task_id.clone(),
@@ -758,7 +758,7 @@ mod tests {
         let agents = vec![
             agent("software-engineer", true),
             agent("researcher", true),
-            agent("docs-manager", true),
+            agent("writer", true),
         ];
         let store = make_store().await;
         let task_id = post(&store, "Market analysis", &["research", "analysis", "facts"]).await;

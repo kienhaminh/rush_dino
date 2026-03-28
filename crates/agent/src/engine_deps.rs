@@ -28,7 +28,7 @@ use crate::{
         glob_search::GlobSearchTool,
         grep_search::GrepSearchTool,
         image::ImageTool,
-        knowledge_graph_query::KnowledgeGraphQueryTool,
+        knowledge_graph::KnowledgeGraphTool,
         memory_search::MemorySearchTool,
         memory_write::MemoryWriteTool,
         present_message::PresentMessageTool,
@@ -46,24 +46,39 @@ use crate::{
 };
 
 pub const CORE_TOOLS: &[&str] = &[
-    "delegate",
-    "edit",
+    // File & shell
     "bash",
+    "edit",
     "glob",
     "grep",
+    "read",
+    "write",
+    // Memory
     "memory_search",
     "memory_write",
+    // Communication
     "message",
-    "read",
-    "tool_search",
-    "web_search",
+    // Web
     "web_fetch",
-    "write",
-    "post_task",
-    "claim_task",
-    "update_task",
-    "review_task",
+    "web_search",
+    // Agent coordination
+    "delegate",
     "session_manage",
+    "session_send",
+    "spawn_agent",
+    // Workflows
+    "run_workflow",
+    "workflow_manage",
+    // Scheduling
+    "cron_list",
+    "cron_manage",
+    // Kanban / inter-agent task board
+    "claim_task",
+    "post_task",
+    "review_task",
+    "update_task",
+    // Tool discovery
+    "tool_search",
 ];
 
 pub struct EngineDeps {
@@ -160,7 +175,7 @@ pub fn build_engine_deps(
             agent_manager_c3,
         ));
         if let Some(graph) = graph_c {
-            r.register(KnowledgeGraphQueryTool::new(graph));
+            r.register(KnowledgeGraphTool::new(graph));
         }
         r.register(SpawnAgentTool::new(agent_manager_c2));
         r

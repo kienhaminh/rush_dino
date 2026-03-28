@@ -4,7 +4,7 @@ import { Send, RefreshCw } from 'lucide-react';
 import { ConversationTimeline } from '@/components/workspace/conversation-timeline';
 import { SubAgentPanel } from '@/components/workspace/sub-agent-panel';
 import { ResizeHandle } from '@/components/workspace/resize-handle';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { useChatWs } from '@/hooks/use-chat-ws';
 import { useSubAgentSessions } from '@/hooks/use-sub-agent-sessions';
 import { fetchConversation } from '@/lib/api';
 import { messagesToItems } from '@/lib/message-converter';
@@ -14,31 +14,43 @@ import { Textarea } from '@/components/ui/textarea';
 const MAIN_SESSION_ID = 'main';
 
 export function ChatPage() {
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { items, sendMessage, resetWithItems, isConnected, isStreaming } =
-    useWebSocket(MAIN_SESSION_ID, undefined);
+  const {
+    items,
+    sendMessage,
+    resetWithItems,
+    isConnected,
+    isStreaming,
+    historyLoaded,
+    setHistoryLoaded,
+  } = useChatWs();
 
   const { sessions: agentSessions, liveRuns, refresh: refreshAgentSessions } = useSubAgentSessions(items);
   const [panelWidth, setPanelWidth] = useState(260);
 
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    try {
-      const detail = await fetchConversation(MAIN_SESSION_ID);
-      resetWithItems(messagesToItems(detail.messages));
-    } catch {
-      resetWithItems([]);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [resetWithItems]);
-
+  // Load history from REST API only once (on first mount).
+  // On subsequent mounts (navigating back), items are already in the provider.
   useEffect(() => {
-    loadHistory();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (historyLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await fetchConversation(MAIN_SESSION_ID);
+        if (!cancelled) {
+          resetWithItems(messagesToItems(detail.messages));
+          setHistoryLoaded(true);
+        }
+      } catch {
+        if (!cancelled) {
+          resetWithItems([]);
+          setHistoryLoaded(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [historyLoaded, resetWithItems, setHistoryLoaded]);
 
   const handleSendMessage = useCallback(() => {
     if (!inputValue.trim() || isStreaming) return;
@@ -69,7 +81,7 @@ export function ChatPage() {
     <div className="flex flex-1 min-w-0 h-full overflow-hidden bg-background">
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
 
-        {historyLoading ? (
+        {!historyLoaded ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex items-center gap-2 text-muted-foreground/50 text-sm">
               <RefreshCw size={14} className="animate-spin" />

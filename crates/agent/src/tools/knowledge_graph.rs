@@ -7,18 +7,18 @@ use rushdino_common::{AppError, Result};
 
 use crate::{knowledge_graph::KnowledgeGraphAccess, tool_registry::Tool};
 
-pub struct KnowledgeGraphQueryTool {
+pub struct KnowledgeGraphTool {
     graph: Arc<dyn KnowledgeGraphAccess>,
 }
 
-impl KnowledgeGraphQueryTool {
+impl KnowledgeGraphTool {
     pub fn new(graph: Arc<dyn KnowledgeGraphAccess>) -> Self {
         Self { graph }
     }
 }
 
 #[async_trait]
-impl Tool for KnowledgeGraphQueryTool {
+impl Tool for KnowledgeGraphTool {
     fn name(&self) -> &str {
         "knowledge_graph"
     }

@@ -148,6 +148,20 @@ impl ConversationManager {
     }
 
     pub async fn delete_conversation(&self, id: &str) -> Result<()> {
+        // Clean up kanban tasks that reference this conversation before deleting it.
+        // Subtasks are deleted first (parent FK is SET NULL but we want full cleanup).
+        sqlx::query(
+            "DELETE FROM kanban_tasks WHERE parent_task_id IN \
+             (SELECT id FROM kanban_tasks WHERE conversation_id = ?1)"
+        )
+        .bind(id)
+        .execute(self.pool.as_ref())
+        .await?;
+        sqlx::query("DELETE FROM kanban_tasks WHERE conversation_id = ?1")
+            .bind(id)
+            .execute(self.pool.as_ref())
+            .await?;
+
         sqlx::query("DELETE FROM conversations WHERE id = ?1")
             .bind(id)
             .execute(self.pool.as_ref())

@@ -55,6 +55,9 @@ pub struct AgentConfig {
     pub bootstrap_max_chars: usize,
     /// Max total characters for all bootstrap files combined.
     pub bootstrap_total_max_chars: usize,
+    /// Delay in milliseconds between react loop iterations (after tool execution,
+    /// before the next LLM call). Prevents rapid-fire tool cycling.
+    pub turn_delay_ms: u64,
 }
 
 impl Default for AgentConfig {
@@ -68,6 +71,7 @@ impl Default for AgentConfig {
             thinking_level: ThinkingLevel::Medium,
             bootstrap_max_chars: crate::memory_bootstrap::DEFAULT_BOOTSTRAP_MAX_CHARS,
             bootstrap_total_max_chars: crate::memory_bootstrap::DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
+            turn_delay_ms: 500,
         }
     }
 }

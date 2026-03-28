@@ -4,16 +4,16 @@ import { BrowserRouter } from 'react-router-dom';
 
 import App from './App';
 import { DashboardAuthProvider } from './hooks/use-dashboard-auth';
-import { WsStatusProvider } from './hooks/use-ws-status';
+import { ChatWsProvider } from './hooks/use-chat-ws';
 import './styles/globals.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
       <DashboardAuthProvider>
-        <WsStatusProvider>
+        <ChatWsProvider>
           <App />
-        </WsStatusProvider>
+        </ChatWsProvider>
       </DashboardAuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

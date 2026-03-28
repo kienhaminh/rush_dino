@@ -39,26 +39,32 @@ export function WorkflowsPage() {
   } = useWorkflowPageState();
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background">
-      <WorkflowSidebar
-        workflows={workflowSummaries}
-        selectedId={selectedWorkflowId}
-        loading={loadingWorkflows}
-        onSelect={setSelectedWorkflowId}
-        onCreate={handleCreate}
-      />
-
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {/* Header bar: workflow name + status + controls */}
-        <div className="flex items-center gap-3 px-6 py-3 border-b border-border/50 bg-card/20 flex-shrink-0">
+    <div className="flex h-full w-full overflow-hidden flex-col bg-background">
+        {/* Header bar: workflow picker + name + description + status + controls */}
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-border/50 bg-card/20 flex-shrink-0">
+          <WorkflowSidebar
+            workflows={workflowSummaries}
+            selectedId={selectedWorkflowId}
+            loading={loadingWorkflows}
+            onSelect={setSelectedWorkflowId}
+            onCreate={handleCreate}
+          />
           {draft ? (
             <>
-              <input
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                placeholder="Workflow name"
-                className="flex-1 min-w-0 bg-transparent text-sm font-semibold placeholder:text-muted-foreground/50 outline-none"
-              />
+              <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+                <input
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  placeholder="Workflow name"
+                  className="bg-transparent text-sm font-semibold placeholder:text-muted-foreground/50 outline-none leading-tight"
+                />
+                <input
+                  value={draft.description}
+                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                  placeholder="Add a description…"
+                  className="bg-transparent text-xs text-muted-foreground placeholder:text-muted-foreground/40 outline-none leading-tight"
+                />
+              </div>
               <Select
                 value={draft.status}
                 onValueChange={(val) => setDraft({ ...draft, status: val as WorkflowDraft['status'] })}
@@ -110,22 +116,10 @@ export function WorkflowsPage() {
           </div>
         ) : null}
 
-        {/* Description row */}
-        {draft && (
-          <div className="px-6 py-2 border-b border-border/30 flex-shrink-0">
-            <input
-              value={draft.description}
-              onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              placeholder="Add a description…"
-              className="w-full bg-transparent text-xs text-muted-foreground placeholder:text-muted-foreground/40 outline-none"
-            />
-          </div>
-        )}
-
         {/* Pipeline canvas — fills remaining space */}
         <div className="flex-1 min-h-0 overflow-hidden">
           {draft ? (
-            <WorkflowPipelineCanvas draft={draft} agents={agents} onChange={setDraft} />
+            <WorkflowPipelineCanvas key={draft.id ?? 'new'} draft={draft} agents={agents} onChange={setDraft} />
           ) : (
             <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
               Select a workflow or create a new one.
@@ -144,7 +138,6 @@ export function WorkflowsPage() {
             onSelect={setSelectedRunId}
           />
         )}
-      </div>
     </div>
   );
 }

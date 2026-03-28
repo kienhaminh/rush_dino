@@ -184,8 +184,8 @@ mod tests {
                 icon: Some("📚".to_owned()),
             },
             AgentEntry {
-                name: "debugger".to_owned(),
-                description: "Debug specialist".to_owned(),
+                name: "software-engineer".to_owned(),
+                description: "Software engineer".to_owned(),
                 icon: None,
             },
         ];
@@ -194,7 +194,7 @@ mod tests {
         assert!(prompt.contains("researcher"));
         assert!(prompt.contains("Research specialist"));
         assert!(prompt.contains("📚"));
-        assert!(prompt.contains("debugger"));
+        assert!(prompt.contains("software-engineer"));
         assert!(prompt.contains("🤖")); // fallback for icon: None
     }
 

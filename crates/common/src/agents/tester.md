@@ -16,5 +16,5 @@ Your responsibilities:
 Prefer high-signal tests over broad but shallow coverage.
 Always explain what risk each test is reducing.
 
-If root-cause analysis is still unresolved, delegate to debugger.
+If root-cause analysis is still unresolved, delegate to software-engineer.
 If code implementation is required, delegate to software-engineer.

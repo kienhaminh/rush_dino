@@ -1,39 +1,84 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from 'react';
+import type { ReactNode } from 'react';
+import { toast } from 'sonner';
 
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
-import type { ConversationItem, RichContent, WsEvent } from '../lib/types';
+import type { ConversationItem, RichContent, WsEvent } from '@/lib/types';
 
-// Callback invoked when a broadcast user_message arrives from a channel.
-// Provides { conversationId, channel } so the UI can auto-switch.
-export type OnChannelMessage = (conversationId: string, channel: string) => void;
+const MAIN_SESSION_ID = 'main';
 
-// Callback invoked when the server assigns a new conversation_id for a message
-// that was sent without one (i.e. "New conversation" flow in the workspace).
-export type OnConversationStarted = (conversationId: string) => void;
+// ---------------------------------------------------------------------------
+// Context: connection status (rarely changes — safe for AppLayout to consume)
+// ---------------------------------------------------------------------------
+
+interface ChatWsConnectionValue {
+  isConnected: boolean;
+}
+
+const ChatWsConnectionContext = createContext<ChatWsConnectionValue>({
+  isConnected: false,
+});
+
+// ---------------------------------------------------------------------------
+// Context: chat items & actions (changes on every streaming chunk — only
+// consumed by ChatPage)
+// ---------------------------------------------------------------------------
+
+interface ChatWsValue {
+  items: ConversationItem[];
+  isStreaming: boolean;
+  isConnected: boolean;
+  sendMessage: (text: string) => void;
+  clearItems: () => void;
+  resetWithItems: (items: ConversationItem[]) => void;
+  historyLoaded: boolean;
+  setHistoryLoaded: (v: boolean) => void;
+}
+
+const ChatWsContext = createContext<ChatWsValue | null>(null);
+
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
 
 function buildWsUrl() {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   return `${protocol}://${window.location.host}/api/ws/chat`;
 }
 
-export function useWebSocket(
-  activeConversationId: string | null,
-  onChannelMessage?: OnChannelMessage,
-  onConversationStarted?: OnConversationStarted,
-) {
+export function ChatWsProvider({ children }: { children: ReactNode }) {
   const { readyForProtectedRoutes } = useDashboardAuth();
-  const [items, setItems] = useState<ConversationItem[]>([]);
+
+  // Connection state
   const [isConnected, setIsConnected] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  // Track which conversation is currently streaming so we can ignore cross-conversation events
-  const streamingConvIdRef = useRef<string | null>(null);
-  // Holds the conversation_id of the most recently completed stream so that the
-  // AssistantMessage event (sent after the done:true chunk) can still be applied.
-  const lastStreamedConvIdRef = useRef<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef(0);
   const readyRef = useRef(readyForProtectedRoutes);
   readyRef.current = readyForProtectedRoutes;
+
+  // Chat state (persists across navigation)
+  const [items, setItems] = useState<ConversationItem[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  // Streaming refs
+  const streamingConvIdRef = useRef<string | null>(null);
+  const lastStreamedConvIdRef = useRef<string | null>(null);
+
+  // Error dedup for runtime_log_error toasts
+  const seenErrorLogIdsRef = useRef<Set<string>>(new Set());
+
+  // -------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------
 
   const replaceAssistantItem = useCallback(
     (
@@ -76,10 +121,12 @@ export function useWebSocket(
     [],
   );
 
+  // -------------------------------------------------------------------------
+  // WebSocket connection + message handling
+  // -------------------------------------------------------------------------
+
   const connect = useCallback(() => {
-    if (!readyRef.current) {
-      return;
-    }
+    if (!readyRef.current) return;
 
     const socket = new WebSocket(buildWsUrl());
     socketRef.current = socket;
@@ -92,25 +139,42 @@ export function useWebSocket(
     socket.onclose = () => {
       if (socketRef.current !== socket) return;
       setIsConnected(false);
-      if (!readyRef.current) {
-        return;
-      }
+      if (!readyRef.current) return;
       const wait = Math.min(1000 * 2 ** reconnectRef.current, 30_000);
       reconnectRef.current += 1;
       window.setTimeout(connect, wait);
     };
 
     socket.onmessage = (event) => {
-      const msg: WsEvent = JSON.parse(event.data as string);
+      let msg: WsEvent;
+      try {
+        msg = JSON.parse(event.data as string);
+      } catch {
+        return;
+      }
 
+      // --- runtime_log_error (toast, from old WsStatusProvider) ---
+      if (msg.type === 'runtime_log_error') {
+        if (seenErrorLogIdsRef.current.has(msg.id)) return;
+        seenErrorLogIdsRef.current.add(msg.id);
+        if (seenErrorLogIdsRef.current.size > 100) {
+          const oldestId = seenErrorLogIdsRef.current.values().next().value;
+          if (oldestId) seenErrorLogIdsRef.current.delete(oldestId);
+        }
+        const title = msg.level === 'fatal' ? 'Fatal backend error' : 'Backend error detected';
+        const description = msg.target
+          ? `[${msg.target}] ${msg.message}`
+          : msg.message;
+        toast.error(title, { description, duration: 10_000 });
+        return;
+      }
+
+      // --- chat_chunk ---
       if (msg.type === 'chat_chunk') {
         if (msg.done) {
-          // Save the conv id before clearing so the subsequent AssistantMessage
-          // event (which arrives after done:true) can still be matched.
           lastStreamedConvIdRef.current = streamingConvIdRef.current;
           setIsStreaming(false);
           streamingConvIdRef.current = null;
-          // Mark all open thinking blocks as done so they collapse.
           setItems((prev) =>
             prev.map((item) =>
               item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
@@ -134,14 +198,8 @@ export function useWebSocket(
           return;
         }
         if (!msg.delta) return;
-        // Track which conversation is streaming; on the first chunk of a new
-        // conversation (sent without a conversation_id), notify ChatPage so it
-        // can adopt the server-assigned id and continue the same thread.
         if (streamingConvIdRef.current === null) {
           streamingConvIdRef.current = msg.conversation_id ?? null;
-          if (msg.conversation_id) {
-            onConversationStarted?.(msg.conversation_id);
-          }
         }
         setItems((prev) => {
           const last = prev[prev.length - 1];
@@ -170,19 +228,19 @@ export function useWebSocket(
         return;
       }
 
+      // --- assistant_reset ---
       if (msg.type === 'assistant_reset') {
         setItems((prev) => [...prev, { kind: 'thinking', id: crypto.randomUUID() }]);
         return;
       }
 
+      // --- assistant_message ---
       if (msg.type === 'assistant_message') {
         const shouldApply =
-          msg.conversation_id === activeConversationId ||
+          msg.conversation_id === MAIN_SESSION_ID ||
           msg.conversation_id === streamingConvIdRef.current ||
           msg.conversation_id === lastStreamedConvIdRef.current;
-        if (!shouldApply) {
-          return;
-        }
+        if (!shouldApply) return;
         lastStreamedConvIdRef.current = null;
         setItems((prev) =>
           replaceAssistantItem(prev, {
@@ -196,6 +254,7 @@ export function useWebSocket(
         return;
       }
 
+      // --- tool_start ---
       if (msg.type === 'tool_start') {
         setItems((prev) => [
           ...prev,
@@ -210,6 +269,7 @@ export function useWebSocket(
         return;
       }
 
+      // --- tool_end ---
       if (msg.type === 'tool_end') {
         setItems((prev) => {
           const reversedIdx = [...prev]
@@ -233,6 +293,7 @@ export function useWebSocket(
         return;
       }
 
+      // --- approval_request ---
       if (msg.type === 'approval_request') {
         setItems((prev) => [
           ...prev,
@@ -247,6 +308,7 @@ export function useWebSocket(
         return;
       }
 
+      // --- error ---
       if (msg.type === 'error') {
         setItems((prev) => [
           ...prev,
@@ -256,10 +318,8 @@ export function useWebSocket(
         return;
       }
 
+      // --- user_message (external channel broadcast) ---
       if (msg.type === 'user_message') {
-        // A message arrived via an external channel (Telegram, Discord, etc.).
-        // Notify ChatPage so it can switch to / load that conversation.
-        onChannelMessage?.(msg.conversation_id, msg.channel);
         setIsStreaming(true);
         streamingConvIdRef.current = msg.conversation_id;
         setItems((prev) => [
@@ -269,8 +329,8 @@ export function useWebSocket(
         return;
       }
 
+      // --- task_review_ready ---
       if (msg.type === 'task_review_ready') {
-        // Inject the pre-formatted notification from the backend as an assistant item.
         setItems((prev) => [
           ...prev,
           {
@@ -284,7 +344,11 @@ export function useWebSocket(
         return;
       }
     };
-  }, [activeConversationId, onChannelMessage, onConversationStarted, replaceAssistantItem]);
+  }, [replaceAssistantItem]);
+
+  // -------------------------------------------------------------------------
+  // Lifecycle
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
     if (!readyForProtectedRoutes) {
@@ -295,41 +359,72 @@ export function useWebSocket(
     }
 
     connect();
-    return () => socketRef.current?.close();
+    return () => {
+      socketRef.current?.close();
+    };
   }, [connect, readyForProtectedRoutes]);
 
-  const sendMessage = useCallback(
-    (text: string) => {
-      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
-      setItems((prev) => [
-        ...prev,
-        { kind: 'user' as const, id: crypto.randomUUID(), content: text },
-      ]);
-      setIsStreaming(true);
-      socketRef.current.send(
-        JSON.stringify({ conversation_id: activeConversationId, message: text }),
-      );
-    },
-    [activeConversationId],
-  );
+  // -------------------------------------------------------------------------
+  // Actions
+  // -------------------------------------------------------------------------
+
+  const sendMessage = useCallback((text: string) => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) return;
+    setItems((prev) => [
+      ...prev,
+      { kind: 'user' as const, id: crypto.randomUUID(), content: text },
+    ]);
+    setIsStreaming(true);
+    socketRef.current.send(
+      JSON.stringify({ conversation_id: MAIN_SESSION_ID, message: text }),
+    );
+  }, []);
 
   const clearItems = useCallback(() => setItems([]), []);
 
-  /** Replace the current item list with a pre-loaded history (e.g. from REST API) */
   const resetWithItems = useCallback((history: ConversationItem[]) => {
     setItems(history);
   }, []);
 
-  return useMemo(
+  // -------------------------------------------------------------------------
+  // Context values
+  // -------------------------------------------------------------------------
+
+  const connectionValue = useMemo(() => ({ isConnected }), [isConnected]);
+
+  const chatValue = useMemo(
     () => ({
       items,
+      isStreaming,
+      isConnected,
       sendMessage,
       clearItems,
       resetWithItems,
-      isConnected,
-      isStreaming,
-      streamingConvId: streamingConvIdRef.current,
+      historyLoaded,
+      setHistoryLoaded,
     }),
-    [items, sendMessage, clearItems, resetWithItems, isConnected, isStreaming],
+    [items, isStreaming, isConnected, sendMessage, clearItems, resetWithItems, historyLoaded],
   );
+
+  return (
+    <ChatWsConnectionContext.Provider value={connectionValue}>
+      <ChatWsContext.Provider value={chatValue}>{children}</ChatWsContext.Provider>
+    </ChatWsConnectionContext.Provider>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hooks
+// ---------------------------------------------------------------------------
+
+/** Read only the connection status (used by AppLayout header badge). */
+export function useChatWsConnection() {
+  return useContext(ChatWsConnectionContext);
+}
+
+/** Full chat state + actions (used by ChatPage). */
+export function useChatWs() {
+  const ctx = useContext(ChatWsContext);
+  if (!ctx) throw new Error('useChatWs must be used within ChatWsProvider');
+  return ctx;
 }

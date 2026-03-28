@@ -51,11 +51,16 @@ impl Tool for WebSearchTool {
 
     fn description(&self) -> &str {
         "Search the web via Brave Search API. Returns structured results with titles, URLs, \
-         and descriptions. Use `maxResults` to control how many results are returned (default 5)."
+         and descriptions. Call once per topic — if results are insufficient, use web_fetch \
+         to read specific URLs rather than searching again."
     }
 
     fn keywords(&self) -> Vec<&str> {
         vec!["internet", "search", "google", "browse"]
+    }
+
+    fn max_calls_per_turn(&self) -> Option<usize> {
+        Some(1)
     }
 
     fn parameters(&self) -> Value {
