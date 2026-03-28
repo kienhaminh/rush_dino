@@ -8,16 +8,27 @@ import {
   fetchSessions,
   fetchSystemSummary,
   getSessionAuditLog,
+  fetchMcpStatus,
   patchSessionNetworkPolicy,
+  patchSessionMcpPolicy,
+  patchSessionBashPolicy,
+  putAgentSandbox,
 } from '@/lib/api';
 import type {
   AppConfigView,
   AuditEntry,
+  McpServerStatus,
   NetworkRule,
+  SandboxMcpPolicy,
   SandboxNetworkPolicy,
+  SandboxPolicy,
+  SandboxProcessPolicy,
   SessionSummary,
   SystemSummaryResponse,
 } from '@/lib/types';
+import { SandboxMcpTab } from './tabs/sandbox-mcp-tab';
+import { SandboxNetworkTab } from './tabs/sandbox-network-tab';
+import { SandboxBashTab } from './tabs/sandbox-bash-tab';
 import type { AgentRecord } from '@/pages/agents/agent-types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -256,7 +267,23 @@ export type SandboxOverviewContentProps = {
   onApprove: (entry: AuditEntry) => void;
   onDeny: (entry: AuditEntry) => void;
   onApplyNetworkPolicy: (sessionId: string, policy: SandboxNetworkPolicy) => Promise<void>;
+  // Tab bar props
+  activeTab: 'overview' | 'mcp' | 'network' | 'bash';
+  onTabChange: (tab: 'overview' | 'mcp' | 'network' | 'bash') => void;
+  mcpServers: McpServerStatus[];
+  onMcpPolicyChange: (agentId: string, mcp: SandboxMcpPolicy) => Promise<void>;
+  onApplyMcpPolicy: (agentId: string) => Promise<void>;
+  onNetworkPolicyChange: (agentId: string, network: SandboxNetworkPolicy) => Promise<void>;
+  onBashPolicyChange: (agentId: string, process: SandboxProcessPolicy) => Promise<void>;
+  onApplyBashPolicy: (agentId: string) => Promise<void>;
 };
+
+const DEFAULT_STRIP_PATTERNS = [
+  'AKIA[A-Z0-9]{16}',
+  'sk-[A-Za-z0-9]{32,}',
+  'ghp_[A-Za-z0-9]{36}',
+  'password\\s*[:=]\\s*\\S+',
+];
 
 export function SandboxOverviewContent({
   summary,
@@ -277,6 +304,14 @@ export function SandboxOverviewContent({
   onApprove,
   onDeny,
   onApplyNetworkPolicy,
+  activeTab,
+  onTabChange,
+  mcpServers,
+  onMcpPolicyChange,
+  onApplyMcpPolicy,
+  onNetworkPolicyChange,
+  onBashPolicyChange,
+  onApplyBashPolicy,
 }: SandboxOverviewContentProps) {
   const selectedSession = sessions.find((session) => session.id === selectedSessionId) ?? null;
   const selectedAgent = agents.find((agent) => agent.id === selectedAgentId) ?? null;
@@ -352,6 +387,42 @@ export function SandboxOverviewContent({
           </Card>
         </section>
 
+        {/* Agent selector + Tab bar */}
+        <div className="flex items-center gap-4 border-b border-border/60 -mx-6 px-6 md:-mx-8 md:px-8">
+          <div className="flex items-center gap-2 py-2">
+            <span className="text-[11px] text-muted-foreground">Agent:</span>
+            <select
+              value={selectedAgentId ?? ''}
+              onChange={(e) => onSelectAgent(e.target.value)}
+              className="rounded border border-border bg-card px-2 py-1 text-xs text-foreground"
+            >
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.emoji} {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <nav className="flex">
+            {(['overview', 'mcp', 'network', 'bash'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => onTabChange(tab)}
+                className={`border-b-2 px-4 py-2.5 text-[13px] capitalize transition-colors ${
+                  activeTab === tab
+                    ? 'border-primary font-semibold text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {tab === 'mcp' ? 'MCP Tools' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab content */}
+        {activeTab === 'overview' && (
+        <div className="flex flex-col gap-6">
         <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
           <Card className="border-border/60 bg-card/80">
             <CardHeader className="pb-3">
@@ -798,6 +869,64 @@ export function SandboxOverviewContent({
             ) : null}
           </CardContent>
         </Card>
+        </div>
+        )}
+        {activeTab === 'mcp' && selectedAgentId && (
+          <SandboxMcpTab
+            servers={mcpServers}
+            policy={
+              selectedAgent?.sandboxPolicy?.sandbox.mcp ?? {
+                default: 'deny' as const,
+                servers: {},
+                inbound: {
+                  max_size_kb: 64,
+                  strip_patterns: DEFAULT_STRIP_PATTERNS,
+                  block_on_match: true,
+                },
+              }
+            }
+            auditEntries={auditEntries}
+            loadingAudit={loadingEntries}
+            onPolicyChange={(mcp) => void onMcpPolicyChange(selectedAgentId, mcp)}
+            onApply={() => onApplyMcpPolicy(selectedAgentId)}
+          />
+        )}
+        {activeTab === 'network' && selectedAgentId && (
+          <SandboxNetworkTab
+            policy={
+              selectedAgent?.sandboxPolicy?.sandbox.network ?? {
+                default: 'deny' as const,
+                on_block: 'prompt' as const,
+                allow: [],
+              }
+            }
+            auditEntries={auditEntries}
+            loadingAudit={loadingEntries}
+            sessionId={selectedSessionId}
+            onPolicyChange={(network) => void onNetworkPolicyChange(selectedAgentId, network)}
+            onApply={() =>
+              selectedSessionId
+                ? onApplyNetworkPolicy(selectedSessionId, selectedAgent?.sandboxPolicy?.sandbox.network ?? { default: 'deny', on_block: 'prompt', allow: [] })
+                : Promise.resolve()
+            }
+          />
+        )}
+        {activeTab === 'bash' && selectedAgentId && (
+          <SandboxBashTab
+            policy={
+              selectedAgent?.sandboxPolicy?.sandbox.process ?? {
+                allow_privileged: false,
+                max_concurrent: 3,
+                deny_commands: [],
+                timeout_seconds: 30,
+              }
+            }
+            auditEntries={auditEntries}
+            loadingAudit={loadingEntries}
+            onPolicyChange={(process) => void onBashPolicyChange(selectedAgentId, process)}
+            onApply={() => onApplyBashPolicy(selectedAgentId)}
+          />
+        )}
       </div>
     </div>
   );
@@ -815,22 +944,26 @@ export function SandboxMonitorPage() {
   const [loadingEntries, setLoadingEntries] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'mcp' | 'network' | 'bash'>('overview');
+  const [mcpServers, setMcpServers] = useState<McpServerStatus[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadOverview = useCallback(async () => {
     setLoadingOverview(true);
     try {
-      const [nextSummary, nextConfig, nextAgents, nextSessions] = await Promise.all([
+      const [nextSummary, nextConfig, nextAgents, nextSessions, nextMcpServers] = await Promise.all([
         fetchSystemSummary(),
         fetchConfig(),
         fetchAgents(),
         fetchSessions(),
+        fetchMcpStatus().catch(() => [] as McpServerStatus[]),
       ]);
 
       setSummary(nextSummary);
       setConfig(nextConfig);
       setAgents(nextAgents);
       setSessions(nextSessions);
+      setMcpServers(nextMcpServers);
       setSelectedSessionId((current) => {
         if (current && nextSessions.some((session) => session.id === current)) {
           return current;
@@ -926,6 +1059,69 @@ export function SandboxMonitorPage() {
     [fetchEntries],
   );
 
+  const handleMcpPolicyChange = useCallback(
+    async (agentId: string, mcp: SandboxMcpPolicy) => {
+      const agent = agents.find((a) => a.id === agentId);
+      if (!agent?.sandboxPolicy) return;
+      const updated: SandboxPolicy = {
+        ...agent.sandboxPolicy,
+        sandbox: { ...agent.sandboxPolicy.sandbox, mcp },
+      };
+      await putAgentSandbox(agentId, updated);
+    },
+    [agents],
+  );
+
+  const handleApplyMcpPolicy = useCallback(
+    async (agentId: string) => {
+      if (!selectedSessionId) return;
+      const agent = agents.find((a) => a.id === agentId);
+      const mcp = agent?.sandboxPolicy?.sandbox.mcp;
+      if (!mcp) return;
+      await patchSessionMcpPolicy(selectedSessionId, mcp);
+      toast.success('MCP policy applied.');
+    },
+    [agents, selectedSessionId],
+  );
+
+  const handleNetworkPolicyChange = useCallback(
+    async (agentId: string, network: SandboxNetworkPolicy) => {
+      const agent = agents.find((a) => a.id === agentId);
+      if (!agent?.sandboxPolicy) return;
+      const updated: SandboxPolicy = {
+        ...agent.sandboxPolicy,
+        sandbox: { ...agent.sandboxPolicy.sandbox, network },
+      };
+      await putAgentSandbox(agentId, updated);
+    },
+    [agents],
+  );
+
+  const handleBashPolicyChange = useCallback(
+    async (agentId: string, process: SandboxProcessPolicy) => {
+      const agent = agents.find((a) => a.id === agentId);
+      if (!agent?.sandboxPolicy) return;
+      const updated: SandboxPolicy = {
+        ...agent.sandboxPolicy,
+        sandbox: { ...agent.sandboxPolicy.sandbox, process },
+      };
+      await putAgentSandbox(agentId, updated);
+    },
+    [agents],
+  );
+
+  const handleApplyBashPolicy = useCallback(
+    async (agentId: string) => {
+      if (!selectedSessionId) return;
+      const agent = agents.find((a) => a.id === agentId);
+      const process = agent?.sandboxPolicy?.sandbox.process;
+      if (!process) return;
+      await patchSessionBashPolicy(selectedSessionId, process);
+      toast.success('Bash policy applied.');
+    },
+    [agents, selectedSessionId],
+  );
+
   return (
     <SandboxOverviewContent
       summary={summary}
@@ -950,6 +1146,14 @@ export function SandboxMonitorPage() {
       onApprove={(entry) => void handleApprove(entry)}
       onDeny={(entry) => void handleDeny(entry)}
       onApplyNetworkPolicy={handleApplyNetworkPolicy}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      mcpServers={mcpServers}
+      onMcpPolicyChange={handleMcpPolicyChange}
+      onApplyMcpPolicy={handleApplyMcpPolicy}
+      onNetworkPolicyChange={handleNetworkPolicyChange}
+      onBashPolicyChange={handleBashPolicyChange}
+      onApplyBashPolicy={handleApplyBashPolicy}
     />
   );
 }

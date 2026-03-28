@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 
 import { SandboxOverviewContent, type SandboxOverviewContentProps } from './SandboxMonitorPage';
+import type { SandboxNetworkPolicy } from '@/lib/types';
 
 function buildProps(overrides: Partial<SandboxOverviewContentProps> = {}): SandboxOverviewContentProps {
   return {
@@ -163,7 +164,15 @@ function buildProps(overrides: Partial<SandboxOverviewContentProps> = {}): Sandb
     onRefreshEntries: () => undefined,
     onApprove: () => undefined,
     onDeny: () => undefined,
-    onApplyNetworkPolicy: async () => undefined,
+    onApplyNetworkPolicy: async (_s: string, _p: SandboxNetworkPolicy) => undefined,
+    activeTab: 'overview' as const,
+    mcpServers: [],
+    onTabChange: () => undefined,
+    onMcpPolicyChange: async () => undefined,
+    onApplyMcpPolicy: async () => undefined,
+    onNetworkPolicyChange: async () => undefined,
+    onBashPolicyChange: async () => undefined,
+    onApplyBashPolicy: async () => undefined,
     ...overrides,
   };
 }
@@ -194,5 +203,21 @@ describe('SandboxOverviewContent', () => {
     expect(html).toContain('api.example.com');
     expect(html).toContain('OPENAI_API_KEY');
     expect(html).toContain('http://gateway.internal');
+  });
+
+  it('renders tab bar with MCP Tools, Network, Bash tabs', () => {
+    const html = renderToStaticMarkup(
+      createElement(SandboxOverviewContent, buildProps()),
+    );
+    expect(html).toContain('MCP Tools');
+    expect(html).toContain('Network');
+    expect(html).toContain('Bash');
+  });
+
+  it('renders Overview tab label', () => {
+    const html = renderToStaticMarkup(
+      createElement(SandboxOverviewContent, buildProps()),
+    );
+    expect(html).toContain('Overview');
   });
 });
