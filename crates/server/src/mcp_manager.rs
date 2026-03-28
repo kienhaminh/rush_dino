@@ -152,15 +152,12 @@ impl McpManager {
         for (server_name, server) in map.iter() {
             for tool in &server.tools {
                 let full_name = format!("{}__{}", server_name, tool.name);
-                let base_url = server.config.url.clone();
-                // Derive base URL (everything before /sse or last path component)
-                let base_url = sse_url_to_base(&base_url);
                 let mcp_tool = McpTool {
                     full_name: full_name.clone(),
                     tool_name: tool.name.clone(),
                     description: tool.description.clone(),
                     parameters: tool.parameters.clone(),
-                    base_url,
+                    sse_url: server.config.url.clone(),
                     auth_header: server.config.auth_header.clone(),
                     http: self.http.clone(),
                 };
@@ -225,8 +222,11 @@ impl SseReader {
                 for line in raw.lines() {
                     if let Some(val) = line.strip_prefix("event:") {
                         event_type = val.trim().to_owned();
-                    } else if let Some(val) = line.strip_prefix("data:") {
-                        data = val.trim().to_owned();
+                    } else if let Some(val) = line.strip_prefix("data: ").or_else(|| line.strip_prefix("data:")) {
+                        if !data.is_empty() {
+                            data.push('\n');
+                        }
+                        data.push_str(val.trim_end());
                     }
                 }
 
@@ -258,8 +258,10 @@ impl SseReader {
             match self.next_event().await? {
                 None => return Err(anyhow::anyhow!("SSE stream closed before receiving id={id}")),
                 Some((_evt, data)) => {
-                    let v: Value = serde_json::from_str(&data)
-                        .map_err(|e| anyhow::anyhow!("SSE JSON parse error: {e}"))?;
+                    let v = match serde_json::from_str::<Value>(&data) {
+                        Ok(v) => v,
+                        Err(_) => continue,
+                    };
                     if v.get("id").and_then(|x| x.as_u64()) == Some(id) {
                         return Ok(v);
                     }
@@ -297,20 +299,6 @@ fn resolve_message_endpoint(sse_url: &str, path: &str) -> String {
     }
     // Fallback: just concatenate
     format!("{}{}", sse_url.trim_end_matches("/sse"), path)
-}
-
-/// Derive the base URL from the SSE endpoint URL (strips trailing `/sse` if present).
-fn sse_url_to_base(sse_url: &str) -> String {
-    if let Some(base) = sse_url.strip_suffix("/sse") {
-        base.to_owned()
-    } else {
-        // Remove the last path segment
-        if let Some(pos) = sse_url.rfind('/') {
-            sse_url[..pos].to_owned()
-        } else {
-            sse_url.to_owned()
-        }
-    }
 }
 
 /// POST a JSON-RPC request to `endpoint`.
@@ -539,8 +527,8 @@ struct McpTool {
     tool_name: String,
     description: String,
     parameters: Value,
-    /// SSE URL of the originating server.
-    base_url: String,
+    /// Full SSE URL of the originating server.
+    sse_url: String,
     auth_header: Option<String>,
     http: reqwest::Client,
 }
@@ -560,11 +548,9 @@ impl Tool for McpTool {
     }
 
     async fn execute(&self, args: Value) -> Result<String> {
-        // Reconstruct SSE URL from base_url
-        let sse_url = format!("{}/sse", self.base_url.trim_end_matches('/'));
         call_mcp_tool(
             &self.http,
-            &sse_url,
+            &self.sse_url,
             self.auth_header.as_deref(),
             &self.tool_name,
             args,
@@ -585,16 +571,4 @@ mod tests {
         assert_eq!(result, "http://localhost:3100/messages?sessionId=abc");
     }
 
-    #[test]
-    fn sse_url_to_base_strips_sse() {
-        assert_eq!(sse_url_to_base("http://localhost:3100/sse"), "http://localhost:3100");
-    }
-
-    #[test]
-    fn sse_url_to_base_handles_no_sse() {
-        assert_eq!(
-            sse_url_to_base("http://localhost:3100/mcp/stream"),
-            "http://localhost:3100/mcp"
-        );
-    }
 }
