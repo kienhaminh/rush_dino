@@ -85,6 +85,31 @@ pub struct DelegateToAgentTool {
     pub home_dir: PathBuf,
 }
 
+impl DelegateToAgentTool {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        agent_manager: Arc<AgentManager>,
+        provider: Arc<Provider>,
+        config: AgentConfig,
+        registry: Weak<ToolRegistry>,
+        session_ctx: Weak<SessionToolContext>,
+        task_memory: Arc<AgentTaskMemory>,
+        conversation: Arc<ConversationManager>,
+        home_dir: PathBuf,
+    ) -> Self {
+        Self {
+            agent_manager,
+            provider,
+            config,
+            registry,
+            session_ctx,
+            task_memory,
+            conversation,
+            home_dir,
+        }
+    }
+}
+
 #[async_trait]
 impl Tool for DelegateToAgentTool {
     fn name(&self) -> &str {
