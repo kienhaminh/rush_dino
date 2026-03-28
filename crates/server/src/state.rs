@@ -223,7 +223,7 @@ impl AppState {
         self.runtime.system_broker()
     }
 
-    pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KnowledgeGraphService>> {
+    pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KgGateway>> {
         self.runtime.knowledge_graph()
     }
 

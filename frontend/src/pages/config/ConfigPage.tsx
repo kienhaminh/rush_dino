@@ -9,8 +9,9 @@ import { ConfigSectionProfiles } from './config-section-profiles';
 import { ConfigSectionCredentials } from './config-section-credentials';
 import { ConfigSectionServer } from './config-section-server';
 import { ConfigSectionCoreFiles } from './config-section-core-files';
+import { ConfigSectionKnowledgeGraph } from './config-section-knowledge-graph';
 
-type Section = 'profiles' | 'credentials' | 'server' | 'core-files';
+type Section = 'profiles' | 'credentials' | 'server' | 'core-files' | 'knowledge-graph';
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   {
@@ -24,6 +25,11 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
     key: 'core-files',
     label: 'Core Files',
     description: 'View and edit the core memory files injected into every agent session.',
+  },
+  {
+    key: 'knowledge-graph',
+    label: 'Knowledge Graph',
+    description: 'Connect to an external knowledge graph for long-term fact storage.',
   },
 ];
 
@@ -173,6 +179,14 @@ export function ConfigPage() {
               <ConfigSectionServer config={config} onChange={handleConfigChange} />
             )}
             {activeSection === 'core-files' && <ConfigSectionCoreFiles />}
+            {activeSection === 'knowledge-graph' && (
+              <ConfigSectionKnowledgeGraph
+                config={config}
+                credentials={credentials}
+                onConfigChange={handleConfigChange}
+                onCredentialsChange={handleCredentialsChange}
+              />
+            )}
 
             {/* Footer */}
             {activeSection !== 'profiles' && activeSection !== 'core-files' && (

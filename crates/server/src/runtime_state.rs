@@ -8,7 +8,7 @@ use sqlx::SqlitePool;
 
 use rushdino_agent::{AgentEngine, AgentRuntime, SharedSystemBroker};
 use rushdino_common::{config::Provider, AppConfig, AppError, Result};
-use rushdino_knowledge_graph::KnowledgeGraphService;
+use rushdino_knowledge_graph::KgGateway;
 use rushdino_providers::types::ThinkingLevel;
 use rushdino_skill_graph::SkillGraphService;
 
@@ -22,7 +22,7 @@ pub struct RuntimeStatus {
 pub struct RuntimeState {
     engine: Arc<ArcSwapOption<AgentEngine>>,
     config: Arc<ArcSwap<AppConfig>>,
-    knowledge_graph: Arc<ArcSwapOption<KnowledgeGraphService>>,
+    knowledge_graph: Arc<ArcSwapOption<KgGateway>>,
     skill_graph: Arc<ArcSwapOption<SkillGraphService>>,
     status: Arc<RwLock<RuntimeStatus>>,
     pool: Arc<SqlitePool>,
@@ -80,7 +80,7 @@ impl RuntimeState {
         self.engine.load_full()
     }
 
-    pub fn knowledge_graph(&self) -> Option<Arc<KnowledgeGraphService>> {
+    pub fn knowledge_graph(&self) -> Option<Arc<KgGateway>> {
         self.knowledge_graph.load_full()
     }
 
@@ -131,7 +131,7 @@ impl RuntimeState {
         &self,
         config: Arc<AppConfig>,
         engine: Arc<AgentEngine>,
-        knowledge_graph: Option<Arc<KnowledgeGraphService>>,
+        knowledge_graph: Option<Arc<KgGateway>>,
         status: RuntimeStatus,
     ) {
         self.config.store(config);

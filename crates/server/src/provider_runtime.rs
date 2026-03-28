@@ -6,7 +6,7 @@ use rushdino_common::{
     AppConfig, AppError, CredentialsConfig, Result,
 };
 use rushdino_auth::refresh_access_token;
-use rushdino_knowledge_graph::KnowledgeGraphService;
+use rushdino_knowledge_graph::KgGateway;
 use rushdino_providers::{
     types::{OpenAIAuth, ProviderConfig},
     ProviderService,
@@ -99,17 +99,26 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
             let provider = Arc::new(ProviderService::from_config(&resolved.provider_config)?);
 
             let knowledge_graph_service = if config.knowledge_graph.enabled {
-                Some(Arc::new(KnowledgeGraphService::new(
-                    (*pool).clone(),
+                match KgGateway::from_config(
+                    &config.knowledge_graph,
+                    &credentials.knowledge_graph,
                     provider.clone(),
-                    config.knowledge_graph.clone(),
+                    pool.clone(),
                     config.data_dir.clone(),
-                )))
+                )
+                .await
+                {
+                    Ok(gw) => Some(Arc::new(gw)),
+                    Err(err) => {
+                        tracing::warn!("knowledge graph gateway init failed: {err}");
+                        None
+                    }
+                }
             } else {
                 None
             };
-            let knowledge_graph_bridge = knowledge_graph_service.as_ref().map(|service| {
-                Arc::new(KnowledgeGraphBridge::new(service.clone()))
+            let knowledge_graph_bridge = knowledge_graph_service.as_ref().map(|gw| {
+                Arc::new(KnowledgeGraphBridge::new(gw.clone()))
                     as Arc<dyn KnowledgeGraphAccess>
             });
 

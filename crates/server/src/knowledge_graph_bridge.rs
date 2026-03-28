@@ -4,15 +4,18 @@ use async_trait::async_trait;
 
 use rushdino_agent::KnowledgeGraphAccess;
 use rushdino_common::Result;
-use rushdino_knowledge_graph::KnowledgeGraphService;
+use rushdino_knowledge_graph::KgGateway;
 
+/// Adapts [`KgGateway`] to the [`KnowledgeGraphAccess`] trait expected by the
+/// agent engine. The bridge lives in the server crate because it depends on
+/// both `rushdino-agent` and `rushdino-knowledge-graph`.
 pub struct KnowledgeGraphBridge {
-    service: Arc<KnowledgeGraphService>,
+    gateway: Arc<KgGateway>,
 }
 
 impl KnowledgeGraphBridge {
-    pub fn new(service: Arc<KnowledgeGraphService>) -> Self {
-        Self { service }
+    pub fn new(gateway: Arc<KgGateway>) -> Self {
+        Self { gateway }
     }
 }
 
@@ -20,7 +23,7 @@ impl KnowledgeGraphBridge {
 impl KnowledgeGraphAccess for KnowledgeGraphBridge {
     async fn ingest_text(&self, source_type: &str, source_ref: &str, text: &str) -> Result<()> {
         let _ = self
-            .service
+            .gateway
             .ingest_text(source_type, source_ref, text)
             .await?;
         Ok(())
@@ -32,14 +35,14 @@ impl KnowledgeGraphAccess for KnowledgeGraphBridge {
         conversation_id: Option<&str>,
         max_facts: usize,
     ) -> Result<Vec<String>> {
-        let configured = self.service.config().max_context_facts as usize;
+        let configured = self.gateway.config().max_context_facts as usize;
         let limit = max_facts.min(configured).max(1);
-        self.service
+        self.gateway
             .facts_for_prompt(query, conversation_id, limit)
             .await
     }
 
     async fn facts_as_json(&self, query: &str, limit: usize) -> Result<serde_json::Value> {
-        self.service.facts_as_json(query, limit).await
+        self.gateway.facts_as_json(query, limit).await
     }
 }

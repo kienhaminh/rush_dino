@@ -133,6 +133,18 @@ export interface ExecutionConfig {
   shell_exec_sandbox: ShellExecSandboxConfig;
 }
 
+export interface KnowledgeGraphConfig {
+  enabled: boolean;
+  uri?: string;
+  auto_context: boolean;
+  max_context_facts: number;
+  max_extraction_chars: number;
+  backfill_on_startup: boolean;
+  extract_from_conversations: boolean;
+  extract_from_memory: boolean;
+  extract_from_documents: boolean;
+}
+
 export interface AppConfigView {
   host: string;
   port: number;
@@ -151,6 +163,7 @@ export interface AppConfigView {
   allowed_chat_ids: number[];
   security: SecurityConfig;
   execution: ExecutionConfig;
+  knowledge_graph: KnowledgeGraphConfig;
   [key: string]: unknown;
 }
 
@@ -159,6 +172,12 @@ export interface ProfileSecrets {
   access_token?: string;
   refresh_token?: string;
   token_expires_at?: number;
+}
+
+export interface KgCredentials {
+  username?: string;
+  password?: string;
+  api_key?: string;
 }
 
 /** All credential fields are optional strings. */
@@ -175,6 +194,7 @@ export interface CredentialsView {
   codex_access_token?: string;
   codex_refresh_token?: string;
   codex_token_expires_at?: number;
+  knowledge_graph?: KgCredentials;
 }
 
 export interface DashboardAuthStatusResponse {

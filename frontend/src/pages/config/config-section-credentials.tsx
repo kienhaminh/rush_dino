@@ -7,7 +7,7 @@ interface Props {
   onChange: (patch: Partial<CredentialsView>) => void;
 }
 
-type CredentialKey = Exclude<keyof CredentialsView, 'profiles'>;
+type CredentialKey = Exclude<keyof CredentialsView, 'profiles' | 'knowledge_graph'>;
 
 /** Fields in display order with labels.
  *  openai_api_key / anthropic_api_key are intentionally excluded — provider API
