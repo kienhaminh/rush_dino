@@ -16,8 +16,11 @@ import type {
   RunKind,
   RunSnapshot,
   RunState,
+  McpServerStatus,
+  SandboxMcpPolicy,
   SandboxNetworkPolicy,
   SandboxPolicy,
+  SandboxProcessPolicy,
   SessionSummary,
   SoulMemoryFile,
   SoulMemoryStateResponse,
@@ -805,6 +808,46 @@ export async function denySessionRequest(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ request_id: requestId }),
+  });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+// ---------------------------------------------------------------------------
+// Sandbox MCP / process policy API
+// ---------------------------------------------------------------------------
+
+/** Fetch the list of configured MCP servers and their connection status. */
+export async function fetchMcpStatus(): Promise<McpServerStatus[]> {
+  const endpoint = '/api/mcp/status';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+/** Hot-reload the MCP server policy for an active session without restarting. */
+export async function patchSessionMcpPolicy(
+  sessionId: string,
+  mcpPolicy: SandboxMcpPolicy,
+): Promise<void> {
+  const endpoint = `/api/sessions/${encodeURIComponent(sessionId)}/sandbox/mcp`;
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(mcpPolicy),
+  });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+/** Hot-reload the bash/process policy for an active session without restarting. */
+export async function patchSessionBashPolicy(
+  sessionId: string,
+  processPolicy: SandboxProcessPolicy,
+): Promise<void> {
+  const endpoint = `/api/sessions/${encodeURIComponent(sessionId)}/sandbox/process`;
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(processPolicy),
   });
   await parseJsonOrThrow(response, endpoint);
 }
