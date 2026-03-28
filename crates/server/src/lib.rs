@@ -364,7 +364,8 @@ pub async fn build_app(
     let mcp_manager = McpManager::new();
     let servers_bg = config.mcp_servers.clone();
 
-    // Build the engine. Optional services (KG, MCP) are skipped on startup;
+    // Build the engine synchronously so the router is ready to serve accurate status
+    // immediately (e.g. /healthz). Optional services (KG, MCP) are skipped on startup;
     // they are activated when the user enables them via config update.
     if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None, false).await {
         tracing::error!("failed to perform initial runtime refresh: {err}");
