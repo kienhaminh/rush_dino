@@ -33,7 +33,6 @@ import type {
   GraphEntity,
   GraphNode,
   IngestStats,
-  McpServerStatus,
 } from './types';
 import type {
   AgentRecord,
@@ -893,13 +892,4 @@ export async function triggerKgBackfill(): Promise<IngestStats> {
   return parseJsonOrThrow(response, endpoint);
 }
 
-// ---------------------------------------------------------------------------
-// MCP Server API
-// ---------------------------------------------------------------------------
-
-export async function fetchMcpStatus(): Promise<McpServerStatus[]> {
-  const endpoint = '/api/mcp/status';
-  const response = await fetch(endpoint);
-  return parseJsonOrThrow(response, endpoint);
-}
 
