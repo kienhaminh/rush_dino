@@ -69,12 +69,7 @@ export function AppLayout() {
                   title={`Update available: v${versionData?.latest_version}`}
                 >
                   <ArrowUpCircle
-                    className={`h-4.5 w-4.5 ${isCritical ? 'text-red-500' : 'text-emerald-500'}`}
-                  />
-                  <span
-                    className={`absolute right-1 top-1 h-2 w-2 rounded-full animate-pulse ${
-                      isCritical ? 'bg-red-500' : 'bg-emerald-500'
-                    }`}
+                    className={`h-4.5 w-4.5 animate-pulse ${isCritical ? 'text-red-500' : 'text-emerald-500'}`}
                   />
                 </button>
               )}
