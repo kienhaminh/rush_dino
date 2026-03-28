@@ -307,27 +307,27 @@ pub async fn build_app(
     let mcp_manager = McpManager::new();
     let servers_bg = config.mcp_servers.clone();
 
-    // Spawn initial runtime refresh, then reconcile MCP servers so discovered tools
-    // are registered into the just-built engine's tool registry (fixes startup race).
+    // Build the engine synchronously so the router is ready to serve accurate status
+    // immediately (e.g. /healthz). Non-critical follow-up work (MCP reconcile,
+    // workflow seeding, session bootstrap) is spawned in the background.
+    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None).await {
+        tracing::error!("failed to perform initial runtime refresh: {err}");
+    }
+    if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
+        let _ = log_runtime(
+            &runtime_logs,
+            "warn",
+            "provider",
+            "default profile runtime unavailable",
+            Some(serde_json::json!({ "error": unavailable_error })),
+        )
+        .await;
+    }
+
+    // Spawn non-critical startup work in the background.
     let runtime_state_bg = runtime_state.clone();
-    let runtime_logs_bg = runtime_logs.clone();
     let mcp_manager_bg = mcp_manager.clone();
     tokio::spawn(async move {
-        // 1. Build the engine without MCP tools first.
-        if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref(), None).await {
-            tracing::error!("failed to perform initial runtime refresh: {err}");
-        }
-        if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
-            let _ = log_runtime(
-                &runtime_logs_bg,
-                "warn",
-                "provider",
-                "default profile runtime unavailable",
-                Some(serde_json::json!({ "error": unavailable_error })),
-            )
-            .await;
-        }
-        // 2. Now that the engine exists, reconcile MCP servers and register their tools.
         if let Some(engine) = runtime_state_bg.engine_opt() {
             let registry = engine.tool_registry.clone();
             mcp_manager_bg.reconcile_and_register(&servers_bg, registry).await;
