@@ -53,6 +53,7 @@ pub struct McpServerStatus {
 // ──────────────────────────────────────────────
 
 /// A single tool discovered from a remote MCP server.
+#[derive(Clone)]
 struct McpDiscoveredTool {
     name: String,
     description: String,
@@ -90,6 +91,24 @@ impl McpManager {
     /// Replace the server list and (re)connect to any changed or new servers.
     /// Servers that were removed are dropped from the map.
     pub async fn reconcile(&self, servers: &[McpServerConfig]) {
+        self.reconcile_inner(servers, None).await;
+    }
+
+    /// Like `reconcile`, but also registers each server's discovered tools into
+    /// `registry` as soon as discovery completes (inside the per-server task).
+    pub async fn reconcile_and_register(
+        &self,
+        servers: &[McpServerConfig],
+        registry: Arc<ToolRegistry>,
+    ) {
+        self.reconcile_inner(servers, Some(registry)).await;
+    }
+
+    async fn reconcile_inner(
+        &self,
+        servers: &[McpServerConfig],
+        registry: Option<Arc<ToolRegistry>>,
+    ) {
         let new_names: std::collections::HashSet<String> =
             servers.iter().map(|s| s.name.clone()).collect();
 
@@ -116,18 +135,38 @@ impl McpManager {
             let cfg_clone = cfg.clone();
             let http = self.http.clone();
             let state = self.state.clone();
+            let registry = registry.clone();
 
             tokio::spawn(async move {
                 info!(server = %name, "mcp: discovering tools");
                 match discover_tools(&http, &cfg_clone).await {
                     Ok(tools) => {
                         let count = tools.len();
-                        let mut map = state.write().expect("mcp state lock poisoned");
-                        if let Some(entry) = map.get_mut(&name) {
-                            entry.status = McpConnectionStatus::Connected;
-                            entry.tools = tools;
-                            entry.last_seen_at = Some(Instant::now());
-                            entry.config = cfg_clone;
+                        {
+                            let mut map = state.write().expect("mcp state lock poisoned");
+                            if let Some(entry) = map.get_mut(&name) {
+                                entry.status = McpConnectionStatus::Connected;
+                                entry.tools = tools.clone();
+                                entry.last_seen_at = Some(Instant::now());
+                                entry.config = cfg_clone.clone();
+                            }
+                        }
+                        // Register discovered tools into the provided registry, if any.
+                        if let Some(reg) = registry {
+                            for tool in &tools {
+                                let full_name = format!("{}__{}", name, tool.name);
+                                let mcp_tool = McpTool {
+                                    full_name: full_name.clone(),
+                                    tool_name: tool.name.clone(),
+                                    description: tool.description.clone(),
+                                    parameters: tool.parameters.clone(),
+                                    sse_url: cfg_clone.url.clone(),
+                                    auth_header: cfg_clone.auth_header.clone(),
+                                    http: http.clone(),
+                                };
+                                debug!(tool = %full_name, "mcp: registering tool after discovery");
+                                reg.register(mcp_tool);
+                            }
                         }
                         info!(server = %name, tools = count, "mcp: tools discovered");
                     }

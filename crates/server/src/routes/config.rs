@@ -48,6 +48,23 @@ pub async fn patch_config(
     if gateway_runtime_reload_required_from_config(&current, &updated) {
         reconcile_gateway_adapters(&state, &updated, &credentials).await?;
     }
+    if mcp_reload_required(&current, &updated) {
+        if let Some(engine) = state.engine_opt() {
+            let registry = engine.tool_registry.clone();
+            let manager = state.mcp_manager.clone();
+            let servers = updated.mcp_servers.clone();
+            tokio::spawn(async move {
+                manager.reconcile_and_register(&servers, registry).await;
+            });
+        } else {
+            // No engine yet — just reconcile so status is updated
+            let manager = state.mcp_manager.clone();
+            let servers = updated.mcp_servers.clone();
+            tokio::spawn(async move {
+                manager.reconcile(&servers).await;
+            });
+        }
+    }
 
     let result = serde_json::to_value(&updated)
         .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
@@ -282,6 +299,10 @@ fn gateway_runtime_reload_required_from_credentials(
 
 fn execution_runtime_reload_required_from_config(current: &AppConfig, updated: &AppConfig) -> bool {
     current.default_profile_id != updated.default_profile_id
+}
+
+fn mcp_reload_required(current: &AppConfig, updated: &AppConfig) -> bool {
+    current.mcp_servers != updated.mcp_servers
 }
 
 fn execution_runtime_reload_required_from_credentials(
