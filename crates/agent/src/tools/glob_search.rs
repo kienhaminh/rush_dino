@@ -212,7 +212,7 @@ impl Tool for GlobSearchTool {
             .filter_entry(|e| {
                 e.file_name()
                     .to_str()
-                    .map_or(true, |name| !should_skip(name))
+                    .is_none_or(|name| !should_skip(name))
             })
         {
             let entry = match entry {

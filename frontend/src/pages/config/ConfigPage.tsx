@@ -10,8 +10,9 @@ import { ConfigSectionCredentials } from './config-section-credentials';
 import { ConfigSectionServer } from './config-section-server';
 import { ConfigSectionCoreFiles } from './config-section-core-files';
 import { ConfigSectionKnowledgeGraph } from './config-section-knowledge-graph';
+import { ConfigSectionMcpServers } from './config-section-mcp-servers';
 
-type Section = 'profiles' | 'credentials' | 'server' | 'core-files' | 'knowledge-graph';
+type Section = 'profiles' | 'credentials' | 'server' | 'core-files' | 'knowledge-graph' | 'mcp-servers';
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   {
@@ -30,6 +31,11 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
     key: 'knowledge-graph',
     label: 'Knowledge Graph',
     description: 'Connect to an external knowledge graph for long-term fact storage.',
+  },
+  {
+    key: 'mcp-servers',
+    label: 'MCP Servers',
+    description: 'External MCP servers connected via SSE. Tools are available to all agents automatically.',
   },
 ];
 
@@ -186,6 +192,9 @@ export function ConfigPage() {
                 onConfigChange={handleConfigChange}
                 onCredentialsChange={handleCredentialsChange}
               />
+            )}
+            {activeSection === 'mcp-servers' && config && (
+              <ConfigSectionMcpServers config={config} onConfigChange={handleConfigChange} />
             )}
 
             {/* Footer */}

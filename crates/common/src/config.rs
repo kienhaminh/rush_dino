@@ -218,6 +218,17 @@ pub struct AgentSection {
     pub max_context_tokens: Option<usize>,
 }
 
+/// Configuration for a single external MCP server (HTTP/SSE transport).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct McpServerConfig {
+    /// Display name for this server (e.g. "filesystem").
+    pub name: String,
+    /// SSE endpoint URL (e.g. "http://localhost:3100/sse").
+    pub url: String,
+    /// Optional Authorization header value (e.g. "Bearer sk-...").
+    pub auth_header: Option<String>,
+}
+
 /// Bootstrap file injection limits for the system prompt.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BootstrapConfig {
@@ -301,6 +312,10 @@ pub struct AppConfig {
     pub bootstrap: BootstrapConfig,
     #[serde(default)]
     pub agent: AgentSection,
+    /// External MCP servers connected via HTTP/SSE.
+    /// Tools discovered from these servers are available to all agents automatically.
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerConfig>,
 }
 
 impl Default for AppConfig {
@@ -334,6 +349,7 @@ impl Default for AppConfig {
             knowledge_graph: KnowledgeGraphConfig::default(),
             bootstrap: BootstrapConfig::default(),
             agent: AgentSection::default(),
+            mcp_servers: Vec::new(),
         }
     }
 }

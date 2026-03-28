@@ -33,6 +33,7 @@ import type {
   GraphEntity,
   GraphNode,
   IngestStats,
+  McpServerStatus,
 } from './types';
 import type {
   AgentRecord,
@@ -889,6 +890,16 @@ export async function fetchKgNode(id: string, limit = 20): Promise<GraphNode> {
 export async function triggerKgBackfill(): Promise<IngestStats> {
   const endpoint = '/api/graph/backfill';
   const response = await fetch(endpoint, { method: 'POST' });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+// ---------------------------------------------------------------------------
+// MCP Server API
+// ---------------------------------------------------------------------------
+
+export async function fetchMcpStatus(): Promise<McpServerStatus[]> {
+  const endpoint = '/api/mcp/status';
+  const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
 }
 

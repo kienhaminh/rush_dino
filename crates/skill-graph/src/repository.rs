@@ -217,7 +217,7 @@ fn row_to_node(row: &sqlx::sqlite::SqliteRow) -> Result<SkillNode> {
     Ok(SkillNode {
         id: row.try_get("id")?,
         name: row.try_get("name")?,
-        node_type: NodeType::from_str(&type_str)
+        node_type: NodeType::parse(&type_str)
             .ok_or_else(|| AppError::Validation(format!("invalid node_type: {type_str}")))?,
         description: row.try_get("description")?,
         tags,
@@ -234,10 +234,10 @@ fn row_to_edge(row: &sqlx::sqlite::SqliteRow) -> Result<SkillEdge> {
         id: row.try_get("id")?,
         source_id: row.try_get("source_id")?,
         target_id: row.try_get("target_id")?,
-        edge_type: EdgeType::from_str(&type_str)
+        edge_type: EdgeType::parse(&type_str)
             .ok_or_else(|| AppError::Validation(format!("invalid edge_type: {type_str}")))?,
         weight: row.try_get("weight")?,
-        origin: EdgeOrigin::from_str(&origin_str)
+        origin: EdgeOrigin::parse(&origin_str)
             .ok_or_else(|| AppError::Validation(format!("invalid origin: {origin_str}")))?,
         created_at: row.try_get("created_at")?,
     })

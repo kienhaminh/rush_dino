@@ -79,6 +79,7 @@ pub struct DelegateToAgentTool {
 }
 
 impl DelegateToAgentTool {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         agent_manager: Arc<AgentManager>,
         provider: Arc<Provider>,

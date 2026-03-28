@@ -14,6 +14,7 @@ pub mod gateway;
 pub mod graph;
 pub mod health;
 pub mod logs;
+pub mod mcp;
 pub mod providers;
 pub mod runs;
 pub mod sandbox;

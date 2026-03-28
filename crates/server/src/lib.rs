@@ -1,4 +1,5 @@
 pub mod approval_gate;
+pub mod mcp_manager;
 pub mod policy_system_broker;
 pub mod channel_pairing;
 mod chat_broadcast;
@@ -38,6 +39,7 @@ use rushdino_security::rate_limit::EndpointLimiters;
 use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
+    mcp_manager::McpManager,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
     cron_runtime::spawn_cron_runtime,
     middleware::{
@@ -80,28 +82,6 @@ pub async fn build_app(
     ));
 
     spawn_cron_runtime(runtime_state.clone());
-
-    let runtime_state_bg = runtime_state.clone();
-    let runtime_logs_bg = runtime_logs.clone();
-    tokio::spawn(async move {
-        if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref()).await {
-            tracing::error!("failed to perform initial runtime refresh: {err}");
-        }
-        if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
-            let _ = log_runtime(
-                &runtime_logs_bg,
-                "warn",
-                "provider",
-                "default profile runtime unavailable",
-                Some(serde_json::json!({ "error": unavailable_error })),
-            )
-            .await;
-        }
-        if let Some(engine) = runtime_state_bg.engine_opt() {
-            engine.seed_initial_workflows().await;
-            engine.ensure_main_session().await.ok();
-        }
-    });
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
@@ -321,6 +301,41 @@ pub async fn build_app(
     }
     runtime_state.set_skill_graph(skill_graph_service.clone());
 
+    // MCP: initialize manager. Reconcile (connect + register tools) happens after
+    // the engine is built in the startup spawn below, so MCP tools are present in
+    // the initial agent session.
+    let mcp_manager = McpManager::new();
+    let servers_bg = config.mcp_servers.clone();
+
+    // Build the engine synchronously so the router is ready to serve accurate status
+    // immediately (e.g. /healthz). Non-critical follow-up work (MCP reconcile,
+    // workflow seeding, session bootstrap) is spawned in the background.
+    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None).await {
+        tracing::error!("failed to perform initial runtime refresh: {err}");
+    }
+    if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
+        let _ = log_runtime(
+            &runtime_logs,
+            "warn",
+            "provider",
+            "default profile runtime unavailable",
+            Some(serde_json::json!({ "error": unavailable_error })),
+        )
+        .await;
+    }
+
+    // Spawn non-critical startup work in the background.
+    let runtime_state_bg = runtime_state.clone();
+    let mcp_manager_bg = mcp_manager.clone();
+    tokio::spawn(async move {
+        if let Some(engine) = runtime_state_bg.engine_opt() {
+            let registry = engine.tool_registry.clone();
+            mcp_manager_bg.reconcile_and_register(&servers_bg, registry).await;
+            engine.seed_initial_workflows().await;
+            engine.ensure_main_session().await.ok();
+        }
+    });
+
     let state = AppState::new(
         runtime_state.clone(),
         config_path,
@@ -339,6 +354,7 @@ pub async fn build_app(
         sandbox_registry,
         pending_oauth,
         skill_graph_service,
+        mcp_manager.clone(),
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -561,6 +577,7 @@ pub async fn build_app(
         .route("/api/skill-graph/edges/:id", axum::routing::delete(routes::skill_graph::delete_edge))
         .route("/api/skill-graph/assign", post(routes::skill_graph::assign_category))
         .route("/api/skill-graph/reseed", post(routes::skill_graph::reseed))
+        .route("/api/mcp/status", get(routes::mcp::get_mcp_status))
         .route(
             "/api/profiles/:id",
             axum::routing::put(routes::providers::update_profile)
@@ -717,7 +734,7 @@ fn should_register_gateway_adapter(
 }
 
 pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
-    refresh_runtime_from_disk(state.runtime.as_ref()).await
+    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref())).await
 }
 
 async fn shutdown_signal() {

@@ -57,7 +57,7 @@ pub async fn upsert_node(
     State(state): State<AppState>,
     Json(body): Json<UpsertNodeRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let node_type = NodeType::from_str(&body.node_type).ok_or_else(|| {
+    let node_type = NodeType::parse(&body.node_type).ok_or_else(|| {
         rushdino_common::AppError::Validation(format!("invalid node_type: {}", body.node_type))
     })?;
     let node = state
@@ -84,13 +84,13 @@ pub async fn upsert_edge(
     State(state): State<AppState>,
     Json(body): Json<UpsertEdgeRequest>,
 ) -> Result<Json<serde_json::Value>> {
-    let edge_type = EdgeType::from_str(&body.edge_type).ok_or_else(|| {
+    let edge_type = EdgeType::parse(&body.edge_type).ok_or_else(|| {
         rushdino_common::AppError::Validation(format!("invalid edge_type: {}", body.edge_type))
     })?;
     let origin = body
         .origin
         .as_deref()
-        .and_then(EdgeOrigin::from_str)
+        .and_then(EdgeOrigin::parse)
         .unwrap_or(EdgeOrigin::Manual);
     let id = state
         .skill_graph()

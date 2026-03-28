@@ -4,7 +4,9 @@
 // `SandboxPolicy` type and provides helpers to apply that profile when
 // spawning subprocesses.
 
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
+use std::path::Path;
+use std::path::PathBuf;
 
 use crate::policy::types::{AccessMode, DefaultAction, ProcessPolicy, SandboxPolicy};
 

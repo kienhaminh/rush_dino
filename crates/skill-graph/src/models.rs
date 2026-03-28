@@ -15,7 +15,7 @@ impl NodeType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "skill" => Some(NodeType::Skill),
             "category" => Some(NodeType::Category),
@@ -39,7 +39,7 @@ impl EdgeType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "belongs_to" => Some(EdgeType::BelongsTo),
             "related_to" => Some(EdgeType::RelatedTo),
@@ -63,7 +63,7 @@ impl EdgeOrigin {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "manual" => Some(EdgeOrigin::Manual),
             "inferred" => Some(EdgeOrigin::Inferred),
