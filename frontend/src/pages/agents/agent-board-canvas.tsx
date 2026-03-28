@@ -50,6 +50,32 @@ function AmbientCanvas() {
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
 }
 
+// ── Shared toolbar button — centralises hover styling ─────────────────────────
+interface ToolbarButtonProps {
+  onClick: () => void;
+  title: string;
+  children: React.ReactNode;
+}
+
+function ToolbarButton({ onClick, title, children }: ToolbarButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className={[
+        'flex items-center justify-center',
+        'w-7 h-7 rounded-[7px]',
+        'border-none bg-transparent',
+        'text-muted-foreground cursor-pointer',
+        'transition-colors duration-150',
+        'hover:bg-accent hover:text-foreground',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  );
+}
+
 // ── Floating toolbar (uses useReactFlow — must be inside ReactFlowProvider) ───
 interface ToolbarProps {
   loading: boolean;
@@ -71,20 +97,6 @@ function CanvasToolbar({ loading, onRefresh, onSearch }: ToolbarProps) {
     border: '1px solid hsl(var(--border))',
     backdropFilter: 'blur(8px)',
     borderRadius: '10px',
-  };
-
-  const btnStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '28px',
-    height: '28px',
-    borderRadius: '7px',
-    color: 'hsl(var(--muted-foreground))',
-    cursor: 'pointer',
-    transition: 'background 0.15s, color 0.15s',
-    border: 'none',
-    background: 'transparent',
   };
 
   return (
@@ -115,50 +127,26 @@ function CanvasToolbar({ loading, onRefresh, onSearch }: ToolbarProps) {
       <div style={{ width: '1px', height: '20px', background: 'hsl(var(--border))' }} />
 
       {/* Zoom controls */}
-      <button
-        style={btnStyle}
-        onClick={() => zoomIn()}
-        title="Zoom in"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      <ToolbarButton onClick={() => zoomIn()} title="Zoom in">
         <ZoomInIcon className="w-3.5 h-3.5" />
-      </button>
-      <button
-        style={btnStyle}
-        onClick={() => zoomOut()}
-        title="Zoom out"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      </ToolbarButton>
+      <ToolbarButton onClick={() => zoomOut()} title="Zoom out">
         <ZoomOutIcon className="w-3.5 h-3.5" />
-      </button>
-      <button
-        style={btnStyle}
-        onClick={() => fitView({ padding: 0.25 })}
-        title="Fit view"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      </ToolbarButton>
+      <ToolbarButton onClick={() => fitView({ padding: 0.25 })} title="Fit view">
         <MaximizeIcon className="w-3.5 h-3.5" />
-      </button>
+      </ToolbarButton>
 
       {/* Divider */}
       <div style={{ width: '1px', height: '20px', background: 'hsl(var(--border))' }} />
 
       {/* Refresh */}
-      <button
-        style={btnStyle}
-        onClick={onRefresh}
-        title="Refresh"
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'hsl(var(--accent))'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--foreground))'; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'hsl(var(--muted-foreground))'; }}
-      >
+      <ToolbarButton onClick={onRefresh} title="Refresh">
         <RefreshCwIcon
           className="w-3.5 h-3.5"
           style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}
         />
-      </button>
+      </ToolbarButton>
     </div>
   );
 }
@@ -225,7 +213,7 @@ function AgentBoardCanvasInner({ agents, loading, onRefresh }: InnerProps) {
           return {
             id: agent.id,
             type: 'agentBoard',
-            position: { x: col * 320 + idx * 0, y: row * 220 },
+            position: { x: col * 320, y: row * 220 },
             data: {
               agent,
               onNavigate: handleNavigate,
