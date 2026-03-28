@@ -83,28 +83,6 @@ pub async fn build_app(
 
     spawn_cron_runtime(runtime_state.clone());
 
-    let runtime_state_bg = runtime_state.clone();
-    let runtime_logs_bg = runtime_logs.clone();
-    tokio::spawn(async move {
-        if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref()).await {
-            tracing::error!("failed to perform initial runtime refresh: {err}");
-        }
-        if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
-            let _ = log_runtime(
-                &runtime_logs_bg,
-                "warn",
-                "provider",
-                "default profile runtime unavailable",
-                Some(serde_json::json!({ "error": unavailable_error })),
-            )
-            .await;
-        }
-        if let Some(engine) = runtime_state_bg.engine_opt() {
-            engine.seed_initial_workflows().await;
-            engine.ensure_main_session().await.ok();
-        }
-    });
-
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
     let dashboard_auth = Arc::new(rushdino_common::dashboard_auth::DashboardAuthService::new(
@@ -332,6 +310,31 @@ pub async fn build_app(
             mcp.reconcile(&servers).await;
         });
     }
+
+    // Spawn initial runtime refresh now that mcp_manager is available, so MCP tools
+    // can be registered into the engine's tool registry on first build.
+    let runtime_state_bg = runtime_state.clone();
+    let runtime_logs_bg = runtime_logs.clone();
+    let mcp_manager_bg = mcp_manager.clone();
+    tokio::spawn(async move {
+        if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref(), Some(mcp_manager_bg.as_ref())).await {
+            tracing::error!("failed to perform initial runtime refresh: {err}");
+        }
+        if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
+            let _ = log_runtime(
+                &runtime_logs_bg,
+                "warn",
+                "provider",
+                "default profile runtime unavailable",
+                Some(serde_json::json!({ "error": unavailable_error })),
+            )
+            .await;
+        }
+        if let Some(engine) = runtime_state_bg.engine_opt() {
+            engine.seed_initial_workflows().await;
+            engine.ensure_main_session().await.ok();
+        }
+    });
 
     let state = AppState::new(
         runtime_state.clone(),
@@ -731,7 +734,7 @@ fn should_register_gateway_adapter(
 }
 
 pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
-    refresh_runtime_from_disk(state.runtime.as_ref()).await
+    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref())).await
 }
 
 async fn shutdown_signal() {

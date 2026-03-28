@@ -14,6 +14,7 @@ use rushdino_providers::{
 
 use crate::{
     knowledge_graph_bridge::KnowledgeGraphBridge,
+    mcp_manager::McpManager,
     runtime_state::{RuntimeState, RuntimeStatus},
 };
 
@@ -82,7 +83,7 @@ pub fn validate_default_profile_execution(
     }
 }
 
-pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
+pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Option<&McpManager>) -> Result<()> {
     let config = Arc::new(AppConfig::load_from_path(runtime.config_path())?);
     let mut credentials = CredentialsConfig::load_from_path(runtime.credentials_path())?;
     let mut status = runtime_status_from_config(config.as_ref());
@@ -175,6 +176,10 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState) -> Result<()> {
             engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
             if let Some(sg) = runtime.skill_graph() {
                 engine_inner.set_skill_graph(sg);
+            }
+            // Re-register MCP tools into the fresh engine's tool registry.
+            if let Some(mgr) = mcp_manager {
+                mgr.register_into(&engine_inner.tool_registry);
             }
             let engine = Arc::new(engine_inner);
 
