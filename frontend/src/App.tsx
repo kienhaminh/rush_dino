@@ -15,6 +15,7 @@ const SessionsRoute = lazy(() => import('./pages/sessions/SessionsRoute').then(m
 const MetricsPage = lazy(() => import('./pages/metrics/MetricsPage').then(m => ({ default: m.MetricsPage })));
 const KanbanPage = lazy(() => import('./pages/kanban/KanbanPage').then(m => ({ default: m.KanbanPage })));
 const AgentsPage = lazy(() => import('./pages/agents/AgentsPage').then(m => ({ default: m.AgentsPage })));
+const AgentFocusPage = lazy(() => import('./pages/agents/AgentFocusPage').then(m => ({ default: m.AgentFocusPage })));
 const WorkflowsPage = lazy(() => import('./pages/workflows/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
 const SkillsRoute = lazy(() => import('./pages/skills/SkillsRoute').then(m => ({ default: m.SkillsRoute })));
 const NodesPage = lazy(() => import('./pages/nodes/NodesPage').then(m => ({ default: m.NodesPage })));
@@ -106,6 +107,7 @@ export default function App() {
 
                   {/* Operations pages (flat) */}
                   <Route path="agents" element={<AgentsPage />} />
+                  <Route path="agents/:id" element={<AgentFocusPage />} />
                   <Route path="agent-board" element={<Navigate to="/kanban" replace />} />
                   <Route path="kanban" element={<KanbanPage />} />
                   <Route path="workflows" element={<WorkflowsPage />} />
