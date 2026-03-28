@@ -99,8 +99,8 @@ function buildNodes({
     id: `skill-${skill.name}`,
     type: 'skill',
     position: positions[i] ?? { x: 0, y: 0 },
-    // Center the node over its position point
-    style: { transform: 'translate(-50%, -50%)' },
+    // Center the node over its position point using the xyflow v12 origin prop
+    origin: [0.5, 0.5] as [number, number],
     data: {
       name: skill.name,
       emoji: skill.emoji ?? '🔷',
@@ -116,7 +116,7 @@ function buildNodes({
     id: `tool-${tool.id}`,
     type: 'tool',
     position: positions[skills.length + i] ?? { x: 0, y: 0 },
-    style: { transform: 'translate(-50%, -50%)' },
+    origin: [0.5, 0.5] as [number, number],
     data: {
       name: tool.label,
       emoji: tool.source === 'plugin' ? '🔌' : '🔧',
@@ -131,7 +131,7 @@ function buildNodes({
     id: 'core',
     type: 'core',
     position: { x: CANVAS_CENTER_X, y: CANVAS_CENTER_Y },
-    style: { transform: 'translate(-50%, -50%)' },
+    origin: [0.5, 0.5] as [number, number],
     data: { emoji: agent.emoji || '🤖', name: agent.name },
     draggable: false,
   };
