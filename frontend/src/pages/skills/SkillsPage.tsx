@@ -1,8 +1,9 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { SearchIcon, LayoutGridIcon, NetworkIcon } from 'lucide-react';
 
 import { fetchAgents } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useDebounced } from '@/hooks/use-debounced';
 import type { AgentRecord } from '@/pages/agents/agent-types';
 
 import type { SkillNode, GraphSnapshot } from './skill-graph-types';
@@ -11,16 +12,6 @@ import { SkillGraphView } from './SkillGraphView';
 import { SkillDetailPanel } from './SkillDetailPanel';
 
 type FilterTab = 'all' | 'core' | 'custom';
-
-/** Debounce a callback by `delay` ms */
-function useDebounced<T>(value: T, delay: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
-  return debounced;
-}
 
 export function SkillsPage() {
   // Data
@@ -33,11 +24,8 @@ export function SkillsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterTab>('all');
 
-  // Highlighted IDs from semantic search results
-  const [highlightedIds, setHighlightedIds] = useState<string[]>([]);
-
-  // Track inflight search to avoid race conditions
-  const searchAbortRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Highlighted IDs from semantic search results — null means "no active search"
+  const [highlightedIds, setHighlightedIds] = useState<Set<string> | null>(null);
 
   const debouncedSearch = useDebounced(searchQuery, 300);
 
@@ -57,38 +45,25 @@ export function SkillsPage() {
       .catch((err) => console.error('Failed to load agents:', err));
   }, []);
 
-  // Run semantic search when debounced query changes
+  // Run semantic search when debounced query changes.
+  // A cancellation flag prevents stale responses from overwriting fresh results.
   useEffect(() => {
-    if (searchAbortRef.current) {
-      clearTimeout(searchAbortRef.current);
-    }
-
     if (!debouncedSearch.trim()) {
-      setHighlightedIds([]);
+      setHighlightedIds(null);
       return;
     }
-
-    // Query the skill graph with the search term
+    let cancelled = false;
     querySkillGraph(debouncedSearch, 20)
-      .then((scored) => {
-        if (!graph) return;
-        // Map scored skill names back to node IDs
-        const nameToId: Record<string, string> = {};
-        for (const node of graph.nodes) {
-          if (node.nodeType === 'skill') {
-            nameToId[node.name.toLowerCase()] = node.id;
-          }
-        }
-        const ids = scored
-          .map((s) => nameToId[s.name.toLowerCase()])
-          .filter(Boolean) as string[];
-        setHighlightedIds(ids);
+      .then((results) => {
+        if (!cancelled) setHighlightedIds(new Set(results.map((r) => r.name)));
       })
-      .catch((err) => {
-        console.error('Skill graph query failed:', err);
-        setHighlightedIds([]);
+      .catch(() => {
+        if (!cancelled) setHighlightedIds(null);
       });
-  }, [debouncedSearch, graph]);
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch]);
 
   // Assign/unassign stubs with optimistic local state
   // TODO: wire up real API calls when assign/unassign endpoints exist
@@ -178,9 +153,9 @@ export function SkillsPage() {
         </div>
 
         {/* Search active hint */}
-        {highlightedIds.length > 0 && (
+        {highlightedIds && highlightedIds.size > 0 && (
           <span className="text-xs text-muted-foreground">
-            {highlightedIds.length} match{highlightedIds.length !== 1 ? 'es' : ''}
+            {highlightedIds.size} match{highlightedIds.size !== 1 ? 'es' : ''}
           </span>
         )}
 
@@ -203,7 +178,7 @@ export function SkillsPage() {
             snapshot={graph}
             onSkillSelect={handleSkillSelect}
             selectedSkillId={selectedSkill?.id}
-            highlightedIds={debouncedSearch.trim() ? highlightedIds : undefined}
+            highlightedIds={debouncedSearch.trim() && highlightedIds ? [...highlightedIds] : undefined}
             filter={filter}
           />
         </div>

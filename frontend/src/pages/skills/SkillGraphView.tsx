@@ -151,7 +151,7 @@ export interface SkillGraphViewProps {
   /** External graph snapshot — if provided, internal fetch is skipped */
   snapshot?: GraphSnapshot | null;
   /** Called when a skill node is clicked */
-  onSkillSelect?: (skill: SkillNodeType) => void;
+  onSkillSelect?: (skill: SkillNodeType | null) => void;
   /** Highlight the selected node with a glow border */
   selectedSkillId?: string;
   /** When set and non-empty, dim nodes not in the set */
@@ -197,12 +197,13 @@ export function SkillGraphView({
   }, [snapshot, selectedSkillId, highlightedIds, filter]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
-  const [edges, , onEdgesChange] = useEdgesState(layout.edges);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(layout.edges);
 
-  // Sync when layout changes
+  // Sync when layout changes (nodes AND edges so dimming stays current)
   useEffect(() => {
     setNodes(layout.nodes);
-  }, [layout.nodes, setNodes]);
+    setEdges(layout.edges);
+  }, [layout.nodes, layout.edges, setNodes, setEdges]);
 
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     if (!snapshot || node.type !== 'skill') return;
@@ -245,7 +246,7 @@ export function SkillGraphView({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
-        onPaneClick={() => onSkillSelect && onSkillSelect(null as unknown as SkillNodeType)}
+        onPaneClick={() => onSkillSelect?.(null)}
         fitView
         fitViewOptions={{ padding: 0.15 }}
         minZoom={0.3}
