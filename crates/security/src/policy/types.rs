@@ -39,17 +39,12 @@ pub struct SandboxConfig {
 // ---------------------------------------------------------------------------
 
 /// Whether an unlisted resource is allowed or denied by default.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum DefaultAction {
     Allow,
+    #[default]
     Deny,
-}
-
-impl Default for DefaultAction {
-    fn default() -> Self {
-        DefaultAction::Deny
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -57,17 +52,12 @@ impl Default for DefaultAction {
 // ---------------------------------------------------------------------------
 
 /// Read/write access mode for a filesystem path rule.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum AccessMode {
+    #[default]
     ReadOnly,
     ReadWrite,
-}
-
-impl Default for AccessMode {
-    fn default() -> Self {
-        AccessMode::ReadOnly
-    }
 }
 
 /// A single filesystem allow-rule pairing a path with an access mode.
@@ -131,21 +121,16 @@ impl Default for ProcessPolicy {
 // ---------------------------------------------------------------------------
 
 /// What the runtime should do when a network request is blocked.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum BlockBehavior {
     /// Pause and prompt a human for approval before proceeding.
     Prompt,
     /// Silently reject the request.
+    #[default]
     Deny,
     /// Terminate the agent process immediately.
     HardStop,
-}
-
-impl Default for BlockBehavior {
-    fn default() -> Self {
-        BlockBehavior::Deny
-    }
 }
 
 /// A single network allow-rule. Supports glob host patterns (e.g. `*.anthropic.com`).

@@ -172,10 +172,8 @@ fn description_keyword_match(
             matches as f64 / task_words.len() as f64
         };
 
-        if score > 0.1 {
-            if best.as_ref().map_or(true, |(_, s)| score > *s) {
-                best = Some((agent.name.clone(), score));
-            }
+        if score > 0.1 && best.as_ref().is_none_or(|(_, s)| score > *s) {
+            best = Some((agent.name.clone(), score));
         }
     }
 

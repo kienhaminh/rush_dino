@@ -66,7 +66,7 @@ pub async fn run_react_loop(
 
     for _ in 0..config.max_iterations {
         if needs_compaction(&messages, config.max_context_tokens) {
-            messages = compact_messages(&*provider, messages, config.max_context_tokens).await;
+            messages = compact_messages(&provider, messages, config.max_context_tokens).await;
         }
         let response = provider
             .chat(build_chat_request(messages.clone(), &session_ctx, config))
@@ -145,7 +145,7 @@ pub async fn run_react_loop_streaming(
 
     for _ in 0..config.max_iterations {
         if needs_compaction(&messages, config.max_context_tokens) {
-            messages = compact_messages(&*provider, messages, config.max_context_tokens).await;
+            messages = compact_messages(&provider, messages, config.max_context_tokens).await;
         }
         let mut stream = provider
             .stream_chat(build_chat_request(messages.clone(), &session_ctx, config))
