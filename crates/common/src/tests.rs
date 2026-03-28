@@ -132,6 +132,7 @@ fn credentials_save_round_trip_special_chars() {
         profiles: std::collections::HashMap::new(),
         slack_app_token: None,
         api_secret: None,
+        knowledge_graph: crate::config::KgCredentials::default(),
     };
 
     credentials
