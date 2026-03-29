@@ -19,8 +19,10 @@ use async_trait::async_trait;
 use tokio::process::Command;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use rushdino_agent::system_broker::{ShellExecRequest, ShellExecResult, SystemBroker};
-use rushdino_common::Result;
+use rushdino_agent::system_broker::{
+    InputRequest, InputRequestResult, ShellExecRequest, ShellExecResult, SystemBroker,
+};
+use rushdino_common::{AppError, Result};
 use rushdino_security::guardrail::pipeline::{GuardrailPipeline, InputDecision};
 use rushdino_security::guardrail::types::{
     ActionCategory, GuardrailAction, SourceTag,
@@ -289,5 +291,11 @@ impl SystemBroker for GuardrailBroker {
             cwd,
             source_tag,
         })
+    }
+
+    async fn request_user_input(&self, _request: InputRequest) -> Result<InputRequestResult> {
+        Err(AppError::Agent(
+            "request_user_input is not supported by GuardrailBroker".to_owned(),
+        ))
     }
 }

@@ -1,4 +1,5 @@
 pub mod approval_gate;
+pub mod input_request_gate;
 pub mod guardrail_broker;
 pub mod mcp_manager;
 pub mod channel_pairing;
@@ -41,6 +42,7 @@ use crate::{
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
     mcp_manager::McpManager,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
+    input_request_gate::InputRequestGate,
     cron_runtime::spawn_cron_runtime,
     middleware::{
         cors_layer, dashboard_auth_middleware, hmac_auth_middleware, rate_limit_middleware,
@@ -67,9 +69,14 @@ pub async fn build_app(
         Some(chat_broadcast.clone()),
     ));
     let gate = ApprovalGate::new();
+    let input_gate = InputRequestGate::new();
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
     runtime.reconcile_incomplete_runs().await?;
-    let system_broker = Arc::new(LocalSystemBroker::new(gate.clone(), runtime.clone()))
+    let system_broker = Arc::new(LocalSystemBroker::new(
+        gate.clone(),
+        input_gate.clone(),
+        runtime.clone(),
+    ))
         as rushdino_agent::SharedSystemBroker;
     let runtime_state = Arc::new(RuntimeState::new(
         config.clone(),
@@ -340,6 +347,7 @@ pub async fn build_app(
         credentials_path,
         webchat,
         gate,
+        input_gate,
         gateway_state,
         gateway_sessions,
         gateway_control,
@@ -415,6 +423,10 @@ pub async fn build_app(
         .route("/api/cron/:id/runs", get(routes::cron::list_cron_runs))
         .route("/api/logs", get(routes::logs::get_logs))
         .route("/api/approvals", get(routes::approval::list_approvals))
+        .route(
+            "/api/input-requests/:request_id",
+            post(routes::input_requests::resolve_input_request),
+        )
         .route(
             "/api/channels/:channel/pairing",
             get(routes::channel_pairing::get_channel_pairing),

@@ -30,6 +30,7 @@ function toneForState(state: string) {
     case 'queued':
       return 'border-warning/30 text-warning';
     case 'awaiting_approval':
+    case 'awaiting_input':
       return 'border-warning/30 text-warning';
     case 'blocked':
     case 'failed':
@@ -56,6 +57,7 @@ const RUN_STATE_FILTERS = [
   { value: 'running', label: 'Running' },
   { value: 'queued', label: 'Queued' },
   { value: 'awaiting_approval', label: 'Awaiting approval' },
+  { value: 'awaiting_input', label: 'Awaiting input' },
   { value: 'blocked', label: 'Blocked' },
   { value: 'failed', label: 'Failed' },
   { value: 'completed', label: 'Completed' },
@@ -299,6 +301,10 @@ export function RunsPage({
                             Open approvals
                           </RouterLink>
                         </Button>
+                      ) : detail.snapshot.state === 'awaiting_input' ? (
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-warning/30 text-warning">
+                          Waiting for user input
+                        </Badge>
                       ) : null}
                     </div>
                     <div className="mt-3 space-y-3">

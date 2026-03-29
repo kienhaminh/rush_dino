@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
-import type { ConversationItem, RichContent, WsEvent } from '@/lib/types';
+import type { ConversationItem, InputRequestStatus, RichContent, WsEvent } from '@/lib/types';
 
 const MAIN_SESSION_ID = 'main';
 
@@ -37,6 +37,11 @@ interface ChatWsValue {
   isStreaming: boolean;
   isConnected: boolean;
   sendMessage: (text: string) => void;
+  markInputRequestResolved: (
+    requestId: string,
+    status: InputRequestStatus,
+    values?: Record<string, unknown> | null,
+  ) => void;
   clearItems: () => void;
   resetWithItems: (items: ConversationItem[]) => void;
   historyLoaded: boolean;
@@ -308,6 +313,35 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // --- input_request ---
+      if (msg.type === 'input_request') {
+        setItems((prev) => {
+          if (
+            prev.some(
+              (item) =>
+                item.kind === 'input_request' && item.requestId === msg.request_id,
+            )
+          ) {
+            return prev;
+          }
+          return [
+            ...prev,
+            {
+              kind: 'input_request' as const,
+              id: `input-${msg.request_id}`,
+              requestId: msg.request_id,
+              runId: msg.run_id ?? null,
+              conversationId: msg.conversation_id,
+              payload: msg.payload,
+              createdAt: msg.created_at,
+              status: 'pending' as const,
+              values: null,
+            },
+          ];
+        });
+        return;
+      }
+
       // --- error ---
       if (msg.type === 'error') {
         setItems((prev) => [
@@ -380,6 +414,27 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  const markInputRequestResolved = useCallback(
+    (
+      requestId: string,
+      status: InputRequestStatus,
+      values?: Record<string, unknown> | null,
+    ) => {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.kind === 'input_request' && item.requestId === requestId
+            ? {
+                ...item,
+                status,
+                values: values ?? null,
+              }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
+
   const clearItems = useCallback(() => setItems([]), []);
 
   const resetWithItems = useCallback((history: ConversationItem[]) => {
@@ -398,12 +453,22 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       isStreaming,
       isConnected,
       sendMessage,
+      markInputRequestResolved,
       clearItems,
       resetWithItems,
       historyLoaded,
       setHistoryLoaded,
     }),
-    [items, isStreaming, isConnected, sendMessage, clearItems, resetWithItems, historyLoaded],
+    [
+      items,
+      isStreaming,
+      isConnected,
+      sendMessage,
+      markInputRequestResolved,
+      clearItems,
+      resetWithItems,
+      historyLoaded,
+    ],
   );
 
   return (

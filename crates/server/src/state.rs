@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 use crate::approval_gate::ApprovalGate;
 use crate::channel_pairing::ChannelPairingService;
 use crate::chat_broadcast::ChatBroadcastHub;
+use crate::input_request_gate::InputRequestGate;
 use crate::mcp_manager::McpManager;
 use crate::middleware::HmacAuthState;
 use crate::runtime_log_store::RuntimeLogStore;
@@ -120,6 +121,8 @@ pub struct AppState {
     pub webchat: Arc<WebChatAdapter>,
     /// Session-scoped tool approval gate for dangerous tool commands.
     pub gate: Arc<ApprovalGate>,
+    /// Session-scoped input request gate for interactive question/form tools.
+    pub input_gate: Arc<InputRequestGate>,
     /// Gateway adapter lifecycle state for UI/admin routes.
     pub gateway_state: Arc<GatewayStateStore>,
     /// Shared gateway session manager.
@@ -156,6 +159,7 @@ impl AppState {
         credentials_path: PathBuf,
         webchat: Arc<WebChatAdapter>,
         gate: Arc<ApprovalGate>,
+        input_gate: Arc<InputRequestGate>,
         gateway_state: Arc<GatewayStateStore>,
         gateway_sessions: Arc<SessionManager>,
         gateway_control: GatewayControl,
@@ -177,6 +181,7 @@ impl AppState {
             credentials_path,
             webchat,
             gate,
+            input_gate,
             gateway_state,
             gateway_sessions,
             gateway_control,

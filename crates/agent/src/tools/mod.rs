@@ -12,6 +12,7 @@ pub mod knowledge_graph;
 pub mod memory_search;
 pub mod memory_write;
 pub mod present_message;
+pub mod request_user_input;
 pub mod run_workflow;
 pub mod session_tools;
 pub mod bash;

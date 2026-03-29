@@ -446,7 +446,7 @@ export interface SessionSummary {
   title: string;
   createdAt: string;
   updatedAt: string;
-  status: 'active' | 'idle' | 'awaiting_approval' | 'blocked' | string;
+  status: 'active' | 'idle' | 'awaiting_approval' | 'awaiting_input' | 'blocked' | string;
   messageCount: number;
   lastRole?: string | null;
   lastMessagePreview?: string | null;
@@ -560,6 +560,7 @@ export type RunState =
   | 'queued'
   | 'running'
   | 'awaiting_approval'
+  | 'awaiting_input'
   | 'blocked'
   | 'completed'
   | 'failed'
@@ -665,6 +666,64 @@ export interface UsageMetricsResponse {
 // Workspace conversation types — richer than flat Message[]
 // ---------------------------------------------------------------------------
 
+export type InputRequestKind = 'question' | 'form';
+export type InputFieldType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'multiselect'
+  | 'boolean'
+  | 'number';
+export type InputRequestStatus = 'submitted' | 'cancelled';
+
+export interface InputFieldOption {
+  label: string;
+  value: string;
+}
+
+export interface InputFieldSpec {
+  name: string;
+  label: string;
+  description?: string | null;
+  type: InputFieldType;
+  required: boolean;
+  placeholder?: string | null;
+  defaultValue?: unknown | null;
+  min?: number | null;
+  max?: number | null;
+  minLength?: number | null;
+  maxLength?: number | null;
+  options: InputFieldOption[];
+}
+
+export interface InputRequestSpec {
+  kind: InputRequestKind;
+  title: string;
+  description?: string | null;
+  submitLabel?: string | null;
+  cancelLabel?: string | null;
+  fields: InputFieldSpec[];
+}
+
+export interface InputRequestPayload {
+  spec: InputRequestSpec;
+}
+
+export interface PendingInputRequest {
+  requestId: string;
+  sessionId: string;
+  conversationId: string;
+  runId?: string | null;
+  payload: InputRequestPayload;
+  createdAt: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  messages: Message[];
+  pendingInputRequests: PendingInputRequest[];
+}
+
 export type WsEventType =
   | 'chat_chunk'
   | 'assistant_reset'
@@ -673,6 +732,7 @@ export type WsEventType =
   | 'tool_end'
   | 'approval_request'
   | 'approval_result'
+  | 'input_request'
   | 'user_message'
   | 'runtime_log_error'
   | 'error';
@@ -728,6 +788,14 @@ export interface WsApprovalResultEvent {
   approved: boolean;
   error?: string;
 }
+export interface WsInputRequestEvent {
+  type: 'input_request';
+  request_id: string;
+  run_id?: string | null;
+  conversation_id: string;
+  payload: InputRequestPayload;
+  created_at: string;
+}
 export interface WsErrorEvent {
   type: 'error';
   run_id?: string;
@@ -773,6 +841,7 @@ export type WsEvent =
   | WsToolEndEvent
   | WsApprovalRequestEvent
   | WsApprovalResultEvent
+  | WsInputRequestEvent
   | WsErrorEvent
   | WsRuntimeLogErrorEvent
   | WsUserMessageEvent
@@ -803,6 +872,17 @@ export type ConversationItem =
       request_id: string;
       tool: string;
       args: Record<string, unknown>;
+    }
+  | {
+      kind: 'input_request';
+      id: string;
+      requestId: string;
+      runId?: string | null;
+      conversationId: string;
+      payload: InputRequestPayload;
+      createdAt: string;
+      status: 'pending' | InputRequestStatus;
+      values?: Record<string, unknown> | null;
     }
   | { kind: 'error'; id: string; message: string };
 

@@ -172,7 +172,9 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
         .filter(|run| {
             matches!(
                 run.state,
-                rushdino_agent::RunState::Running | rushdino_agent::RunState::AwaitingApproval
+                rushdino_agent::RunState::Running
+                    | rushdino_agent::RunState::AwaitingApproval
+                    | rushdino_agent::RunState::AwaitingInput
             )
         })
         .count();
@@ -211,6 +213,11 @@ async fn build_session_summary(state: AppState, conversation_id: &str) -> Result
     let now = Utc::now();
     let status = if conversation.archived_at.is_some() {
         "archived"
+    } else if runs
+        .iter()
+        .any(|run| run.state == rushdino_agent::RunState::AwaitingInput)
+    {
+        "awaiting_input"
     } else if pending_approval_count > 0 {
         "awaiting_approval"
     } else if runs

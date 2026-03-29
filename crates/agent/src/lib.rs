@@ -53,7 +53,11 @@ pub use runtime::{
     RunOriginMetadata, RunPolicySnapshot, RunSnapshot, RunState,
 };
 pub use skill_manager::{Skill, SkillManager};
-pub use system_broker::{SharedSystemBroker, ShellExecRequest, ShellExecResult, SystemBroker};
+pub use system_broker::{
+    InputFieldOption, InputFieldSpec, InputFieldType, InputRequest, InputRequestKind,
+    InputRequestPayload, InputRequestResult, InputRequestSpec, InputRequestStatus,
+    SharedSystemBroker, ShellExecRequest, ShellExecResult, SystemBroker,
+};
 pub use tool_registry::{Tool, ToolRegistry};
 pub use usage_metrics_store::{UsageMetricRow, UsageMetricSnapshot, UsageMetricsStore};
 pub use workflow_types::{
