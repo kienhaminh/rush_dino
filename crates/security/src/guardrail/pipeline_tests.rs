@@ -1,6 +1,5 @@
 use super::pipeline::*;
 use super::types::*;
-use std::sync::{Arc, Mutex};
 
 fn make_pipeline() -> GuardrailPipeline {
     GuardrailPipeline::new("agent-1", None)

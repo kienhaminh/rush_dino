@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use super::data_redactor::DataRedactor;
+use super::glob::glob_match;
 use super::output_scanner::OutputScanner;
 use super::pattern_registry::PatternRegistry;
 use super::policy_enforcer::PolicyEnforcer;
@@ -95,6 +96,8 @@ impl GuardrailPipeline {
                 prompt_message: msg,
             },
             FilterDecision::Deny(reason) => InputDecision::Denied(reason),
+            // TrustGate only returns Allow, NeedsApproval, or Deny.
+            // Transformed and Flagged are not expected from TrustGate.
             _ => InputDecision::Allowed { redacted_content },
         }
     }
@@ -134,7 +137,6 @@ impl GuardrailPipeline {
     /// Check if an action matches an always-allow rule in PolicyEnforcer.
     fn is_explicitly_allowed(&self, action: &GuardrailAction) -> bool {
         if let Some(rules) = self.policy_enforcer.allow_rules().get(&action.category) {
-            use super::glob::glob_match;
             return rules.iter().any(|r| glob_match(r, &action.description));
         }
         false
