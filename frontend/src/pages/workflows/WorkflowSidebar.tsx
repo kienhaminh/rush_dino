@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDownIcon, PlusIcon, SearchIcon } from 'lucide-react';
+import { ChevronDownIcon, SearchIcon } from 'lucide-react';
 import type { WorkflowListItem } from './workflow-types';
 import { Badge } from '@/components/ui/badge';
 
@@ -8,7 +8,6 @@ interface WorkflowSidebarProps {
   selectedId: string | null;
   loading: boolean;
   onSelect: (id: string) => void;
-  onCreate: () => void;
 }
 
 export function WorkflowSidebar({
@@ -16,7 +15,6 @@ export function WorkflowSidebar({
   selectedId,
   loading,
   onSelect,
-  onCreate,
 }: WorkflowSidebarProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -46,11 +44,6 @@ export function WorkflowSidebar({
 
   function handleSelect(id: string) {
     onSelect(id);
-    setOpen(false);
-  }
-
-  function handleCreate() {
-    onCreate();
     setOpen(false);
   }
 
@@ -85,20 +78,11 @@ export function WorkflowSidebar({
           style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }}
         >
           {/* Panel header */}
-          <div className="px-3 py-2.5 border-b border-border/50 flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Workflows
-              </p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">{workflows.length} total</p>
-            </div>
-            <button
-              onClick={handleCreate}
-              className="h-7 px-2.5 rounded-md border border-border bg-background/70 hover:bg-background flex items-center gap-1 text-xs font-medium transition-colors"
-            >
-              <PlusIcon className="w-3 h-3" />
-              New
-            </button>
+          <div className="px-3 py-2.5 border-b border-border/50">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Workflows
+            </p>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">{workflows.length} total</p>
           </div>
 
           {/* Search */}

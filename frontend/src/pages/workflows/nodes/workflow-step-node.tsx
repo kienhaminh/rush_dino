@@ -1,14 +1,14 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { AgentRecord } from '@/pages/agents/agent-types';
-import type { WorkflowStepDraft } from '../WorkflowEditorPanel';
+import type { WorkflowStep } from '../workflow-types';
 
 export interface WorkflowStepNodeData {
-  step: WorkflowStepDraft;
+  step: WorkflowStep;
   agent?: AgentRecord;
   index: number;
   isActive: boolean;
   accentColor: string;
-  onSelect: (key: string) => void;
+  onSelect: (id: string) => void;
   [key: string]: unknown;
 }
 
@@ -23,7 +23,7 @@ export function WorkflowStepNode({ data }: NodeProps) {
 
   return (
     <div
-      onClick={() => onSelect(step.key)}
+      onClick={() => onSelect(step.id)}
       style={{
         width: '220px',
         background: isActive ? `${accentColor}10` : 'hsl(var(--card) / 0.75)',

@@ -43,8 +43,6 @@ import type {
   AgentHealth,
 } from '@/pages/agents/agent-types';
 import type {
-  CreateWorkflowInput,
-  UpdateWorkflowInput,
   WorkflowDetail,
   WorkflowListItem,
   WorkflowRunDetail,
@@ -339,35 +337,6 @@ export async function fetchWorkflow(workflowId: string): Promise<WorkflowDetail>
   return parseJsonOrThrow(response, endpoint);
 }
 
-export async function createWorkflow(payload: CreateWorkflowInput): Promise<WorkflowDetail> {
-  const endpoint = '/api/workflows';
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return parseJsonOrThrow(response, endpoint);
-}
-
-export async function updateWorkflow(
-  workflowId: string,
-  payload: UpdateWorkflowInput,
-): Promise<WorkflowDetail> {
-  const endpoint = `/api/workflows/${encodeURIComponent(workflowId)}`;
-  const response = await fetch(endpoint, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return parseJsonOrThrow(response, endpoint);
-}
-
-export async function deleteWorkflow(workflowId: string): Promise<void> {
-  const endpoint = `/api/workflows/${encodeURIComponent(workflowId)}`;
-  const response = await fetch(endpoint, { method: 'DELETE' });
-  await parseJsonOrThrow(response, endpoint);
-}
-
 export async function startWorkflowRun(
   workflowId: string,
   payload: { input?: string; triggeredBy?: string } = {},
@@ -395,6 +364,12 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunDetail
   const endpoint = `/api/workflow-runs/${encodeURIComponent(runId)}`;
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
+}
+
+export async function cancelWorkflowRun(runId: string): Promise<void> {
+  const endpoint = `/api/workflow-runs/${encodeURIComponent(runId)}/cancel`;
+  const response = await fetch(endpoint, { method: 'POST' });
+  await parseJsonOrThrow(response, endpoint);
 }
 
 export async function fetchSessions(): Promise<SessionSummary[]> {
