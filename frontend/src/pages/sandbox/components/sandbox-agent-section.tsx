@@ -28,12 +28,26 @@ const DEFAULT_BASH_POLICY: SandboxProcessPolicy = {
   max_concurrent: 3,
   deny_commands: [],
   timeout_seconds: 30,
+  inbound: {
+    max_size_kb: 32,
+    strip_patterns: ['AKIA[A-Z0-9]{16}', 'sk-[A-Za-z0-9]{32,}', 'ghp_[A-Za-z0-9]{36}'],
+    block_on_match: false,
+  },
 };
 
 type PolicyTab = 'mcp' | 'network' | 'bash';
 
-const CATEGORY_FILTERS = ['all', 'network', 'mcp', 'process'] as const;
+const CATEGORY_FILTERS = ['all', 'network', 'mcp', 'process', 'filesystem', 'inference'] as const;
 type CategoryFilter = (typeof CATEGORY_FILTERS)[number];
+
+const CATEGORY_LABELS: Record<CategoryFilter, string> = {
+  all: 'All',
+  network: 'Network',
+  mcp: 'MCP',
+  process: 'Bash',
+  filesystem: 'FS',
+  inference: 'Inference',
+};
 
 interface Props {
   /** Display label shown in the section header */
@@ -106,7 +120,7 @@ export function SandboxAgentSection({
       </div>
 
       {/* Split layout */}
-      <div className="grid flex-1 grid-cols-[1fr_300px] gap-0" style={{ minHeight: '320px' }}>
+      <div className="grid flex-1 grid-cols-[1fr_300px]" style={{ minHeight: '320px' }}>
         {/* Left: unified audit feed with category filter */}
         <div className="overflow-y-auto border-r border-border/60 p-4">
           <div className="mb-3 flex items-center gap-2">
@@ -124,7 +138,7 @@ export function SandboxAgentSection({
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  {f === 'process' ? 'Bash' : f}
+                  {CATEGORY_LABELS[f]}
                 </button>
               ))}
             </div>
