@@ -25,3 +25,5 @@ mod output_scanner_tests;
 mod prompt_shield_tests;
 #[cfg(test)]
 mod pipeline_tests;
+#[cfg(test)]
+mod integration_tests;
