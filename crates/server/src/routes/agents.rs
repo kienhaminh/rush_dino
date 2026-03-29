@@ -21,6 +21,10 @@ pub struct AgentListItem {
     pub description: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sandbox_policy: Option<SandboxPolicy>,
+    pub claim_tags: Vec<String>,
+    pub claims_tasks: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,6 +140,9 @@ pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_jso
                 .to_string(),
             description: agent.description,
             sandbox_policy: agent.sandbox_policy,
+            claim_tags: agent.claim_tags.clone(),
+            claims_tasks: agent.claims_tasks,
+            tools: agent.tools.clone(),
         })
         .collect::<Vec<_>>();
 
@@ -424,6 +431,41 @@ fn read_workspace_file_record(
 }
 
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHealthResponse {
+    pub success_rate: f64,
+    pub total_tasks: i64,
+    pub circuit_open: bool,
+}
+
+pub async fn get_agent_health(
+    Path(agent_id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<AgentHealthResponse>> {
+    let engine = state.engine()?;
+    if !is_valid_agent_id(&agent_id) {
+        return Err(AppError::Validation("invalid agent id".to_owned()));
+    }
+    let health_store = engine.health_store();
+    let success_rate = health_store.get_success_rate(&agent_id).await?;
+    let circuit_open = health_store.is_circuit_open(&agent_id).await?;
+    let total_tasks = health_store.get_total_tasks(&agent_id).await?;
+    Ok(Json(AgentHealthResponse { success_rate, total_tasks, circuit_open }))
+}
+
+pub async fn reset_agent_health(
+    Path(agent_id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>> {
+    let engine = state.engine()?;
+    if !is_valid_agent_id(&agent_id) {
+        return Err(AppError::Validation("invalid agent id".to_owned()));
+    }
+    engine.health_store().reset(&agent_id).await?;
+    Ok(Json(serde_json::json!({ "success": true })))
+}
+
 fn format_bytes(bytes: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = 1024 * KB;
@@ -453,6 +495,9 @@ mod tests {
             is_default: false,
             workspace: "/tmp/agent-1".to_owned(),
             description: "test".to_owned(),
+            claim_tags: vec![],
+            claims_tasks: true,
+            tools: None,
             sandbox_policy: Some(SandboxPolicy {
                 version: "1".to_owned(),
                 sandbox: SandboxConfig {
@@ -496,6 +541,9 @@ mod tests {
             is_default: false,
             workspace: "/tmp/agent-1".to_owned(),
             description: "test".to_owned(),
+            claim_tags: vec![],
+            claims_tasks: true,
+            tools: None,
             sandbox_policy: None,
         };
 
