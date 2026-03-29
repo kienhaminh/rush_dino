@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PlusIcon, Trash2Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 import type { AgentRecord, AgentRuntimeData, AgentSkillRecord, AgentToolRecord } from './agent-types';
 import type { SelectedNode } from './agent-network-flow';
@@ -94,6 +95,8 @@ export function AgentOverviewPropertiesPanel({
             name={agent.name}
             skillCount={skillCount}
             toolCount={toolCount}
+            claimTags={agent.claimTags}
+            tools={agent.tools}
           />
         )}
       </div>
@@ -386,6 +389,8 @@ function PropertiesSection({
   name,
   skillCount,
   toolCount,
+  claimTags,
+  tools,
 }: {
   agentId: string;
   modelShort: string;
@@ -393,6 +398,8 @@ function PropertiesSection({
   name: string;
   skillCount: number;
   toolCount: number;
+  claimTags?: string[];
+  tools?: string | null;
 }) {
   return (
     <>
@@ -439,6 +446,33 @@ function PropertiesSection({
             `${name} is a neural agent designed for multi-modal orchestration across distributed nodes.`}
         </p>
       </section>
+
+      {claimTags && claimTags.length > 0 && (
+        <section className="space-y-1">
+          <div className="text-[8px] text-muted-foreground tracking-widest uppercase">Routes To</div>
+          <div className="flex flex-wrap gap-1">
+            {claimTags.slice(0, 6).map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-[8px] px-1.5 py-0">
+                {tag}
+              </Badge>
+            ))}
+            {claimTags.length > 6 && (
+              <span className="text-[8px] text-muted-foreground">+{claimTags.length - 6}</span>
+            )}
+          </div>
+        </section>
+      )}
+
+      {tools && (
+        <section className="space-y-1">
+          <div className="text-[8px] text-muted-foreground tracking-widest uppercase">
+            Tools ({tools.split(',').filter(Boolean).length})
+          </div>
+          <p className="text-[8px] text-muted-foreground/70 leading-relaxed">
+            {tools}
+          </p>
+        </section>
+      )}
     </>
   );
 }
