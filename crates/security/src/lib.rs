@@ -1,3 +1,4 @@
+pub mod guardrail;
 pub mod approval_gate;
 pub mod audit;
 pub mod audit_log;
