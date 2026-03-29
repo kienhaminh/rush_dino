@@ -5,6 +5,7 @@ pub mod trust_gate;
 pub mod data_redactor;
 pub mod policy_enforcer;
 pub mod output_scanner;
+pub mod prompt_shield;
 
 #[cfg(test)]
 mod pattern_registry_tests;
@@ -23,3 +24,6 @@ mod policy_enforcer_tests;
 
 #[cfg(test)]
 mod output_scanner_tests;
+
+#[cfg(test)]
+mod prompt_shield_tests;
