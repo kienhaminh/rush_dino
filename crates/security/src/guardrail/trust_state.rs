@@ -83,13 +83,11 @@ impl TrustState {
     pub fn record_denial(&mut self, category: ActionCategory) {
         let state = self.categories.entry(category).or_default();
         state.consecutive_approvals = 0;
-        if state.level > TrustLevel::Untrusted {
-            state.level = match state.level {
-                TrustLevel::Trusted => TrustLevel::Supervised,
-                TrustLevel::Supervised => TrustLevel::Untrusted,
-                TrustLevel::Untrusted => TrustLevel::Untrusted,
-            };
-        }
+        state.level = match state.level {
+            TrustLevel::Trusted => TrustLevel::Supervised,
+            TrustLevel::Supervised => TrustLevel::Untrusted,
+            TrustLevel::Untrusted => TrustLevel::Untrusted,
+        };
     }
 
     /// Return true if the approval count has reached the threshold to suggest a level promotion.
@@ -138,23 +136,40 @@ impl TrustState {
         serde_json::from_str(&json)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
     }
+
+    /// Load trust state from file, or create a fresh state if the file doesn't exist.
+    pub fn load_or_default(path: &Path, agent_id: &str) -> Self {
+        Self::load(path).unwrap_or_else(|_| Self::new(agent_id))
+    }
+
+    /// Return the agent ID.
+    pub fn agent_id(&self) -> &str {
+        &self.agent_id
+    }
 }
 
-/// Simple glob matching: `*` matches any sequence of characters.
-/// Supports suffix wildcard (`git *`), prefix wildcard (`*`), suffix-only (`*.rs`), and exact match.
+/// Glob matching supporting *, **, prefix patterns, and extension patterns.
 fn glob_match(pattern: &str, text: &str) -> bool {
     if pattern == "*" {
         return true;
     }
-    // Pattern like "git *" — prefix followed by space and wildcard
+    // "prefix /**" — path prefix match (e.g., "/home/user/**")
+    if let Some(prefix) = pattern.strip_suffix("/**") {
+        return text.starts_with(prefix);
+    }
+    // "prefix**" — path prefix match without slash (e.g., "/home/user**")
+    if let Some(prefix) = pattern.strip_suffix("**") {
+        return text.starts_with(prefix);
+    }
+    // "cmd *" — command with arguments: text must equal cmd or start with "cmd "
     if let Some(prefix) = pattern.strip_suffix(" *") {
         return text == prefix || text.starts_with(&format!("{prefix} "));
     }
-    // Pattern like "prefix*"
+    // "prefix*" — simple prefix match
     if let Some(prefix) = pattern.strip_suffix('*') {
         return text.starts_with(prefix);
     }
-    // Pattern like "*suffix"
+    // "*suffix" — suffix match (e.g., "*.log")
     if let Some(suffix) = pattern.strip_prefix('*') {
         return text.ends_with(suffix);
     }
