@@ -84,6 +84,29 @@ impl AgentMessageStore {
             .collect()
     }
 
+    pub async fn list_all(&self, limit: i64) -> Result<Vec<AgentMessage>> {
+        let rows = sqlx::query(
+            "SELECT id, from_agent, to_agent, content, read, created_at \
+             FROM agent_messages ORDER BY created_at DESC LIMIT ?1",
+        )
+        .bind(limit)
+        .fetch_all(self.pool.as_ref())
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(AgentMessage {
+                    id: row.try_get("id")?,
+                    from_agent: row.try_get("from_agent")?,
+                    to_agent: row.try_get("to_agent")?,
+                    content: row.try_get("content")?,
+                    read: row.try_get::<i32, _>("read")? != 0,
+                    created_at: row.try_get("created_at")?,
+                })
+            })
+            .collect()
+    }
+
     pub async fn mark_read(&self, message_id: &str) -> Result<()> {
         sqlx::query("UPDATE agent_messages SET read = 1 WHERE id = ?1")
             .bind(message_id)

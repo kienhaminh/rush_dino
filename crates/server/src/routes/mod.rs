@@ -15,6 +15,7 @@ pub mod graph;
 pub mod health;
 pub mod logs;
 pub mod mcp;
+pub mod messages;
 pub mod providers;
 pub mod runs;
 pub mod sandbox;
