@@ -186,19 +186,31 @@ impl SystemBroker for GuardrailBroker {
                     )));
                 }
 
-                let approved = tokio::time::timeout(
+                let timeout_result = tokio::time::timeout(
                     std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS),
                     rx,
                 )
-                .await
-                .map_err(|_| {
-                    rushdino_common::AppError::Agent(
-                        "Approval timeout — command denied automatically".to_owned(),
-                    )
-                })?
-                .map_err(|_| {
-                    rushdino_common::AppError::Agent("Approval channel closed".to_owned())
-                })?;
+                .await;
+
+                // Always clean up the pending entry — either the timeout fired
+                // (entry still present) or the receiver was dropped without a
+                // response (entry still present). On success the entry was
+                // already removed by `resolve_approval`, so `remove` is a no-op.
+                let approved = match timeout_result {
+                    Err(_elapsed) => {
+                        self.pending.lock().await.remove(&req_id);
+                        return Err(rushdino_common::AppError::Agent(
+                            "Approval timeout — command denied automatically".to_owned(),
+                        ));
+                    }
+                    Ok(Err(_recv_err)) => {
+                        self.pending.lock().await.remove(&req_id);
+                        return Err(rushdino_common::AppError::Agent(
+                            "Approval channel closed".to_owned(),
+                        ));
+                    }
+                    Ok(Ok(decision)) => decision,
+                };
 
                 // Record the decision so TrustGate can update trust state.
                 self.pipeline.record_decision(&action, approved);
