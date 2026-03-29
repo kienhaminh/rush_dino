@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use rushdino_common::Result;
+use rushdino_security::guardrail::types::SourceTag;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellExecRequest {
@@ -19,6 +20,9 @@ pub struct ShellExecResult {
     pub stdout: String,
     pub stderr: String,
     pub cwd: PathBuf,
+    /// Indicates where the command output originated, used by the guardrail
+    /// pipeline to determine whether PromptShield scanning is warranted.
+    pub source_tag: SourceTag,
 }
 
 #[async_trait]

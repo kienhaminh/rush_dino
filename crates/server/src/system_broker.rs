@@ -172,6 +172,7 @@ impl SystemBroker for LocalSystemBroker {
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             cwd,
+            source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
         })
     }
 }

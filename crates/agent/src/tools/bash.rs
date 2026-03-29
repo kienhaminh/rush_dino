@@ -183,6 +183,7 @@ mod tests {
                 stdout: "ok".to_owned(),
                 stderr: String::new(),
                 cwd: PathBuf::from("/tmp/host"),
+                source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
             })
         }
     }
