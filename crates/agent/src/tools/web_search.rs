@@ -91,7 +91,7 @@ impl Tool for WebSearchTool {
             .map_err(|e| AppError::Validation(format!("web_search endpoint blocked: {e}")))?;
 
         let payload: Value = reqwest::Client::new()
-            .get(&self.endpoint)
+            .get(endpoint_url)
             .header("x-subscription-token", api_key)
             .query(&[("q", query), ("count", &max_results.to_string())])
             .send()

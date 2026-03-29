@@ -32,3 +32,8 @@ Write in clear, concise, actionable language.
 Prefer examples and step-by-step instructions for operational tasks.
 Always consider the target audience and business goals.
 If the task primarily requires research, delegate to researcher.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

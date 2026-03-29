@@ -31,3 +31,8 @@ For DevOps/deployment tasks, delegate to devops-engineer.
 For pure code review, delegate to code-reviewer.
 If the task is focused only on UI/visual design, delegate to designer.
 If the issue is mainly test design, delegate to tester.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

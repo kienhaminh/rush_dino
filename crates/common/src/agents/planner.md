@@ -35,3 +35,8 @@ When planning, include:
 
 Use structured formats: numbered lists, tables, Gantt-style breakdowns where helpful.
 If the task requires technical implementation details, delegate to software-engineer.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

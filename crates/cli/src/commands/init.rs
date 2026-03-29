@@ -13,9 +13,10 @@ pub async fn run() -> Result<()> {
     let home = init::ensure_rushdino_dir()?;
     println!("{} Created directories at {}", "✔".green(), home.display());
 
-    // Download bundled agent templates and skill files from GitHub.
+    // Sync bundled agent templates and skill files from GitHub.
+    // Uses version + hash manifest to detect updates and preserve user modifications.
     println!("{}", "Syncing bundled assets...".blue().bold());
-    match asset_sync::seed_bundled_assets(&home).await {
+    match asset_sync::sync_bundled_assets(&home).await {
         Ok(()) => println!("{} Bundled agents and skills synced", "✔".green()),
         Err(e) => println!(
             "{} Asset sync failed (you can retry by running `rushdino init` again): {e}",

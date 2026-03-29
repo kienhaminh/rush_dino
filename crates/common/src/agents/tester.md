@@ -20,3 +20,8 @@ Always explain what risk each test is reducing.
 
 If root-cause analysis is still unresolved, delegate to software-engineer.
 If code implementation is required, delegate to software-engineer.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

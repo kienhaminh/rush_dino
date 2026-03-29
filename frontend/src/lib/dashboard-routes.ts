@@ -84,8 +84,8 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   },
   {
     id: 'channels',
-    label: 'Channels',
-    description: 'Channel runtime, configuration, and infrastructure',
+    label: 'Gateway',
+    description: 'Read-only channel status and Workspace handoff',
     href: '/gateway',
     icon: Waypoints,
   },
@@ -212,7 +212,7 @@ export function resolvePageHeader(pathname: string): PageHeader {
   }
 
   if (normalized.startsWith('/gateway')) {
-    return { id: 'channels', title: 'Channels', subtitle: 'Channel runtime, settings, and infrastructure' };
+    return { id: 'channels', title: 'Gateway', subtitle: 'Read-only channel status and Workspace handoff' };
   }
 
   if (normalized.startsWith('/sessions')) {
@@ -236,6 +236,10 @@ export function resolvePageHeader(pathname: string): PageHeader {
 
   if (normalized === '/kanban') {
     return { id: 'system', title: 'Task Board', subtitle: 'Kanban board for inter-agent collaboration' };
+  }
+
+  if (normalized === '/agent-board') {
+    return { id: 'system', title: 'Team Status', subtitle: 'Agent health, routing tags, tools, and activity' };
   }
 
   // Flat operation routes (agents, board, workflows, skills, etc.)

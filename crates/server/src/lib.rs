@@ -665,7 +665,7 @@ pub async fn run_server() -> Result<()> {
 
     let asset_home = init::default_home_dir();
     tokio::spawn(async move {
-        if let Err(e) = asset_sync::seed_bundled_assets(&asset_home).await {
+        if let Err(e) = asset_sync::sync_bundled_assets(&asset_home).await {
             tracing::warn!("asset_sync failed: {e}");
         }
     });

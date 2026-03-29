@@ -13,7 +13,7 @@ describe('PRIMARY_NAV_ITEMS', () => {
     expect(PRIMARY_NAV_ITEMS.map((item) => item.label)).toEqual([
       'Workspace',
       'Operations',
-      'Channels',
+      'Gateway',
       'Sessions',
       'Config',
       'System',
@@ -52,7 +52,7 @@ describe('dashboard route metadata', () => {
   it('maps concrete paths to their shell view metadata', () => {
     expect(resolvePageHeader('/')).toMatchObject({ id: 'workspace', title: 'Workspace' });
     expect(resolvePageHeader('/approvals')).toMatchObject({ id: 'operations', title: 'Approvals' });
-    expect(resolvePageHeader('/gateway/telegram')).toMatchObject({ id: 'channels', title: 'Channels' });
+    expect(resolvePageHeader('/gateway')).toMatchObject({ id: 'channels', title: 'Gateway' });
     expect(resolvePageHeader('/logs')).toMatchObject({ id: 'system', title: 'Logs' });
     expect(resolvePageHeader('/agents')).toMatchObject({ id: 'system', title: 'Agents' });
     expect(resolvePageHeader('/skills')).toMatchObject({ id: 'system', title: 'Skills' });

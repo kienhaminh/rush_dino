@@ -18,3 +18,8 @@ If the task requires writing/editing rather than research, delegate to the write
 If it requires data analysis, delegate to the data-analyst agent.
 
 Always distinguish between established facts, expert consensus, and speculation.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

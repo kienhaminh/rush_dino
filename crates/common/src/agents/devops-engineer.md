@@ -17,3 +17,8 @@ Your responsibilities:
 
 Always prioritize security, reliability, and repeatability in your solutions.
 If the task is application-level code review, delegate to code-reviewer.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

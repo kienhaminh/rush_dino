@@ -15,13 +15,6 @@ import {
 import { AgentHealthIndicator } from './agent-health-indicator';
 import { useAgentHealth } from './use-agent-health';
 
-const COLUMN_ORDER: Array<{ key: OverviewAgentStatus; label: string }> = [
-  { key: 'idle', label: 'Idle' },
-  { key: 'active', label: 'Active' },
-  { key: 'recent', label: 'Recent' },
-  { key: 'blocked', label: 'Blocked' },
-];
-
 // ------------------------------------------------------------------
 // Team activity summary bar
 // ------------------------------------------------------------------
@@ -110,25 +103,18 @@ export function AgentBoardPage() {
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
       <div className="w-full space-y-5 pb-12">
-        {/* Header */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <p className="text-lg font-semibold">Team Status Dashboard</p>
-            <p className="text-sm text-muted-foreground">
-              Agent health, routing tags, tools, and activity — all in one view.
-            </p>
-            <div className="flex items-center gap-2">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] border-border/50 bg-muted/40">
+              {totalAgents} agents
+            </Badge>
+            {board?.generatedAt ? (
               <Badge variant="outline" className="text-[10px] border-border/50 bg-muted/40">
-                {totalAgents} agents
+                Updated {formatDateTime(board.generatedAt)}
               </Badge>
-              {board?.generatedAt ? (
-                <Badge variant="outline" className="text-[10px] border-border/50 bg-muted/40">
-                  Updated {formatDateTime(board.generatedAt)}
-                </Badge>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-
           <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
             <RefreshCwIcon className={`w-3.5 h-3.5 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -157,39 +143,17 @@ export function AgentBoardPage() {
           </div>
         ) : null}
 
-        {/* Columns */}
+        {/* Agent grid */}
         {totalAgents > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {COLUMN_ORDER.map((column) => (
-              <section
-                key={column.key}
-                className="rounded-xl border border-border/50 bg-card/70 p-3 space-y-3 min-h-[220px]"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                    {column.label}
-                  </p>
-                  <Badge variant="outline" className="text-[10px] border-border/50 bg-muted/40">
-                    {columns[column.key].length}
-                  </Badge>
-                </div>
-
-                {columns[column.key].length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No agents</p>
-                ) : (
-                  <div className="space-y-2">
-                    {columns[column.key].map((card) => (
-                      <AgentStatusCard
-                        key={card.agentId}
-                        card={card}
-                        agentRecord={agentRecordByName[card.name]}
-                        health={healthMap[card.name]}
-                        onResetHealth={() => void resetHealth(card.name)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </section>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {[...columns.active, ...columns.recent, ...columns.blocked, ...columns.idle].map((card) => (
+              <AgentStatusCard
+                key={card.agentId}
+                card={card}
+                agentRecord={agentRecordByName[card.name]}
+                health={healthMap[card.name]}
+                onResetHealth={() => void resetHealth(card.name)}
+              />
             ))}
           </div>
         ) : null}
