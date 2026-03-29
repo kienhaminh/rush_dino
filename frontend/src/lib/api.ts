@@ -1,5 +1,4 @@
 import type {
-  ApprovalsResponse,
   AppConfigView,
   AuditEntry,
   ChannelPairingState,
@@ -428,12 +427,6 @@ export async function fetchLogs(params?: {
   return parseJsonOrThrow(response, endpoint);
 }
 
-export async function fetchApprovals(): Promise<ApprovalsResponse> {
-  const endpoint = '/api/approvals';
-  const response = await fetch(endpoint);
-  return parseJsonOrThrow(response, endpoint);
-}
-
 export async function fetchChannelPairing(channel: string): Promise<ChannelPairingState> {
   const endpoint = `/api/channels/${encodeURIComponent(channel)}/pairing`;
   const response = await fetch(endpoint);
@@ -461,22 +454,6 @@ export async function revokeChannelPairedUser(
   const endpoint = `/api/channels/${encodeURIComponent(channel)}/pairing/paired/${encodeURIComponent(senderId)}`;
   const response = await fetch(endpoint, {
     method: 'DELETE',
-  });
-  return parseJsonOrThrow(response, endpoint);
-}
-
-export async function resolveApproval(
-  requestId: string,
-  payload: { approved: boolean; sessionId: string },
-): Promise<{ request_id: string; status: string }> {
-  const endpoint = `/api/approval/${encodeURIComponent(requestId)}`;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      approved: payload.approved,
-      session_id: payload.sessionId,
-    }),
   });
   return parseJsonOrThrow(response, endpoint);
 }

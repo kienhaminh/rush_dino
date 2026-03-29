@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw, Shield, Wrench } from 'lucide-react';
+import { RefreshCw, Shield, Wrench } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -137,15 +137,6 @@ export function DiagnosticsPage() {
                   {summary?.security.sandboxEnabled ? 'Shell sandbox enabled' : 'Shell sandbox disabled'}
                   {' · '}
                   network {summary?.security.sandboxAllowNetwork ? 'allowed' : 'blocked'}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3">
-                <div className="flex items-center gap-2 text-foreground">
-                  <AlertTriangle className="h-4 w-4 text-primary" />
-                  <span className="font-medium">Approval queue</span>
-                </div>
-                <p className="mt-1">
-                  {summary?.approvals.pendingCount ?? 0} requests currently waiting for operator action.
                 </p>
               </div>
             </CardContent>

@@ -1,5 +1,5 @@
 import { Link as RouterLink } from 'react-router-dom';
-import { Clock3, RefreshCw, ShieldAlert, SquareSlash } from 'lucide-react';
+import { Clock3, RefreshCw, SquareSlash } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -294,14 +294,7 @@ export function RunsPage({
                   <div className="rounded-3xl border border-border/50 bg-background/50 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Timeline</p>
-                      {detail.snapshot.state === 'awaiting_approval' ? (
-                        <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                          <RouterLink to="/approvals">
-                            <ShieldAlert className="mr-1 h-3 w-3" />
-                            Open approvals
-                          </RouterLink>
-                        </Button>
-                      ) : detail.snapshot.state === 'awaiting_input' ? (
+                      {detail.snapshot.state === 'awaiting_input' ? (
                         <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-warning/30 text-warning">
                           Waiting for user input
                         </Badge>

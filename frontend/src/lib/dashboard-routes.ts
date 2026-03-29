@@ -16,7 +16,7 @@ export type PrimaryNavId =
   | 'config'
   | 'system';
 
-export type OperationsViewId = 'summary' | 'approvals' | 'diagnostics' | 'analytics';
+export type OperationsViewId = 'summary' | 'diagnostics' | 'analytics';
 export type ConfigSectionId = 'profiles' | 'credentials' | 'server' | 'identity';
 
 export type AdvancedViewId =
@@ -78,7 +78,7 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   {
     id: 'operations',
     label: 'Operations',
-    description: 'Health, approvals, diagnostics, and analytics',
+    description: 'Health, diagnostics, and analytics',
     href: '/operations',
     icon: LayoutDashboard,
   },
@@ -118,12 +118,6 @@ export const OPERATIONS_VIEWS: OperationsView[] = [
     label: 'Summary',
     description: 'Current system posture and activity',
     href: '/operations/summary',
-  },
-  {
-    id: 'approvals',
-    label: 'Approvals',
-    description: 'Pending decisions and recent approvals',
-    href: '/approvals',
   },
   {
     id: 'diagnostics',
@@ -194,15 +188,6 @@ export function resolvePageHeader(pathname: string): PageHeader {
 
   if (normalized === '/metrics') {
     return { id: 'operations', title: 'Metrics', subtitle: 'Usage, cost, and activity analytics' };
-  }
-
-  if (normalized === '/approvals') {
-    const view = OPERATIONS_VIEWS.find((v) => v.id === 'approvals');
-    return {
-      id: 'operations',
-      title: view?.label ?? 'Approvals',
-      subtitle: view?.description ?? 'Pending decisions and recent approvals',
-    };
   }
 
   if (normalized.startsWith('/operations')) {

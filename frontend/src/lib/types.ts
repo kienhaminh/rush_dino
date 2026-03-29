@@ -282,15 +282,6 @@ export interface ChannelStatusSummary {
   issue?: string | null;
 }
 
-export interface PendingApprovalSummary {
-  requestId: string;
-  sessionId: string;
-  conversationId: string;
-  runId?: string | null;
-  tool: string;
-  args?: Record<string, unknown>;
-}
-
 export interface ChannelPairingPendingRequest {
   id: string;
   channelId: string;
@@ -318,21 +309,6 @@ export interface ChannelPairingState {
   paired: ChannelPairedUser[];
 }
 
-export interface ApprovalAuditRecord {
-  id: string;
-  status: string;
-  tool?: string | null;
-  requestId?: string | null;
-  runId?: string | null;
-  sessionId?: string | null;
-  createdAt: string;
-}
-
-export interface ApprovalsResponse {
-  pending: PendingApprovalSummary[];
-  recent: ApprovalAuditRecord[];
-}
-
 export interface SystemIncidentRecord {
   id: string;
   level: string;
@@ -352,10 +328,6 @@ export interface SystemSummaryResponse {
   profilesCount: number;
   fallbackProfileIds: string[];
   channels: ChannelStatusSummary[];
-  approvals: {
-    pendingCount: number;
-    pending: PendingApprovalSummary[];
-  };
   runs: {
     totalCount: number;
     activeCount: number;

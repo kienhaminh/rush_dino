@@ -11,7 +11,6 @@ const ChatPage = lazy(() => import('./pages/chat/ChatPage').then(m => ({ default
 const OverviewPage = lazy(() => import('./pages/overview/OverviewPage').then(m => ({ default: m.OverviewPage })));
 const OperationsPage = lazy(() => import('./pages/operations/OperationsPage').then(m => ({ default: m.OperationsPage })));
 const GatewayRoute = lazy(() => import('./pages/gateway/GatewayRoute').then(m => ({ default: m.GatewayRoute })));
-const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage').then(m => ({ default: m.ApprovalsPage })));
 const SessionsRoute = lazy(() => import('./pages/sessions/SessionsRoute').then(m => ({ default: m.SessionsRoute })));
 const MetricsPage = lazy(() => import('./pages/metrics/MetricsPage').then(m => ({ default: m.MetricsPage })));
 const KanbanPage = lazy(() => import('./pages/kanban/KanbanPage').then(m => ({ default: m.KanbanPage })));
@@ -95,7 +94,6 @@ export default function App() {
                     <Route path="diagnostics" element={<DiagnosticsPage />} />
                     <Route path="analytics" element={<Navigate to="/metrics" replace />} />
                   </Route>
-                  <Route path="approvals" element={<ApprovalsPage />} />
                   <Route path="metrics" element={<MetricsPage />} />
 
                   {/* Channels */}

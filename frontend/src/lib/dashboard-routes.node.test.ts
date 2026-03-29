@@ -25,7 +25,6 @@ describe('dashboard route metadata', () => {
   it('defines operations, config, and advanced subviews', () => {
     expect(OPERATIONS_VIEWS.map((item) => item.id)).toEqual([
       'summary',
-      'approvals',
       'diagnostics',
       'analytics',
     ]);
@@ -51,7 +50,6 @@ describe('dashboard route metadata', () => {
 
   it('maps concrete paths to their shell view metadata', () => {
     expect(resolvePageHeader('/')).toMatchObject({ id: 'workspace', title: 'Workspace' });
-    expect(resolvePageHeader('/approvals')).toMatchObject({ id: 'operations', title: 'Approvals' });
     expect(resolvePageHeader('/gateway')).toMatchObject({ id: 'channels', title: 'Gateway' });
     expect(resolvePageHeader('/logs')).toMatchObject({ id: 'system', title: 'Logs' });
     expect(resolvePageHeader('/agents')).toMatchObject({ id: 'system', title: 'Agents' });

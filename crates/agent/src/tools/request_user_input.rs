@@ -316,15 +316,18 @@ fn normalize_field(field: InputFieldArgs) -> Result<InputFieldSpec> {
         .into_iter()
         .map(ChoiceInput::into_option)
         .collect::<Result<Vec<_>>>()?;
+    let constraints = FieldConstraints {
+        default_value: field.default_value.as_ref(),
+        min: field.min,
+        max: field.max,
+        min_length: field.min_length,
+        max_length: field.max_length,
+        options: &options,
+    };
     validate_field_constraints(
         &name,
         &field.field_type,
-        field.default_value.as_ref(),
-        field.min,
-        field.max,
-        field.min_length,
-        field.max_length,
-        &options,
+        &constraints,
     )?;
 
     Ok(InputFieldSpec {
@@ -343,16 +346,29 @@ fn normalize_field(field: InputFieldArgs) -> Result<InputFieldSpec> {
     })
 }
 
-fn validate_field_constraints(
-    name: &str,
-    field_type: &InputFieldType,
-    default_value: Option<&Value>,
+struct FieldConstraints<'a> {
+    default_value: Option<&'a Value>,
     min: Option<i64>,
     max: Option<i64>,
     min_length: Option<usize>,
     max_length: Option<usize>,
-    options: &[InputFieldOption],
+    options: &'a [InputFieldOption],
+}
+
+fn validate_field_constraints(
+    name: &str,
+    field_type: &InputFieldType,
+    constraints: &FieldConstraints<'_>,
 ) -> Result<()> {
+    let FieldConstraints {
+        default_value,
+        min,
+        max,
+        min_length,
+        max_length,
+        options,
+    } = *constraints;
+
     match field_type {
         InputFieldType::Text | InputFieldType::Textarea => {
             if min.is_some() || max.is_some() {
@@ -635,5 +651,26 @@ mod tests {
         .expect_err("missing run context should fail");
 
         assert!(error.to_string().contains("active run context"));
+    }
+
+    #[test]
+    fn text_fields_reject_choices() {
+        let error = normalize_field(InputFieldArgs {
+            name: "summary".to_owned(),
+            label: "Summary".to_owned(),
+            description: None,
+            field_type: InputFieldType::Text,
+            required: false,
+            placeholder: None,
+            default_value: None,
+            min: None,
+            max: None,
+            min_length: None,
+            max_length: None,
+            choices: vec![ChoiceInput::Value("unexpected".to_owned())],
+        })
+        .expect_err("text fields should reject choices");
+
+        assert!(error.to_string().contains("does not support choices"));
     }
 }

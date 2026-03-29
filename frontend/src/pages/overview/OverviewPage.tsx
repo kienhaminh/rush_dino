@@ -7,7 +7,6 @@ import {
   KeyRound,
   Link2,
   RefreshCw,
-  ShieldCheck,
   TerminalSquare,
 } from 'lucide-react';
 
@@ -105,20 +104,6 @@ export function OverviewPage() {
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Card className="border-border/60 bg-card/80">
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                Pending approvals
-              </p>
-              <p className="mt-1 text-3xl font-semibold">{summary?.approvals.pendingCount ?? 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="border-border/60 bg-card/80">
           <CardContent className="flex items-center gap-4 p-5">
             <div className="rounded-2xl bg-info/10 p-3 text-info">
@@ -238,29 +223,9 @@ export function OverviewPage() {
                     </Button>
                   </div>
                 </div>
-              ) : summary?.approvals.pending.length ? (
-                summary.approvals.pending.slice(0, 4).map((request) => (
-                  <div
-                    key={request.requestId}
-                    className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium">{request.tool}</p>
-                      <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                        <RouterLink to="/approvals">
-                          Review
-                          <ArrowRight className="ml-1 h-3 w-3" />
-                        </RouterLink>
-                      </Button>
-                    </div>
-                    <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                      session {request.sessionId}
-                    </p>
-                  </div>
-                ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-background/40 px-4 py-8 text-sm text-muted-foreground">
-                  No runs or approvals are waiting on operator action.
+                  No runs are waiting on operator action.
                 </div>
               )}
             </CardContent>

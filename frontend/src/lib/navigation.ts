@@ -12,7 +12,6 @@ import {
   ScrollText,
   Settings,
   ShieldAlert,
-  ShieldCheck,
   Waypoints,
   Zap,
 } from 'lucide-react';
@@ -61,7 +60,6 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'metrics', label: 'Metrics', icon: BarChart, href: '/metrics', matchPrefix: '/metrics', advancedOnly: true },
       { id: 'cron', label: 'Cron', icon: Loader, href: '/cron', matchPrefix: '/cron', advancedOnly: true },
       { id: 'gateway', label: 'Gateway', icon: Waypoints, href: '/gateway', matchPrefix: '/gateway', advancedOnly: true },
-      { id: 'approvals', label: 'Approvals', icon: ShieldCheck, href: '/approvals', matchPrefix: '/approvals', advancedOnly: true },
       { id: 'guardrail', label: 'Guardrail', icon: ShieldAlert, href: '/guardrail', matchPrefix: '/guardrail', advancedOnly: true },
       { id: 'config', label: 'Config', icon: Settings, href: '/config', matchPrefix: '/config' },
     ],
