@@ -129,13 +129,13 @@ impl PatternRegistry {
         }
     }
 
-    pub fn add_pattern(&mut self, entry: PatternEntry) {
-        if let Ok(regex) = Regex::new(&entry.regex) {
-            self.patterns.push(CompiledPattern {
-                regex,
-                pattern_type: entry.pattern_type,
-            });
-        }
+    pub fn add_pattern(&mut self, entry: PatternEntry) -> Result<(), regex::Error> {
+        let compiled = Regex::new(&entry.regex)?;
+        self.patterns.push(CompiledPattern {
+            regex: compiled,
+            pattern_type: entry.pattern_type,
+        });
+        Ok(())
     }
 
     /// Scan text and return all matches, deduplicating overlapping ranges.
@@ -210,5 +210,5 @@ fn short_hash(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
     let result = hasher.finalize();
-    hex::encode(&result[..3])
+    hex::encode(&result[..8])
 }

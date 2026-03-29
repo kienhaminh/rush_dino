@@ -72,7 +72,7 @@ fn custom_pattern_works() {
         name: "internal_token".to_string(),
         regex: r"RUSH_[A-Za-z0-9]{32}".to_string(),
         pattern_type: SecretType::ApiKey,
-    });
+    }).unwrap();
     let input = "token=RUSH_ABCDEFGHIJKLMNOPQRSTUVWXYZabcd";
     let matches = registry.scan(input);
     assert_eq!(matches.len(), 1);

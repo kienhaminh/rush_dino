@@ -107,6 +107,10 @@ impl Default for Sensitivity {
 pub struct Confidence(pub f32);
 
 impl Confidence {
+    /// Create a new Confidence, clamping the value to [0.0, 1.0].
+    pub fn new(value: f32) -> Self {
+        Self(value.clamp(0.0, 1.0))
+    }
     pub fn high(&self) -> bool {
         self.0 > 0.8
     }
