@@ -330,7 +330,6 @@ pub async fn build_app(
         if let Some(engine) = runtime_state_bg.engine_opt() {
             let registry = engine.tool_registry.clone();
             mcp_manager_bg.reconcile_and_register(&servers_bg, registry).await;
-            engine.seed_initial_workflows().await;
             engine.ensure_main_session().await.ok();
         }
     });
