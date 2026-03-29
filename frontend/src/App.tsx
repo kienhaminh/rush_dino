@@ -29,6 +29,7 @@ const DebugPage = lazy(() => import('./pages/debug/DebugPage').then(m => ({ defa
 const LogsPage = lazy(() => import('./pages/logs/LogsPage').then(m => ({ default: m.LogsPage })));
 const SystemPage = lazy(() => import('./pages/system/SystemPage').then(m => ({ default: m.SystemPage })));
 const SandboxMonitorPage = lazy(() => import('./pages/sandbox/SandboxMonitorPage').then(m => ({ default: m.SandboxMonitorPage })));
+const GuardrailPage = lazy(() => import('./pages/guardrail/guardrail-page').then(m => ({ default: m.GuardrailPage })));
 const KnowledgeGraphPage = lazy(() => import('./pages/knowledge-graph/KnowledgeGraphPage').then(m => ({ default: m.KnowledgeGraphPage })));
 const MessagesPage = lazy(() => import('./pages/messages/MessagesPage').then(m => ({ default: m.MessagesPage })));
 const AgentBoardPage = lazy(() => import('./pages/agent-board/AgentBoardPage').then(m => ({ default: m.AgentBoardPage })));
@@ -109,6 +110,7 @@ export default function App() {
                   {/* Config */}
                   <Route path="config" element={<ConfigPage />} />
                   <Route path="sandbox" element={<SandboxMonitorPage />} />
+                  <Route path="guardrail" element={<GuardrailPage />} />
 
                   {/* Operations pages (flat) */}
                   <Route path="agents" element={<AgentsPage />} />
