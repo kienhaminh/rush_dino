@@ -68,7 +68,7 @@ export function AgentBoardPage() {
   useEffect(() => {
     fetch('/api/agents')
       .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load agents')))
-      .then((data: AgentRecord[]) => setAgentRecords(data))
+      .then((data: { items: AgentRecord[] }) => setAgentRecords(data.items ?? []))
       .catch(() => { /* silent — agents list is optional enrichment */ });
   }, []);
 
