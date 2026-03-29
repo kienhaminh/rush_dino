@@ -626,6 +626,23 @@ pub async fn build_app(
             "/api/sessions/:session_id/sandbox/deny",
             post(routes::sandbox::deny_session_request),
         )
+        // Guardrail management API routes
+        .route(
+            "/api/agents/:agent_id/guardrail/trust",
+            get(routes::guardrail::get_trust_levels).put(routes::guardrail::set_trust_level),
+        )
+        .route(
+            "/api/agents/:agent_id/guardrail/policy",
+            get(routes::guardrail::get_policy_rules),
+        )
+        .route(
+            "/api/agents/:agent_id/guardrail/policy/rule",
+            post(routes::guardrail::add_policy_rule),
+        )
+        .route(
+            "/api/sessions/:session_id/guardrail/approve",
+            post(routes::guardrail::approve_action),
+        )
         // Version update API
         .route("/api/version/check", get(routes::version::check_version))
         .route("/api/version/upgrade", post(routes::version::trigger_upgrade))

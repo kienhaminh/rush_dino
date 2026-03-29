@@ -12,6 +12,7 @@ pub mod documents;
 pub mod files;
 pub mod gateway;
 pub mod graph;
+pub mod guardrail;
 pub mod health;
 pub mod logs;
 pub mod mcp;
