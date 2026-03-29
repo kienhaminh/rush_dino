@@ -40,6 +40,7 @@ import type {
   AgentSkillRecord,
   AgentFileRecord,
   AgentProgressBoardResponse,
+  AgentHealth,
 } from '@/pages/agents/agent-types';
 import type {
   CreateWorkflowInput,
@@ -215,6 +216,40 @@ export async function fetchAgentProgressBoard(params?: {
   const endpoint = `/api/agents/progress${query.size ? `?${query.toString()}` : ''}`;
   const response = await fetch(endpoint);
   return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchAgentHealth(agentId: string): Promise<AgentHealth> {
+  const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/health`);
+  return parseJsonOrThrow(res, `agents/${encodeURIComponent(agentId)}/health`);
+}
+
+export async function resetAgentHealth(agentId: string): Promise<void> {
+  const res = await fetch(`/api/agents/${encodeURIComponent(agentId)}/health/reset`, { method: 'POST' });
+  await parseJsonOrThrow(res, `agents/${encodeURIComponent(agentId)}/health/reset`);
+}
+
+export type AgentMessageRecord = {
+  id: string;
+  fromAgent: string;
+  toAgent: string;
+  content: string;
+  read: boolean;
+  createdAt: string;
+};
+
+export async function fetchMessages(params?: {
+  agent?: string;
+  limit?: number;
+  unreadOnly?: boolean;
+}): Promise<AgentMessageRecord[]> {
+  const searchParams = new URLSearchParams();
+  if (params?.agent) searchParams.set('agent', params.agent);
+  if (params?.limit) searchParams.set('limit', String(params.limit));
+  if (params?.unreadOnly) searchParams.set('unread_only', 'true');
+  const qs = searchParams.toString();
+  const res = await fetch(`/api/messages${qs ? `?${qs}` : ''}`);
+  const data = await parseJsonOrThrow(res, 'messages');
+  return data.items;
 }
 
 export async function fetchSystemPrompt(): Promise<{ content: string; tokenEstimate: number }> {
