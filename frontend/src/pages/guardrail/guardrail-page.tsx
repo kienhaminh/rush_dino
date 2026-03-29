@@ -4,6 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TrustDashboard } from './components/trust-dashboard';
 import { PolicyRulesEditor } from './components/policy-rules-editor';
+import { ApprovalPrompt } from './components/approval-prompt';
+import type { ApprovalRequest } from '@/lib/guardrail-api';
 
 // Placeholder agent list — agent selection wiring is out of scope for this task.
 // When the real agent list API is available, replace this with a hook.
@@ -11,6 +13,7 @@ const PLACEHOLDER_AGENTS: { id: string; label: string }[] = [];
 
 export function GuardrailPage() {
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 p-6 md:p-8 space-y-6 overflow-y-auto">
@@ -80,6 +83,14 @@ export function GuardrailPage() {
           <p className="text-sm text-muted-foreground">
             Approval prompts appear here during active sessions.
           </p>
+          {/* ApprovalPrompt is rendered at page level so it can show as a modal
+              regardless of which tab is active. pendingApproval is set by the
+              backend push mechanism (to be wired in a later task). */}
+          <ApprovalPrompt
+            request={pendingApproval}
+            sessionId={selectedAgentId}
+            onClose={() => setPendingApproval(null)}
+          />
         </TabsContent>
       </Tabs>
     </div>
