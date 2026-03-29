@@ -32,6 +32,7 @@ hex.workspace = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["sync", "time", "rt", "rt-multi-thread", "macros"] }
+tempfile = "3"
 
 [features]
 wasm-sandbox = ["wasmtime"]
