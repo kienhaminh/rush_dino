@@ -7,7 +7,8 @@ export type AgentPanel =
   | 'tools'
   | 'skills'
   | 'channels'
-  | 'cron';
+  | 'cron'
+  | 'messages';
 
 export type AgentRecord = {
   id: string;
