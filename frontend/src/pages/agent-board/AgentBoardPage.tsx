@@ -1,15 +1,19 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCwIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { AgentRecord } from '@/pages/agents/agent-types';
 import { useAgentProgressBoard } from '@/pages/agents/use-agent-progress-board';
+import type { KanbanBoardStats } from '@/pages/kanban/kanban-types';
 
 import {
   buildOverviewBoardColumns,
   type OverviewAgentCard,
   type OverviewAgentStatus,
 } from './agent-board-status';
+import { AgentHealthIndicator } from './agent-health-indicator';
+import { useAgentHealth } from './use-agent-health';
 
 const COLUMN_ORDER: Array<{ key: OverviewAgentStatus; label: string }> = [
   { key: 'active', label: 'Active' },
@@ -18,24 +22,100 @@ const COLUMN_ORDER: Array<{ key: OverviewAgentStatus; label: string }> = [
   { key: 'blocked', label: 'Blocked' },
 ];
 
+// ------------------------------------------------------------------
+// Team activity summary bar
+// ------------------------------------------------------------------
+
+function TeamActivityBar({ stats }: { stats: KanbanBoardStats | null }) {
+  if (!stats) return null;
+
+  const items = [
+    { label: 'Backlog', value: stats.backlog, color: 'text-muted-foreground' },
+    { label: 'In Progress', value: stats.inProgress, color: 'text-yellow-400' },
+    { label: 'In Review', value: stats.inReview, color: 'text-purple-400' },
+    { label: 'Blocked', value: stats.blocked, color: 'text-red-400' },
+    { label: 'Done', value: stats.done, color: 'text-green-400' },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg border border-border/50 bg-card/70">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mr-1">
+        Team Activity
+      </span>
+      {items.map((item) => (
+        <span key={item.label} className="flex items-center gap-1 text-[10px]">
+          <span className="text-muted-foreground">{item.label}:</span>
+          <span className={`font-semibold ${item.color}`}>{item.value}</span>
+        </span>
+      ))}
+      <span className="flex items-center gap-1 text-[10px] ml-auto">
+        <span className="text-muted-foreground">Total:</span>
+        <span className="font-semibold text-foreground">{stats.total}</span>
+      </span>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Main page
+// ------------------------------------------------------------------
+
 export function AgentBoardPage() {
   const { board, loading, refreshing, error, refresh } = useAgentProgressBoard(true);
+
+  // Fetch agent records for claimTags and tools
+  const [agentRecords, setAgentRecords] = useState<AgentRecord[]>([]);
+  useEffect(() => {
+    fetch('/api/agents')
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load agents')))
+      .then((data: AgentRecord[]) => setAgentRecords(data))
+      .catch(() => { /* silent — agents list is optional enrichment */ });
+  }, []);
+
+  // Fetch kanban stats for team activity bar
+  const [kanbanStats, setKanbanStats] = useState<KanbanBoardStats | null>(null);
+  useEffect(() => {
+    fetch('/api/kanban/board')
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load kanban')))
+      .then((data: { stats: KanbanBoardStats }) => setKanbanStats(data.stats))
+      .catch(() => { /* silent — kanban stats are optional */ });
+  }, []);
+
   const columns = useMemo(
     () => buildOverviewBoardColumns(board?.lanes ?? []),
     [board?.lanes],
   );
+
+  // Build a lookup for agent records by name
+  const agentRecordByName = useMemo(() => {
+    const map: Record<string, AgentRecord> = {};
+    for (const agent of agentRecords) {
+      map[agent.name] = agent;
+    }
+    return map;
+  }, [agentRecords]);
+
+  // Collect agent names for health polling
+  const allCards = useMemo(
+    () => [...columns.active, ...columns.recent, ...columns.idle, ...columns.blocked],
+    [columns],
+  );
+  const agentNames = useMemo(() => allCards.map((c) => c.name), [allCards]);
+
+  const { healthMap, reset: resetHealth } = useAgentHealth(agentNames, true);
 
   const totalAgents =
     columns.active.length + columns.recent.length + columns.idle.length + columns.blocked.length;
 
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
-      <div className="w-full space-y-6 pb-12">
+      <div className="w-full space-y-5 pb-12">
+        {/* Header */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-2">
-            <p className="text-lg font-semibold">All Agents Overview</p>
+            <p className="text-lg font-semibold">Team Status Dashboard</p>
             <p className="text-sm text-muted-foreground">
-              Status board for every agent using delegated activity telemetry.
+              Agent health, routing tags, tools, and activity — all in one view.
             </p>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-[10px] border-border/50 bg-muted/40">
@@ -55,6 +135,10 @@ export function AgentBoardPage() {
           </Button>
         </div>
 
+        {/* Team activity bar */}
+        <TeamActivityBar stats={kanbanStats} />
+
+        {/* Error / loading states */}
         {error ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
             {error}
@@ -73,6 +157,7 @@ export function AgentBoardPage() {
           </div>
         ) : null}
 
+        {/* Columns */}
         {totalAgents > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             {COLUMN_ORDER.map((column) => (
@@ -94,7 +179,13 @@ export function AgentBoardPage() {
                 ) : (
                   <div className="space-y-2">
                     {columns[column.key].map((card) => (
-                      <AgentStatusCard key={card.agentId} card={card} />
+                      <AgentStatusCard
+                        key={card.agentId}
+                        card={card}
+                        agentRecord={agentRecordByName[card.name]}
+                        health={healthMap[card.name]}
+                        onResetHealth={() => void resetHealth(card.name)}
+                      />
                     ))}
                   </div>
                 )}
@@ -107,9 +198,31 @@ export function AgentBoardPage() {
   );
 }
 
-function AgentStatusCard({ card }: { card: OverviewAgentCard }) {
+// ------------------------------------------------------------------
+// Agent card
+// ------------------------------------------------------------------
+
+function AgentStatusCard({
+  card,
+  agentRecord,
+  health,
+  onResetHealth,
+}: {
+  card: OverviewAgentCard;
+  agentRecord: AgentRecord | undefined;
+  health: import('@/pages/agents/agent-types').AgentHealth | undefined;
+  onResetHealth: () => void;
+}) {
+  const claimTags = agentRecord?.claimTags ?? [];
+  const toolsRaw = agentRecord?.tools ?? '';
+  const toolNames = parseToolNames(toolsRaw);
+
+  const visibleTags = claimTags.slice(0, 5);
+  const overflowTags = claimTags.length - visibleTags.length;
+
   return (
-    <article className="rounded-md border border-border/50 bg-background p-3 space-y-2">
+    <article className="rounded-md border border-border/50 bg-background p-3 space-y-2.5">
+      {/* Header: emoji + name + status badge */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-7 h-7 rounded-lg border border-border/50 bg-secondary flex items-center justify-center text-sm shrink-0">
@@ -123,6 +236,46 @@ function AgentStatusCard({ card }: { card: OverviewAgentCard }) {
         <StatusBadge status={card.status} />
       </div>
 
+      {/* Health indicator */}
+      <AgentHealthIndicator health={health} onReset={onResetHealth} />
+
+      {/* Routes to: claim tag pills */}
+      {claimTags.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-[8px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Routes to
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {visibleTags.map((tag) => (
+              <span
+                key={tag}
+                className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-blue-950 border border-blue-900 text-blue-300"
+              >
+                {tag}
+              </span>
+            ))}
+            {overflowTags > 0 ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-muted/60 border border-border/50 text-muted-foreground">
+                +{overflowTags}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Tools */}
+      {toolNames.length > 0 ? (
+        <div className="space-y-1">
+          <p className="text-[8px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Tools
+          </p>
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            {toolNames.join(', ')}
+          </p>
+        </div>
+      ) : null}
+
+      {/* Activity counters */}
       <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
         <Badge variant="outline" className="border-border/50 bg-muted/40">
           Now {card.nowCount}
@@ -135,15 +288,17 @@ function AgentStatusCard({ card }: { card: OverviewAgentCard }) {
         </Badge>
       </div>
 
-      <p className="text-[11px] text-muted-foreground">
-        Last: {card.lastActivityAt ? formatDateTime(card.lastActivityAt) : 'n/a'}
-      </p>
+      {/* Preview */}
       {card.preview ? (
         <p className="text-[11px] text-foreground/80 line-clamp-2">{card.preview}</p>
       ) : null}
     </article>
   );
 }
+
+// ------------------------------------------------------------------
+// Status badge
+// ------------------------------------------------------------------
 
 function StatusBadge({ status }: { status: OverviewAgentStatus }) {
   if (status === 'blocked') {
@@ -172,6 +327,30 @@ function StatusBadge({ status }: { status: OverviewAgentStatus }) {
       Idle
     </Badge>
   );
+}
+
+// ------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------
+
+/** Parse a comma-separated or JSON-array tools string into a list of names. */
+function parseToolNames(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.map(String);
+      }
+    } catch {
+      // Fall through to comma split
+    }
+  }
+  return trimmed
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function formatDateTime(value: string) {
