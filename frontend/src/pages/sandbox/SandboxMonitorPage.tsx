@@ -193,14 +193,14 @@ export function SandboxMonitorPage() {
       if (!teamAgentId) return;
       try {
         const agent = agents.find((a) => a.id === teamAgentId);
-        if (agent?.sandboxPolicy) {
-          await putAgentSandbox(teamAgentId, {
-            ...agent.sandboxPolicy,
-            sandbox: { ...agent.sandboxPolicy.sandbox, mcp },
-          });
-        } else {
-          await patchSessionMcpPolicy('main', mcp);
+        if (!agent?.sandboxPolicy) {
+          toast.error('This agent has no policy file configured.');
+          return;
         }
+        await putAgentSandbox(teamAgentId, {
+          ...agent.sandboxPolicy,
+          sandbox: { ...agent.sandboxPolicy.sandbox, mcp },
+        });
         toast.success('MCP policy applied.');
       } catch {
         toast.error('Failed to apply MCP policy.');
@@ -222,14 +222,14 @@ export function SandboxMonitorPage() {
       if (!teamAgentId) return;
       try {
         const agent = agents.find((a) => a.id === teamAgentId);
-        if (agent?.sandboxPolicy) {
-          await putAgentSandbox(teamAgentId, {
-            ...agent.sandboxPolicy,
-            sandbox: { ...agent.sandboxPolicy.sandbox, network },
-          });
-        } else {
-          await patchSessionNetworkPolicy('main', network);
+        if (!agent?.sandboxPolicy) {
+          toast.error('This agent has no policy file configured.');
+          return;
         }
+        await putAgentSandbox(teamAgentId, {
+          ...agent.sandboxPolicy,
+          sandbox: { ...agent.sandboxPolicy.sandbox, network },
+        });
         toast.success('Network policy applied.');
       } catch {
         toast.error('Failed to apply network policy.');
@@ -251,14 +251,14 @@ export function SandboxMonitorPage() {
       if (!teamAgentId) return;
       try {
         const agent = agents.find((a) => a.id === teamAgentId);
-        if (agent?.sandboxPolicy) {
-          await putAgentSandbox(teamAgentId, {
-            ...agent.sandboxPolicy,
-            sandbox: { ...agent.sandboxPolicy.sandbox, process },
-          });
-        } else {
-          await patchSessionBashPolicy('main', process);
+        if (!agent?.sandboxPolicy) {
+          toast.error('This agent has no policy file configured.');
+          return;
         }
+        await putAgentSandbox(teamAgentId, {
+          ...agent.sandboxPolicy,
+          sandbox: { ...agent.sandboxPolicy.sandbox, process },
+        });
         toast.success('Bash policy applied.');
       } catch {
         toast.error('Failed to apply bash policy.');

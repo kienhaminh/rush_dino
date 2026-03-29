@@ -4,7 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { SandboxInboundFilterEditor } from './sandbox-inbound-filter-editor';
-import type { SandboxProcessPolicy } from '@/lib/types';
+import type { SandboxInboundFilter, SandboxProcessPolicy } from '@/lib/types';
+
+const DEFAULT_INBOUND: SandboxInboundFilter = {
+  max_size_kb: 32,
+  strip_patterns: ['AKIA[A-Z0-9]{16}', 'sk-[A-Za-z0-9]{32,}', 'ghp_[A-Za-z0-9]{36}'],
+  block_on_match: false,
+};
 
 interface Props {
   policy: SandboxProcessPolicy;
@@ -14,7 +20,7 @@ interface Props {
 
 export function SandboxBashPolicyPanel({ policy, onPolicyChange, onApply }: Props) {
   const [newCommand, setNewCommand] = useState('');
-  const inbound = policy.inbound!;
+  const inbound = policy.inbound ?? DEFAULT_INBOUND;
 
   function addDeniedCommand() {
     const trimmed = newCommand.trim();
