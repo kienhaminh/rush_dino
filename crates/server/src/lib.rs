@@ -504,6 +504,14 @@ pub async fn build_app(
             patch(routes::agents::update_agent_file),
         )
         .route(
+            "/api/agents/:id/health",
+            get(routes::agents::get_agent_health),
+        )
+        .route(
+            "/api/agents/:id/health/reset",
+            post(routes::agents::reset_agent_health),
+        )
+        .route(
             "/api/workflows",
             get(routes::workflows::list_workflows).post(routes::workflows::create_workflow),
         )
@@ -535,6 +543,7 @@ pub async fn build_app(
         .route("/api/kanban/tasks", get(routes::kanban::list_kanban_tasks))
         .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task).delete(routes::kanban::delete_kanban_task))
         .route("/api/kanban/stats", get(routes::kanban::get_kanban_stats))
+        .route("/api/messages", get(routes::messages::list_messages))
         .route("/api/graph/search", get(routes::graph::search))
         .route("/api/graph/facts", get(routes::graph::facts))
         .route("/api/graph/node/:id", get(routes::graph::node))

@@ -123,6 +123,14 @@ impl crate::engine::AgentEngine {
         &self.kanban_store
     }
 
+    pub fn health_store(&self) -> &crate::agent_health_store::AgentHealthStore {
+        &self.health_store
+    }
+
+    pub fn message_store(&self) -> &crate::agent_message_store::AgentMessageStore {
+        &self.message_store
+    }
+
     pub fn skill_manager(&self) -> &crate::skill_manager::SkillManager {
         &self.skill_manager
     }

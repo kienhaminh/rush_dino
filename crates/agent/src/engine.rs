@@ -80,6 +80,8 @@ pub struct AgentEngine {
     pub(crate) knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
     pub(crate) skill_graph: Option<Arc<rushdino_skill_graph::SkillGraphService>>,
     pub(crate) session_ctx: Arc<SessionToolContext>,
+    pub(crate) health_store: Arc<crate::agent_health_store::AgentHealthStore>,
+    pub(crate) message_store: Arc<crate::agent_message_store::AgentMessageStore>,
     pub(crate) config: AgentConfig,
     /// Shared runtime override — same Arc as RuntimeState.thinking_level_override.
     pub(crate) thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
@@ -265,6 +267,8 @@ impl AgentEngine {
             knowledge_graph,
             skill_graph: None,
             session_ctx: deps.session_ctx,
+            health_store: deps.health_store,
+            message_store: deps.message_store,
             config,
             thinking_level_override: Arc::new(RwLock::new(None)),
             runtime,
