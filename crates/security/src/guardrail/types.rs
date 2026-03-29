@@ -85,21 +85,16 @@ pub enum SecretType {
 }
 
 /// Sensitivity level for DataRedactor.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Sensitivity {
     /// Redact all detected patterns, no exceptions.
     Strict,
     /// Redact keys, tokens, passwords. Skip PII.
+    #[default]
     Standard,
     /// Only redact private keys and high-confidence secrets.
     Relaxed,
-}
-
-impl Default for Sensitivity {
-    fn default() -> Self {
-        Sensitivity::Standard
-    }
 }
 
 /// Confidence level for PromptShield detection.

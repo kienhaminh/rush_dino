@@ -123,7 +123,7 @@ impl TrustState {
     /// Serialize and persist trust state to a JSON file at the given path.
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
         let json = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .map_err(|e| std::io::Error::other(e))?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -134,7 +134,7 @@ impl TrustState {
     pub fn load(path: &Path) -> std::io::Result<Self> {
         let json = std::fs::read_to_string(path)?;
         serde_json::from_str(&json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+            .map_err(|e| std::io::Error::other(e))
     }
 
     /// Load trust state from file, or create a fresh state if the file doesn't exist.
