@@ -1,28 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReactFlowProvider } from '@xyflow/react';
 
-import type { AgentRecord, AgentRuntimeData } from './agent-types';
+import type { AgentRecord, AgentRuntimeData, AgentSkillRecord, AgentToolRecord } from './agent-types';
 import { AgentNetworkFlow, type SelectedNode } from './agent-network-flow';
 import { useCanvasAnimation } from './canvas/use-canvas-animation';
 import { createGridRenderer } from './canvas/canvas-grid-renderer';
 import { createParticleRenderer } from './canvas/canvas-particle-renderer';
 import { AgentOverviewPropertiesPanel } from './agent-overview-properties-panel';
 
-// ── Ambient Canvas Background ─────────────────────────────────────────────────
-
 function AmbientCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderers = useMemo(
-    () => [createGridRenderer(), createParticleRenderer()],
-    [],
-  );
-
+  const renderers = useMemo(() => [createGridRenderer(), createParticleRenderer()], []);
   useCanvasAnimation({ canvasRef, renderers });
-
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
 }
-
-// ── Agent Overview Panel ──────────────────────────────────────────────────────
 
 export function AgentOverviewPanel({
   agent,
@@ -31,8 +23,15 @@ export function AgentOverviewPanel({
   agent: AgentRecord;
   runtime: AgentRuntimeData;
 }) {
+  const navigate = useNavigate();
   const [pingDots, setPingDots] = useState('');
   const [selectedNode, setSelectedNode] = useState<SelectedNode>(null);
+
+  const [skills, setSkills] = useState<AgentSkillRecord[]>(() => runtime.skills);
+  const [toolSections, setToolSections] = useState(() => runtime.toolSections);
+
+  useEffect(() => { setSkills(runtime.skills); }, [runtime.skills]);
+  useEffect(() => { setToolSections(runtime.toolSections); }, [runtime.toolSections]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -41,38 +40,73 @@ export function AgentOverviewPanel({
     return () => clearInterval(interval);
   }, []);
 
-  return (
-    <div className="flex overflow-hidden h-full" style={{ minHeight: '520px' }}>
-      {/* ── Left: Interactive Network Visualization ─────────────────── */}
-      <div className="flex-1 relative overflow-hidden bg-background" style={{ minHeight: '520px' }}>
-        {/* Canvas ambient effects layer */}
-        <AmbientCanvas />
+  const handleNodeSelect = (node: SelectedNode) => {
+    if (node === 'knowledge') { navigate('/knowledge-graph'); return; }
+    setSelectedNode(node);
+  };
 
-        {/* ReactFlow interactive layer */}
-        <div className="absolute inset-0" style={{ zIndex: 1 }}>
+  const handleRemoveSkill = (name: string) =>
+    setSkills((prev) => prev.filter((s) => s.name !== name));
+
+  const handleAddSkill = (skill: AgentSkillRecord) =>
+    setSkills((prev) => prev.some((s) => s.name === skill.name) ? prev : [...prev, { ...skill, enabled: true }]);
+
+  const handleRemoveTool = (toolId: string) =>
+    setToolSections((prev) =>
+      prev.map((section) => ({
+        ...section,
+        tools: section.tools.filter((t) => t.id !== toolId),
+      })),
+    );
+
+  const handleAddTool = (tool: AgentToolRecord) =>
+    setToolSections((prev) => {
+      const exists = prev.some((s) => s.tools.some((t) => t.id === tool.id));
+      if (exists) return prev;
+      if (prev.length > 0) {
+        return prev.map((s, i) =>
+          i === 0 ? { ...s, tools: [...s.tools, { ...tool, enabled: true }] } : s,
+        );
+      }
+      return [{ id: 'default', label: 'Tools', tools: [{ ...tool, enabled: true }] }];
+    });
+
+  const mutatedRuntime: AgentRuntimeData = useMemo(
+    () => ({ ...runtime, skills, toolSections }),
+    [runtime, skills, toolSections],
+  );
+
+  return (
+    <div className="flex overflow-hidden h-full min-h-[520px]">
+      <div className="flex-1 relative overflow-hidden bg-background min-h-[520px]">
+        <AmbientCanvas />
+        <div className="absolute inset-0 z-[1]">
           <ReactFlowProvider>
-            <AgentNetworkFlow agent={agent} runtime={runtime} onNodeSelect={setSelectedNode} />
+            <AgentNetworkFlow
+              agent={agent}
+              runtime={mutatedRuntime}
+              selectedNode={selectedNode}
+              onNodeSelect={handleNodeSelect}
+            />
           </ReactFlowProvider>
         </div>
-
-        {/* Ping status — bottom-left */}
-        <div className="absolute bottom-4 left-4 flex items-center gap-2" style={{ zIndex: 2 }}>
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
-            style={{ background: '#10b981' }}
-          />
+        <div className="absolute bottom-4 left-4 flex items-center gap-2 z-[2]">
+          <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse bg-success" />
           <span className="text-[9px] text-muted-foreground font-mono">
             Pinging Sub-Nodes{pingDots}
           </span>
         </div>
       </div>
 
-      {/* ── Right: Properties Panel ────────────────────────────────── */}
       <AgentOverviewPropertiesPanel
         agent={agent}
-        runtime={runtime}
+        runtime={mutatedRuntime}
         selectedNode={selectedNode}
         onBack={() => setSelectedNode(null)}
+        onRemoveSkill={handleRemoveSkill}
+        onAddSkill={handleAddSkill}
+        onRemoveTool={handleRemoveTool}
+        onAddTool={handleAddTool}
       />
     </div>
   );

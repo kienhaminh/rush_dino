@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -17,7 +18,8 @@ use tokio::sync::mpsc;
 use rushdino_security::{taint::TaintLevel, validation::scan_prompt_injection};
 
 use crate::{
-    context::{estimate_tokens, truncate_messages},
+    compaction::{compact_messages, needs_compaction},
+    context::estimate_tokens,
     engine::AgentConfig,
     tool_registry::{SessionToolContext, ToolRegistry},
 };
@@ -60,14 +62,17 @@ pub async fn run_react_loop(
     let mut last = None;
     let mut total_usage: Option<Usage> = None;
     let mut last_presented_content: Option<RichContent> = None;
+    let mut call_counts: HashMap<String, usize> = HashMap::new();
 
     for _ in 0..config.max_iterations {
-        let input = truncate_messages(&messages, config.max_context_tokens);
+        if needs_compaction(&messages, config.max_context_tokens) {
+            messages = compact_messages(&provider, messages, config.max_context_tokens).await;
+        }
         let response = provider
-            .chat(build_chat_request(input.clone(), &session_ctx, config))
+            .chat(build_chat_request(messages.clone(), &session_ctx, config))
             .await?;
         let iteration_usage = response.usage.clone().unwrap_or_else(|| {
-            estimate_turn_usage(&input, &response.content, &response.tool_calls)
+            estimate_turn_usage(&messages, &response.content, &response.tool_calls)
         });
         accumulate_usage(&mut total_usage, &iteration_usage);
         let mut response = response;
@@ -105,6 +110,7 @@ pub async fn run_react_loop(
             response.tool_calls.clone(),
             base_taint,
             event_tx.as_ref(),
+            &mut call_counts,
         )
         .await
         {
@@ -112,6 +118,11 @@ pub async fn run_react_loop(
         }
 
         last = Some(response);
+
+        // Throttle between iterations to prevent rapid-fire tool cycling.
+        if config.turn_delay_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(config.turn_delay_ms)).await;
+        }
     }
 
     let mut fallback = last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
@@ -130,11 +141,14 @@ pub async fn run_react_loop_streaming(
     let mut last = None;
     let mut total_usage: Option<Usage> = None;
     let mut last_presented_content: Option<RichContent> = None;
+    let mut call_counts: HashMap<String, usize> = HashMap::new();
 
     for _ in 0..config.max_iterations {
-        let input = truncate_messages(&messages, config.max_context_tokens);
+        if needs_compaction(&messages, config.max_context_tokens) {
+            messages = compact_messages(&provider, messages, config.max_context_tokens).await;
+        }
         let mut stream = provider
-            .stream_chat(build_chat_request(input.clone(), &session_ctx, config))
+            .stream_chat(build_chat_request(messages.clone(), &session_ctx, config))
             .await?;
 
         let mut content = String::new();
@@ -183,7 +197,7 @@ pub async fn run_react_loop_streaming(
             }
         }
 
-        let iteration_usage = estimate_turn_usage(&input, &content, &tool_calls);
+        let iteration_usage = estimate_turn_usage(&messages, &content, &tool_calls);
         accumulate_usage(&mut total_usage, &iteration_usage);
 
         if tool_calls.is_empty() {
@@ -239,12 +253,17 @@ pub async fn run_react_loop_streaming(
             response.tool_calls.clone(),
             base_taint,
             Some(&event_tx),
+            &mut call_counts,
         )
         .await
         {
             last_presented_content = Some(rich_content);
         }
         last = Some(response);
+
+        if config.turn_delay_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(config.turn_delay_ms)).await;
+        }
     }
 
     let mut fallback = last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
@@ -324,6 +343,7 @@ fn estimate_tool_call_tokens(call: &ToolCall) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     use chrono::Utc;
@@ -439,6 +459,7 @@ mod tests {
             ],
             TaintLevel::Clean,
             None,
+            &mut HashMap::new(),
         )
         .await
         .expect("present_message should capture the last rich payload");
@@ -455,8 +476,33 @@ async fn append_tool_outputs(
     calls: Vec<ToolCall>,
     base_taint: TaintLevel,
     event_tx: Option<&mpsc::Sender<StreamingEvent>>,
+    call_counts: &mut HashMap<String, usize>,
 ) -> Option<RichContent> {
-    let futures = calls.into_iter().map(|call| {
+    // Pre-check rate limits and split calls into allowed vs rate-limited.
+    let mut rate_limited: Vec<(ToolCall, String)> = Vec::new();
+    let mut allowed: Vec<ToolCall> = Vec::new();
+
+    for call in calls {
+        let count = call_counts.entry(call.name.clone()).or_insert(0);
+        let limit = registry
+            .get(&call.name)
+            .and_then(|t| t.max_calls_per_turn());
+        if let Some(max) = limit {
+            if *count >= max {
+                let msg = format!(
+                    "Rate limit: {name} has been called {count} time(s) this turn (max {max}). \
+                     Use web_fetch to read specific URLs from previous results instead of searching again.",
+                    name = call.name,
+                );
+                rate_limited.push((call, msg));
+                continue;
+            }
+        }
+        *count += 1;
+        allowed.push(call);
+    }
+
+    let futures = allowed.into_iter().map(|call| {
         let registry = registry.clone();
         let base_taint = base_taint.clone();
         let event_tx = event_tx.cloned();
@@ -561,6 +607,36 @@ async fn append_tool_outputs(
     });
 
     let mut presented_content = None;
+
+    // Append rate-limited tool results first.
+    for (call, msg) in &rate_limited {
+        tracing::info!(tool = %call.name, "tool call rate-limited");
+        if let Some(tx) = event_tx {
+            let _ = tx
+                .send(StreamingEvent::ToolStart {
+                    tool_name: call.name.clone(),
+                    args: call.arguments.clone(),
+                })
+                .await;
+            let _ = tx
+                .send(StreamingEvent::ToolEnd {
+                    tool_name: call.name.clone(),
+                    result: msg.clone(),
+                    is_error: true,
+                })
+                .await;
+        }
+        messages.push(Message {
+            id: call.id.clone(),
+            role: Role::Tool,
+            content: format!("[tool_error:{}] {msg}", call.name),
+            tool_calls: None,
+            rich_content: None,
+            created_at: Utc::now(),
+        });
+    }
+
+    // Append normally executed tool results.
     for (call, output, is_error) in join_all(futures).await {
         if !is_error && call.name == "message" {
             if let Ok(rich_content) = RichContent::from_tool_value(&call.arguments) {

@@ -212,6 +212,23 @@ pub struct ExecutionConfig {
     pub shell_exec_sandbox: ShellExecSandboxConfig,
 }
 
+/// Agent runtime settings (e.g. context window size).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentSection {
+    pub max_context_tokens: Option<usize>,
+}
+
+/// Configuration for a single external MCP server (HTTP/SSE transport).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct McpServerConfig {
+    /// Display name for this server (e.g. "filesystem").
+    pub name: String,
+    /// SSE endpoint URL (e.g. "http://localhost:3100/sse").
+    pub url: String,
+    /// Optional Authorization header value (e.g. "Bearer sk-...").
+    pub auth_header: Option<String>,
+}
+
 /// Bootstrap file injection limits for the system prompt.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct BootstrapConfig {
@@ -221,10 +238,30 @@ pub struct BootstrapConfig {
     pub max_total_chars: Option<usize>,
 }
 
-/// Local knowledge graph settings.
+/// Credentials for connecting to an external knowledge graph endpoint.
+/// Stored in `credentials.toml` under `[knowledge_graph]`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct KgCredentials {
+    /// Username for Bolt/Cypher (Neo4j, Memgraph) or HTTP Basic auth.
+    pub username: Option<String>,
+    /// Password for Bolt/Cypher or HTTP Basic auth.
+    pub password: Option<String>,
+    /// Bearer token for SPARQL endpoints that use API-key auth.
+    pub api_key: Option<String>,
+}
+
+/// External knowledge graph gateway settings.
+///
+/// Set `enabled = true` and provide a `uri` to connect to an external KG.
+/// The protocol adapter is inferred from the URI scheme:
+/// - `bolt://`, `neo4j://`, `neo4j+s://` → Bolt/Cypher (Neo4j, Memgraph, …)
+/// - `http://`, `https://`               → SPARQL 1.1 HTTP
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnowledgeGraphConfig {
     pub enabled: bool,
+    /// Connection URI for the external knowledge graph endpoint.
+    /// The URI scheme selects the protocol adapter automatically.
+    pub uri: Option<String>,
     pub auto_context: bool,
     pub max_context_facts: u32,
     pub max_extraction_chars: u32,
@@ -238,6 +275,7 @@ impl Default for KnowledgeGraphConfig {
     fn default() -> Self {
         Self {
             enabled: false,
+            uri: None,
             auto_context: true,
             max_context_facts: 12,
             max_extraction_chars: 4_000,
@@ -272,6 +310,12 @@ pub struct AppConfig {
     pub knowledge_graph: KnowledgeGraphConfig,
     #[serde(default)]
     pub bootstrap: BootstrapConfig,
+    #[serde(default)]
+    pub agent: AgentSection,
+    /// External MCP servers connected via HTTP/SSE.
+    /// Tools discovered from these servers are available to all agents automatically.
+    #[serde(default)]
+    pub mcp_servers: Vec<McpServerConfig>,
 }
 
 impl Default for AppConfig {
@@ -304,6 +348,8 @@ impl Default for AppConfig {
             execution: ExecutionConfig::default(),
             knowledge_graph: KnowledgeGraphConfig::default(),
             bootstrap: BootstrapConfig::default(),
+            agent: AgentSection::default(),
+            mcp_servers: Vec::new(),
         }
     }
 }
@@ -323,6 +369,9 @@ pub struct CredentialsConfig {
     pub slack_app_token: Option<String>,
     /// HMAC-SHA256 API secret (hex-encoded 256-bit key).  Generated on `rushdino init`.
     pub api_secret: Option<String>,
+    /// Credentials for the external knowledge graph endpoint.
+    #[serde(default)]
+    pub knowledge_graph: KgCredentials,
 }
 
 impl AppConfig {

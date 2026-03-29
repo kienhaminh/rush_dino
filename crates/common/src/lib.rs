@@ -9,11 +9,13 @@ pub mod models;
 pub mod rich_content;
 pub mod skills;
 pub mod templates;
+pub mod cleanup_manifests;
+pub mod release_check;
 pub mod workflow_templates;
 
 pub use config::{
-    AppConfig, ChannelAccessConfig, CredentialsConfig, DmPolicy, ExecutionConfig, Provider,
-    ShellExecSandboxConfig,
+    AppConfig, ChannelAccessConfig, CredentialsConfig, DmPolicy, ExecutionConfig, McpServerConfig,
+    Provider, ShellExecSandboxConfig,
 };
 pub use error::{AppError, Result};
 pub use rich_content::{LinkTarget, RichContent, RichContentBlock, TextFormat};

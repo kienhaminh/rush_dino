@@ -33,7 +33,7 @@ pub async fn search(
 ) -> Result<Json<serde_json::Value>> {
     let service = state
         .knowledge_graph()
-        .ok_or_else(|| AppError::Validation("knowledge graph is disabled".to_owned()))?;
+        .ok_or_else(|| AppError::Validation("Knowledge graph is not connected — check the URI and credentials in Settings".to_owned()))?;
     let q = query.q.unwrap_or_default();
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let items = service.search(&q, limit).await?;
@@ -46,7 +46,7 @@ pub async fn facts(
 ) -> Result<Json<serde_json::Value>> {
     let service = state
         .knowledge_graph()
-        .ok_or_else(|| AppError::Validation("knowledge graph is disabled".to_owned()))?;
+        .ok_or_else(|| AppError::Validation("Knowledge graph is not connected — check the URI and credentials in Settings".to_owned()))?;
     let q = query.q.unwrap_or_default();
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let _conversation_id = query.conversation_id;
@@ -62,7 +62,7 @@ pub async fn node(
 ) -> Result<Json<serde_json::Value>> {
     let service = state
         .knowledge_graph()
-        .ok_or_else(|| AppError::Validation("knowledge graph is disabled".to_owned()))?;
+        .ok_or_else(|| AppError::Validation("Knowledge graph is not connected — check the URI and credentials in Settings".to_owned()))?;
     let limit = query.limit.unwrap_or(20).clamp(1, 100);
     let item = service.node(&id, limit).await?;
     Ok(Json(serde_json::json!({ "item": item })))
@@ -71,7 +71,7 @@ pub async fn node(
 pub async fn stats(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
     let service = state
         .knowledge_graph()
-        .ok_or_else(|| AppError::Validation("knowledge graph is disabled".to_owned()))?;
+        .ok_or_else(|| AppError::Validation("Knowledge graph is not connected — check the URI and credentials in Settings".to_owned()))?;
     let stats = service.stats().await?;
     Ok(Json(serde_json::json!(stats)))
 }
@@ -79,7 +79,7 @@ pub async fn stats(State(state): State<AppState>) -> Result<Json<serde_json::Val
 pub async fn backfill(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
     let service = state
         .knowledge_graph()
-        .ok_or_else(|| AppError::Validation("knowledge graph is disabled".to_owned()))?;
+        .ok_or_else(|| AppError::Validation("Knowledge graph is not connected — check the URI and credentials in Settings".to_owned()))?;
     let result = service.run_backfill().await?;
     Ok(Json(serde_json::json!(result)))
 }

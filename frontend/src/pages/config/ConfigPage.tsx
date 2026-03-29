@@ -8,8 +8,11 @@ import type { AppConfigView, CredentialsView } from '@/lib/types';
 import { ConfigSectionProfiles } from './config-section-profiles';
 import { ConfigSectionCredentials } from './config-section-credentials';
 import { ConfigSectionServer } from './config-section-server';
+import { ConfigSectionCoreFiles } from './config-section-core-files';
+import { ConfigSectionKnowledgeGraph } from './config-section-knowledge-graph';
+import { ConfigSectionMcpServers } from './config-section-mcp-servers';
 
-type Section = 'profiles' | 'credentials' | 'server';
+type Section = 'profiles' | 'credentials' | 'server' | 'core-files' | 'knowledge-graph' | 'mcp-servers';
 
 const SECTIONS: { key: Section; label: string; description: string }[] = [
   {
@@ -19,6 +22,21 @@ const SECTIONS: { key: Section; label: string; description: string }[] = [
   },
   { key: 'credentials', label: 'Credentials', description: 'API keys and bot tokens.' },
   { key: 'server', label: 'Server', description: 'Host, port, and security settings.' },
+  {
+    key: 'core-files',
+    label: 'Core Files',
+    description: 'View and edit the core memory files injected into every agent session.',
+  },
+  {
+    key: 'knowledge-graph',
+    label: 'Knowledge Graph',
+    description: 'Connect to an external knowledge graph for long-term fact storage.',
+  },
+  {
+    key: 'mcp-servers',
+    label: 'MCP Servers',
+    description: 'External MCP servers connected via SSE. Tools are available to all agents automatically.',
+  },
 ];
 
 type Status =
@@ -166,9 +184,21 @@ export function ConfigPage() {
             {activeSection === 'server' && (
               <ConfigSectionServer config={config} onChange={handleConfigChange} />
             )}
+            {activeSection === 'core-files' && <ConfigSectionCoreFiles />}
+            {activeSection === 'knowledge-graph' && (
+              <ConfigSectionKnowledgeGraph
+                config={config}
+                credentials={credentials}
+                onConfigChange={handleConfigChange}
+                onCredentialsChange={handleCredentialsChange}
+              />
+            )}
+            {activeSection === 'mcp-servers' && config && (
+              <ConfigSectionMcpServers config={config} onConfigChange={handleConfigChange} />
+            )}
 
             {/* Footer */}
-            {activeSection !== 'profiles' && (
+            {activeSection !== 'profiles' && activeSection !== 'core-files' && (
               <div className="flex items-center justify-between border-t border-border/50 pt-4">
                 <div>
                   {status.kind === 'saving' && (

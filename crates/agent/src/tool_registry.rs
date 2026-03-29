@@ -18,6 +18,12 @@ pub trait Tool: Send + Sync {
         vec![]
     }
     fn parameters(&self) -> Value;
+    /// Maximum number of times this tool may be called within a single react
+    /// loop (one user turn). `None` means unlimited. When the limit is reached
+    /// the react loop returns a guidance message instead of executing the tool.
+    fn max_calls_per_turn(&self) -> Option<usize> {
+        None
+    }
     async fn execute(&self, args: Value) -> Result<String>;
 }
 

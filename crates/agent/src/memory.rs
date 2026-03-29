@@ -138,7 +138,17 @@ impl MemoryManager {
         } else {
             self.canonical_memory_path()
         };
-        fs::write(&path, content)?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if daily {
+            // Append to daily notes so multiple writes accumulate rather than overwrite.
+            use std::io::Write;
+            let mut file = fs::OpenOptions::new().create(true).append(true).open(&path)?;
+            file.write_all(content.as_bytes())?;
+        } else {
+            fs::write(&path, content)?;
+        }
         Ok(path)
     }
 
@@ -161,7 +171,7 @@ impl MemoryManager {
     pub fn collect_startup_files(&self) -> Vec<BootstrapFile> {
         let mut files = Vec::new();
 
-        for name in ["USER.md", "TOOLS.md", "IDENTITY.md"] {
+        for name in ["SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"] {
             let path = self.resolve_named_path(name);
             let content = fs::read_to_string(&path).ok();
             files.push(BootstrapFile {
@@ -227,6 +237,23 @@ mod tests {
         assert_eq!(content, "root memory");
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn write_memory_daily_appends_not_overwrites() {
+        let dir = tempfile::tempdir().unwrap();
+        let mm = MemoryManager::new(dir.path().to_owned());
+        mm.write_memory("first\n", true).unwrap();
+        mm.write_memory("second\n", true).unwrap();
+        let today = chrono::Utc::now().date_naive();
+        let path = dir
+            .path()
+            .join("memory")
+            .join("daily")
+            .join(format!("{today}.md"));
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains("first"));
+        assert!(content.contains("second"));
     }
 
     #[test]

@@ -7,6 +7,7 @@ import {
   LayersIcon,
   PlayCircleIcon,
   RefreshCwIcon,
+  Trash2Icon,
   XCircleIcon,
 } from 'lucide-react';
 
@@ -21,7 +22,7 @@ import { KANBAN_COLUMNS } from './kanban-types';
 import { useKanbanBoard } from './use-kanban-board';
 
 export function KanbanPage() {
-  const { board, loading, refreshing, error, refresh } = useKanbanBoard(true);
+  const { board, loading, refreshing, error, refresh, deleteTask } = useKanbanBoard(true);
 
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
@@ -47,7 +48,7 @@ export function KanbanPage() {
         {board ? <KanbanStatsBar stats={board.stats} /> : null}
 
         {/* Board columns */}
-        {board ? <KanbanBoard columns={board.columns} /> : null}
+        {board ? <KanbanBoard columns={board.columns} onDeleteTask={deleteTask} /> : null}
 
         {/* Empty state */}
         {!loading && board && board.stats.total === 0 ? (
@@ -76,7 +77,6 @@ function KanbanHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="space-y-2">
-        <p className="text-lg font-semibold">Task Board</p>
         <p className="text-sm text-muted-foreground">
           Kanban view of inter-agent collaboration tasks.
         </p>
@@ -124,7 +124,13 @@ function KanbanStatsBar({ stats }: { stats: KanbanBoardResponse['stats'] }) {
   );
 }
 
-function KanbanBoard({ columns }: { columns: KanbanBoardColumns }) {
+function KanbanBoard({
+  columns,
+  onDeleteTask,
+}: {
+  columns: KanbanBoardColumns;
+  onDeleteTask: (taskId: string) => Promise<void>;
+}) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7 gap-3">
       {KANBAN_COLUMNS.map((col) => {
@@ -148,7 +154,7 @@ function KanbanBoard({ columns }: { columns: KanbanBoardColumns }) {
             ) : (
               <div className="space-y-2">
                 {tasks.map((task) => (
-                  <TaskCard key={task.id} task={task} />
+                  <TaskCard key={task.id} task={task} onDelete={onDeleteTask} />
                 ))}
               </div>
             )}
@@ -159,9 +165,25 @@ function KanbanBoard({ columns }: { columns: KanbanBoardColumns }) {
   );
 }
 
-function TaskCard({ task }: { task: KanbanTask }) {
+function TaskCard({
+  task,
+  onDelete,
+}: {
+  task: KanbanTask;
+  onDelete: (taskId: string) => Promise<void>;
+}) {
   return (
-    <article className="rounded-md border border-border/50 bg-background p-3 space-y-2 transition-colors hover:border-border">
+    <article className="group relative rounded-md border border-border/50 bg-background p-3 space-y-2 transition-colors hover:border-border">
+      {/* Delete button — visible on hover */}
+      <button
+        type="button"
+        onClick={() => onDelete(task.id)}
+        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
+        title="Delete task"
+      >
+        <Trash2Icon className="w-3.5 h-3.5" />
+      </button>
+
       {/* Title + Priority */}
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm leading-snug line-clamp-2">{task.title}</p>

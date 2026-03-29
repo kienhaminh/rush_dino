@@ -16,14 +16,23 @@ import type {
   RunKind,
   RunSnapshot,
   RunState,
+  McpServerStatus,
+  SandboxMcpPolicy,
   SandboxNetworkPolicy,
   SandboxPolicy,
+  SandboxProcessPolicy,
   SessionSummary,
+  SoulMemoryFile,
   SoulMemoryStateResponse,
   RegisteredTool,
   SkillRecord,
   SystemSummaryResponse,
   UsageMetricsResponse,
+  GraphStats,
+  GraphFact,
+  GraphEntity,
+  GraphNode,
+  IngestStats,
 } from './types';
 import type {
   AgentRecord,
@@ -227,6 +236,16 @@ export async function fetchSoulMemoryState(): Promise<SoulMemoryStateResponse> {
   return parseJsonOrThrow(response, endpoint);
 }
 
+export async function patchSoulMemoryFile(filename: string, content: string): Promise<SoulMemoryFile> {
+  const endpoint = '/api/system/soul-memory/file';
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ filename, content }),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
 export async function fetchConfig(): Promise<AppConfigView> {
   const response = await fetch('/api/config');
   if (!response.ok) throw new Error(`Failed to fetch config: ${response.statusText}`);
@@ -345,6 +364,13 @@ export async function fetchWorkflowRun(runId: string): Promise<WorkflowRunDetail
 
 export async function fetchSessions(): Promise<SessionSummary[]> {
   const endpoint = '/api/sessions';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return (data.items ?? []).map(normalizeSessionSummary);
+}
+
+export async function fetchAgentSessions(): Promise<SessionSummary[]> {
+  const endpoint = '/api/agent-sessions';
   const response = await fetch(endpoint);
   const data = await parseJsonOrThrow(response, endpoint);
   return (data.items ?? []).map(normalizeSessionSummary);
@@ -784,4 +810,128 @@ export async function denySessionRequest(
     body: JSON.stringify({ request_id: requestId }),
   });
   await parseJsonOrThrow(response, endpoint);
+}
+
+// ---------------------------------------------------------------------------
+// Sandbox MCP / process policy API
+// ---------------------------------------------------------------------------
+
+/** Fetch the list of configured MCP servers and their connection status. */
+export async function fetchMcpStatus(): Promise<McpServerStatus[]> {
+  const endpoint = '/api/mcp/status';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return Array.isArray(data) ? data : (data.items ?? []);
+}
+
+/** Hot-reload the MCP server policy for an active session without restarting. */
+export async function patchSessionMcpPolicy(
+  sessionId: string,
+  mcpPolicy: SandboxMcpPolicy,
+): Promise<void> {
+  const endpoint = `/api/sessions/${encodeURIComponent(sessionId)}/sandbox/mcp`;
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(mcpPolicy),
+  });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+/** Hot-reload the bash/process policy for an active session without restarting. */
+export async function patchSessionBashPolicy(
+  sessionId: string,
+  processPolicy: SandboxProcessPolicy,
+): Promise<void> {
+  const endpoint = `/api/sessions/${encodeURIComponent(sessionId)}/sandbox/process`;
+  const response = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(processPolicy),
+  });
+  await parseJsonOrThrow(response, endpoint);
+}
+
+// ---------------------------------------------------------------------------
+// Knowledge graph API
+// ---------------------------------------------------------------------------
+
+export async function fetchKgStats(): Promise<GraphStats> {
+  const endpoint = '/api/graph/stats';
+  const response = await fetch(endpoint);
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchKgFacts(q: string, limit = 20): Promise<GraphFact[]> {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  const endpoint = `/api/graph/facts?${params}`;
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function fetchKgSearch(q: string, limit = 20): Promise<GraphEntity[]> {
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  const endpoint = `/api/graph/search?${params}`;
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function fetchKgNode(id: string, limit = 20): Promise<GraphNode> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const endpoint = `/api/graph/node/${encodeURIComponent(id)}?${params}`;
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.item;
+}
+
+export async function triggerKgBackfill(): Promise<IngestStats> {
+  const endpoint = '/api/graph/backfill';
+  const response = await fetch(endpoint, { method: 'POST' });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+// ---------------------------------------------------------------------------
+// Version update API
+// ---------------------------------------------------------------------------
+
+export type VersionCheckResponse = {
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
+  is_critical: boolean;
+  release_notes: string | null;
+  release_url: string;
+  skipped: boolean;
+};
+
+export type UpgradeResponse = {
+  success: boolean;
+  installed_version: string;
+  cleanup_files: string[];
+};
+
+export async function fetchVersionCheck(): Promise<VersionCheckResponse> {
+  const response = await fetch('/api/version/check');
+  return parseJsonOrThrow(response, '/api/version/check');
+}
+
+export async function triggerUpgrade(): Promise<UpgradeResponse> {
+  const response = await fetch('/api/version/upgrade', { method: 'POST' });
+  return parseJsonOrThrow(response, '/api/version/upgrade');
+}
+
+export async function triggerRestart(): Promise<{ status: string }> {
+  const response = await fetch('/api/version/restart', { method: 'POST' });
+  return parseJsonOrThrow(response, '/api/version/restart');
+}
+
+export async function skipVersion(version: string): Promise<{ status: string; version: string }> {
+  const response = await fetch('/api/version/skip', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ version }),
+  });
+  return parseJsonOrThrow(response, '/api/version/skip');
 }

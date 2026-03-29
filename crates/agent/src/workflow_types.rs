@@ -1,5 +1,36 @@
 use serde::{Deserialize, Serialize};
 
+/// Type of workflow step execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum StepType {
+    /// Default: run through an LLM agent react loop.
+    #[default]
+    Agent,
+    /// Execute a shell command; instructions contain the command string.
+    Script,
+    /// Simple string template substitution using previous step outputs.
+    Transform,
+}
+
+impl StepType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Agent => "agent",
+            Self::Script => "script",
+            Self::Transform => "transform",
+        }
+    }
+
+    pub fn from_str_loose(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "script" => Self::Script,
+            "transform" => Self::Transform,
+            _ => Self::Agent,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum WorkflowSource {
@@ -117,6 +148,9 @@ pub struct WorkflowStepInput {
     pub name: String,
     pub instructions: String,
     pub agent_id: String,
+    /// Type of step execution (agent, script, transform). Defaults to agent.
+    #[serde(default)]
+    pub step_type: StepType,
     /// Step IDs this step depends on. NULL = linear (position-based).
     #[serde(default)]
     pub depends_on: Option<Vec<String>>,
@@ -158,6 +192,9 @@ pub struct WorkflowStep {
     pub name: String,
     pub instructions: String,
     pub agent_id: String,
+    /// Type of step execution (agent, script, transform). Defaults to agent.
+    #[serde(default)]
+    pub step_type: StepType,
     pub created_at: String,
     pub updated_at: String,
     #[serde(default)]
@@ -259,6 +296,8 @@ pub struct WorkflowRunExecutionStep {
     pub step_name: String,
     pub instructions: String,
     pub agent_id: String,
+    /// Type of step execution (agent, script, transform). Defaults to agent.
+    pub step_type: StepType,
     /// Parsed from JSON column; None means linear (position-based).
     pub depends_on: Option<Vec<String>>,
     pub max_retries: u8,

@@ -107,7 +107,7 @@ export function SessionsRoute() {
       }
     }
     loadSession();
-  }, [selectedSessionId, sessions]);
+  }, [selectedSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = async () => {
     setError(null);

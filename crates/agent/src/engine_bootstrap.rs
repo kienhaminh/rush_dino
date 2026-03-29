@@ -4,14 +4,11 @@ use uuid::Uuid;
 use rushdino_common::models::{Message, Role};
 
 use crate::{
-    agent_manager::AgentManager,
     engine::AgentConfig,
     memory::MemoryManager,
-    memory_bootstrap::{
-        build_bootstrap_context, build_truncation_warning_lines, clamp_to_char_boundary,
-    },
+    memory_bootstrap::clamp_to_char_boundary,
     skill_manager::SkillManager,
-    system_prompt::{build_system_prompt, AgentEntry, SkillEntry, SystemPromptParams},
+    system_prompt::{build_system_prompt, SkillEntry, SystemPromptParams},
     tool_registry::SessionToolContext,
 };
 
@@ -66,46 +63,38 @@ pub fn title_from(input: &str) -> &str {
 pub fn system_message(
     config: &AgentConfig,
     memory: &MemoryManager,
-    agent_manager: &AgentManager,
     skills: Vec<SkillEntry>,
     session_ctx: &SessionToolContext,
+    agents: &[crate::agent_manager::AgentTemplate],
 ) -> Message {
     // BOOTSTRAP.md, if present, replaces the agent prompt but still gets the full
-    // system prompt (tooling, skills, agents) so the agent can use tools — including
+    // system prompt (tooling, skills) so the agent can use tools — including
     // shell_exec to delete BOOTSTRAP.md once first-run setup is complete.
     let agent_prompt = memory
         .read_named("BOOTSTRAP.md")
         .or_else(|_| memory.read_named("AGENTS.md"))
         .unwrap_or_else(|_| config.system_prompt.clone());
 
-    let startup_files = memory.collect_startup_files();
-    let ctx_files = build_bootstrap_context(
-        startup_files,
-        config.bootstrap_max_chars,
-        config.bootstrap_total_max_chars,
-    );
-    let truncation_warnings = build_truncation_warning_lines(&ctx_files);
+    let tool_defs = session_ctx.active_definitions(); // already sorted
 
-    let agents = agent_manager
-        .list()
-        .into_iter()
+    // Map AgentTemplate slice → AgentEntry vec for the system prompt renderer.
+    use crate::system_prompt::AgentEntry;
+    let agent_entries: Vec<AgentEntry> = agents
+        .iter()
         .map(|a| AgentEntry {
-            name: a.name,
-            icon: a.icon,
-            description: a.description,
+            name: a.name.clone(),
+            description: a.description.clone(),
+            icon: a.icon.clone(),
         })
         .collect();
-
-    let tool_defs = session_ctx.active_definitions(); // already sorted
 
     let content = build_system_prompt(SystemPromptParams {
         agent_prompt,
         tool_defs,
-        agents,
         skills,
-        ctx_files,
-        truncation_warnings,
-        boot: memory.read_named("BOOT.md").ok(),
+        agents: agent_entries,
+        ctx_files: vec![],
+        truncation_warnings: vec![],
         workspace_dir: Some(memory.root().display().to_string()),
     });
 
@@ -133,6 +122,30 @@ pub fn user_message(input: &str) -> Message {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_message_includes_agents_when_provided() {
+        use crate::agent_manager::AgentTemplate;
+        let config = AgentConfig::default();
+        let temp = tempfile::tempdir().unwrap();
+        let memory = MemoryManager::new(temp.path().to_owned());
+        let session_ctx = SessionToolContext::new(vec![], &[]);
+        let agents = vec![AgentTemplate {
+            name: "researcher".to_owned(),
+            description: "Research specialist".to_owned(),
+            system_prompt: String::new(),
+            icon: Some("📚".to_owned()),
+            tools: None,
+            color: None,
+            model: None,
+            claims_tasks: true,
+            claim_tags: Vec::new(),
+            sandbox_policy: None,
+        }];
+        let msg = system_message(&config, &memory, vec![], &session_ctx, &agents);
+        assert!(msg.content.contains("researcher"));
+        assert!(msg.content.contains("Available Agents"));
+    }
 
     #[test]
     fn title_from_does_not_panic_on_multibyte_utf8() {

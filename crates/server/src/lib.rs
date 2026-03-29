@@ -1,4 +1,5 @@
 pub mod approval_gate;
+pub mod mcp_manager;
 pub mod policy_system_broker;
 pub mod channel_pairing;
 mod chat_broadcast;
@@ -16,6 +17,8 @@ pub mod webchat;
 pub mod ws;
 
 use std::sync::Arc;
+
+use sqlx::SqlitePool;
 
 use axum::{
     middleware as axum_middleware,
@@ -36,6 +39,7 @@ use rushdino_security::rate_limit::EndpointLimiters;
 use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
+    mcp_manager::McpManager,
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
     cron_runtime::spawn_cron_runtime,
     middleware::{
@@ -49,35 +53,19 @@ use crate::{
     webchat::WebChatAdapter,
 };
 
-pub async fn run_server() -> Result<()> {
-    init::ensure_rushdino_dir()?;
-
-    let home = init::default_home_dir();
-    let config_path = home.join("config.toml");
-    let credentials_path = home.join("credentials.toml");
-    let config = Arc::new(AppConfig::load_and_reconcile()?);
-    let credentials = Arc::new(CredentialsConfig::load()?);
-
-    let pool = db::init_pool(&config.db_path).await?;
-    db::run_migrations(&pool).await?;
-
-    let pool = Arc::new(pool);
+/// Build the Axum application router with all state wired up.
+pub async fn build_app(
+    config: Arc<AppConfig>,
+    credentials: Arc<CredentialsConfig>,
+    config_path: std::path::PathBuf,
+    credentials_path: std::path::PathBuf,
+    pool: Arc<SqlitePool>,
+) -> Result<Router> {
     let chat_broadcast = Arc::new(ChatBroadcastHub::new());
     let runtime_logs = Arc::new(RuntimeLogStore::new(
         pool.clone(),
         Some(chat_broadcast.clone()),
     ));
-    let _ = log_runtime(
-        &runtime_logs,
-        "info",
-        "server",
-        "server startup initialized",
-        Some(serde_json::json!({
-            "dbPath": config.db_path.display().to_string(),
-            "dataDir": config.data_dir.display().to_string(),
-        })),
-    )
-    .await;
     let gate = ApprovalGate::new();
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
     runtime.reconcile_incomplete_runs().await?;
@@ -90,35 +78,10 @@ pub async fn run_server() -> Result<()> {
         system_broker.clone(),
         config_path.clone(),
         credentials_path.clone(),
+        chat_broadcast.sender(),
     ));
+
     spawn_cron_runtime(runtime_state.clone());
-
-    // Background heavy runtime initialization for fast boot.
-    let runtime_state_bg = runtime_state.clone();
-    let runtime_logs_bg = runtime_logs.clone();
-    tokio::spawn(async move {
-        if let Err(err) = refresh_runtime_from_disk(runtime_state_bg.as_ref()).await {
-            tracing::error!("failed to perform initial runtime refresh: {err}");
-        }
-
-        if let Some(unavailable_error) = runtime_state_bg.status().unavailable_error.clone() {
-            let _ = log_runtime(
-                &runtime_logs_bg,
-                "warn",
-                "provider",
-                "default profile runtime unavailable",
-                Some(serde_json::json!({ "error": unavailable_error })),
-            )
-            .await;
-        }
-
-        if let Some(engine) = runtime_state_bg.engine_opt() {
-            // Seed example workflows on first startup (skipped if any workflows already exist).
-            engine.seed_initial_workflows().await;
-            // Ensure the single main workspace session exists.
-            engine.ensure_main_session().await.ok();
-        }
-    });
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
@@ -338,6 +301,41 @@ pub async fn run_server() -> Result<()> {
     }
     runtime_state.set_skill_graph(skill_graph_service.clone());
 
+    // MCP: initialize manager. Reconcile (connect + register tools) happens after
+    // the engine is built in the startup spawn below, so MCP tools are present in
+    // the initial agent session.
+    let mcp_manager = McpManager::new();
+    let servers_bg = config.mcp_servers.clone();
+
+    // Build the engine synchronously so the router is ready to serve accurate status
+    // immediately (e.g. /healthz). Non-critical follow-up work (MCP reconcile,
+    // workflow seeding, session bootstrap) is spawned in the background.
+    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None).await {
+        tracing::error!("failed to perform initial runtime refresh: {err}");
+    }
+    if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
+        let _ = log_runtime(
+            &runtime_logs,
+            "warn",
+            "provider",
+            "default profile runtime unavailable",
+            Some(serde_json::json!({ "error": unavailable_error })),
+        )
+        .await;
+    }
+
+    // Spawn non-critical startup work in the background.
+    let runtime_state_bg = runtime_state.clone();
+    let mcp_manager_bg = mcp_manager.clone();
+    tokio::spawn(async move {
+        if let Some(engine) = runtime_state_bg.engine_opt() {
+            let registry = engine.tool_registry.clone();
+            mcp_manager_bg.reconcile_and_register(&servers_bg, registry).await;
+            engine.seed_initial_workflows().await;
+            engine.ensure_main_session().await.ok();
+        }
+    });
+
     let state = AppState::new(
         runtime_state.clone(),
         config_path,
@@ -356,6 +354,7 @@ pub async fn run_server() -> Result<()> {
         sandbox_registry,
         pending_oauth,
         skill_graph_service,
+        mcp_manager.clone(),
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -381,6 +380,7 @@ pub async fn run_server() -> Result<()> {
             "/api/sessions",
             get(routes::sessions::list_sessions).post(routes::sessions::create_session),
         )
+        .route("/api/agent-sessions", get(routes::sessions::list_agent_sessions))
         .route(
             "/api/sessions/:id",
             get(routes::sessions::get_session).delete(routes::sessions::delete_session),
@@ -471,6 +471,10 @@ pub async fn run_server() -> Result<()> {
             get(routes::soul_memory::get_soul_memory_state),
         )
         .route(
+            "/api/system/soul-memory/file",
+            patch(routes::soul_memory::patch_core_file),
+        )
+        .route(
             "/api/system/prompt",
             get(routes::soul_memory::get_system_prompt),
         )
@@ -529,7 +533,7 @@ pub async fn run_server() -> Result<()> {
         // Kanban task board
         .route("/api/kanban/board", get(routes::kanban::get_kanban_board))
         .route("/api/kanban/tasks", get(routes::kanban::list_kanban_tasks))
-        .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task))
+        .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task).delete(routes::kanban::delete_kanban_task))
         .route("/api/kanban/stats", get(routes::kanban::get_kanban_stats))
         .route("/api/graph/search", get(routes::graph::search))
         .route("/api/graph/facts", get(routes::graph::facts))
@@ -573,6 +577,7 @@ pub async fn run_server() -> Result<()> {
         .route("/api/skill-graph/edges/:id", axum::routing::delete(routes::skill_graph::delete_edge))
         .route("/api/skill-graph/assign", post(routes::skill_graph::assign_category))
         .route("/api/skill-graph/reseed", post(routes::skill_graph::reseed))
+        .route("/api/mcp/status", get(routes::mcp::get_mcp_status))
         .route(
             "/api/profiles/:id",
             axum::routing::put(routes::providers::update_profile)
@@ -611,6 +616,11 @@ pub async fn run_server() -> Result<()> {
             "/api/sessions/:session_id/sandbox/deny",
             post(routes::sandbox::deny_session_request),
         )
+        // Version update API
+        .route("/api/version/check", get(routes::version::check_version))
+        .route("/api/version/upgrade", post(routes::version::trigger_upgrade))
+        .route("/api/version/restart", post(routes::version::trigger_restart))
+        .route("/api/version/skip", post(routes::version::skip_version))
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),
@@ -628,20 +638,27 @@ pub async fn run_server() -> Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
+    Ok(app)
+}
+
+pub async fn run_server() -> Result<()> {
+    init::ensure_rushdino_dir()?;
+
+    let home = init::default_home_dir();
+    let config_path = home.join("config.toml");
+    let credentials_path = home.join("credentials.toml");
+    let config = Arc::new(AppConfig::load_and_reconcile()?);
+    let credentials = Arc::new(CredentialsConfig::load()?);
+
+    let pool = Arc::new(db::init_pool(&config.db_path).await?);
+    db::run_migrations(pool.as_ref()).await?;
+
+    let app = build_app(config.clone(), credentials, config_path, credentials_path, pool).await?;
+
     let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
-
     tracing::info!("rushdino server listening on http://{addr}");
-    let _ = log_runtime(
-        &runtime_logs,
-        "info",
-        "server",
-        "server listening",
-        Some(serde_json::json!({ "addr": addr })),
-    )
-    .await;
 
-    // Spawn background download of agent/skill templates (first-run only; skips existing files).
     let asset_home = init::default_home_dir();
     tokio::spawn(async move {
         if let Err(e) = asset_sync::seed_bundled_assets(&asset_home).await {
@@ -722,7 +739,7 @@ fn should_register_gateway_adapter(
 }
 
 pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
-    refresh_runtime_from_disk(state.runtime.as_ref()).await
+    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref())).await
 }
 
 async fn shutdown_signal() {

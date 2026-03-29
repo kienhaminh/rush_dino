@@ -21,7 +21,7 @@ function formatSchedule(job: ApiCronJobRecord): string {
 
 function deriveTarget(job: ApiCronJobRecord): { agentId: string; targetLabel: string } {
   if (job.target.kind === 'agent_turn') {
-    const agentId = job.target.agentId?.trim() || 'general-assistant';
+    const agentId = job.target.agentId?.trim() || '';
     return {
       agentId,
       targetLabel: `Agent: ${agentId}`,

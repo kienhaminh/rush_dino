@@ -81,21 +81,9 @@ interface Props {
   messages: Message[];
   systemPrompt?: string | null;
   actualPromptTokens?: number | null;
-  onAddTestMessage?: (role: 'user' | 'assistant', content: string) => void;
 }
 
-export function MessageThread({ messages, systemPrompt, actualPromptTokens, onAddTestMessage }: Props) {
-  const [testMode, setTestMode] = useState(false);
-  const [newRole, setNewRole] = useState<'user' | 'assistant'>('user');
-  const [newContent, setNewContent] = useState('');
-
-  const handleAdd = () => {
-    if (!newContent.trim()) return;
-    onAddTestMessage?.(newRole, newContent);
-    setNewContent('');
-    setTestMode(false);
-  };
-
+export function MessageThread({ messages, systemPrompt, actualPromptTokens }: Props) {
   const systemMessage: Message | null = systemPrompt
     ? { id: '__system__', role: 'system', content: systemPrompt, created_at: undefined }
     : null;
@@ -112,43 +100,7 @@ export function MessageThread({ messages, systemPrompt, actualPromptTokens, onAd
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Full Context Window ({allMessages.length} msgs · {isEstimated ? '~' : ''}{displayTotal.toLocaleString()} tok)
         </div>
-        <button
-          onClick={() => setTestMode(!testMode)}
-          className="text-[10px] text-primary hover:underline uppercase font-bold tracking-tighter"
-        >
-          {testMode ? 'Cancel' : '+ Add Test Message'}
-        </button>
       </div>
-
-      {testMode && (
-        <div className="border border-primary/30 rounded-lg p-3 bg-primary/5 space-y-3">
-          <div className="flex items-center gap-2">
-            <select
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value as any)}
-              className="text-[10px] bg-background border border-border rounded px-1 py-0.5"
-            >
-              <option value="user">User</option>
-              <option value="assistant">Assistant</option>
-            </select>
-            <span className="text-[10px] text-muted-foreground">Add a simulated message</span>
-          </div>
-          <textarea
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            className="w-full h-24 text-xs bg-background border border-border rounded p-2 focus:outline-none focus:ring-1 focus:ring-primary"
-            placeholder="Type message content here..."
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              onClick={handleAdd}
-              className="text-xs px-3 py-1 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
-            >
-              Add Message
-            </button>
-          </div>
-        </div>
-      )}
 
       {allMessages.length === 0 ? (
         <div className="text-xs text-muted-foreground italic">No messages in this session.</div>

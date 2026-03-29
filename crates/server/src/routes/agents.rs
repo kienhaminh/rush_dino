@@ -122,11 +122,12 @@ pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_jso
 
     let mapped = items
         .into_iter()
-        .map(|agent| AgentListItem {
+        .enumerate()
+        .map(|(idx, agent)| AgentListItem {
             id: agent.name.clone(),
             name: humanize_agent_name(&agent.name),
             emoji: agent.icon.unwrap_or_else(|| "🤖".to_owned()),
-            is_default: agent.name == "general-assistant",
+            is_default: idx == 0,
             workspace: config
                 .data_dir
                 .join("agents")
@@ -272,12 +273,6 @@ pub async fn delete_agent(
         return Err(AppError::Validation("invalid agent id".to_owned()));
     }
 
-    if agent_id == "general-assistant" {
-        return Err(AppError::Validation(
-            "cannot delete the default general-assistant template".to_owned(),
-        ));
-    }
-
     engine.delete_agent_template(&agent_id)?;
     Ok(Json(serde_json::json!({ "deleted": true, "id": agent_id })))
 }
@@ -286,12 +281,12 @@ pub async fn delete_agent(
 fn tool_section_id(tool_id: &str) -> &'static str {
     match tool_id {
         "read" | "write" | "edit" => "fs",
-        "exec" => "runtime",
+        "bash" => "runtime",
         "web_search" | "web_fetch" => "web",
         "memory_search" | "memory_write" | "knowledge_graph" => "memory",
         "sessions_list" | "sessions_history" | "sessions_send" | "sessions_spawn"
         | "session_status" => "sessions",
-        "list_agents" | "delegate" | "spawn_agents" | "subagents" => "agents",
+        "list_agents" | "delegate" | "spawn_agents" => "agents",
         "list_skills" | "read_skill" | "create_skill" => "skills",
         "message" => "messaging",
         "cron" | "workflow" => "automation",

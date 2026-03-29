@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { Brain, ChevronDown, ChevronUp } from 'lucide-react';
+import { useLayoutEffect, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface ThinkingBlockProps {
   content?: string;
@@ -7,78 +8,56 @@ interface ThinkingBlockProps {
 }
 
 export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
-  // Auto-collapse when thinking finishes
-  useEffect(() => {
+  // Collapse synchronously before paint to avoid a flash of the expanded state.
+  useLayoutEffect(() => {
     if (done) setExpanded(false);
   }, [done]);
 
   return (
-    <div className="flex justify-start py-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="max-w-[85%] flex flex-col items-start gap-1.5">
-        <span className="text-[9px] font-bold uppercase tracking-widest text-primary/60 pl-1 flex items-center gap-1.5">
-          <Brain size={9} className={done ? undefined : 'animate-pulse'} />
-          Thinking
+    <div className="py-0.5 animate-in fade-in duration-200 ml-9">
+      <button
+        type="button"
+        onClick={() => done && setExpanded((v) => !v)}
+        className={cn(
+          'flex items-center gap-2 text-left group rounded-lg px-2 py-1 -ml-2 transition-colors',
+          done ? 'cursor-pointer hover:bg-muted/20' : 'cursor-default',
+        )}
+      >
+        {/* Animated pulse ring while thinking */}
+        {!done && (
+          <span className="relative flex items-center justify-center w-3.5 h-3.5" aria-hidden>
+            <span className="absolute inset-0 rounded-full bg-[hsl(var(--brand-cyan)/0.15)] animate-ping" />
+            <span className="relative w-1.5 h-1.5 rounded-full bg-[hsl(var(--brand-cyan)/0.6)]" />
+          </span>
+        )}
+
+        {done && (
+          <span className="w-3.5 h-3.5 flex items-center justify-center">
+            <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/25" />
+          </span>
+        )}
+
+        <span className="text-[11px] text-muted-foreground/40 italic select-none group-hover:text-muted-foreground/60 transition-colors">
+          {done ? 'Thought for a moment' : 'Thinking\u2026'}
         </span>
 
-        {/* ── Live state: streaming not yet done ── */}
-        {!done && (
-          <div className="bg-primary/[0.07] border border-primary/25 rounded-[18px] rounded-bl-[4px] px-4 py-3 shadow-sm min-w-[80px]">
-            {content ? (
-              <p className="text-[11px] text-primary/60 font-mono italic leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto scrollbar-thin">
-                {content}
-              </p>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+        {done && (
+          expanded
+            ? <ChevronDown size={10} className="text-muted-foreground/30" />
+            : <ChevronRight size={10} className="text-muted-foreground/30" />
         )}
+      </button>
 
-        {/* ── Collapsed state: done, not expanded ── */}
-        {done && !expanded && (
-          <button
-            type="button"
-            aria-expanded={false}
-            onClick={() => setExpanded(true)}
-            className="bg-primary/[0.07] border border-primary/25 rounded-[18px] rounded-bl-[4px] px-4 py-2.5 shadow-sm text-[11px] text-primary/70 font-mono flex items-center gap-2 hover:bg-primary/[0.12] transition-colors"
-          >
-            View reasoning
-            <ChevronDown size={10} className="text-primary/40" />
-          </button>
-        )}
-
-        {/* ── Expanded state: done, user clicked to open ── */}
-        {done && expanded && (
-          <div className="bg-primary/[0.07] border border-primary/25 rounded-[18px] rounded-bl-[4px] px-4 py-3 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] font-bold uppercase tracking-widest text-primary/40">
-                Reasoning
-              </span>
-              <button
-                type="button"
-                aria-expanded={true}
-                aria-label="Collapse reasoning"
-                onClick={() => setExpanded(false)}
-                className="text-[10px] text-primary/50 hover:text-primary/80 transition-colors font-mono flex items-center gap-1"
-              >
-                Hide <ChevronUp size={10} />
-              </button>
-            </div>
-            <p className="text-[11px] text-primary/60 font-mono italic leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto scrollbar-thin">
-              {content ?? '(no content)'}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* Content — only visible when expanded */}
+      {expanded && content && (
+        <div className="mt-1 ml-1.5 pl-3 border-l border-[hsl(var(--brand-cyan)/0.15)] max-h-52 overflow-y-auto scrollbar-thin">
+          <p className="text-[12px] text-muted-foreground/45 leading-relaxed whitespace-pre-wrap italic">
+            {content}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

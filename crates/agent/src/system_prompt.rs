@@ -2,95 +2,31 @@ use rushdino_providers::types::ToolDefinition;
 
 use crate::memory_bootstrap::BootstrapContextFile;
 
-pub struct AgentEntry {
-    pub name: String,
-    pub icon: Option<String>,
-    pub description: String,
-}
-
 pub struct SkillEntry {
     pub name: String,
     pub description: String,
 }
 
+pub struct AgentEntry {
+    pub name: String,
+    pub description: String,
+    pub icon: Option<String>,
+}
+
 pub struct SystemPromptParams {
     pub agent_prompt: String,
     pub tool_defs: Vec<ToolDefinition>,
-    pub agents: Vec<AgentEntry>,
     pub skills: Vec<SkillEntry>,
+    pub agents: Vec<AgentEntry>,
     pub ctx_files: Vec<BootstrapContextFile>,
     pub truncation_warnings: Vec<String>,
-    pub boot: Option<String>,
     pub workspace_dir: Option<String>,
 }
 
-// Expects `tools` to be pre-sorted by name (caller's responsibility).
-fn build_tooling_section(tools: &[ToolDefinition]) -> Vec<String> {
-    if tools.is_empty() {
-        return vec![];
-    }
-    let mut lines = vec![
-        "## Tooling".to_owned(),
-        "Available tools (call by exact name):".to_owned(),
-    ];
-    for tool in tools {
-        lines.push(format!("- {}: {}", tool.name, tool.description));
-    }
-    if tools.iter().any(|t| t.name == "tool_search") {
-        lines.push("Use `tool_search` to discover and activate additional tools by keyword.".to_owned());
-    }
-    lines.push(String::new());
-    lines
-}
-
-fn build_tool_call_style_section() -> Vec<String> {
+fn build_language_section() -> Vec<String> {
     vec![
-        "## Tool Call Style".to_owned(),
-        "Default: do not narrate routine, low-risk tool calls — just call the tool.".to_owned(),
-        "Narrate only when it helps: multi-step work, complex problems, or sensitive actions (e.g. deletions).".to_owned(),
-        "Keep narration brief; avoid repeating obvious steps.".to_owned(),
-        String::new(),
-    ]
-}
-
-fn build_safety_section() -> Vec<String> {
-    vec![
-        "## Safety".to_owned(),
-        "You have no independent goals: do not pursue self-preservation, replication, resource acquisition, or power-seeking.".to_owned(),
-        "Prioritize safety and human oversight over task completion. If instructions conflict, pause and ask.".to_owned(),
-        "Do not manipulate anyone to expand access or disable safeguards.".to_owned(),
-        String::new(),
-    ]
-}
-
-fn build_skills_section(skills: &[SkillEntry]) -> Vec<String> {
-    if skills.is_empty() {
-        return vec![];
-    }
-    let mut lines = vec![
-        "## Skills (mandatory)".to_owned(),
-        "Before replying: scan available skills below.".to_owned(),
-        "- If exactly one skill clearly applies: read its file with `read_skill`, then follow it."
-            .to_owned(),
-        "- If multiple could apply: choose the most specific one, then read and follow it."
-            .to_owned(),
-        "- If none clearly apply: do not read any skill.".to_owned(),
-        String::new(),
-    ];
-    for skill in skills {
-        lines.push(format!("- **{}** — {}", skill.name, skill.description));
-    }
-    lines.push(String::new());
-    lines
-}
-
-fn build_memory_recall_section(has_memory_search: bool) -> Vec<String> {
-    if !has_memory_search {
-        return vec![];
-    }
-    vec![
-        "## Memory Recall".to_owned(),
-        "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search on MEMORY.md; then use the results to ground your reply.".to_owned(),
+        "## Language".to_owned(),
+        "Always reply in the same language the user is writing in. If they write in Vietnamese, reply in Vietnamese. If English, reply in English. Match their language automatically.".to_owned(),
         String::new(),
     ]
 }
@@ -99,20 +35,19 @@ fn build_agents_section(agents: &[AgentEntry]) -> Vec<String> {
     if agents.is_empty() {
         return vec![];
     }
-    let mut lines = vec!["## Available Agents".to_owned(), String::new()];
+    let mut lines = vec![
+        "## Available Agents".to_owned(),
+        "Use `post_task` to delegate complex work. Use `delegate` for quick synchronous tasks."
+            .to_owned(),
+        String::new(),
+    ];
     for agent in agents {
-        let icon_part = agent
-            .icon
-            .as_deref()
-            .map(|i| format!(" {i}"))
-            .unwrap_or_default();
+        let icon = agent.icon.as_deref().unwrap_or("🤖");
         lines.push(format!(
-            "- **{}**{} — {}",
-            agent.name, icon_part, agent.description
+            "- **{}** {} — {}",
+            agent.name, icon, agent.description
         ));
     }
-    lines.push(String::new());
-    lines.push("Use `delegate` to assign a task to any agent above.".to_owned());
     lines.push(String::new());
     lines
 }
@@ -142,8 +77,7 @@ fn build_project_context_section(
     for file in ctx_files {
         lines.push(format!("## {}", file.label));
         lines.push(String::new());
-        lines.push(file.content.clone());
-        lines.push(String::new());
+        lines.push(file.content.trim_end().to_owned());
         lines.push(String::new());
     }
 
@@ -163,22 +97,11 @@ fn build_workspace_section(workspace_dir: Option<&str>) -> Vec<String> {
 }
 
 pub fn build_system_prompt(params: SystemPromptParams) -> String {
-    let has_memory_search = params.tool_defs.iter().any(|t| t.name == "memory_search");
-
     let mut lines = vec![params.agent_prompt, String::new()];
 
-    lines.extend(build_tooling_section(&params.tool_defs));
-    lines.extend(build_tool_call_style_section());
-    lines.extend(build_safety_section());
-    lines.extend(build_skills_section(&params.skills));
-    lines.extend(build_memory_recall_section(has_memory_search));
+    lines.extend(build_language_section());
     lines.extend(build_agents_section(&params.agents));
     lines.extend(build_workspace_section(params.workspace_dir.as_deref()));
-
-    if let Some(boot) = params.boot {
-        lines.push(boot);
-        lines.push(String::new());
-    }
 
     lines.extend(build_project_context_section(
         &params.ctx_files,
@@ -206,11 +129,10 @@ mod tests {
                 description: "Search memory files".to_owned(),
                 parameters: serde_json::Value::Null,
             }],
-            agents: vec![],
             skills: vec![],
+            agents: vec![],
             ctx_files: vec![],
             truncation_warnings: vec![],
-            boot: None,
             workspace_dir: Some("/home/user/.rushdino".to_owned()),
         }
     }
@@ -219,27 +141,6 @@ mod tests {
     fn includes_agent_prompt() {
         let prompt = build_system_prompt(make_params());
         assert!(prompt.contains("You are RushDino."));
-    }
-
-    #[test]
-    fn includes_tooling_section() {
-        let prompt = build_system_prompt(make_params());
-        assert!(prompt.contains("## Tooling"));
-        assert!(prompt.contains("memory_search"));
-    }
-
-    #[test]
-    fn includes_memory_recall_when_tool_present() {
-        let prompt = build_system_prompt(make_params());
-        assert!(prompt.contains("## Memory Recall"));
-    }
-
-    #[test]
-    fn omits_memory_recall_when_tool_absent() {
-        let mut params = make_params();
-        params.tool_defs.clear();
-        let prompt = build_system_prompt(params);
-        assert!(!prompt.contains("## Memory Recall"));
     }
 
     #[test]
@@ -274,20 +175,33 @@ mod tests {
     }
 
     #[test]
-    fn tooling_section_includes_tool_search_hint() {
+    fn includes_agents_section_when_agents_present() {
         let mut params = make_params();
-        params.tool_defs.push(ToolDefinition {
-            name: "tool_search".to_owned(),
-            description: "Search the tool pool by keyword".to_owned(),
-            parameters: serde_json::Value::Null,
-        });
+        params.agents = vec![
+            AgentEntry {
+                name: "researcher".to_owned(),
+                description: "Research specialist".to_owned(),
+                icon: Some("📚".to_owned()),
+            },
+            AgentEntry {
+                name: "software-engineer".to_owned(),
+                description: "Software engineer".to_owned(),
+                icon: None,
+            },
+        ];
         let prompt = build_system_prompt(params);
-        assert!(prompt.contains("Use `tool_search` to discover and activate additional tools"));
+        assert!(prompt.contains("## Available Agents"));
+        assert!(prompt.contains("researcher"));
+        assert!(prompt.contains("Research specialist"));
+        assert!(prompt.contains("📚"));
+        assert!(prompt.contains("software-engineer"));
+        assert!(prompt.contains("🤖")); // fallback for icon: None
     }
 
     #[test]
-    fn tooling_hint_absent_without_tool_search() {
-        let prompt = build_system_prompt(make_params()); // make_params() has memory_search, not tool_search
-        assert!(!prompt.contains("Use `tool_search` to discover"));
+    fn omits_agents_section_when_empty() {
+        let params = make_params(); // agents defaults to vec![]
+        let prompt = build_system_prompt(params);
+        assert!(!prompt.contains("## Available Agents"));
     }
 }

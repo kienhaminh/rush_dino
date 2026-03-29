@@ -134,6 +134,10 @@ pub struct KanbanTask {
     pub updated_at: String,
     pub claimed_at: Option<String>,
     pub completed_at: Option<String>,
+    /// Number of times this task has been sent back for revision.
+    pub revision_count: u32,
+    /// Conversation to notify when this task reaches a terminal state (done/failed).
+    pub notify_conversation_id: Option<String>,
 }
 
 /// Input for creating a new task.
@@ -150,6 +154,8 @@ pub struct CreateTaskInput {
     pub source_request_id: Option<String>,
     #[serde(default = "default_complexity")]
     pub complexity_level: u32,
+    /// Conversation to notify when this task reaches a terminal state (done/failed).
+    pub notify_conversation_id: Option<String>,
 }
 
 fn default_priority() -> TaskPriority {
@@ -177,11 +183,36 @@ pub struct UpdateTaskInput {
 /// SQLite-backed store for kanban tasks.
 pub struct KanbanStore {
     pool: Arc<SqlitePool>,
+    /// Notifies the kanban dispatcher when new work is available (task created
+    /// or sent back for revision). Avoids polling-only dispatch latency.
+    task_notify: Arc<tokio::sync::Notify>,
 }
 
 impl KanbanStore {
     pub fn new(pool: Arc<SqlitePool>) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            task_notify: Arc::new(tokio::sync::Notify::new()),
+        }
+    }
+
+    /// Create a store that shares a dispatcher notification handle.
+    pub fn with_notify(pool: Arc<SqlitePool>, notify: Arc<tokio::sync::Notify>) -> Self {
+        Self {
+            pool,
+            task_notify: notify,
+        }
+    }
+
+    /// Returns a clone of the task notification handle so the dispatcher can
+    /// wait on it.
+    pub fn task_notify(&self) -> Arc<tokio::sync::Notify> {
+        self.task_notify.clone()
+    }
+
+    /// Returns a reference to the underlying connection pool.
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
     }
 
     /// Create a new task in the backlog.
@@ -215,8 +246,8 @@ impl KanbanStore {
         };
 
         sqlx::query(
-            "INSERT INTO kanban_tasks (id, source_request_id, parent_task_id, title, description, tags, priority, status, complexity_level, depth, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'backlog', ?, ?, ?, ?)"
+            "INSERT INTO kanban_tasks (id, source_request_id, parent_task_id, title, description, tags, priority, status, complexity_level, depth, created_at, updated_at, notify_conversation_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'backlog', ?, ?, ?, ?, ?)"
         )
         .bind(&id)
         .bind(&source_request_id)
@@ -229,10 +260,14 @@ impl KanbanStore {
         .bind(depth)
         .bind(&now)
         .bind(&now)
+        .bind(&input.notify_conversation_id)
         .execute(self.pool.as_ref())
         .await?;
 
-        self.get_task(&id).await
+        let task = self.get_task(&id).await?;
+        // Wake the dispatcher immediately so it picks up this task.
+        self.task_notify.notify_one();
+        Ok(task)
     }
 
     /// Claim a task for an agent. Moves it from Backlog to Claimed.
@@ -298,7 +333,10 @@ impl KanbanStore {
         self.get_task(&input.task_id).await
     }
 
-    /// Review a completed task (orchestrator only).
+    /// Review a completed task. Approve to mark done, or reject for revision.
+    ///
+    /// When rejected, the task moves back to `Backlog` so the dispatcher picks
+    /// it up again. After exceeding 2 revisions the task is auto-failed.
     pub async fn review_task(
         &self,
         task_id: &str,
@@ -314,22 +352,69 @@ impl KanbanStore {
         }
 
         let now = Utc::now().to_rfc3339();
-        let new_status = match verdict {
-            ReviewVerdict::Approved => TaskStatus::Done,
-            ReviewVerdict::NeedsRevision => TaskStatus::InProgress,
-        };
 
-        sqlx::query(
-            "UPDATE kanban_tasks SET status = ?, review_feedback = ?, updated_at = ? WHERE id = ?",
-        )
-        .bind(new_status.as_str())
-        .bind(feedback)
-        .bind(&now)
-        .bind(task_id)
-        .execute(self.pool.as_ref())
-        .await?;
+        match verdict {
+            ReviewVerdict::Approved => {
+                sqlx::query(
+                    "UPDATE kanban_tasks SET status = ?, review_feedback = ?, updated_at = ? WHERE id = ?",
+                )
+                .bind(TaskStatus::Done.as_str())
+                .bind(feedback)
+                .bind(&now)
+                .bind(task_id)
+                .execute(self.pool.as_ref())
+                .await?;
+            }
+            ReviewVerdict::NeedsRevision => {
+                // Increment revision_count and move back to backlog for re-dispatch.
+                sqlx::query(
+                    "UPDATE kanban_tasks SET status = 'backlog', review_feedback = ?, \
+                     revision_count = revision_count + 1, assigned_agent = NULL, updated_at = ? \
+                     WHERE id = ? AND status = 'in_review'",
+                )
+                .bind(feedback)
+                .bind(&now)
+                .bind(task_id)
+                .execute(self.pool.as_ref())
+                .await?;
+
+                // Auto-fail if max revisions exceeded (> 2 revisions = 3 total attempts).
+                let count: (i64,) = sqlx::query_as(
+                    "SELECT revision_count FROM kanban_tasks WHERE id = ?",
+                )
+                .bind(task_id)
+                .fetch_one(self.pool.as_ref())
+                .await?;
+                if count.0 > 2 {
+                    sqlx::query(
+                        "UPDATE kanban_tasks SET status = 'failed', \
+                         result = 'Exceeded maximum revision attempts', updated_at = ? \
+                         WHERE id = ?",
+                    )
+                    .bind(&now)
+                    .bind(task_id)
+                    .execute(self.pool.as_ref())
+                    .await?;
+                } else {
+                    // Task went back to backlog — wake the dispatcher for re-dispatch.
+                    self.task_notify.notify_one();
+                }
+            }
+        }
 
         self.get_task(task_id).await
+    }
+
+    /// Reassign a task to a different agent (used on rejection with reassignment).
+    pub async fn reassign_task(&self, task_id: &str, agent_name: &str) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        sqlx::query("UPDATE kanban_tasks SET assigned_agent = ?, updated_at = ? WHERE id = ?")
+            .bind(agent_name)
+            .bind(&now)
+            .bind(task_id)
+            .execute(self.pool.as_ref())
+            .await?;
+        Ok(())
     }
 
     /// Set conversation_id for a task (when the agent run starts).
@@ -406,6 +491,17 @@ impl KanbanStore {
         self.list_tasks(Some(TaskStatus::Backlog)).await
     }
 
+    /// List all tasks ordered by updated_at DESC, limited to 50.
+    pub async fn list_all_tasks(&self) -> Result<Vec<KanbanTask>> {
+        let rows = sqlx::query_as::<_, KanbanTaskRow>(
+            "SELECT * FROM kanban_tasks ORDER BY updated_at DESC LIMIT 50",
+        )
+        .fetch_all(self.pool.as_ref())
+        .await?;
+
+        Ok(rows.into_iter().map(|r| r.into_task()).collect())
+    }
+
     /// Count active (claimed/in_progress/blocked) tasks for an agent.
     pub async fn count_active_tasks_for_agent(&self, agent_name: &str) -> Result<usize> {
         let row: (i64,) = sqlx::query_as(
@@ -428,6 +524,23 @@ impl KanbanStore {
         .await?;
 
         Ok(row.0 == 0)
+    }
+
+    /// Delete a task by ID. Also deletes any child subtasks.
+    pub async fn delete_task(&self, task_id: &str) -> Result<()> {
+        // Delete subtasks first (parent_task_id FK is SET NULL, but we want full cleanup).
+        sqlx::query("DELETE FROM kanban_tasks WHERE parent_task_id = ?1")
+            .bind(task_id)
+            .execute(self.pool.as_ref())
+            .await?;
+        let result = sqlx::query("DELETE FROM kanban_tasks WHERE id = ?1")
+            .bind(task_id)
+            .execute(self.pool.as_ref())
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(AppError::NotFound(format!("task {task_id} not found")));
+        }
+        Ok(())
     }
 
     /// Get board summary statistics.
@@ -506,6 +619,8 @@ struct KanbanTaskRow {
     updated_at: String,
     claimed_at: Option<String>,
     completed_at: Option<String>,
+    revision_count: i64,
+    notify_conversation_id: Option<String>,
 }
 
 impl KanbanTaskRow {
@@ -535,6 +650,8 @@ impl KanbanTaskRow {
             updated_at: self.updated_at,
             claimed_at: self.claimed_at,
             completed_at: self.completed_at,
+            revision_count: self.revision_count as u32,
+            notify_conversation_id: self.notify_conversation_id,
         }
     }
 }
@@ -546,67 +663,5 @@ struct StatusCountRow {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn task_priority_roundtrip() {
-        for p in [
-            TaskPriority::Low,
-            TaskPriority::Medium,
-            TaskPriority::High,
-            TaskPriority::Critical,
-        ] {
-            assert_eq!(TaskPriority::from_str_loose(p.as_str()), p);
-        }
-    }
-
-    #[test]
-    fn task_status_roundtrip() {
-        for s in [
-            TaskStatus::Backlog,
-            TaskStatus::Claimed,
-            TaskStatus::InProgress,
-            TaskStatus::Blocked,
-            TaskStatus::InReview,
-            TaskStatus::Done,
-            TaskStatus::Failed,
-        ] {
-            assert_eq!(TaskStatus::from_str_loose(s.as_str()), s);
-        }
-    }
-
-    #[test]
-    fn priority_weight_ordering() {
-        assert!(TaskPriority::Critical.weight() > TaskPriority::High.weight());
-        assert!(TaskPriority::High.weight() > TaskPriority::Medium.weight());
-        assert!(TaskPriority::Medium.weight() > TaskPriority::Low.weight());
-    }
-
-    #[test]
-    fn tags_parsing_handles_empty_and_whitespace() {
-        let row = KanbanTaskRow {
-            id: "t1".into(),
-            source_request_id: None,
-            parent_task_id: None,
-            title: "test".into(),
-            description: "desc".into(),
-            tags: " code , architecture , ".into(),
-            priority: "medium".into(),
-            status: "backlog".into(),
-            assigned_agent: None,
-            conversation_id: None,
-            result: None,
-            review_feedback: None,
-            block_reason: None,
-            complexity_level: 2,
-            depth: 0,
-            created_at: "2026-01-01T00:00:00Z".into(),
-            updated_at: "2026-01-01T00:00:00Z".into(),
-            claimed_at: None,
-            completed_at: None,
-        };
-        let task = row.into_task();
-        assert_eq!(task.tags, vec!["code", "architecture"]);
-    }
-}
+#[path = "kanban_store_tests.rs"]
+mod tests;

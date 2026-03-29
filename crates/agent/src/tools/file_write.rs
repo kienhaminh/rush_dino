@@ -9,7 +9,7 @@ use rushdino_security::validation::validate_path;
 
 use crate::{
     tool_registry::Tool,
-    tools::shell_exec::current_tool_execution_context,
+    tools::bash::current_tool_execution_context,
 };
 
 pub struct FileWriteTool {

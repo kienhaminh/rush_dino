@@ -10,6 +10,7 @@ type UseKanbanBoardResult = {
   refreshing: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  deleteTask: (taskId: string) => Promise<void>;
 };
 
 async function fetchKanbanBoard(): Promise<KanbanBoardResponse> {
@@ -52,6 +53,14 @@ export function useKanbanBoard(enabled: boolean): UseKanbanBoardResult {
     await load(true);
   }, [load]);
 
+  const deleteTask = useCallback(async (taskId: string) => {
+    const res = await fetch(`/api/kanban/tasks/${taskId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      throw new Error(`Failed to delete task: ${res.status}`);
+    }
+    await load(true);
+  }, [load]);
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -74,5 +83,5 @@ export function useKanbanBoard(enabled: boolean): UseKanbanBoardResult {
     };
   }, [enabled, load]);
 
-  return { board, loading, refreshing, error, refresh };
+  return { board, loading, refreshing, error, refresh, deleteTask };
 }

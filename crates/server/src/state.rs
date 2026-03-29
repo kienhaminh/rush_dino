@@ -9,6 +9,7 @@ use tokio::sync::RwLock;
 use crate::approval_gate::ApprovalGate;
 use crate::channel_pairing::ChannelPairingService;
 use crate::chat_broadcast::ChatBroadcastHub;
+use crate::mcp_manager::McpManager;
 use crate::middleware::HmacAuthState;
 use crate::runtime_log_store::RuntimeLogStore;
 use crate::runtime_state::{RuntimeState, RuntimeStatus};
@@ -162,6 +163,8 @@ pub struct AppState {
     pub pending_oauth: Arc<PendingOAuthStore>,
     /// Skill graph service for keyword-based skill routing.
     pub skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
+    /// MCP server manager — manages connections and discovered tools.
+    pub mcp_manager: Arc<McpManager>,
 }
 
 impl AppState {
@@ -184,6 +187,7 @@ impl AppState {
         sandbox_registry: Arc<SandboxRegistry>,
         pending_oauth: Arc<PendingOAuthStore>,
         skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
+        mcp_manager: Arc<McpManager>,
     ) -> Self {
         Self {
             runtime,
@@ -204,6 +208,7 @@ impl AppState {
             sandbox_registry,
             pending_oauth,
             skill_graph,
+            mcp_manager,
         }
     }
 
@@ -223,7 +228,7 @@ impl AppState {
         self.runtime.system_broker()
     }
 
-    pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KnowledgeGraphService>> {
+    pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KgGateway>> {
         self.runtime.knowledge_graph()
     }
 

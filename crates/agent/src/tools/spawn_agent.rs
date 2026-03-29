@@ -55,6 +55,10 @@ impl Tool for SpawnAgentTool {
                 "icon": {
                     "type": "string",
                     "description": "Optional emoji icon for the agent"
+                },
+                "claim_tags": {
+                    "type": "string",
+                    "description": "Comma-separated tags for kanban task routing (e.g. 'code, debugging, api')"
                 }
             },
             "required": ["name", "description", "system_prompt"]
@@ -75,6 +79,16 @@ impl Tool for SpawnAgentTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("system_prompt is required".to_owned()))?;
         let icon = args.get("icon").and_then(Value::as_str).map(str::to_owned);
+        let claim_tags: Vec<String> = args
+            .get("claim_tags")
+            .and_then(Value::as_str)
+            .map(|s| {
+                s.split(',')
+                    .map(|t| t.trim().to_owned())
+                    .filter(|t| !t.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let template = AgentTemplate {
             name: name.to_owned(),
@@ -84,6 +98,8 @@ impl Tool for SpawnAgentTool {
             tools: None,
             color: None,
             model: None,
+            claims_tasks: true,
+            claim_tags,
             sandbox_policy: None,
         };
 

@@ -133,6 +133,73 @@ export interface ExecutionConfig {
   shell_exec_sandbox: ShellExecSandboxConfig;
 }
 
+// ---------------------------------------------------------------------------
+// Knowledge graph types — mirror the Rust models
+// ---------------------------------------------------------------------------
+
+export interface GraphStats {
+  sources: number;
+  entities: number;
+  relations: number;
+  evidence: number;
+}
+
+export interface GraphFact {
+  id: string;
+  subject: string;
+  predicate: string;
+  object: string;
+  confidence: number;
+  support_count: number;
+  last_seen_at: string;
+  evidence: string[];
+}
+
+export interface GraphEntity {
+  id: string;
+  canonical_name: string;
+  entity_type?: string | null;
+  last_seen_at: string;
+}
+
+export interface GraphNode {
+  entity: GraphEntity;
+  outgoing: GraphFact[];
+  incoming: GraphFact[];
+}
+
+export interface IngestStats {
+  scanned: number;
+  ingested: number;
+  skipped: number;
+  failed: number;
+}
+
+export interface KnowledgeGraphConfig {
+  enabled: boolean;
+  uri?: string;
+  auto_context: boolean;
+  max_context_facts: number;
+  max_extraction_chars: number;
+  backfill_on_startup: boolean;
+  extract_from_conversations: boolean;
+  extract_from_memory: boolean;
+  extract_from_documents: boolean;
+}
+
+export interface McpServerConfig {
+  name: string;
+  url: string;
+  auth_header?: string | null;
+}
+
+export interface McpServerConnectionStatus {
+  name: string;
+  status: { kind: 'connecting' } | { kind: 'connected' } | { kind: 'error'; message: string };
+  tool_count: number;
+  last_seen_secs?: number | null;
+}
+
 export interface AppConfigView {
   host: string;
   port: number;
@@ -151,6 +218,8 @@ export interface AppConfigView {
   allowed_chat_ids: number[];
   security: SecurityConfig;
   execution: ExecutionConfig;
+  knowledge_graph: KnowledgeGraphConfig;
+  mcp_servers: McpServerConfig[];
   [key: string]: unknown;
 }
 
@@ -159,6 +228,12 @@ export interface ProfileSecrets {
   access_token?: string;
   refresh_token?: string;
   token_expires_at?: number;
+}
+
+export interface KgCredentials {
+  username?: string;
+  password?: string;
+  api_key?: string;
 }
 
 /** All credential fields are optional strings. */
@@ -175,6 +250,7 @@ export interface CredentialsView {
   codex_access_token?: string;
   codex_refresh_token?: string;
   codex_token_expires_at?: number;
+  knowledge_graph?: KgCredentials;
 }
 
 export interface DashboardAuthStatusResponse {
@@ -342,6 +418,8 @@ export interface SoulMemoryFile {
 export interface RegisteredTool {
   name: string;
   description: string;
+  /** True = active from session start. False = pool-only, activated on demand via tool_search. */
+  isCore: boolean;
 }
 
 export interface InjectedContextFile {
@@ -676,6 +754,17 @@ export interface WsUserMessageEvent {
   channel: string;
 }
 
+/** Emitted when a kanban task completes and is ready for review. */
+export interface WsTaskReviewReadyEvent {
+  type: 'task_review_ready';
+  task_id: string;
+  conversation_id: string;
+  agent_name: string;
+  title: string;
+  result: string;
+  notification: string;
+}
+
 export type WsEvent =
   | WsChatChunkEvent
   | WsAssistantResetEvent
@@ -686,7 +775,8 @@ export type WsEvent =
   | WsApprovalResultEvent
   | WsErrorEvent
   | WsRuntimeLogErrorEvent
-  | WsUserMessageEvent;
+  | WsUserMessageEvent
+  | WsTaskReviewReadyEvent;
 
 export type ConversationItem =
   | { kind: 'user'; id: string; content: string }
@@ -716,11 +806,6 @@ export type ConversationItem =
     }
   | { kind: 'error'; id: string; message: string };
 
-export interface ActiveAgent {
-  name: string;
-  role: 'orchestrator' | 'delegate';
-}
-
 // ---------------------------------------------------------------------------
 // Sandbox policy types — mirror the Rust SandboxPolicy YAML structs
 // ---------------------------------------------------------------------------
@@ -743,16 +828,44 @@ export interface SandboxFilesystemPolicy {
   deny: string[];
 }
 
+export interface SandboxInboundFilter {
+  max_size_kb: number;
+  strip_patterns: string[];
+  block_on_match: boolean;
+}
+
+export interface McpServerStatus {
+  name: string;
+  url: string;
+  connected: boolean;
+  tool_count: number;
+}
+
+export interface SandboxMcpPolicy {
+  default: 'allow' | 'deny';
+  servers: Record<string, 'allow' | 'deny'>;
+  inbound: SandboxInboundFilter;
+}
+
 export interface SandboxProcessPolicy {
   allow_privileged: boolean;
   max_concurrent: number;
   deny_commands: string[];
+  timeout_seconds?: number;
+  inbound?: SandboxInboundFilter;
+}
+
+export interface SandboxNetworkInboundFilter {
+  max_size_kb: number;
+  strip_headers: string[];
+  allowed_content_types: string[];
 }
 
 export interface SandboxNetworkPolicy {
   default: 'allow' | 'deny';
   on_block: 'prompt' | 'deny' | 'hard-stop';
   allow: NetworkRule[];
+  inbound?: SandboxNetworkInboundFilter;
 }
 
 export interface SandboxInferencePolicy {
@@ -774,6 +887,7 @@ export interface SandboxPolicy {
     process: SandboxProcessPolicy;
     network: SandboxNetworkPolicy;
     inference: SandboxInferencePolicy;
+    mcp?: SandboxMcpPolicy;
   };
   providers: CredentialProvider[];
 }
@@ -783,11 +897,15 @@ export interface AuditEntry {
   session_id: string;
   agent_id: string | null;
   ts: string;
-  category: 'filesystem' | 'network' | 'process' | 'inference';
+  category: 'filesystem' | 'network' | 'process' | 'inference' | 'mcp';
   decision: 'allow' | 'deny' | 'route' | 'pending';
   binary: string | null;
   destination: string | null;
   method: string | null;
   path: string | null;
   reason: string | null;
+  direction?: 'outbound' | 'inbound';
+  server?: string;
+  tool?: string;
+  filtered?: boolean;
 }

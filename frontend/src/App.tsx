@@ -15,6 +15,7 @@ const SessionsRoute = lazy(() => import('./pages/sessions/SessionsRoute').then(m
 const MetricsPage = lazy(() => import('./pages/metrics/MetricsPage').then(m => ({ default: m.MetricsPage })));
 const KanbanPage = lazy(() => import('./pages/kanban/KanbanPage').then(m => ({ default: m.KanbanPage })));
 const AgentsPage = lazy(() => import('./pages/agents/AgentsPage').then(m => ({ default: m.AgentsPage })));
+const AgentFocusPage = lazy(() => import('./pages/agents/AgentFocusPage').then(m => ({ default: m.AgentFocusPage })));
 const WorkflowsPage = lazy(() => import('./pages/workflows/WorkflowsPage').then(m => ({ default: m.WorkflowsPage })));
 const SkillsRoute = lazy(() => import('./pages/skills/SkillsRoute').then(m => ({ default: m.SkillsRoute })));
 const NodesPage = lazy(() => import('./pages/nodes/NodesPage').then(m => ({ default: m.NodesPage })));
@@ -27,6 +28,7 @@ const DebugPage = lazy(() => import('./pages/debug/DebugPage').then(m => ({ defa
 const LogsPage = lazy(() => import('./pages/logs/LogsPage').then(m => ({ default: m.LogsPage })));
 const SystemPage = lazy(() => import('./pages/system/SystemPage').then(m => ({ default: m.SystemPage })));
 const SandboxMonitorPage = lazy(() => import('./pages/sandbox/SandboxMonitorPage').then(m => ({ default: m.SandboxMonitorPage })));
+const KnowledgeGraphPage = lazy(() => import('./pages/knowledge-graph/KnowledgeGraphPage').then(m => ({ default: m.KnowledgeGraphPage })));
 const NotFoundPage = lazy(() => import('./pages/not-found/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 const DesignSystemPage = lazy(() => import('./pages/design-system/DesignSystemPage').then(m => ({ default: m.DesignSystemPage })));
 const LoginPage = lazy(() => import('./pages/login/LoginPage').then(m => ({ default: m.LoginPage })));
@@ -106,12 +108,14 @@ export default function App() {
 
                   {/* Operations pages (flat) */}
                   <Route path="agents" element={<AgentsPage />} />
+                  <Route path="agents/:id" element={<AgentFocusPage />} />
                   <Route path="agent-board" element={<Navigate to="/kanban" replace />} />
                   <Route path="kanban" element={<KanbanPage />} />
                   <Route path="workflows" element={<WorkflowsPage />} />
                   <Route path="skills" element={<SkillsRoute />} />
                   <Route path="coding-agents" element={<CodingAgentsPage />} />
                   <Route path="acp-sessions" element={<AcpSessionsPage />} />
+                  <Route path="knowledge-graph" element={<KnowledgeGraphPage />} />
 
                   {/* System */}
                   <Route path="logs" element={<SystemPage />}>

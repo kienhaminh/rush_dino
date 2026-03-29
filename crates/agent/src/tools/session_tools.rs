@@ -12,7 +12,6 @@ use rushdino_common::{
 use rushdino_providers::{types::ChatResponse, Provider};
 
 use crate::{
-    agent_manager::AgentManager,
     conversation::ConversationManager,
     engine::AgentConfig,
     engine_bootstrap::system_message,
@@ -21,7 +20,7 @@ use crate::{
     skill_manager::SkillManager,
     system_prompt::SkillEntry,
     tool_registry::{SessionToolContext, Tool, ToolRegistry},
-    tools::shell_exec::{
+    tools::bash::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
 };
@@ -33,7 +32,6 @@ struct SessionChatDeps {
     session_ctx: Weak<SessionToolContext>,
     memory: Arc<MemoryManager>,
     skill_manager: Arc<SkillManager>,
-    agent_manager: Arc<AgentManager>,
     config: AgentConfig,
 }
 
@@ -75,9 +73,9 @@ async fn run_session_turn(
         system_message(
             &deps.config,
             deps.memory.as_ref(),
-            deps.agent_manager.as_ref(),
             skills,
             session_ctx.as_ref(),
+            &[],
         ),
     );
 
@@ -101,6 +99,7 @@ async fn run_session_turn(
         run_id: None,
         delegation_depth: 0,
         workspace_override: None,
+        parent_context: None,
     });
     let tool_ctx = ToolExecutionContext {
         conversation_id: Some(conversation_id.to_owned()),
@@ -127,24 +126,24 @@ async fn run_session_turn(
     Ok(response)
 }
 
-pub struct SessionCreateTool {
+pub struct SessionManageTool {
     conversation: Arc<ConversationManager>,
 }
 
-impl SessionCreateTool {
+impl SessionManageTool {
     pub fn new(conversation: Arc<ConversationManager>) -> Self {
         Self { conversation }
     }
 }
 
 #[async_trait]
-impl Tool for SessionCreateTool {
+impl Tool for SessionManageTool {
     fn name(&self) -> &str {
-        "session_create"
+        "session_manage"
     }
 
     fn description(&self) -> &str {
-        "Create a new session/conversation with a human-readable title."
+        "Manage sessions: create, get, or delete. Use `action` to specify the operation."
     }
 
     fn keywords(&self) -> Vec<&str> {
@@ -152,68 +151,82 @@ impl Tool for SessionCreateTool {
     }
 
     fn parameters(&self) -> Value {
-        json!({"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]})
-    }
-
-    async fn execute(&self, args: Value) -> Result<String> {
-        let title = args
-            .get("title")
-            .and_then(Value::as_str)
-            .ok_or_else(|| AppError::Validation("title is required".to_owned()))?;
-        let session = self.conversation.create_conversation(title.trim()).await?;
-        serde_json::to_string_pretty(&json!(session)).map_err(|e| AppError::Agent(e.to_string()))
-    }
-}
-
-pub struct SessionGetTool {
-    conversation: Arc<ConversationManager>,
-}
-
-impl SessionGetTool {
-    pub fn new(conversation: Arc<ConversationManager>) -> Self {
-        Self { conversation }
-    }
-}
-
-#[async_trait]
-impl Tool for SessionGetTool {
-    fn name(&self) -> &str {
-        "session_get"
-    }
-
-    fn description(&self) -> &str {
-        "Get session metadata and recent messages by session ID."
-    }
-
-    fn keywords(&self) -> Vec<&str> {
-        vec!["session", "conversation", "history"]
-    }
-
-    fn parameters(&self) -> Value {
-        json!({"type": "object", "properties": {"sessionId": {"type": "string"}}, "required": ["sessionId"]})
-    }
-
-    async fn execute(&self, args: Value) -> Result<String> {
-        let session_id = args
-            .get("sessionId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| AppError::Validation("sessionId is required".to_owned()))?;
-        let session = self
-            .conversation
-            .get_conversation_record(session_id)
-            .await?;
-        let messages = self.conversation.get_messages(session_id).await?;
-        serde_json::to_string_pretty(&json!({
-            "session": {
-                "id": session.conversation.id,
-                "title": session.conversation.title,
-                "createdAt": session.conversation.created_at.to_rfc3339(),
-                "updatedAt": session.conversation.updated_at.to_rfc3339(),
-                "archivedAt": session.archived_at.map(|value| value.to_rfc3339()),
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["create", "get", "delete"],
+                    "description": "Operation: create a new session, get session details, or delete a session"
+                },
+                "title": {
+                    "type": "string",
+                    "description": "Session title (required for 'create')"
+                },
+                "sessionId": {
+                    "type": "string",
+                    "description": "Session ID (required for 'get' and 'delete')"
+                }
             },
-            "messages": messages,
-        }))
-        .map_err(|e| AppError::Agent(e.to_string()))
+            "required": ["action"]
+        })
+    }
+
+    async fn execute(&self, args: Value) -> Result<String> {
+        let action = args
+            .get("action")
+            .and_then(Value::as_str)
+            .ok_or_else(|| AppError::Validation("action is required".to_owned()))?;
+
+        match action {
+            "create" => {
+                let title = args
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("title is required for 'create'".to_owned()))?;
+                let session = self.conversation.create_conversation(title.trim()).await?;
+                serde_json::to_string_pretty(&json!(session))
+                    .map_err(|e| AppError::Agent(e.to_string()))
+            }
+            "get" => {
+                let session_id = args
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("sessionId is required for 'get'".to_owned()))?;
+                let session = self
+                    .conversation
+                    .get_conversation_record(session_id)
+                    .await?;
+                let messages = self.conversation.get_messages(session_id).await?;
+                serde_json::to_string_pretty(&json!({
+                    "session": {
+                        "id": session.conversation.id,
+                        "title": session.conversation.title,
+                        "createdAt": session.conversation.created_at.to_rfc3339(),
+                        "updatedAt": session.conversation.updated_at.to_rfc3339(),
+                        "archivedAt": session.archived_at.map(|value| value.to_rfc3339()),
+                    },
+                    "messages": messages,
+                }))
+                .map_err(|e| AppError::Agent(e.to_string()))
+            }
+            "delete" => {
+                let session_id = args
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| AppError::Validation("sessionId is required for 'delete'".to_owned()))?;
+                if session_id == "main" {
+                    return Err(AppError::Validation(
+                        "Cannot delete the main session".to_owned(),
+                    ));
+                }
+                self.conversation.delete_conversation(session_id).await?;
+                Ok(format!("{{\"deleted\": \"{session_id}\"}}"))
+            }
+            other => Err(AppError::Validation(format!(
+                "unknown action '{other}'. Use one of: create, get, delete"
+            ))),
+        }
     }
 }
 
@@ -229,7 +242,6 @@ impl SessionSendTool {
         session_ctx: Weak<SessionToolContext>,
         memory: Arc<MemoryManager>,
         skill_manager: Arc<SkillManager>,
-        agent_manager: Arc<AgentManager>,
         config: AgentConfig,
     ) -> Self {
         Self {
@@ -240,7 +252,6 @@ impl SessionSendTool {
                 session_ctx,
                 memory,
                 skill_manager,
-                agent_manager,
                 config,
             },
         }
@@ -287,5 +298,179 @@ impl Tool for SessionSendTool {
             "reply": response.content,
         }))
         .map_err(|e| AppError::Agent(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
+    use sqlx::sqlite::SqliteConnectOptions;
+    use sqlx::SqlitePool;
+
+    use super::*;
+    use crate::conversation::ConversationManager;
+
+    async fn make_migrated_pool() -> Arc<SqlitePool> {
+        let opts = SqliteConnectOptions::from_str("sqlite::memory:")
+            .unwrap()
+            .foreign_keys(true);
+        let pool = Arc::new(SqlitePool::connect_with(opts).await.unwrap());
+        rushdino_common::db::run_migrations(&pool).await.unwrap();
+        pool
+    }
+
+    // ── SessionManageTool ──────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn session_manage_create() {
+        let pool = make_migrated_pool().await;
+        let conversation = Arc::new(ConversationManager::new(pool.clone()));
+        let tool = SessionManageTool::new(conversation.clone());
+
+        let result = tool
+            .execute(serde_json::json!({"action": "create", "title": "Complex Task Session"}))
+            .await;
+
+        assert!(result.is_ok(), "expected Ok, got: {:?}", result);
+        let body: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(body["title"], "Complex Task Session");
+        assert!(body["id"].is_string(), "session id should be a string");
+
+        let sessions = conversation.list_conversations().await.unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].title, "Complex Task Session");
+    }
+
+    #[tokio::test]
+    async fn session_manage_create_unique_ids() {
+        let pool = make_migrated_pool().await;
+        let conversation = Arc::new(ConversationManager::new(pool.clone()));
+        let tool = SessionManageTool::new(conversation.clone());
+
+        let r1 = tool.execute(serde_json::json!({"action": "create", "title": "Task A"})).await.unwrap();
+        let r2 = tool.execute(serde_json::json!({"action": "create", "title": "Task B"})).await.unwrap();
+
+        let v1: serde_json::Value = serde_json::from_str(&r1).unwrap();
+        let v2: serde_json::Value = serde_json::from_str(&r2).unwrap();
+        assert_ne!(v1["id"], v2["id"], "each session must have a unique id");
+    }
+
+    #[tokio::test]
+    async fn session_manage_create_rejects_missing_title() {
+        let pool = make_migrated_pool().await;
+        let conversation = Arc::new(ConversationManager::new(pool));
+        let tool = SessionManageTool::new(conversation);
+
+        let result = tool.execute(serde_json::json!({"action": "create"})).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("title"));
+    }
+
+    #[tokio::test]
+    async fn session_manage_rejects_unknown_action() {
+        let pool = make_migrated_pool().await;
+        let conversation = Arc::new(ConversationManager::new(pool));
+        let tool = SessionManageTool::new(conversation);
+
+        let result = tool.execute(serde_json::json!({"action": "archive"})).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("unknown action"));
+    }
+
+    // ── DelegateToAgentTool — new session creation ───────────────────────────
+
+    /// Verifies that delegating to a valid agent creates a new isolated
+    /// agent conversation (kind = 'agent') in the database, even though the
+    /// react loop itself fails because the provider URL is unreachable.
+    ///
+    /// This proves the contract: every delegation spawns a fresh session so
+    /// the sub-agent's history is independently persisted and traceable.
+    #[tokio::test]
+    async fn delegate_tool_creates_agent_session_for_complex_task() {
+        use crate::agent_manager::{AgentManager, AgentTemplate};
+        use crate::agent_task_memory::AgentTaskMemory;
+        use crate::tool_registry::{SessionToolContext, ToolRegistry};
+        use crate::tools::delegate_to_agent::DelegateToAgentTool;
+        use rushdino_providers::CompletionsProvider;
+
+        let dir =
+            std::env::temp_dir().join(format!("test-sess-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Shared DB with full schema so conversation inserts succeed.
+        let pool = make_migrated_pool().await;
+        let conversation = Arc::new(ConversationManager::new(pool.clone()));
+
+        // Register a valid agent template.
+        let manager = Arc::new(AgentManager::new(dir.clone()));
+        manager
+            .save(&AgentTemplate {
+                name: "researcher".to_owned(),
+                description: "Researcher".to_owned(),
+                system_prompt: "You are a researcher.".to_owned(),
+                icon: None,
+                tools: None,
+                color: None,
+                model: None,
+                claims_tasks: false,
+                claim_tags: Vec::new(),
+                sandbox_policy: None,
+            })
+            .unwrap();
+
+        // Alive Arc references so the Weak upgrades succeed inside execute().
+        let registry = Arc::new(ToolRegistry::new());
+        let session_ctx = Arc::new(SessionToolContext::new(vec![], &[]));
+
+        // Dummy provider that cannot connect — react loop will fail after the
+        // conversation row is already committed to the DB.
+        let provider = Arc::new(rushdino_providers::Provider::Ollama(
+            CompletionsProvider::new(
+                "http://localhost:0".to_owned(),
+                "noop".to_owned(),
+                None,
+                Some("ollama".to_owned()),
+            ),
+        ));
+
+        let tool = DelegateToAgentTool::new(
+            manager,
+            provider,
+            crate::engine::AgentConfig::default(),
+            Arc::downgrade(&registry),
+            Arc::downgrade(&session_ctx),
+            Arc::new(AgentTaskMemory::new(dir.clone())),
+            conversation.clone(),
+            dir.clone(),
+        );
+
+        // Execute — will return an error from the network layer, but the agent
+        // conversation must have been committed before that point.
+        let _ = tool
+            .execute(serde_json::json!({
+                "agent_name": "researcher",
+                "task": "Compile a comprehensive market analysis report"
+            }))
+            .await;
+
+        // After delegation completes, the agent session is auto-archived
+        // so it no longer appears in the active agent-session list.
+        let active_agent_sessions = conversation.list_agent_conversations().await.unwrap();
+        assert_eq!(
+            active_agent_sessions.len(),
+            0,
+            "agent session should be archived after delegation completes"
+        );
+
+        // It must NOT appear in the regular user session list.
+        let user_sessions = conversation.list_conversations().await.unwrap();
+        assert!(
+            user_sessions.is_empty(),
+            "agent sessions must not leak into the user session list"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

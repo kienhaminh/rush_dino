@@ -227,6 +227,23 @@ run_release() {
     ensure_tag_absent "$tag"
   fi
 
+  # Ask whether this is a critical/hotfix release
+  release_body=""
+  echo ""
+  echo "Is this a critical/hotfix release?"
+  echo "  1) No (normal release)"
+  echo "  2) Yes (critical/hotfix — users cannot skip this update)"
+  read -r -p "Choice [1]: " criticality_choice
+  case "${criticality_choice:-1}" in
+    2)
+      release_body="[CRITICAL] "
+      echo "Marked as CRITICAL release."
+      ;;
+    *)
+      echo "Normal release."
+      ;;
+  esac
+
   if [[ "$BUMP_MODE" != "none" ]]; then
     update_workspace_version "$cargo_toml" "$next_version"
   fi
@@ -238,7 +255,11 @@ run_release() {
     commit_message="chore: release $tag"
     git -C "$repo_root" commit -m "$commit_message"
   fi
-  git -C "$repo_root" tag "$tag"
+  if [[ -n "$release_body" ]]; then
+    git -C "$repo_root" tag -a "$tag" -m "${release_body}Release ${tag}"
+  else
+    git -C "$repo_root" tag "$tag"
+  fi
   git -C "$repo_root" push
   git -C "$repo_root" push origin "$tag"
 

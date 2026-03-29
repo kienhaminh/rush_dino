@@ -69,18 +69,16 @@ Each agent template gets a new `claim_tags` field:
 | code-reviewer | `code-review, security, quality` |
 | researcher | `research, analysis, fact-checking` |
 | writer | `writing, editing, documentation` |
-| content-creator | `content, marketing, seo, blog` |
+| writer | `writing, articles, emails, creative, content, blog, seo, marketing, copy` |
 | data-analyst | `data, analysis, statistics, visualization` |
-| ui-ux-designer | `design, ui, ux, wireframe, accessibility` |
-| artist-designer | `visual, branding, illustration, design-direction` |
+| designer | `design, ui, ux, accessibility, user-flow, visual, color, layout, graphics` |
 | devops-engineer | `devops, ci-cd, docker, infrastructure` |
 | planner | `planning, breakdown, timeline, milestones` |
-| project-manager | `project, scope, coordination, delivery` |
+| planner | `planning, task-breakdown, timelines, roadmap, scope, milestones, coordination, ideation` |
 | debugger | `debugging, root-cause, reproduction` |
 | fullstack-developer | `frontend, backend, fullstack, api` |
 | tester | `testing, qa, edge-cases, regression` |
 | docs-manager | `docs, technical-writing, runbooks` |
-| git-manager | `git, branching, merge, conflict` |
 
 **Scoring formula:** `score = overlap_count / task_tag_count` (percentage of task tags matched by the agent). If one agent scores highest with score > 0.7 and no other agent is within 0.1 of their score → auto-claim. This means an agent must match at least 70% of what the task asks for. **Edge case:** if `task_tag_count == 0` (empty tags array), skip Phase 1 and go directly to Phase 2 (LLM fallback). The `post_task` tool schema enforces `"minItems": 1` on tags to discourage this, but the matching engine handles it gracefully regardless.
 

@@ -51,9 +51,9 @@ export const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
 
   // ── Runtime ──────────────────────────────────────────────────────────────
   {
-    id: 'exec',
-    label: 'exec',
-    description: 'Run shell commands',
+    id: 'bash',
+    label: 'bash',
+    description: 'Execute bash commands and return output',
     sectionId: 'runtime',
     profiles: ['coding'],
   },

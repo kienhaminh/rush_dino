@@ -31,6 +31,9 @@ rust-embed.workspace = true
 uuid.workspace = true
 walkdir.workspace = true
 reqwest.workspace = true
+anyhow.workspace = true
+url.workspace = true
+bytes = "1"
 rushdino-common = { path = "../common" }
 rushdino-auth = { path = "../auth" }
 rushdino-providers = { path = "../providers" }
@@ -43,3 +46,11 @@ serde_yaml = "0.9"
 rushdino-telegram = { path = "../extensions/telegram" }
 rushdino-discord = { path = "../extensions/discord" }
 rushdino-slack = { path = "../extensions/slack" }
+self_update = { workspace = true }
+semver.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+tower.workspace = true
+uuid.workspace = true
+sqlx.workspace = true

@@ -6,7 +6,7 @@ use serde_json::json;
 use tokio::process::Command;
 
 use rushdino_agent::{
-    tools::shell_exec::is_dangerous_command, AgentRuntime, RunPolicySnapshot, ShellExecRequest,
+    tools::bash::is_dangerous_command, AgentRuntime, RunPolicySnapshot, ShellExecRequest,
     ShellExecResult, SystemBroker,
 };
 use rushdino_common::{init, AppError, Result};
@@ -63,7 +63,7 @@ impl LocalSystemBroker {
                 .runtime
                 .mark_awaiting_approval(
                     run_id,
-                    "exec",
+                    "bash",
                     RunPolicySnapshot {
                         decision: "ask".to_owned(),
                         approval_state: "pending".to_owned(),
@@ -84,7 +84,7 @@ impl LocalSystemBroker {
                 session_id,
                 conversation_id,
                 request.run_id.as_deref(),
-                "exec",
+                "bash",
                 json!({
                     "command": request.command,
                     "cwd": cwd.display().to_string(),
@@ -239,7 +239,7 @@ mod tests {
         });
 
         let request = rx.recv().await.expect("approval request should be emitted");
-        assert_eq!(request.tool, "exec");
+        assert_eq!(request.tool, "bash");
         assert_eq!(request.run_id.as_deref(), Some("run-1"));
         assert_eq!(
             request.args,

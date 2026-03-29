@@ -4,7 +4,7 @@
 //! - `post_task` — create a new task on the board (any agent)
 //! - `claim_task` — pick up a backlog task (any agent)
 //! - `update_task` — update task status/result during execution (any agent)
-//! - `review_task` — approve or reject completed work (orchestrator only)
+//! - `review_task` — approve or reject completed work (any agent)
 
 use std::sync::Arc;
 
@@ -42,8 +42,12 @@ impl Tool for PostTaskTool {
     }
 
     fn description(&self) -> &str {
-        "Create a new task on the kanban board. Used by the orchestrator to decompose requests, \
-         or by specialists to request help from other agents."
+        "Post a task to the kanban board for a specialist agent to handle asynchronously. \
+         Use this when a request requires 5+ tool calls, specialist expertise (research, code review, debugging), \
+         or is complex enough that losing context would hurt. \
+         Tags guide routing: [\"research\",\"web-search\"] → researcher, [\"code\",\"debugging\"] → software-engineer. \
+         Pass notify_conversation_id so you get notified when the task is done. \
+         After posting, tell the user what was queued and which agent will handle it."
     }
 
     fn parameters(&self) -> Value {
@@ -79,6 +83,10 @@ impl Tool for PostTaskTool {
                 "complexity_level": {
                     "type": "integer",
                     "description": "Complexity: 1=simple, 2=moderate, 3=complex"
+                },
+                "notify_conversation_id": {
+                    "type": "string",
+                    "description": "Conversation to notify when task completes (pass your current conversation ID)"
                 }
             },
             "required": ["title", "description", "tags"]
@@ -128,6 +136,11 @@ impl Tool for PostTaskTool {
             .map(|v| v as u32)
             .unwrap_or(2);
 
+        let notify_conversation_id = args
+            .get("notify_conversation_id")
+            .and_then(Value::as_str)
+            .map(String::from);
+
         let input = CreateTaskInput {
             title: title.to_owned(),
             description: description.to_owned(),
@@ -136,6 +149,7 @@ impl Tool for PostTaskTool {
             parent_task_id,
             source_request_id,
             complexity_level,
+            notify_conversation_id,
         };
 
         let task = self.store.create_task(&input).await?;
@@ -303,8 +317,8 @@ impl Tool for ReviewTaskTool {
     }
 
     fn description(&self) -> &str {
-        "Review a completed task. Approve to mark as done, or send back for revision with feedback. \
-         Only the orchestrator (general-assistant) should use this tool."
+        "Review a completed task. Approve to mark it done, or reject with feedback \
+         for the agent to revise. Any agent can review tasks."
     }
 
     fn parameters(&self) -> Value {
@@ -323,6 +337,10 @@ impl Tool for ReviewTaskTool {
                 "feedback": {
                     "type": "string",
                     "description": "Feedback for the agent (required when verdict is needs_revision)"
+                },
+                "reassign_to": {
+                    "type": "string",
+                    "description": "Optional: reassign the task to a different agent on rejection"
                 }
             },
             "required": ["task_id", "verdict"]
@@ -350,8 +368,26 @@ impl Tool for ReviewTaskTool {
         };
 
         let feedback = args.get("feedback").and_then(Value::as_str);
+        let reassign_to = args.get("reassign_to").and_then(Value::as_str);
 
         let task = self.store.review_task(task_id, verdict, feedback).await?;
+
+        // If rejected and reassign_to is provided, update the assigned agent so
+        // the dispatcher routes the retry to the specified agent.
+        if matches!(verdict, ReviewVerdict::NeedsRevision) {
+            if let Some(agent) = reassign_to {
+                self.store.reassign_task(task_id, agent).await?;
+                // Re-fetch after reassignment to return accurate state.
+                let updated = self.store.get_task(task_id).await?;
+                return Ok(serde_json::to_string_pretty(&updated)
+                    .unwrap_or_else(|_| format!("Task reviewed and reassigned: {}", updated.id)));
+            }
+        }
+
         Ok(serde_json::to_string_pretty(&task).unwrap_or_else(|_| format!("Task reviewed: {}", task.id)))
     }
 }
+
+#[cfg(test)]
+#[path = "kanban_tools_tests.rs"]
+mod tests;

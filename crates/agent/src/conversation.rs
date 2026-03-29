@@ -69,13 +69,48 @@ impl ConversationManager {
         Ok(conversation)
     }
 
+    /// Create an isolated conversation for a sub-agent delegation. These are marked
+    /// `kind = 'agent'` so they are excluded from the main session list.
+    pub async fn create_agent_conversation(&self, id: &str, title: &str) -> Result<Conversation> {
+        let now = Utc::now();
+        let conversation = Conversation {
+            id: id.to_owned(),
+            title: title.to_owned(),
+            created_at: now,
+            updated_at: now,
+        };
+
+        sqlx::query(
+            "INSERT OR IGNORE INTO conversations (id, title, created_at, updated_at, archived_at, kind) VALUES (?1, ?2, ?3, ?4, NULL, 'agent')",
+        )
+        .bind(&conversation.id)
+        .bind(&conversation.title)
+        .bind(conversation.created_at.to_rfc3339())
+        .bind(conversation.updated_at.to_rfc3339())
+        .execute(self.pool.as_ref())
+        .await?;
+
+        Ok(conversation)
+    }
+
     pub async fn list_conversations(&self) -> Result<Vec<Conversation>> {
         let rows = sqlx::query(
-            "SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
+            "SELECT id, title, created_at, updated_at FROM conversations WHERE kind = 'user' ORDER BY updated_at DESC",
         )
         .fetch_all(self.pool.as_ref())
         .await?;
 
+        rows.into_iter().map(map_conversation).collect()
+    }
+
+    pub async fn list_agent_conversations(&self) -> Result<Vec<Conversation>> {
+        let rows = sqlx::query(
+            "SELECT id, title, created_at, updated_at FROM conversations \
+             WHERE kind = 'agent' AND archived_at IS NULL \
+             ORDER BY updated_at DESC LIMIT 50",
+        )
+        .fetch_all(self.pool.as_ref())
+        .await?;
         rows.into_iter().map(map_conversation).collect()
     }
 
@@ -113,10 +148,46 @@ impl ConversationManager {
     }
 
     pub async fn delete_conversation(&self, id: &str) -> Result<()> {
+        // Clean up kanban tasks that reference this conversation before deleting it.
+        // Subtasks are deleted first (parent FK is SET NULL but we want full cleanup).
+        sqlx::query(
+            "DELETE FROM kanban_tasks WHERE parent_task_id IN \
+             (SELECT id FROM kanban_tasks WHERE conversation_id = ?1)"
+        )
+        .bind(id)
+        .execute(self.pool.as_ref())
+        .await?;
+        sqlx::query("DELETE FROM kanban_tasks WHERE conversation_id = ?1")
+            .bind(id)
+            .execute(self.pool.as_ref())
+            .await?;
+
         sqlx::query("DELETE FROM conversations WHERE id = ?1")
             .bind(id)
             .execute(self.pool.as_ref())
             .await?;
+        Ok(())
+    }
+
+    /// Delete specific messages by ID from a conversation. Used to persist compaction: when the
+    /// react loop compacts old messages into a summary, the original rows are removed here.
+    pub async fn delete_messages_by_ids(
+        &self,
+        conversation_id: &str,
+        ids: &[String],
+    ) -> Result<()> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let sql = format!(
+            "DELETE FROM messages WHERE conversation_id = ? AND id IN ({placeholders})"
+        );
+        let mut q = sqlx::query(&sql).bind(conversation_id);
+        for id in ids {
+            q = q.bind(id.as_str());
+        }
+        q.execute(self.pool.as_ref()).await?;
         Ok(())
     }
 

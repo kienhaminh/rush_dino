@@ -18,9 +18,9 @@ use crate::{
     react_loop::run_react_loop,
     runtime::AgentRuntime,
     tool_registry::{SessionToolContext, ToolRegistry},
-    tools::shell_exec::{with_tool_execution_context, ToolExecutionContext},
+    tools::bash::{with_tool_execution_context, ToolExecutionContext},
     workflow_manager::WorkflowManager,
-    workflow_types::WorkflowRunExecutionStep,
+    workflow_types::{StepType, WorkflowRunExecutionStep},
 };
 
 /// Carries the outcome of a single step task back to the DAG loop.
@@ -274,12 +274,16 @@ impl WorkflowRunner {
                     })
                     .collect();
 
-                let step_input = build_step_input(
-                    &context.run_input,
-                    &previous_outputs,
-                    &step.step_name,
-                    &step.instructions,
-                );
+                // Agent steps get the full formatted prompt; script/transform use raw instructions.
+                let step_input = match step.step_type {
+                    StepType::Agent => build_step_input(
+                        &context.run_input,
+                        &previous_outputs,
+                        &step.step_name,
+                        &step.instructions,
+                    ),
+                    StepType::Script | StepType::Transform => step.instructions.clone(),
+                };
 
                 self.manager
                     .mark_run_step_running(&step.run_step_id, &step_input)
@@ -307,19 +311,37 @@ impl WorkflowRunner {
                 let step_clone = step.clone();
                 let step_input_clone = step_input;
                 let conversation_id_clone = conversation_id;
+                let previous_outputs_clone = previous_outputs;
 
                 in_flight.spawn(async move {
-                    let outcome = runner
-                        .execute_step_with_timeout(
-                            &run_id_owned,
-                            &step_clone.agent_id,
-                            &step_input_clone,
-                            &conversation_id_clone,
-                            step_clone.position,
-                            &step_clone.step_name,
-                            step_clone.timeout_secs,
-                        )
-                        .await;
+                    let outcome = match step_clone.step_type {
+                        StepType::Agent => {
+                            runner
+                                .execute_step_with_timeout(
+                                    &run_id_owned,
+                                    &step_clone.agent_id,
+                                    &step_input_clone,
+                                    &conversation_id_clone,
+                                    step_clone.position,
+                                    &step_clone.step_name,
+                                    step_clone.timeout_secs,
+                                )
+                                .await
+                        }
+                        StepType::Script => {
+                            execute_script_step_with_timeout(
+                                &step_input_clone,
+                                step_clone.timeout_secs,
+                            )
+                            .await
+                        }
+                        StepType::Transform => {
+                            execute_transform_step(
+                                &step_clone.instructions,
+                                &previous_outputs_clone,
+                            )
+                        }
+                    };
 
                     StepTaskResult {
                         run_step_id: step_clone.run_step_id,
@@ -562,6 +584,7 @@ impl WorkflowRunner {
             run_id: Some(run_id.to_owned()),
             delegation_depth: 0,
             workspace_override: None,
+            parent_context: None,
         };
 
         let session_ctx = self
@@ -672,4 +695,51 @@ fn build_step_input(
     }
 
     lines.join("\n")
+}
+
+/// Execute a shell command step. The `instructions` field is used as the command string.
+async fn execute_script_step(instructions: &str) -> Result<String> {
+    let output = tokio::process::Command::new("sh")
+        .arg("-c")
+        .arg(instructions)
+        .output()
+        .await
+        .map_err(|e| AppError::Agent(format!("script step failed: {e}")))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(AppError::Agent(format!(
+            "script step failed (exit {}): {stderr}",
+            output.status
+        )))
+    }
+}
+
+/// Wraps `execute_script_step` with an optional wall-clock timeout.
+async fn execute_script_step_with_timeout(
+    instructions: &str,
+    timeout_secs: Option<u64>,
+) -> Result<String> {
+    if let Some(secs) = timeout_secs {
+        time::timeout(Duration::from_secs(secs), execute_script_step(instructions))
+            .await
+            .unwrap_or_else(|_| Err(AppError::Agent("script step timed out".to_owned())))
+    } else {
+        execute_script_step(instructions).await
+    }
+}
+
+/// Simple template substitution: `{{step_name}}` is replaced with that step's output.
+fn execute_transform_step(
+    instructions: &str,
+    previous_outputs: &[(String, String)],
+) -> Result<String> {
+    let mut result = instructions.to_owned();
+    for (name, output) in previous_outputs {
+        let placeholder = format!("{{{{{name}}}}}");
+        result = result.replace(&placeholder, output);
+    }
+    Ok(result)
 }

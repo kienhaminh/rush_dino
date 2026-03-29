@@ -1,4 +1,8 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -7,6 +11,9 @@ use rushdino_common::{AppError, Result};
 use rushdino_security::validation::validate_path;
 
 use crate::tool_registry::Tool;
+
+/// Default maximum number of lines returned per read.
+const DEFAULT_LIMIT: usize = 2000;
 
 pub struct FileReadTool {
     /// Home directory (~/.rushdino). Relative paths are resolved here so that
@@ -21,6 +28,44 @@ impl FileReadTool {
     }
 }
 
+/// Read a file with offset/limit and return content with line numbers.
+fn read_with_pagination(path: &Path, offset: usize, limit: usize) -> Result<String> {
+    let file = fs::File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let all_lines: Vec<String> = reader.lines().map_while(std::result::Result::ok).collect();
+    let total_lines = all_lines.len();
+
+    if offset >= total_lines {
+        return Ok(format!(
+            "[file has {total_lines} lines, offset {offset} is past end]"
+        ));
+    }
+
+    let end = (offset + limit).min(total_lines);
+    let selected = &all_lines[offset..end];
+
+    // Format with line numbers (1-indexed, right-aligned).
+    let width = format!("{}", end).len();
+    let mut output = String::new();
+    for (i, line) in selected.iter().enumerate() {
+        let line_num = offset + i + 1; // 1-indexed
+        output.push_str(&format!("{line_num:>width$}\t{line}\n"));
+    }
+
+    // Append metadata footer when file is larger than the returned window.
+    if total_lines > limit || offset > 0 {
+        output.push_str(&format!(
+            "\n[lines {}-{} of {} total]",
+            offset + 1,
+            end,
+            total_lines
+        ));
+    }
+
+    Ok(output)
+}
+
 #[async_trait]
 impl Tool for FileReadTool {
     fn name(&self) -> &str {
@@ -28,9 +73,9 @@ impl Tool for FileReadTool {
     }
 
     fn description(&self) -> &str {
-        "Read a file. Provide an absolute path to read any file on the filesystem, \
-         or a relative path resolved from the rushdino home directory \
-         (e.g. `documents/notes.txt`, `memory/daily/2026-03-21.md`, `MEMORY.md`)."
+        "Read a file with line numbers. Supports `offset` and `limit` for chunked reading \
+         of large files (default: first 2000 lines). Provide an absolute path to read any \
+         file, or a relative path resolved from the rushdino home directory."
     }
 
     fn parameters(&self) -> Value {
@@ -42,6 +87,16 @@ impl Tool for FileReadTool {
                     "description": "Absolute path to any file on the filesystem, or a relative path \
                                     resolved from the rushdino home directory \
                                     (e.g. `documents/notes.txt`, `memory/daily/2026-03-21.md`)."
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line number to start reading from (0-indexed, default 0)",
+                    "minimum": 0
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to return (default 2000)",
+                    "minimum": 1
                 }
             },
             "required": ["path"]
@@ -54,14 +109,24 @@ impl Tool for FileReadTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("path is required".to_owned()))?;
 
+        let offset = args
+            .get("offset")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
+
+        let limit = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|v| v as usize)
+            .unwrap_or(DEFAULT_LIMIT);
+
         let path = Path::new(path_str);
 
         // INTENTIONAL: Absolute paths bypass all root validation by design.
         // The agent is trusted — the operator controls which agents run and what
         // they can access. This is not exposed to untrusted external input.
         if path.is_absolute() {
-            // Absolute paths bypass home_dir restriction — read directly from the filesystem.
-            Ok(fs::read_to_string(path)?)
+            read_with_pagination(path, offset, limit)
         } else {
             // Relative paths always resolve under home_dir (~/.rushdino).
             // workspace_override is intentionally ignored here — memory files and
@@ -70,7 +135,7 @@ impl Tool for FileReadTool {
             let target = self.home_dir.join(path_str);
             let canonical = validate_path(&target, std::slice::from_ref(&self.home_dir))
                 .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
-            Ok(fs::read_to_string(canonical)?)
+            read_with_pagination(&canonical, offset, limit)
         }
     }
 }
@@ -118,7 +183,8 @@ mod tests {
         let result = tool.execute(json!({"path": "notes.txt"})).await;
 
         assert!(result.is_ok(), "expected Ok, got {result:?}");
-        assert_eq!(result.unwrap(), expected);
+        // Now returns line-numbered output.
+        assert!(result.unwrap().contains(expected));
     }
 
     #[tokio::test]
@@ -135,7 +201,7 @@ mod tests {
             .await;
 
         assert!(result.is_ok(), "expected Ok, got {result:?}");
-        assert_eq!(result.unwrap(), "today's note");
+        assert!(result.unwrap().contains("today's note"));
     }
 
     #[tokio::test]
@@ -159,5 +225,41 @@ mod tests {
             .execute(serde_json::json!({ "path": "../../../etc/passwd" }))
             .await;
         assert!(result.is_err(), "path traversal should be rejected");
+    }
+
+    #[tokio::test]
+    async fn output_includes_line_numbers() {
+        let mut tmp = NamedTempFile::new().expect("create temp file");
+        write!(tmp, "line one\nline two\nline three").unwrap();
+
+        let home_dir = tempfile::tempdir().unwrap();
+        let tool = make_tool(home_dir.path().to_path_buf());
+        let abs_path = tmp.path().to_str().unwrap().to_owned();
+
+        let result = tool.execute(json!({"path": abs_path})).await.unwrap();
+        assert!(result.contains("1\tline one"));
+        assert!(result.contains("2\tline two"));
+        assert!(result.contains("3\tline three"));
+    }
+
+    #[tokio::test]
+    async fn offset_and_limit_work() {
+        let mut tmp = NamedTempFile::new().expect("create temp file");
+        write!(tmp, "a\nb\nc\nd\ne").unwrap();
+
+        let home_dir = tempfile::tempdir().unwrap();
+        let tool = make_tool(home_dir.path().to_path_buf());
+        let abs_path = tmp.path().to_str().unwrap().to_owned();
+
+        let result = tool
+            .execute(json!({"path": abs_path, "offset": 1, "limit": 2}))
+            .await
+            .unwrap();
+
+        assert!(result.contains("2\tb"));
+        assert!(result.contains("3\tc"));
+        assert!(!result.contains("1\ta"));
+        assert!(!result.contains("4\td"));
+        assert!(result.contains("[lines 2-3 of 5 total]"));
     }
 }

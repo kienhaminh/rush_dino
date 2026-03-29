@@ -22,7 +22,7 @@ use crate::{
     engine_bootstrap::title_from,
     react_loop::run_react_loop,
     tool_registry::{SessionToolContext, Tool, ToolRegistry},
-    tools::shell_exec::{
+    tools::bash::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
     },
 };
@@ -39,14 +39,14 @@ pub const MAX_DELEGATION_DEPTH: u8 = 3;
 /// `ToolRegistry → DelegateToAgentTool → ToolRegistry`.
 /// Tools that are always available to every delegated agent, regardless of
 /// the agent template's `tools` field.
-const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search"];
+const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search", "post_task", "claim_task", "update_task"];
 
 /// Parses the agent template's `tools` field (comma-separated) into a list of
 /// tool names, merging in the always-available base tools.
 ///
 /// Returns an empty vec when `tools` is `None`, which signals "unrestricted" —
 /// the agent gets access to all tools in the parent pool.
-fn parse_tool_list(tools: &Option<String>) -> Vec<String> {
+pub(crate) fn parse_tool_list(tools: &Option<String>) -> Vec<String> {
     let Some(raw) = tools else {
         return Vec::new();
     };
@@ -79,6 +79,7 @@ pub struct DelegateToAgentTool {
 }
 
 impl DelegateToAgentTool {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         agent_manager: Arc<AgentManager>,
         provider: Arc<Provider>,
@@ -148,6 +149,7 @@ impl Tool for DelegateToAgentTool {
             run_id: None,
             delegation_depth: 0,
             workspace_override: None,
+            parent_context: None,
         });
         let current_depth = parent_ctx.delegation_depth;
 
@@ -201,14 +203,47 @@ impl Tool for DelegateToAgentTool {
             AppError::Agent(format!("failed to create agent workspace: {e}"))
         })?;
 
-        // Inject the agent's task history into the system prompt if available.
-        let system_content = match self.task_memory.load_task_log(agent_name) {
-            Some(log) => format!(
-                "{}\n\n## Your Task History\n\n{}",
-                template.system_prompt, log
-            ),
-            None => template.system_prompt,
-        };
+        // Build the full system content: agent prompt + workspace/tool context + task history.
+        let mut system_content = template.system_prompt.clone();
+
+        // Inform the agent about its workspace and tool constraints.
+        system_content.push_str(&format!(
+            "\n\n## Workspace\nYour working directory is: {}\n\
+             Confine all file operations to this directory unless explicitly instructed otherwise.",
+            agent_workspace.display()
+        ));
+
+        // List available tools so the agent knows its boundaries.
+        let tool_names: Vec<String> = scoped_ctx
+            .active_definitions()
+            .iter()
+            .map(|d| d.name.clone())
+            .collect();
+        if !tool_names.is_empty() {
+            system_content.push_str(&format!(
+                "\n\n## Available Tools\nYou have access to: {}.\n\
+                 Do not attempt to call tools not in this list.",
+                tool_names.join(", ")
+            ));
+        }
+
+        // Inject the agent's task history if available.
+        if let Some(log) = self.task_memory.load_task_log(agent_name) {
+            system_content.push_str(&format!("\n\n## Your Task History\n\n{log}"));
+        }
+
+        // Inject parent context summary so the child agent knows what the delegating agent was doing.
+        if let Some(parent_ctx_str) = current_tool_execution_context()
+            .and_then(|ctx| ctx.parent_context.clone())
+        {
+            system_content.push_str(&format!("\n\n## Parent Context\n\n{parent_ctx_str}"));
+        }
+
+        // Build parent context for the child: what we're doing and why we're delegating
+        let child_parent_context = Some(format!(
+            "Delegated by parent agent. Task: {}",
+            if task.len() > 500 { &task[..500] } else { task }
+        ));
 
         // Create an isolated conversation for this delegation so the sub-agent's
         // message history is persisted and traceable independently.
@@ -216,7 +251,7 @@ impl Tool for DelegateToAgentTool {
         let conv_id_str = conv_id.to_string();
         let conv_title = format!("{agent_name}: {}", title_from(task));
         self.conversation
-            .create_conversation_with_id(&conv_id_str, &conv_title)
+            .create_agent_conversation(&conv_id_str, &conv_title)
             .await?;
 
         // Build the initial message list: target system prompt followed by the task.
@@ -249,12 +284,16 @@ impl Tool for DelegateToAgentTool {
         let messages = vec![sys_msg, user_msg];
 
         // Build the child context: isolated conversation, workspace, incremented depth.
+        // Use the sub-agent's own conv_id as its session_id so that tool calls
+        // (sandbox approvals, usage metrics) are attributed to the sub-agent's
+        // session rather than leaking into the main session.
         let child_ctx = ToolExecutionContext {
-            session_id: parent_ctx.session_id,
+            session_id: Some(conv_id_str.clone()),
             conversation_id: Some(conv_id_str.clone()),
             run_id: None,
             delegation_depth: current_depth + 1,
             workspace_override: Some(agent_workspace),
+            parent_context: child_parent_context,
         };
 
         let (response, all_messages) = with_tool_execution_context(
@@ -289,6 +328,17 @@ impl Tool for DelegateToAgentTool {
             .append_task(agent_name, task, &response.content)
         {
             tracing::warn!(agent = agent_name, error = %e, "failed to write agent task log");
+        }
+
+        // Archive the agent conversation so it no longer appears in the active
+        // sessions list. The conversation history is preserved for traceability.
+        if let Err(e) = self.conversation.archive_conversation(&conv_id_str).await {
+            tracing::warn!(
+                agent = agent_name,
+                conv_id = %conv_id_str,
+                error = %e,
+                "failed to archive agent conversation"
+            );
         }
 
         Ok(response.content)
@@ -379,6 +429,8 @@ mod tests {
                 tools: None,
                 color: None,
                 model: None,
+                claims_tasks: true,
+                claim_tags: Vec::new(),
                 sandbox_policy: None,
             })
             .unwrap();
@@ -402,6 +454,7 @@ mod tests {
             delegation_depth: MAX_DELEGATION_DEPTH,
             run_id: None,
             workspace_override: None,
+            parent_context: None,
         };
 
         let result = with_tool_execution_context(
@@ -429,10 +482,10 @@ mod tests {
 
     #[test]
     fn parse_tool_list_parses_csv() {
-        let result = parse_tool_list(&Some("read, write, exec".to_owned()));
+        let result = parse_tool_list(&Some("read, write, bash".to_owned()));
         assert!(result.contains(&"read".to_owned()));
         assert!(result.contains(&"write".to_owned()));
-        assert!(result.contains(&"exec".to_owned()));
+        assert!(result.contains(&"bash".to_owned()));
     }
 
     #[test]

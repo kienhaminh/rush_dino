@@ -127,6 +127,17 @@ pub async fn get_kanban_task(
     Ok(Json(task))
 }
 
+/// DELETE /api/kanban/tasks/:id — Delete a task and its subtasks.
+pub async fn delete_kanban_task(
+    State(state): State<AppState>,
+    Path(task_id): Path<String>,
+) -> Result<Json<serde_json::Value>> {
+    let engine = state.engine()?;
+    let store = engine.kanban_store();
+    store.delete_task(&task_id).await?;
+    Ok(Json(serde_json::json!({ "deleted": task_id })))
+}
+
 /// GET /api/kanban/stats — Board statistics only.
 pub async fn get_kanban_stats(State(state): State<AppState>) -> Result<Json<KanbanBoardStats>> {
     let engine = state.engine()?;

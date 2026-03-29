@@ -1,5 +1,6 @@
 import {
   BarChart,
+  Database,
   FileText,
   Folder,
   GitBranch,
@@ -44,6 +45,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'kanban', label: 'Task Board', icon: LayoutGrid, href: '/kanban', matchPrefix: '/kanban' },
       { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows' },
       { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills' },
+      { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph' },
     ],
   },
   {
