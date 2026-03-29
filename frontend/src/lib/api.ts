@@ -28,6 +28,8 @@ import type {
   SkillRecord,
   SystemSummaryResponse,
   InputRequestStatus,
+  MobileGatewayKeyRecord,
+  IssuedMobileGatewayKey,
   UsageMetricsResponse,
   GraphStats,
   GraphFact,
@@ -458,6 +460,48 @@ export async function revokeChannelPairedUser(
   return parseJsonOrThrow(response, endpoint);
 }
 
+export async function fetchMobileGatewayKeys(): Promise<MobileGatewayKeyRecord[]> {
+  const endpoint = '/api/channels/mobile/keys';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function issueMobileGatewayKey(payload: {
+  label?: string;
+}): Promise<IssuedMobileGatewayKey> {
+  const endpoint = '/api/channels/mobile/keys';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function revokeMobileGatewayKey(
+  id: string,
+): Promise<{ id: string; revoked: boolean }> {
+  const endpoint = `/api/channels/mobile/keys/${encodeURIComponent(id)}`;
+  const response = await fetch(endpoint, { method: 'DELETE' });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function resolveApproval(
+  requestId: string,
+  payload: { approved: boolean; sessionId: string },
+): Promise<{ request_id: string; status: string }> {
+  const endpoint = `/api/approval/${encodeURIComponent(requestId)}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      approved: payload.approved,
+      session_id: payload.sessionId,
+    }),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
 export async function fetchSystemSummary(): Promise<SystemSummaryResponse> {
   const endpoint = '/api/system/summary';
   const response = await fetch(endpoint);

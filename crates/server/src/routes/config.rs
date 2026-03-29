@@ -177,6 +177,8 @@ fn gateway_runtime_reload_required_from_config(current: &AppConfig, updated: &Ap
         || current.gateway.discord.enabled != updated.gateway.discord.enabled
         || current.gateway.discord.access != updated.gateway.discord.access
         || current.gateway.slack.enabled != updated.gateway.slack.enabled
+        || current.gateway.mobile.enabled != updated.gateway.mobile.enabled
+        || current.gateway.mobile.publish_host != updated.gateway.mobile.publish_host
 }
 
 fn gateway_runtime_reload_required_from_credentials(
@@ -214,6 +216,7 @@ async fn reconcile_gateway_adapters(
     reconcile_telegram_adapter(state, config, credentials).await?;
     reconcile_discord_adapter(state, config, credentials).await?;
     reconcile_slack_adapter(state, config, credentials).await?;
+    reconcile_mobile_gateway_adapter(state, config).await?;
     Ok(())
 }
 
@@ -318,5 +321,18 @@ async fn reconcile_slack_adapter(
         .upsert_adapter(
             Arc::new(rushdino_slack::SlackAdapter::new(bot, app)) as Arc<dyn ChannelAdapter>
         )
+        .await
+}
+
+async fn reconcile_mobile_gateway_adapter(state: &AppState, config: &AppConfig) -> Result<()> {
+    if !config.gateway.mobile.enabled {
+        state.gateway_control.remove_adapter("mobile").await?;
+        state.gateway_state.reporter("mobile").disabled().await;
+        return Ok(());
+    }
+
+    state
+        .gateway_control
+        .upsert_adapter(state.mobile_gateway_adapter.clone() as Arc<dyn ChannelAdapter>)
         .await
 }

@@ -213,6 +213,8 @@ pub async fn rate_limit_middleware(
     let result = match path.as_str() {
         "/api/chat" => limiters.chat.check(ip),
         "/api/ws/chat" => limiters.ws_chat.check(ip),
+        "/api/channels/mobile/connect" => limiters.chat.check(ip),
+        "/api/channels/mobile/ws" => limiters.ws_chat.check(ip),
         "/api/documents/ingest" => limiters.documents_ingest.check(ip),
         p if p.starts_with("/api/conversations") => limiters.conversations.check(ip),
         _ => Ok(()),
@@ -269,6 +271,8 @@ fn dashboard_auth_required_path(path: &str) -> bool {
         "/api/dashboard-auth/status"
         | "/api/dashboard-auth/exchange"
         | "/api/dashboard-auth/logout"
+        | "/api/channels/mobile/connect"
+        | "/api/channels/mobile/ws"
         | "/healthz" => false,
         "/api/ws/chat" => true,
         _ => path.starts_with("/api/"),

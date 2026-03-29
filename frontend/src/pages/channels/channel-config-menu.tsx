@@ -311,6 +311,19 @@ export function ChannelConfigMenu({
       nextValues = setPathValue(nextValues, 'slackAppToken', credentials?.slack_app_token ?? '');
     }
 
+    if (channel === 'mobile') {
+      nextValues = setPathValue(
+        nextValues,
+        'enabled',
+        Boolean(config?.gateway.mobile.enabled ?? currentEnabled),
+      );
+      nextValues = setPathValue(
+        nextValues,
+        'publishHost',
+        config?.gateway.mobile.publish_host ?? '',
+      );
+    }
+
     return nextValues;
   }, [channel, config, credentials, settings, currentEnabled]);
 
@@ -376,6 +389,13 @@ export function ChannelConfigMenu({
     if (channel === 'slack') {
       patch.slackBotToken = tokenValue(getPathValue(formValues, 'slackBotToken'));
       patch.slackAppToken = tokenValue(getPathValue(formValues, 'slackAppToken'));
+    }
+
+    if (channel === 'mobile') {
+      const publishHost = getPathValue(formValues, 'publishHost');
+      if (typeof publishHost === 'string') {
+        patch.mobilePublishHost = publishHost;
+      }
     }
 
     return patch;

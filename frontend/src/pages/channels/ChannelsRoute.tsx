@@ -5,12 +5,21 @@ import {
   fetchChannelPairing,
   fetchConfig,
   fetchCredentials,
+  fetchMobileGatewayKeys,
+  issueMobileGatewayKey,
   patchConfig,
   patchCredentials,
+  revokeMobileGatewayKey,
   resolveChannelPairingRequest,
   revokeChannelPairedUser,
 } from '@/lib/api';
-import type { AppConfigView, ChannelPairingState, CredentialsView } from '@/lib/types';
+import type {
+  AppConfigView,
+  ChannelPairingState,
+  CredentialsView,
+  IssuedMobileGatewayKey,
+  MobileGatewayKeyRecord,
+} from '@/lib/types';
 import {
   ChannelsPage,
   type ChannelConfigAction,
@@ -76,6 +85,7 @@ function buildSnapshot(
   const discordConfigured = hasCredential(credentials.discord_bot_token);
   const slackConfigured =
     hasCredential(credentials.slack_bot_token) && hasCredential(credentials.slack_app_token);
+  const mobileConfigured = hasCredential(gateway.mobile.publish_host);
 
   return {
     channelMeta: [],
@@ -92,6 +102,7 @@ function buildSnapshot(
         pairedCount: pairing.discord?.paired.length ?? 0,
         pendingPairingCount: pairing.discord?.pending.length ?? 0,
       },
+      mobile: status(gateway.mobile.enabled, mobileConfigured),
       slack: status(gateway.slack.enabled, slackConfigured),
       whatsapp: virtualStatus('whatsapp'),
       googlechat: virtualStatus('googlechat'),
@@ -104,8 +115,13 @@ function buildSnapshot(
 
 function isPersistedGatewayChannel(
   channel: ChannelKey,
-): channel is 'telegram' | 'discord' | 'slack' {
-  return channel === 'telegram' || channel === 'discord' || channel === 'slack';
+): channel is 'telegram' | 'discord' | 'mobile' | 'slack' {
+  return (
+    channel === 'telegram' ||
+    channel === 'discord' ||
+    channel === 'mobile' ||
+    channel === 'slack'
+  );
 }
 
 function supportsPairing(channel: ChannelKey): channel is PairingChannel {
@@ -117,6 +133,7 @@ function isChannelKey(value: string | undefined): value is ChannelKey {
     value === 'whatsapp' ||
     value === 'telegram' ||
     value === 'discord' ||
+    value === 'mobile' ||
     value === 'googlechat' ||
     value === 'slack' ||
     value === 'signal' ||
@@ -144,6 +161,9 @@ export function ChannelsRoute() {
     () => loadJsonRecord<ChannelEnabledOverrides>(CHANNEL_ENABLED_OVERRIDES_KEY),
   );
   const [channelPairing, setChannelPairing] = useState<ChannelPairingStateMap>({});
+  const [mobileGatewayKeys, setMobileGatewayKeys] = useState<MobileGatewayKeyRecord[]>([]);
+  const [lastIssuedMobileGatewayKey, setLastIssuedMobileGatewayKey] =
+    useState<IssuedMobileGatewayKey | null>(null);
   const hasLoadedInitialDataRef = useRef(false);
 
   const snapshot = useMemo(
@@ -162,18 +182,21 @@ export function ChannelsRoute() {
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
-      const [nextConfig, nextCredentials, telegramPairing, discordPairing] = await Promise.all([
-        fetchConfig(),
-        fetchCredentials(),
-        fetchChannelPairing('telegram'),
-        fetchChannelPairing('discord'),
-      ]);
+      const [nextConfig, nextCredentials, telegramPairing, discordPairing, nextMobileKeys] =
+        await Promise.all([
+          fetchConfig(),
+          fetchCredentials(),
+          fetchChannelPairing('telegram'),
+          fetchChannelPairing('discord'),
+          fetchMobileGatewayKeys(),
+        ]);
       setConfig(nextConfig);
       setCredentials(nextCredentials);
       setChannelPairing({
         telegram: telegramPairing,
         discord: discordPairing,
       });
+      setMobileGatewayKeys(nextMobileKeys);
       setLastError(null);
       setLastSuccessAt(Date.now());
     } catch (err) {
@@ -257,6 +280,17 @@ export function ChannelsRoute() {
           toast.error('Slack test failed: both bot and app tokens are required.');
           return;
         }
+        if (
+          channel === 'mobile' &&
+          !hasCredential(
+            typeof patch.mobilePublishHost === 'string'
+              ? patch.mobilePublishHost
+              : config.gateway.mobile.publish_host,
+          )
+        ) {
+          toast.error('Mobile Gateway test failed: publish host is missing.');
+          return;
+        }
         toast.info(
           `Connection test passed local validation for ${channel}. Use Save or Connect to apply.`,
         );
@@ -303,6 +337,20 @@ export function ChannelsRoute() {
           telegram: {
             ...baseGateway.telegram,
             native_streaming: patch.telegramNativeStreaming,
+          },
+        };
+      }
+      if (channel === 'mobile' && typeof patch.mobilePublishHost === 'string') {
+        const baseGateway = configPatch.gateway ?? config.gateway;
+        configPatch.gateway = {
+          ...baseGateway,
+          mobile: {
+            ...baseGateway.mobile,
+            enabled:
+              typeof requestedEnabled === 'boolean'
+                ? requestedEnabled
+                : baseGateway.mobile.enabled,
+            publish_host: patch.mobilePublishHost,
           },
         };
       }
@@ -358,6 +406,38 @@ export function ChannelsRoute() {
     },
     [config, credentials],
   );
+
+  const handleIssueMobileGatewayKey = useCallback(async (label?: string) => {
+    try {
+      setChannelConfigSaving(true);
+      const issued = await issueMobileGatewayKey({ label });
+      setLastIssuedMobileGatewayKey(issued);
+      setMobileGatewayKeys(await fetchMobileGatewayKeys());
+      setLastSuccessAt(Date.now());
+      setLastError(null);
+      toast.success('Issued mobile gateway key.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to issue mobile gateway key.');
+    } finally {
+      setChannelConfigSaving(false);
+    }
+  }, []);
+
+  const handleRevokeMobileGatewayKey = useCallback(async (id: string) => {
+    try {
+      setChannelConfigSaving(true);
+      await revokeMobileGatewayKey(id);
+      setMobileGatewayKeys(await fetchMobileGatewayKeys());
+      setLastIssuedMobileGatewayKey((current) => (current?.id === id ? null : current));
+      setLastSuccessAt(Date.now());
+      setLastError(null);
+      toast.success('Revoked mobile gateway key.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke mobile gateway key.');
+    } finally {
+      setChannelConfigSaving(false);
+    }
+  }, []);
 
   const openChannelConfig = useCallback(
     (channel: ChannelKey) => {
@@ -425,6 +505,17 @@ export function ChannelsRoute() {
         loading={loading}
         lastError={lastError}
         pairing={supportsPairing(routeChannel) ? channelPairing[routeChannel] ?? null : null}
+        mobileGateway={
+          routeChannel === 'mobile'
+            ? {
+                keys: mobileGatewayKeys,
+                lastIssuedKey: lastIssuedMobileGatewayKey,
+                onIssueKey: handleIssueMobileGatewayKey,
+                onRevokeKey: handleRevokeMobileGatewayKey,
+                onDismissIssuedKey: () => setLastIssuedMobileGatewayKey(null),
+              }
+            : null
+        }
         onAction={handleChannelConfigAction}
         onPairingRefresh={supportsPairing(routeChannel) ? refreshPairingChannel : undefined}
         onPairingDecision={supportsPairing(routeChannel) ? handlePairingDecision : undefined}

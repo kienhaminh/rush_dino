@@ -20,6 +20,10 @@ describe('channel pairing option visibility', () => {
     expect(dmPolicyValues('slack')).not.toContain('pairing');
   });
 
+  it('does not show pairing for mobile gateway', () => {
+    expect(dmPolicyValues('mobile')).not.toContain('pairing');
+  });
+
   it('defaults telegram and discord connects to pairing', () => {
     expect(defaultDmPolicyForChannel('telegram')).toBe('pairing');
     expect(defaultDmPolicyForChannel('discord')).toBe('pairing');
@@ -27,5 +31,14 @@ describe('channel pairing option visibility', () => {
 
   it('keeps slack on open by default', () => {
     expect(defaultDmPolicyForChannel('slack')).toBe('open');
+  });
+
+  it('keeps mobile gateway on open by default', () => {
+    expect(defaultDmPolicyForChannel('mobile')).toBe('open');
+  });
+
+  it('exposes a publish host field for mobile gateway', () => {
+    const fieldKeys = getOpenClawChannelFields('mobile').map((field) => field.key);
+    expect(fieldKeys).toContain('publishHost');
   });
 });

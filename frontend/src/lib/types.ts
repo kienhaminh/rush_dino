@@ -102,6 +102,10 @@ export interface TelegramChannelConfig extends ChannelConfig {
   native_streaming?: boolean;
 }
 
+export interface MobileGatewayConfig extends ChannelConfig {
+  publish_host: string;
+}
+
 export type DmPolicy = 'open' | 'pairing' | 'allowlist' | 'disabled';
 
 export interface ChannelAccessConfig {
@@ -114,6 +118,7 @@ export interface GatewayConfig {
   discord: ChannelConfig;
   slack: ChannelConfig;
   webchat: ChannelConfig;
+  mobile: MobileGatewayConfig;
 }
 
 export interface SecurityConfig {
@@ -257,6 +262,27 @@ export interface DashboardAuthStatusResponse {
   enabled: boolean;
   authenticated: boolean;
   expiresAt?: string | null;
+}
+
+export interface MobileGatewayQrPayload {
+  kind: string;
+  version: number;
+  host: string;
+  apiKey: string;
+}
+
+export interface MobileGatewayKeyRecord {
+  id: string;
+  senderId: string;
+  label?: string | null;
+  createdAt: string;
+  lastSeenAt?: string | null;
+  revokedAt?: string | null;
+}
+
+export interface IssuedMobileGatewayKey extends MobileGatewayKeyRecord {
+  apiKey: string;
+  qrPayload: MobileGatewayQrPayload;
 }
 
 export interface RuntimeLogRecord {
