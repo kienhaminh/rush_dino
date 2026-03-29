@@ -8,6 +8,7 @@ import {
   Loader,
   Mail,
   MessageSquare,
+  MonitorDot,
   ScrollText,
   Settings,
   Shield,
@@ -45,6 +46,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'agents', label: 'Agents', icon: Folder, href: '/agents', matchPrefix: '/agents' },
       { id: 'kanban', label: 'Task Board', icon: LayoutGrid, href: '/kanban', matchPrefix: '/kanban', advancedOnly: true },
+      { id: 'agent-board', label: 'Team Status', icon: MonitorDot, href: '/agent-board', matchPrefix: '/agent-board', advancedOnly: true },
       { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows', advancedOnly: true },
       { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills', advancedOnly: true },
       { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph', advancedOnly: true },
