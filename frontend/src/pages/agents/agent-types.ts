@@ -17,6 +17,17 @@ export type AgentRecord = {
   workspace: string;
   description: string;
   sandboxPolicy?: SandboxPolicy | null;
+  claimTags?: string[];
+  claimsTasks?: boolean;
+  tools?: string | null;
+};
+
+export type AgentHealth = {
+  successRate: number;
+  totalTasks: number;
+  circuitOpen: boolean;
+  backoffSeconds: number;
+  nextRetryAt: string | null;
 };
 
 export type AgentFileRecord = {
