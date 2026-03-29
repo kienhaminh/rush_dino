@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::{Arc, Weak}};
 use sqlx::SqlitePool;
 use rushdino_common::Result;
 use rushdino_providers::Provider;
-use rushdino_security::egress_proxy::EgressProxy;
+use rushdino_security::guardrail::pipeline::GuardrailPipeline;
 
 use crate::{
     agent_health_store::AgentHealthStore,
@@ -119,8 +119,8 @@ pub fn build_engine_deps(
     runtime: Arc<AgentRuntime>,
     system_broker: SharedSystemBroker,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-    // Optional sandbox egress proxy — pass Some to enforce network policy in web tools.
-    egress_proxy: Option<Arc<EgressProxy>>,
+    // Optional guardrail pipeline — pass Some to enforce network policy in web tools.
+    _guardrail_pipeline: Option<Arc<GuardrailPipeline>>,
     broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> Result<EngineDeps> {
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
@@ -149,7 +149,6 @@ pub fn build_engine_deps(
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
     let system_broker_c = system_broker.clone();
-    let egress_proxy_c = egress_proxy.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
 
@@ -161,14 +160,11 @@ pub fn build_engine_deps(
         let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
 
         let r = ToolRegistry::new();
-        // Build WebSearchTool, optionally attaching the sandbox egress proxy.
-        let mut web_search = WebSearchTool::new(
+        // Build WebSearchTool.
+        let web_search = WebSearchTool::new(
             "https://api.search.brave.com/res/v1/web/search".to_owned(),
             brave_c,
         );
-        if let Some(proxy) = &egress_proxy_c {
-            web_search = web_search.with_egress_proxy(proxy.clone());
-        }
         r.register(web_search);
         r.register(ImageTool::new(
             gemini_api_key,
@@ -194,11 +190,8 @@ pub fn build_engine_deps(
         r
     });
 
-    // Build WebFetchTool, optionally attaching the sandbox egress proxy and provider.
-    let mut web_fetch = WebFetchTool::new().with_provider(provider.clone());
-    if let Some(proxy) = &egress_proxy {
-        web_fetch = web_fetch.with_egress_proxy(proxy.clone());
-    }
+    // Build WebFetchTool, attaching the provider.
+    let web_fetch = WebFetchTool::new().with_provider(provider.clone());
     registry.register(web_fetch);
     registry.register(SessionManageTool::new(conversation.clone()));
     registry.register(cron_list_tool(cron_manager.clone()));

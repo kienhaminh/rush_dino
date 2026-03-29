@@ -210,8 +210,8 @@ impl AgentEngine {
         runtime: Arc<AgentRuntime>,
         system_broker: SharedSystemBroker,
         knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-        // Optional sandbox egress proxy — pass Some for sandboxed agents.
-        egress_proxy: Option<Arc<rushdino_security::egress_proxy::EgressProxy>>,
+        // Optional guardrail pipeline — pass Some for sandboxed agents.
+        guardrail_pipeline: Option<Arc<rushdino_security::guardrail::pipeline::GuardrailPipeline>>,
         broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Result<Self> {
         let deps = build_engine_deps(
@@ -224,7 +224,7 @@ impl AgentEngine {
             runtime.clone(),
             system_broker,
             knowledge_graph.clone(),
-            egress_proxy,
+            guardrail_pipeline,
             broadcast_tx,
         )?;
 
