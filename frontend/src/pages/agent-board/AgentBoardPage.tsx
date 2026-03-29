@@ -16,9 +16,9 @@ import { AgentHealthIndicator } from './agent-health-indicator';
 import { useAgentHealth } from './use-agent-health';
 
 const COLUMN_ORDER: Array<{ key: OverviewAgentStatus; label: string }> = [
+  { key: 'idle', label: 'Idle' },
   { key: 'active', label: 'Active' },
   { key: 'recent', label: 'Recent' },
-  { key: 'idle', label: 'Idle' },
   { key: 'blocked', label: 'Blocked' },
 ];
 
