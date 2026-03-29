@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
 
-use rushdino_common::{AppError, Result};
+use rushdino_common::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentMessage {

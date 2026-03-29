@@ -1,21 +1,16 @@
 use serde::{Deserialize, Serialize};
 
 /// Type of workflow step execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum StepType {
     /// Default: run through an LLM agent react loop.
+    #[default]
     Agent,
     /// Execute a shell command; instructions contain the command string.
     Script,
     /// Simple string template substitution using previous step outputs.
     Transform,
-}
-
-impl Default for StepType {
-    fn default() -> Self {
-        Self::Agent
-    }
 }
 
 impl StepType {

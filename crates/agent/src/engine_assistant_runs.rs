@@ -10,7 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use rushdino_common::{
-    models::{Message, Role},
+    models::Message,
     Result,
 };
 use rushdino_providers::types::ChatResponse;
@@ -20,7 +20,6 @@ use crate::{
     engine_bootstrap::{resolve_skills_for_prompt, system_message, title_from, user_message},
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
-    tool_registry::SessionToolContext,
     tools::bash::{with_tool_execution_context, ToolExecutionContext},
 };
 
