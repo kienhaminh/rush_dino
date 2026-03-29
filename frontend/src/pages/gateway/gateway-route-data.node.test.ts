@@ -66,6 +66,7 @@ describe('buildGatewayChannels', () => {
       'whatsapp',
       'telegram',
       'discord',
+      'mobile',
       'googlechat',
       'slack',
       'signal',

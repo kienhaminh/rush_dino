@@ -10,6 +10,7 @@ use crate::channel_pairing::ChannelPairingService;
 use crate::chat_broadcast::ChatBroadcastHub;
 use crate::mcp_manager::McpManager;
 use crate::middleware::HmacAuthState;
+use crate::mobile_gateway::{MobileGatewayAdapter, MobileGatewayService};
 use crate::runtime_log_store::RuntimeLogStore;
 use crate::runtime_state::{RuntimeState, RuntimeStatus};
 use crate::webchat::WebChatAdapter;
@@ -138,6 +139,10 @@ pub struct AppState {
     pub channel_pairing: Arc<ChannelPairingService>,
     /// SQLite-backed dashboard auth state store.
     pub dashboard_auth: Arc<DashboardAuthService>,
+    /// SQLite-backed mobile gateway API key store.
+    pub mobile_gateway: Arc<MobileGatewayService>,
+    /// Mobile gateway adapter shared with the gateway and WS route.
+    pub mobile_gateway_adapter: Arc<MobileGatewayAdapter>,
     /// Guardrail registry: maps session IDs to their per-session guardrail pipelines.
     pub guardrail_registry: Arc<GuardrailRegistry>,
     /// Temporary OAuth PKCE sessions for UI-driven headless login.
@@ -165,6 +170,8 @@ impl AppState {
         chat_broadcast: Arc<ChatBroadcastHub>,
         channel_pairing: Arc<ChannelPairingService>,
         dashboard_auth: Arc<DashboardAuthService>,
+        mobile_gateway: Arc<MobileGatewayService>,
+        mobile_gateway_adapter: Arc<MobileGatewayAdapter>,
         guardrail_registry: Arc<GuardrailRegistry>,
         pending_oauth: Arc<PendingOAuthStore>,
         skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
@@ -186,6 +193,8 @@ impl AppState {
             chat_broadcast,
             channel_pairing,
             dashboard_auth,
+            mobile_gateway,
+            mobile_gateway_adapter,
             guardrail_registry,
             pending_oauth,
             skill_graph,

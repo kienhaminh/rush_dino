@@ -67,6 +67,18 @@ fn config_reload_triggers_for_telegram_native_streaming_changes() {
 }
 
 #[test]
+fn config_reload_triggers_for_mobile_gateway_changes() {
+    let current = AppConfig::default();
+    let mut updated = AppConfig::default();
+    updated.gateway.mobile.enabled = true;
+    updated.gateway.mobile.publish_host = "https://rushdino.tailnet.ts.net".to_owned();
+
+    assert!(gateway_runtime_reload_required_from_config(
+        &current, &updated
+    ));
+}
+
+#[test]
 fn config_reload_triggers_for_default_profile_change() {
     let current = AppConfig::default();
     let mut updated = AppConfig::default();

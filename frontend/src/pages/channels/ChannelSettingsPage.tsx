@@ -9,7 +9,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { AppConfigView, ChannelPairingState, CredentialsView } from '@/lib/types';
+import type {
+  AppConfigView,
+  ChannelPairingState,
+  CredentialsView,
+  IssuedMobileGatewayKey,
+  MobileGatewayKeyRecord,
+} from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
   type ChannelConfigAction,
@@ -19,6 +25,15 @@ import {
 } from './ChannelsPage';
 import { ChannelPairingPanel } from './channel-pairing-panel';
 import { ChannelConfigMenu } from './channel-config-menu';
+import { MobileGatewayKeysPanel } from './mobile-gateway-keys-panel';
+
+type MobileGatewaySettingsState = {
+  keys: MobileGatewayKeyRecord[];
+  lastIssuedKey: IssuedMobileGatewayKey | null;
+  onIssueKey: (label?: string) => void;
+  onRevokeKey: (id: string) => void;
+  onDismissIssuedKey: () => void;
+};
 
 type ChannelSettingsPageProps = {
   channel: ChannelKey;
@@ -33,6 +48,7 @@ type ChannelSettingsPageProps = {
   loading?: boolean;
   lastError?: string | null;
   pairing?: ChannelPairingState | null;
+  mobileGateway?: MobileGatewaySettingsState | null;
   onAction: (
     channel: ChannelKey,
     patch: ChannelDetailConfigPatch,
@@ -47,9 +63,9 @@ type ChannelSettingsPageProps = {
 };
 
 function channelLabel(channel: ChannelKey): string {
-  return channel === 'googlechat'
-    ? 'Google Chat'
-    : channel.charAt(0).toUpperCase() + channel.slice(1);
+  if (channel === 'googlechat') return 'Google Chat';
+  if (channel === 'mobile') return 'Mobile Gateway';
+  return channel.charAt(0).toUpperCase() + channel.slice(1);
 }
 
 function detailStatusTone(status: string) {
@@ -80,6 +96,7 @@ export function ChannelSettingsPage({
   loading,
   lastError,
   pairing,
+  mobileGateway,
   onPairingRefresh,
   onAction,
   onPairingDecision,
@@ -318,6 +335,18 @@ export function ChannelSettingsPage({
             onRefresh={onPairingRefresh}
             onDecision={onPairingDecision}
             onRevoke={onPairingRevoke}
+          />
+        ) : null}
+
+        {channel === 'mobile' && mobileGateway ? (
+          <MobileGatewayKeysPanel
+            publishHost={config?.gateway.mobile.publish_host ?? ''}
+            busy={saving || Boolean(loading)}
+            keys={mobileGateway.keys}
+            lastIssuedKey={mobileGateway.lastIssuedKey}
+            onIssueKey={mobileGateway.onIssueKey}
+            onRevokeKey={mobileGateway.onRevokeKey}
+            onDismissIssuedKey={mobileGateway.onDismissIssuedKey}
           />
         ) : null}
       </div>

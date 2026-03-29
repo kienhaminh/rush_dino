@@ -1,4 +1,4 @@
-import { ArrowRight, MessageCircle, Send, Waypoints } from 'lucide-react';
+import { ArrowRight, MessageCircle, Send, Smartphone, Waypoints } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,8 @@ function channelIcon(channel: ChannelKey) {
       return Send;
     case 'discord':
       return MessageCircle;
+    case 'mobile':
+      return Smartphone;
     default:
       return Waypoints;
   }

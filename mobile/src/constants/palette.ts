@@ -1,0 +1,17 @@
+export const palette = {
+  paper: '#f5efe2',
+  paperStrong: '#fff9f0',
+  ink: '#1b2019',
+  mutedInk: '#646a63',
+  line: '#d8cfbf',
+  accent: '#d45a32',
+  accentDeep: '#9f3416',
+  moss: '#294a3a',
+  mossSoft: '#dfe9df',
+  bubbleUser: '#214f43',
+  bubbleAssistant: '#fff4e1',
+  bubbleSystem: '#ece4d7',
+  success: '#2f7d4a',
+  danger: '#b33a21',
+  warning: '#b67b24',
+} as const;

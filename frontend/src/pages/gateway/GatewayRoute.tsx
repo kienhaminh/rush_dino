@@ -10,6 +10,7 @@ const ORDERED_CHANNELS: ChannelKey[] = [
   'whatsapp',
   'telegram',
   'discord',
+  'mobile',
   'googlechat',
   'slack',
   'signal',
@@ -23,6 +24,8 @@ function channelLabel(channel: ChannelKey): string {
       return 'Google Chat';
     case 'imessage':
       return 'iMessage';
+    case 'mobile':
+      return 'Mobile Gateway';
     default:
       return channel.charAt(0).toUpperCase() + channel.slice(1);
   }

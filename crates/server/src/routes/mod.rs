@@ -17,6 +17,7 @@ pub mod health;
 pub mod logs;
 pub mod mcp;
 pub mod messages;
+pub mod mobile_gateway;
 pub mod providers;
 pub mod runs;
 pub mod sessions;

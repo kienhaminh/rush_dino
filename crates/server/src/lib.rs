@@ -2,6 +2,7 @@ pub mod approval_gate;
 pub mod guardrail_broker;
 pub mod mcp_manager;
 pub mod channel_pairing;
+pub mod mobile_gateway;
 mod chat_broadcast;
 mod cron_runtime;
 mod knowledge_graph_bridge;
@@ -40,6 +41,7 @@ use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
     mcp_manager::McpManager,
+    mobile_gateway::{MobileGatewayAdapter, MobileGatewayService},
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
     cron_runtime::spawn_cron_runtime,
     middleware::{
@@ -85,6 +87,7 @@ pub async fn build_app(
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
+    let mobile_gateway = Arc::new(MobileGatewayService::new((*pool).clone()));
     let dashboard_auth = Arc::new(rushdino_common::dashboard_auth::DashboardAuthService::new(
         (*pool).clone(),
     ));
@@ -119,6 +122,13 @@ pub async fn build_app(
             "webchat",
             config.gateway.webchat.enabled,
             gateway_adapter_capabilities("webchat"),
+        )
+        .await;
+    gateway_state
+        .seed_channel(
+            "mobile",
+            config.gateway.mobile.enabled,
+            gateway_adapter_capabilities("mobile"),
         )
         .await;
     let gateway_sessions = Arc::new(SessionManager::new((*pool).clone()));
@@ -258,6 +268,22 @@ pub async fn build_app(
         .await;
     }
 
+    let mobile_gateway_adapter = Arc::new(MobileGatewayAdapter::new());
+    if config.gateway.mobile.enabled {
+        gateway.register_arc(
+            mobile_gateway_adapter.clone() as Arc<dyn rushdino_gateway::ChannelAdapter>
+        );
+        tracing::info!("gateway: mobile adapter registered");
+        let _ = log_runtime(
+            &runtime_logs,
+            "info",
+            "gateway.mobile",
+            "mobile adapter registered",
+            None,
+        )
+        .await;
+    }
+
     let gateway_control = gateway.start().await?;
 
     // Build optional HMAC auth state from CredentialsConfig
@@ -350,6 +376,8 @@ pub async fn build_app(
         chat_broadcast,
         channel_pairing,
         dashboard_auth,
+        mobile_gateway,
+        mobile_gateway_adapter,
         guardrail_registry,
         pending_oauth,
         skill_graph_service,
@@ -371,6 +399,23 @@ pub async fn build_app(
         )
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
+        .route(
+            "/api/channels/mobile/keys",
+            get(routes::mobile_gateway::list_mobile_gateway_keys)
+                .post(routes::mobile_gateway::issue_mobile_gateway_key),
+        )
+        .route(
+            "/api/channels/mobile/keys/:id",
+            axum::routing::delete(routes::mobile_gateway::revoke_mobile_gateway_key),
+        )
+        .route(
+            "/api/channels/mobile/connect",
+            get(routes::mobile_gateway::connect_mobile_gateway),
+        )
+        .route(
+            "/api/channels/mobile/ws",
+            get(routes::mobile_gateway::ws_mobile_gateway),
+        )
         .route(
             "/api/conversations",
             get(routes::conversations::list_conversations),
@@ -695,7 +740,7 @@ fn gateway_adapter_capabilities(channel_id: &str) -> GatewayAdapterCapabilities 
             images: GatewayRichDeliveryMode::Native,
             link_buttons: GatewayRichDeliveryMode::Native,
         },
-        "webchat" => GatewayAdapterCapabilities {
+        "webchat" | "mobile" => GatewayAdapterCapabilities {
             plain_text: true,
             markdown: true,
             code_blocks: true,
@@ -738,6 +783,7 @@ fn should_register_gateway_adapter(
                     .is_some_and(|token| !token.trim().is_empty())
         }
         "webchat" => config.gateway.webchat.enabled,
+        "mobile" => config.gateway.mobile.enabled,
         _ => false,
     }
 }

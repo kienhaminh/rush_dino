@@ -27,6 +27,8 @@ import type {
   RegisteredTool,
   SkillRecord,
   SystemSummaryResponse,
+  MobileGatewayKeyRecord,
+  IssuedMobileGatewayKey,
   UsageMetricsResponse,
   GraphStats,
   GraphFact,
@@ -470,6 +472,33 @@ export async function revokeChannelPairedUser(
   const response = await fetch(endpoint, {
     method: 'DELETE',
   });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function fetchMobileGatewayKeys(): Promise<MobileGatewayKeyRecord[]> {
+  const endpoint = '/api/channels/mobile/keys';
+  const response = await fetch(endpoint);
+  const data = await parseJsonOrThrow(response, endpoint);
+  return data.items ?? [];
+}
+
+export async function issueMobileGatewayKey(payload: {
+  label?: string;
+}): Promise<IssuedMobileGatewayKey> {
+  const endpoint = '/api/channels/mobile/keys';
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
+}
+
+export async function revokeMobileGatewayKey(
+  id: string,
+): Promise<{ id: string; revoked: boolean }> {
+  const endpoint = `/api/channels/mobile/keys/${encodeURIComponent(id)}`;
+  const response = await fetch(endpoint, { method: 'DELETE' });
   return parseJsonOrThrow(response, endpoint);
 }
 

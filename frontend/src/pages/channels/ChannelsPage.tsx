@@ -13,6 +13,7 @@ export type ChannelKey =
   | 'whatsapp'
   | 'telegram'
   | 'discord'
+  | 'mobile'
   | 'googlechat'
   | 'slack'
   | 'signal'
@@ -38,6 +39,7 @@ export type ChannelDetailConfigPatch = {
   telegramNativeStreaming?: boolean;
   telegramBotToken?: string;
   discordBotToken?: string;
+  mobilePublishHost?: string;
   slackBotToken?: string;
   slackAppToken?: string;
   gatewayAccess?: ChannelAccessConfig;
@@ -83,6 +85,7 @@ export function ChannelsPage(props: ChannelsProps) {
     'whatsapp',
     'telegram',
     'discord',
+    'mobile',
     'googlechat',
     'slack',
     'signal',
@@ -203,6 +206,18 @@ export function ChannelsPage(props: ChannelsProps) {
                       key={channel}
                       title="Google Chat"
                       description="Bot status and channel configuration."
+                      status={status}
+                      onConfigure={() => props.onOpenChannelConfig(channel)}
+                      onToggleEnabled={handleToggle}
+                      enabled={running}
+                    />
+                  );
+                case 'mobile':
+                  return (
+                    <GenericChannelCard
+                      key={channel}
+                      title="Mobile Gateway"
+                      description="Tailnet publish host and API-key access for the Expo client."
                       status={status}
                       onConfigure={() => props.onOpenChannelConfig(channel)}
                       onToggleEnabled={handleToggle}
