@@ -30,7 +30,10 @@ export function SandboxBashPolicyPanel({ policy, onPolicyChange, onApply }: Prop
   }
 
   function removeDeniedCommand(index: number) {
-    onPolicyChange({ ...policy, deny_commands: policy.deny_commands.filter((_, i) => i !== index) });
+    onPolicyChange({
+      ...policy,
+      deny_commands: policy.deny_commands.filter((_, i) => i !== index),
+    });
   }
 
   return (

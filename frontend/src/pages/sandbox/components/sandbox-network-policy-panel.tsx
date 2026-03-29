@@ -9,12 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { NetworkRule, SandboxNetworkPolicy } from '@/lib/types';
+import type { NetworkRule, SandboxNetworkInboundFilter, SandboxNetworkPolicy } from '@/lib/types';
 
-const DEFAULT_INBOUND = {
+const DEFAULT_INBOUND: SandboxNetworkInboundFilter = {
   max_size_kb: 256,
-  strip_headers: [] as string[],
-  allowed_content_types: [] as string[],
+  strip_headers: [],
+  allowed_content_types: [],
 };
 
 interface Props {
@@ -181,7 +181,7 @@ export function SandboxNetworkPolicyPanel({ policy, onPolicyChange, onApply }: P
       </div>
 
       <Button size="sm" className="w-full text-xs" onClick={() => void onApply(policy)}>
-        Apply (Hot-reload)
+        Apply Policy
       </Button>
     </div>
   );

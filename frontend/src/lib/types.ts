@@ -193,7 +193,7 @@ export interface McpServerConfig {
   auth_header?: string | null;
 }
 
-export interface McpServerStatus {
+export interface McpServerConnectionStatus {
   name: string;
   status: { kind: 'connecting' } | { kind: 'connected' } | { kind: 'error'; message: string };
   tool_count: number;

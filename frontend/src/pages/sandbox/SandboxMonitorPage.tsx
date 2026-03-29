@@ -271,11 +271,11 @@ export type SandboxOverviewContentProps = {
   activeTab: 'overview' | 'mcp' | 'network' | 'bash';
   onTabChange: (tab: 'overview' | 'mcp' | 'network' | 'bash') => void;
   mcpServers: McpServerStatus[];
-  onMcpPolicyChange: (agentId: string, mcp: SandboxMcpPolicy) => Promise<void>;
+  onMcpPolicyChange: (agentId: string, mcp: SandboxMcpPolicy) => void;
   onApplyMcpPolicy: (agentId: string, policy: SandboxMcpPolicy) => Promise<void>;
-  onNetworkPolicyChange: (agentId: string, network: SandboxNetworkPolicy) => Promise<void>;
+  onNetworkPolicyChange: (agentId: string, network: SandboxNetworkPolicy) => void;
   onApplyNetworkPolicyForAgent: (agentId: string, network: SandboxNetworkPolicy) => Promise<void>;
-  onBashPolicyChange: (agentId: string, process: SandboxProcessPolicy) => Promise<void>;
+  onBashPolicyChange: (agentId: string, process: SandboxProcessPolicy) => void;
   onApplyBashPolicy: (agentId: string, policy: SandboxProcessPolicy) => Promise<void>;
 };
 

@@ -49,12 +49,10 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
   function statusDot(name: string) {
     const s = getStatus(name);
     if (!s) return <span className="w-2 h-2 rounded-full bg-muted flex-shrink-0" />;
-    if (s.status.kind === 'connected')
+    if (s.connected)
       return (
         <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 shadow-[0_0_6px_rgba(34,197,94,0.5)]" />
       );
-    if (s.status.kind === 'connecting')
-      return <span className="w-2 h-2 rounded-full bg-yellow-400 flex-shrink-0" />;
     return (
       <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.5)]" />
     );
@@ -64,20 +62,18 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
   function statusLabel(name: string): React.ReactNode {
     const s = getStatus(name);
     if (!s) return null;
-    if (s.status.kind === 'connected')
+    if (s.connected)
       return (
         <span className="text-[10px] text-muted-foreground">{s.tool_count} tools</span>
       );
-    if (s.status.kind === 'connecting')
-      return <span className="text-[10px] text-muted-foreground">connecting…</span>;
     return <span className="text-[10px] text-red-400">unreachable</span>;
   }
 
   /** Footer text shown in the expanded row when the server is connected. */
   function lastSeenLabel(name: string): string {
     const s = getStatus(name);
-    if (!s || s.status.kind !== 'connected' || s.last_seen_secs == null) return '';
-    return `Connected · last seen ${s.last_seen_secs}s ago`;
+    if (!s || !s.connected) return '';
+    return `Connected · ${s.tool_count} tools`;
   }
 
   function toggleExpand(name: string) {
