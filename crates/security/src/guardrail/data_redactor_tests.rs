@@ -42,10 +42,8 @@ fn same_secret_produces_same_hash() {
     let input2 = "other=sk-abc123def456ghi789jkl012";
     let out1 = redactor.redact(input1);
     let out2 = redactor.redact(input2);
-    assert!(out1.contains("sha256:"));
-    assert!(out2.contains("sha256:"));
-    // Both should have the same hash since same secret
     let hash1 = out1.split("sha256:").nth(1).and_then(|s| s.split(']').next()).unwrap_or("");
     let hash2 = out2.split("sha256:").nth(1).and_then(|s| s.split(']').next()).unwrap_or("");
-    assert_eq!(hash1, hash2);
+    assert!(!hash1.is_empty(), "hash1 should not be empty");
+    assert_eq!(hash1, hash2, "same secret should produce same hash");
 }

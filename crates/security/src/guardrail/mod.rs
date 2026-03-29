@@ -1,5 +1,6 @@
 pub mod types;
 pub mod pattern_registry;
+pub(crate) mod glob;
 pub mod trust_state;
 pub mod trust_gate;
 pub mod data_redactor;

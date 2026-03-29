@@ -128,7 +128,13 @@ impl PromptShield {
         }
     }
 
-    /// Convenience method that returns a FilterDecision based on scan results.
+    /// Convert a scan result to a filter decision.
+    ///
+    /// High confidence (>0.8): NeedsApproval — block until user confirms.
+    /// Medium confidence (>0.5): Flagged — pass through but surface warning in UI.
+    /// Low confidence (<=0.5): Allow — log only, do not interrupt the agent.
+    ///
+    /// Use `scan()` directly if you need access to flagged sections at all confidence levels.
     pub fn filter(&self, content: &str, source: &SourceTag) -> FilterDecision {
         let result = self.scan(content, source);
 

@@ -3,6 +3,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+use super::glob::glob_match;
 use super::types::{ActionCategory, TrustLevel};
 
 const L0_TO_L1_THRESHOLD: u32 = 5;
@@ -148,30 +149,3 @@ impl TrustState {
     }
 }
 
-/// Glob matching supporting *, **, prefix patterns, and extension patterns.
-fn glob_match(pattern: &str, text: &str) -> bool {
-    if pattern == "*" {
-        return true;
-    }
-    // "prefix /**" — path prefix match (e.g., "/home/user/**")
-    if let Some(prefix) = pattern.strip_suffix("/**") {
-        return text.starts_with(prefix);
-    }
-    // "prefix**" — path prefix match without slash (e.g., "/home/user**")
-    if let Some(prefix) = pattern.strip_suffix("**") {
-        return text.starts_with(prefix);
-    }
-    // "cmd *" — command with arguments: text must equal cmd or start with "cmd "
-    if let Some(prefix) = pattern.strip_suffix(" *") {
-        return text == prefix || text.starts_with(&format!("{prefix} "));
-    }
-    // "prefix*" — simple prefix match
-    if let Some(prefix) = pattern.strip_suffix('*') {
-        return text.starts_with(prefix);
-    }
-    // "*suffix" — suffix match (e.g., "*.log")
-    if let Some(suffix) = pattern.strip_prefix('*') {
-        return text.ends_with(suffix);
-    }
-    pattern == text
-}
