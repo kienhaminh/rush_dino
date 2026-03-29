@@ -6,6 +6,7 @@ import {
   GitBranch,
   LayoutGrid,
   Loader,
+  Mail,
   MessageSquare,
   ScrollText,
   Settings,
@@ -22,6 +23,7 @@ export type SidebarItem = {
   icon: LucideIcon;
   href: string;
   matchPrefix: string | null; // null = exact match only
+  advancedOnly?: boolean;
 };
 
 export type SidebarGroup = {
@@ -42,22 +44,23 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
     label: 'operations',
     items: [
       { id: 'agents', label: 'Agents', icon: Folder, href: '/agents', matchPrefix: '/agents' },
-      { id: 'kanban', label: 'Task Board', icon: LayoutGrid, href: '/kanban', matchPrefix: '/kanban' },
-      { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows' },
-      { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills' },
-      { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph' },
+      { id: 'kanban', label: 'Task Board', icon: LayoutGrid, href: '/kanban', matchPrefix: '/kanban', advancedOnly: true },
+      { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows', advancedOnly: true },
+      { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills', advancedOnly: true },
+      { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph', advancedOnly: true },
+      { id: 'messages', label: 'Messages', icon: Mail, href: '/messages', matchPrefix: '/messages', advancedOnly: true },
     ],
   },
   {
     label: 'system',
     items: [
-      { id: 'sessions', label: 'Sessions', icon: FileText, href: '/sessions', matchPrefix: '/sessions' },
-      { id: 'logs', label: 'Logs', icon: ScrollText, href: '/logs', matchPrefix: '/logs' },
-      { id: 'metrics', label: 'Metrics', icon: BarChart, href: '/metrics', matchPrefix: '/metrics' },
-      { id: 'cron', label: 'Cron', icon: Loader, href: '/cron', matchPrefix: '/cron' },
-      { id: 'gateway', label: 'Gateway', icon: Waypoints, href: '/gateway', matchPrefix: '/gateway' },
-      { id: 'approvals', label: 'Approvals', icon: ShieldCheck, href: '/approvals', matchPrefix: '/approvals' },
-      { id: 'sandbox', label: 'Sandbox', icon: Shield, href: '/sandbox', matchPrefix: '/sandbox' },
+      { id: 'sessions', label: 'Sessions', icon: FileText, href: '/sessions', matchPrefix: '/sessions', advancedOnly: true },
+      { id: 'logs', label: 'Logs', icon: ScrollText, href: '/logs', matchPrefix: '/logs', advancedOnly: true },
+      { id: 'metrics', label: 'Metrics', icon: BarChart, href: '/metrics', matchPrefix: '/metrics', advancedOnly: true },
+      { id: 'cron', label: 'Cron', icon: Loader, href: '/cron', matchPrefix: '/cron', advancedOnly: true },
+      { id: 'gateway', label: 'Gateway', icon: Waypoints, href: '/gateway', matchPrefix: '/gateway', advancedOnly: true },
+      { id: 'approvals', label: 'Approvals', icon: ShieldCheck, href: '/approvals', matchPrefix: '/approvals', advancedOnly: true },
+      { id: 'sandbox', label: 'Sandbox', icon: Shield, href: '/sandbox', matchPrefix: '/sandbox', advancedOnly: true },
       { id: 'config', label: 'Config', icon: Settings, href: '/config', matchPrefix: '/config' },
     ],
   },
