@@ -1,13 +1,8 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
 use rushdino_common::{AppError, Result};
-use rushdino_security::{
-    egress_proxy::{EgressDecision, EgressProxy, EgressRequest},
-    validation::validate_url,
-};
+use rushdino_security::validation::validate_url;
 
 use crate::tool_registry::Tool;
 
@@ -16,9 +11,6 @@ pub struct WebSearchTool {
     api_key: Option<String>,
     /// Hosts explicitly allowed even if they resolve to private IPs (empty = public IPs only).
     allowed_external_hosts: Vec<String>,
-    /// Optional egress proxy for sandbox policy enforcement.
-    /// When set, the search endpoint request is checked before execution.
-    pub egress_proxy: Option<Arc<EgressProxy>>,
 }
 
 impl WebSearchTool {
@@ -27,18 +19,11 @@ impl WebSearchTool {
             endpoint: endpoint.trim().to_owned(),
             api_key: api_key.map(|k| k.trim().to_owned()),
             allowed_external_hosts: Vec::new(),
-            egress_proxy: None,
         }
     }
 
     pub fn with_allowed_hosts(mut self, hosts: Vec<String>) -> Self {
         self.allowed_external_hosts = hosts;
-        self
-    }
-
-    /// Attach a sandbox egress proxy for policy-based network enforcement.
-    pub fn with_egress_proxy(mut self, proxy: Arc<EgressProxy>) -> Self {
-        self.egress_proxy = Some(proxy);
         self
     }
 }
@@ -104,33 +89,6 @@ impl Tool for WebSearchTool {
         // This prevents an operator misconfiguration from routing requests to internal IPs.
         let endpoint_url = validate_url(&self.endpoint, &self.allowed_external_hosts)
             .map_err(|e| AppError::Validation(format!("web_search endpoint blocked: {e}")))?;
-
-        // Sandbox policy enforcement: check with egress proxy before making the request.
-        if let Some(proxy) = &self.egress_proxy {
-            let host = endpoint_url.host_str().unwrap_or("").to_string();
-            let port = endpoint_url.port_or_known_default().unwrap_or(443);
-            let path = endpoint_url.path().to_string();
-            let req = EgressRequest {
-                host,
-                port,
-                method: "GET".to_string(),
-                path,
-            };
-            match proxy.check(&req) {
-                EgressDecision::Allow => {}
-                EgressDecision::RouteForInference => {} // proceed as normal for now
-                EgressDecision::Deny(reason) => {
-                    return Err(AppError::Validation(format!(
-                        "Network request blocked by policy: {reason}"
-                    )));
-                }
-                EgressDecision::PendingApproval => {
-                    return Err(AppError::Validation(
-                        "Network request pending user approval".to_owned(),
-                    ));
-                }
-            }
-        }
 
         let payload: Value = reqwest::Client::new()
             .get(&self.endpoint)

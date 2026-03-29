@@ -29,8 +29,7 @@ export type AdvancedViewId =
   | 'logs'
   | 'cron'
   | 'nodes'
-  | 'debug'
-  | 'sandbox';
+  | 'debug';
 
 export type PrimaryNavItem = {
   id: PrimaryNavId;
@@ -178,7 +177,6 @@ export const ADVANCED_VIEWS: AdvancedView[] = [
   { id: 'cron',          label: 'Cron',           description: 'Scheduled task management',                  href: '/cron' },
   { id: 'nodes',         label: 'Nodes',          description: 'Infrastructure and approval nodes',          href: '/system/nodes' },
   { id: 'debug',         label: 'Debug',          description: 'Low-level debugging surfaces',               href: '/system/debug' },
-  { id: 'sandbox',       label: 'Sandbox',        description: 'Full sandbox posture, policies, and live session audit', href: '/sandbox' },
 ];
 
 function normalizePath(pathname: string) {

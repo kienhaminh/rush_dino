@@ -1,8 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Instant};
 
 use rushdino_gateway::{GatewayControl, GatewayStateStore, SessionManager};
-use rushdino_security::approval_gate::ApprovalGate as SandboxApprovalGate;
-use rushdino_security::egress_proxy::EgressProxy;
+use rushdino_security::guardrail::pipeline::GuardrailPipeline;
 use rushdino_security::rate_limit::EndpointLimiters;
 use tokio::sync::RwLock;
 
@@ -20,23 +19,15 @@ use rushdino_common::dashboard_auth::DashboardAuthService;
 use rushdino_common::{AppConfig, Result};
 
 // ---------------------------------------------------------------------------
-// SandboxRegistry
+// GuardrailRegistry
 // ---------------------------------------------------------------------------
 
-/// Shared registry mapping active session IDs to their sandbox components.
+/// Per-session guardrail pipelines for isolated trust state tracking.
 ///
 /// Stored in `AppState` and cloned cheaply via `Arc`. Routes use it to
-/// perform hot-reloads, audit-log queries, and approve/deny pending sandbox
-/// network requests.
-pub struct SandboxRegistry {
-    /// session_id → EgressProxy — enables network policy hot-reload per session.
-    pub proxies: RwLock<HashMap<String, Arc<EgressProxy>>>,
-    /// session_id → ApprovalGate — enables approve/deny of pending egress requests.
-    pub approval_gates: RwLock<HashMap<String, Arc<SandboxApprovalGate>>>,
-    /// Shared SQLite pool for audit log queries.
-    pub pool: Arc<sqlx::SqlitePool>,
-    /// Base directory under which `{agent_id}/sandbox.yaml` files live.
-    pub agents_dir: PathBuf,
+/// retrieve the per-session pipeline for trust and policy state queries.
+pub struct GuardrailRegistry {
+    pub pipelines: RwLock<HashMap<String, Arc<GuardrailPipeline>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -98,32 +89,22 @@ impl PendingOAuthStore {
     }
 }
 
-impl SandboxRegistry {
+impl GuardrailRegistry {
     /// Create a new, empty registry wrapped in an `Arc`.
-    pub fn new(pool: Arc<sqlx::SqlitePool>, agents_dir: PathBuf) -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            proxies: RwLock::new(HashMap::new()),
-            approval_gates: RwLock::new(HashMap::new()),
-            pool,
-            agents_dir,
+            pipelines: RwLock::new(HashMap::new()),
         })
     }
 
-    /// Register the sandbox components for a newly started agent session.
-    pub async fn register_session(
-        &self,
-        session_id: String,
-        proxy: Arc<EgressProxy>,
-        gate: Arc<SandboxApprovalGate>,
-    ) {
-        self.proxies.write().await.insert(session_id.clone(), proxy);
-        self.approval_gates.write().await.insert(session_id, gate);
+    /// Register the guardrail pipeline for a newly started agent session.
+    pub async fn register_session(&self, session_id: &str, pipeline: Arc<GuardrailPipeline>) {
+        self.pipelines.write().await.insert(session_id.to_owned(), pipeline);
     }
 
-    /// Remove all sandbox components for a completed or aborted session.
+    /// Remove the guardrail pipeline for a completed or aborted session.
     pub async fn unregister_session(&self, session_id: &str) {
-        self.proxies.write().await.remove(session_id);
-        self.approval_gates.write().await.remove(session_id);
+        self.pipelines.write().await.remove(session_id);
     }
 }
 
@@ -157,8 +138,8 @@ pub struct AppState {
     pub channel_pairing: Arc<ChannelPairingService>,
     /// SQLite-backed dashboard auth state store.
     pub dashboard_auth: Arc<DashboardAuthService>,
-    /// Sandbox registry: maps session IDs to their egress proxies and approval gates.
-    pub sandbox_registry: Arc<SandboxRegistry>,
+    /// Guardrail registry: maps session IDs to their per-session guardrail pipelines.
+    pub guardrail_registry: Arc<GuardrailRegistry>,
     /// Temporary OAuth PKCE sessions for UI-driven headless login.
     pub pending_oauth: Arc<PendingOAuthStore>,
     /// Skill graph service for keyword-based skill routing.
@@ -184,7 +165,7 @@ impl AppState {
         chat_broadcast: Arc<ChatBroadcastHub>,
         channel_pairing: Arc<ChannelPairingService>,
         dashboard_auth: Arc<DashboardAuthService>,
-        sandbox_registry: Arc<SandboxRegistry>,
+        guardrail_registry: Arc<GuardrailRegistry>,
         pending_oauth: Arc<PendingOAuthStore>,
         skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
         mcp_manager: Arc<McpManager>,
@@ -205,7 +186,7 @@ impl AppState {
             chat_broadcast,
             channel_pairing,
             dashboard_auth,
-            sandbox_registry,
+            guardrail_registry,
             pending_oauth,
             skill_graph,
             mcp_manager,

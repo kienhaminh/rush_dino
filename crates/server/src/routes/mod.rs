@@ -19,7 +19,6 @@ pub mod mcp;
 pub mod messages;
 pub mod providers;
 pub mod runs;
-pub mod sandbox;
 pub mod sessions;
 pub mod skills;
 pub mod soul_memory;

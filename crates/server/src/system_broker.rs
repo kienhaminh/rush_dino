@@ -11,10 +11,6 @@ use rushdino_agent::{
 };
 use rushdino_common::{init, AppError, Result};
 
-use rushdino_security::sandbox::{
-    apply_subprocess_isolation, platform_supports_sandbox, SandboxPolicy,
-};
-
 use crate::approval_gate::ApprovalGate;
 
 pub struct LocalSystemBroker {
@@ -139,25 +135,6 @@ impl SystemBroker for LocalSystemBroker {
 
         let mut cmd = Command::new("sh");
         cmd.args(["-c", &request.command]).current_dir(&cwd);
-
-        if platform_supports_sandbox() {
-            let workspace = init::canonical_home_dir();
-            let temp_dir = std::env::temp_dir();
-            let mut writable = vec![workspace.clone(), temp_dir.clone()];
-            if let Ok(p) = temp_dir.canonicalize() {
-                writable.push(p);
-            }
-            if let Ok(p) = workspace.canonicalize() {
-                writable.push(p);
-            }
-            let policy = SandboxPolicy::new(writable, true);
-            #[cfg(unix)]
-            unsafe {
-                cmd.pre_exec(move || {
-                    apply_subprocess_isolation(&policy).map_err(std::io::Error::other)
-                });
-            }
-        }
 
         let output = tokio::time::timeout(
             std::time::Duration::from_secs(request.timeout_secs),

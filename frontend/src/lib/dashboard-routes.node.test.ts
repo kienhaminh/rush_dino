@@ -46,7 +46,6 @@ describe('dashboard route metadata', () => {
       'cron',
       'nodes',
       'debug',
-      'sandbox',
     ]);
   });
 
@@ -55,13 +54,9 @@ describe('dashboard route metadata', () => {
     expect(resolvePageHeader('/approvals')).toMatchObject({ id: 'operations', title: 'Approvals' });
     expect(resolvePageHeader('/gateway/telegram')).toMatchObject({ id: 'channels', title: 'Channels' });
     expect(resolvePageHeader('/logs')).toMatchObject({ id: 'system', title: 'Logs' });
-    expect(resolvePageHeader('/sandbox')).toMatchObject({ id: 'system', title: 'Sandbox' });
     expect(resolvePageHeader('/agents')).toMatchObject({ id: 'system', title: 'Agents' });
     expect(resolvePageHeader('/skills')).toMatchObject({ id: 'system', title: 'Skills' });
     expect(resolvePageHeader('/metrics')).toMatchObject({ id: 'operations', title: 'Metrics' });
   });
 
-  it('routes the sandbox advanced view without the /system prefix', () => {
-    expect(ADVANCED_VIEWS.find((item) => item.id === 'sandbox')?.href).toBe('/sandbox');
-  });
 });

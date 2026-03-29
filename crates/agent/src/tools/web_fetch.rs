@@ -16,10 +16,7 @@ use rushdino_providers::{
     types::{ChatRequest, ThinkingLevel},
     Provider,
 };
-use rushdino_security::{
-    egress_proxy::{EgressDecision, EgressProxy, EgressRequest},
-    validation::{validate_url, ValidationError},
-};
+use rushdino_security::validation::{validate_url, ValidationError};
 
 use crate::tool_registry::Tool;
 
@@ -36,9 +33,6 @@ pub struct WebFetchTool {
     max_response_bytes: usize,
     timeout_secs: u64,
     allowed_external_hosts: Vec<String>,
-    /// Optional egress proxy for sandbox policy enforcement.
-    /// When set, network requests are checked before execution.
-    pub egress_proxy: Option<Arc<EgressProxy>>,
     /// Optional LLM provider for HTML-to-summary extraction.
     provider: Option<Arc<Provider>>,
 }
@@ -50,7 +44,6 @@ impl WebFetchTool {
             max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
             timeout_secs: DEFAULT_TIMEOUT_SECS,
             allowed_external_hosts: Vec::new(),
-            egress_proxy: None,
             provider: None,
         }
     }
@@ -72,12 +65,6 @@ impl WebFetchTool {
 
     pub fn with_allowed_hosts(mut self, hosts: Vec<String>) -> Self {
         self.allowed_external_hosts = hosts;
-        self
-    }
-
-    /// Attach a sandbox egress proxy for policy-based network enforcement.
-    pub fn with_egress_proxy(mut self, proxy: Arc<EgressProxy>) -> Self {
-        self.egress_proxy = Some(proxy);
         self
     }
 
@@ -140,33 +127,6 @@ impl Tool for WebFetchTool {
 
         if url.scheme() != "http" && url.scheme() != "https" {
             return Err(AppError::Validation("URL must be http or https".to_owned()));
-        }
-
-        // Sandbox policy enforcement: check with egress proxy before making the request.
-        if let Some(proxy) = &self.egress_proxy {
-            let host = url.host_str().unwrap_or("").to_string();
-            let port = url.port_or_known_default().unwrap_or(443);
-            let path = url.path().to_string();
-            let req = EgressRequest {
-                host,
-                port,
-                method: "GET".to_string(),
-                path,
-            };
-            match proxy.check(&req) {
-                EgressDecision::Allow => {}
-                EgressDecision::RouteForInference => {} // proceed as normal for now
-                EgressDecision::Deny(reason) => {
-                    return Err(AppError::Validation(format!(
-                        "Network request blocked by policy: {reason}"
-                    )));
-                }
-                EgressDecision::PendingApproval => {
-                    return Err(AppError::Validation(
-                        "Network request pending user approval".to_owned(),
-                    ));
-                }
-            }
         }
 
         let client = reqwest::Client::builder()

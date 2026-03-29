@@ -1,7 +1,6 @@
 pub mod approval_gate;
 pub mod guardrail_broker;
 pub mod mcp_manager;
-pub mod policy_system_broker;
 pub mod channel_pairing;
 mod chat_broadcast;
 mod cron_runtime;
@@ -290,9 +289,8 @@ pub async fn build_app(
         }
     }
 
-    // Build the sandbox registry using the shared SQLite pool and agents dir.
-    let agents_dir = config.data_dir.join("agents");
-    let sandbox_registry = state::SandboxRegistry::new(pool.clone(), agents_dir);
+    // Build the guardrail registry for per-session pipeline isolation.
+    let guardrail_registry = state::GuardrailRegistry::new();
     let pending_oauth = state::PendingOAuthStore::new();
 
     // Skill graph: keyword-based routing for skill selection
@@ -352,7 +350,7 @@ pub async fn build_app(
         chat_broadcast,
         channel_pairing,
         dashboard_auth,
-        sandbox_registry,
+        guardrail_registry,
         pending_oauth,
         skill_graph_service,
         mcp_manager.clone(),
@@ -604,27 +602,6 @@ pub async fn build_app(
         .route(
             "/api/providers/:profile_id/connect-oauth/complete",
             post(routes::providers::connect_profile_oauth_complete),
-        )
-        // Sandbox policy API routes
-        .route(
-            "/api/agents/:agent_id/sandbox",
-            get(routes::sandbox::get_agent_sandbox).put(routes::sandbox::put_agent_sandbox),
-        )
-        .route(
-            "/api/sessions/:session_id/sandbox/network",
-            patch(routes::sandbox::patch_session_network_policy),
-        )
-        .route(
-            "/api/sessions/:session_id/audit-log",
-            get(routes::sandbox::get_session_audit_log),
-        )
-        .route(
-            "/api/sessions/:session_id/sandbox/approve",
-            post(routes::sandbox::approve_session_request),
-        )
-        .route(
-            "/api/sessions/:session_id/sandbox/deny",
-            post(routes::sandbox::deny_session_request),
         )
         // Guardrail management API routes
         .route(
