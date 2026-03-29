@@ -119,7 +119,8 @@ pub fn build_engine_deps(
     runtime: Arc<AgentRuntime>,
     system_broker: SharedSystemBroker,
     knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-    // Optional guardrail pipeline — pass Some to enforce network policy in web tools.
+    // TODO(Task 10): wire guardrail pipeline to web tools for network policy enforcement.
+    // The egress proxy was removed; web tool network checking will be added here.
     _guardrail_pipeline: Option<Arc<GuardrailPipeline>>,
     broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 ) -> Result<EngineDeps> {

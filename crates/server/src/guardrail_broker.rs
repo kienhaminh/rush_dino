@@ -5,17 +5,19 @@
 //!  1. Classify the command's output origin via `classify_command`.
 //!  2. Run input filters (PolicyEnforcer → DataRedactor → TrustGate). Hard-deny
 //!     blocks immediately; NeedsApproval waits for a human decision via the
-//!     `approval_tx` channel.
+//!     `pending` map.
 //!  3. Execute the command via `sh -c` with the configured timeout.
 //!  4. Run output filters (OutputScanner → PromptShield) on stdout/stderr.
-//!  5. Prepend an injection warning to stderr if PromptShield fires.
+//!  5. Prepend an injection warning to stderr if PromptShield fires on either
+//!     stdout or stderr.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Mutex};
 
 use rushdino_agent::system_broker::{ShellExecRequest, ShellExecResult, SystemBroker};
 use rushdino_common::Result;
@@ -24,12 +26,19 @@ use rushdino_security::guardrail::types::{
     ActionCategory, GuardrailAction, SourceTag,
 };
 
+/// Timeout in seconds to wait for a human approval decision before
+/// automatically denying the command.
+const APPROVAL_TIMEOUT_SECS: u64 = 60;
+
 // ---------------------------------------------------------------------------
 // ApprovalRequest
 // ---------------------------------------------------------------------------
 
 /// An approval request sent to the frontend when TrustGate requires human
 /// input before a command can be executed.
+///
+/// Does NOT carry a responder channel — the decision is delivered via
+/// [`GuardrailBroker::resolve_approval`] keyed by `id`.
 #[derive(Debug, Clone)]
 pub struct ApprovalRequest {
     pub id: String,
@@ -38,8 +47,6 @@ pub struct ApprovalRequest {
     pub description: String,
     /// The command content with secrets redacted, safe to display in UI.
     pub redacted_content: String,
-    /// One-shot channel to send the user's decision back (true = approved).
-    pub responder: Arc<tokio::sync::Mutex<Option<oneshot::Sender<bool>>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -54,6 +61,8 @@ pub struct GuardrailBroker {
     pipeline: Arc<GuardrailPipeline>,
     /// Sends approval requests to the approval queue consumed by the API layer.
     approval_tx: mpsc::Sender<ApprovalRequest>,
+    /// In-flight approval waiters keyed by request id.
+    pending: Arc<Mutex<HashMap<String, oneshot::Sender<bool>>>>,
     /// Default working directory when the request does not specify one.
     project_dir: PathBuf,
 }
@@ -75,6 +84,7 @@ impl GuardrailBroker {
         Self {
             pipeline: Arc::new(GuardrailPipeline::new(agent_id, trust_state_path)),
             approval_tx,
+            pending: Arc::new(Mutex::new(HashMap::new())),
             project_dir,
         }
     }
@@ -85,19 +95,32 @@ impl GuardrailBroker {
         self.pipeline.clone()
     }
 
+    /// Deliver a human approval decision for a pending request.
+    ///
+    /// Called by the API route layer when the user approves or denies a
+    /// command.  If the waiter has already timed out the send is silently
+    /// dropped.
+    pub async fn resolve_approval(&self, request_id: &str, approved: bool) {
+        let sender = self.pending.lock().await.remove(request_id);
+        if let Some(tx) = sender {
+            // Ignore error — receiver may have dropped on timeout.
+            let _ = tx.send(approved);
+        }
+    }
+
     /// Classify the origin of a shell command's output.
     ///
-    /// Commands that explicitly fetch from the network (curl/wget) produce
-    /// untrusted output that warrants PromptShield scanning.  All other
-    /// commands are treated as local-origin.
+    /// Commands that explicitly fetch from the network (curl/wget/http)
+    /// produce untrusted output that warrants PromptShield scanning.  All
+    /// other commands are treated as local-origin.
     fn classify_command(command: &str) -> SourceTag {
         let trimmed = command.trim();
-        let is_network_command = trimmed.starts_with("curl ")
+        if trimmed.starts_with("curl ")
             || trimmed.starts_with("wget ")
-            || trimmed.contains("| curl ")
-            || trimmed.contains("| wget ");
-
-        if is_network_command {
+            || trimmed.starts_with("http ")
+            || trimmed.contains("| curl")
+            || trimmed.contains("| wget")
+        {
             SourceTag::ShellExternal
         } else {
             SourceTag::LocalFile
@@ -141,28 +164,30 @@ impl SystemBroker for GuardrailBroker {
             }
 
             InputDecision::NeedsApproval { redacted_content, .. } => {
-                // Send the approval request to the API layer and wait up to 60 s.
+                // Register waiter BEFORE sending the request so there is no
+                // race between the API layer resolving and us registering.
                 let (tx, rx) = oneshot::channel::<bool>();
+                let req_id = uuid::Uuid::new_v4().to_string();
+                self.pending.lock().await.insert(req_id.clone(), tx);
+
                 let req = ApprovalRequest {
-                    id: uuid::Uuid::new_v4().to_string(),
+                    id: req_id.clone(),
                     session_id: action.session_id.clone(),
                     category: action.category,
                     description: action.description.clone(),
                     redacted_content,
-                    responder: Arc::new(tokio::sync::Mutex::new(Some(tx))),
                 };
 
-                self.approval_tx
-                    .send(req)
-                    .await
-                    .map_err(|e| {
-                        rushdino_common::AppError::Agent(format!(
-                            "Failed to send approval request: {e}"
-                        ))
-                    })?;
+                if let Err(e) = self.approval_tx.send(req).await {
+                    // Clean up the pending entry if send fails.
+                    self.pending.lock().await.remove(&req_id);
+                    return Err(rushdino_common::AppError::Agent(format!(
+                        "Failed to send approval request: {e}"
+                    )));
+                }
 
                 let approved = tokio::time::timeout(
-                    std::time::Duration::from_secs(60),
+                    std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS),
                     rx,
                 )
                 .await
@@ -226,12 +251,19 @@ impl SystemBroker for GuardrailBroker {
         let stdout_result = self.pipeline.check_output(&raw_stdout, &source_tag);
         let stderr_result = self.pipeline.check_output(&raw_stderr, &source_tag);
 
-        // Prepend an injection warning to stderr when PromptShield detects
-        // suspicious content in stdout (where injections are most likely).
-        let stderr = if let Some(warning) = stdout_result.injection_warning {
-            format!("[GUARDRAIL WARNING] {warning}\n{}", stderr_result.content)
-        } else {
-            stderr_result.content
+        // Prepend injection warnings to stderr when PromptShield detects
+        // suspicious content in either stdout or stderr.
+        let stderr = match (stdout_result.injection_warning, stderr_result.injection_warning) {
+            (Some(w1), Some(w2)) => {
+                format!(
+                    "[GUARDRAIL WARNING] {w1}\n[GUARDRAIL WARNING] {w2}\n{}",
+                    stderr_result.content
+                )
+            }
+            (Some(w), None) | (None, Some(w)) => {
+                format!("[GUARDRAIL WARNING] {w}\n{}", stderr_result.content)
+            }
+            (None, None) => stderr_result.content,
         };
 
         Ok(ShellExecResult {
