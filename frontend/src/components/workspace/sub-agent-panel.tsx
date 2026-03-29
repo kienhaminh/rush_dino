@@ -65,7 +65,7 @@ function SessionDetail({ sessionId, onClose }: { sessionId: string; onClose: () 
                   : 'bg-muted/40 text-foreground/70 mr-4',
               )}
             >
-              {item.kind !== 'tool_use' && item.kind !== 'thinking' && item.kind !== 'error' && item.kind !== 'approval'
+              {item.kind !== 'tool_use' && item.kind !== 'thinking' && item.kind !== 'error' && item.kind !== 'approval' && item.kind !== 'input_request'
                 ? <SubAgentMarkdown content={item.content} />
                 : null}
             </div>

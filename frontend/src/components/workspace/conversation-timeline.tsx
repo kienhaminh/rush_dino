@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { AssistantRichContent } from './assistant-rich-content';
 import { DelegateBlock } from './delegate-block';
+import { InputRequestCard } from './input-request-card';
 import { ThinkingBlock } from './thinking-block';
 import { ToolUseBlock } from './tool-use-block';
 import { ToolUseGroup } from './tool-use-group';
@@ -10,6 +11,11 @@ import type { ConversationItem } from '@/lib/types';
 interface ConversationTimelineProps {
   items: ConversationItem[];
   isStreaming?: boolean;
+  onResolveInputRequest?: (
+    requestId: string,
+    status: 'submitted' | 'cancelled',
+    values?: Record<string, unknown> | null,
+  ) => void;
 }
 
 // ── Grouping ─────────────────────────────────────────────────────────────────
@@ -63,9 +69,18 @@ function groupItems(items: ConversationItem[]): DisplayGroup[] {
 interface TimelineItemProps {
   item: ConversationItem;
   showCursor?: boolean;
+  onResolveInputRequest?: (
+    requestId: string,
+    status: 'submitted' | 'cancelled',
+    values?: Record<string, unknown> | null,
+  ) => void;
 }
 
-const TimelineItem = memo(function TimelineItem({ item, showCursor }: TimelineItemProps) {
+const TimelineItem = memo(function TimelineItem({
+  item,
+  showCursor,
+  onResolveInputRequest,
+}: TimelineItemProps) {
   if (item.kind === 'user') {
     return (
       <div className="flex justify-end py-1 mt-6">
@@ -129,6 +144,10 @@ const TimelineItem = memo(function TimelineItem({ item, showCursor }: TimelineIt
     );
   }
 
+  if (item.kind === 'input_request') {
+    return <InputRequestCard item={item} onResolved={onResolveInputRequest} />;
+  }
+
   return null;
 });
 
@@ -137,6 +156,7 @@ const TimelineItem = memo(function TimelineItem({ item, showCursor }: TimelineIt
 export const ConversationTimeline = memo(function ConversationTimeline({
   items,
   isStreaming,
+  onResolveInputRequest,
 }: ConversationTimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -163,7 +183,10 @@ export const ConversationTimeline = memo(function ConversationTimeline({
   }
 
   const hasLiveThinking = items.some((item) => item.kind === 'thinking' && !item.done);
-  const showTypingBubble = isStreaming && !hasLiveThinking;
+  const hasPendingInputRequest = items.some(
+    (item) => item.kind === 'input_request' && item.status === 'pending',
+  );
+  const showTypingBubble = isStreaming && !hasLiveThinking && !hasPendingInputRequest;
 
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto scrollbar-thin px-4 py-8 md:px-8">
@@ -186,6 +209,7 @@ export const ConversationTimeline = memo(function ConversationTimeline({
               key={item.id}
               item={item}
               showCursor={showCursor}
+              onResolveInputRequest={onResolveInputRequest}
             />
           );
         })}

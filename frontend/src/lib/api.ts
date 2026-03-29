@@ -4,6 +4,7 @@ import type {
   AuditEntry,
   ChannelPairingState,
   Conversation,
+  ConversationDetail,
   CredentialsView,
   DashboardAuthStatusResponse,
   DoctorReportResponse,
@@ -27,6 +28,7 @@ import type {
   RegisteredTool,
   SkillRecord,
   SystemSummaryResponse,
+  InputRequestStatus,
   UsageMetricsResponse,
   GraphStats,
   GraphFact,
@@ -136,9 +138,24 @@ function normalizeSessionSummary(session: SessionSummary): SessionSummary {
   };
 }
 
-export async function fetchConversation(id: string): Promise<{ id: string; messages: Message[] }> {
+export async function fetchConversation(id: string): Promise<ConversationDetail> {
   const response = await fetch(`/api/conversations/${id}`);
   return parseJsonOrThrow(response, `/api/conversations/${id}`);
+}
+
+export async function resolveInputRequest(
+  requestId: string,
+  payload:
+    | { status: 'submitted'; values: Record<string, unknown> }
+    | { status: 'cancelled' },
+): Promise<{ requestId: string; status: InputRequestStatus }> {
+  const endpoint = `/api/input-requests/${encodeURIComponent(requestId)}`;
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseJsonOrThrow(response, endpoint);
 }
 
 export async function deleteConversation(id: string): Promise<void> {

@@ -14,6 +14,7 @@ pub mod gateway;
 pub mod graph;
 pub mod guardrail;
 pub mod health;
+pub mod input_requests;
 pub mod logs;
 pub mod mcp;
 pub mod messages;

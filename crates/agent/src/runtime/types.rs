@@ -32,6 +32,7 @@ pub enum RunState {
     Queued,
     Running,
     AwaitingApproval,
+    AwaitingInput,
     Blocked,
     Completed,
     Failed,
@@ -44,6 +45,7 @@ impl RunState {
             Self::Queued => "queued",
             Self::Running => "running",
             Self::AwaitingApproval => "awaiting_approval",
+            Self::AwaitingInput => "awaiting_input",
             Self::Blocked => "blocked",
             Self::Completed => "completed",
             Self::Failed => "failed",
@@ -56,6 +58,7 @@ impl RunState {
             "queued" => Ok(Self::Queued),
             "running" => Ok(Self::Running),
             "awaiting_approval" => Ok(Self::AwaitingApproval),
+            "awaiting_input" => Ok(Self::AwaitingInput),
             "blocked" => Ok(Self::Blocked),
             "completed" => Ok(Self::Completed),
             "failed" => Ok(Self::Failed),
@@ -69,7 +72,8 @@ impl RunState {
     }
 
     pub fn is_wait_target(self) -> bool {
-        self.is_terminal() || matches!(self, Self::AwaitingApproval | Self::Blocked)
+        self.is_terminal()
+            || matches!(self, Self::AwaitingApproval | Self::AwaitingInput | Self::Blocked)
     }
 }
 

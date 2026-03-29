@@ -162,7 +162,9 @@ mod tests {
 
     use super::{is_dangerous_command, ToolExecutionContext};
     use crate::{
-        system_broker::{ShellExecRequest, ShellExecResult, SystemBroker},
+        system_broker::{
+            InputRequest, InputRequestResult, ShellExecRequest, ShellExecResult, SystemBroker,
+        },
         tool_registry::Tool,
     };
 
@@ -185,6 +187,10 @@ mod tests {
                 cwd: PathBuf::from("/tmp/host"),
                 source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
             })
+        }
+
+        async fn request_user_input(&self, _request: InputRequest) -> Result<InputRequestResult> {
+            Ok(InputRequestResult::cancelled())
         }
     }
 

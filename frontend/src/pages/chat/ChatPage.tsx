@@ -20,6 +20,7 @@ export function ChatPage() {
   const {
     items,
     sendMessage,
+    markInputRequestResolved,
     resetWithItems,
     isConnected,
     isStreaming,
@@ -39,7 +40,7 @@ export function ChatPage() {
       try {
         const detail = await fetchConversation(MAIN_SESSION_ID);
         if (!cancelled) {
-          resetWithItems(messagesToItems(detail.messages));
+          resetWithItems(messagesToItems(detail.messages, detail.pendingInputRequests ?? []));
           setHistoryLoaded(true);
         }
       } catch {
@@ -89,7 +90,11 @@ export function ChatPage() {
             </div>
           </div>
         ) : (
-          <ConversationTimeline items={items} isStreaming={isStreaming} />
+          <ConversationTimeline
+            items={items}
+            isStreaming={isStreaming}
+            onResolveInputRequest={markInputRequestResolved}
+          />
         )}
 
         {/* Chat Input */}

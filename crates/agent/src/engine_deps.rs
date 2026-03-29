@@ -36,6 +36,7 @@ use crate::{
         memory_search::MemorySearchTool,
         memory_write::MemoryWriteTool,
         present_message::PresentMessageTool,
+        request_user_input::RequestUserInputTool,
         run_workflow::RunWorkflowTool,
         session_tools::{SessionManageTool, SessionSendTool},
         bash::ShellExecTool,
@@ -62,6 +63,7 @@ pub const CORE_TOOLS: &[&str] = &[
     "memory_write",
     // Communication
     "message",
+    "request_user_input",
     // Web
     "web_fetch",
     "web_search",
@@ -158,7 +160,7 @@ pub fn build_engine_deps(
     // is only available in the second Arc::new_cyclic below. It is registered
     // there alongside SessionSendTool.
     let registry = Arc::new_cyclic(|_weak_registry| {
-        let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
+        let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c.clone());
 
         let r = ToolRegistry::new();
         // Build WebSearchTool.
@@ -178,6 +180,7 @@ pub fn build_engine_deps(
         r.register(GrepSearchTool::new(home_c.clone()));
         r.register(shell_exec);
         r.register(PresentMessageTool::new());
+        r.register(RequestUserInputTool::new(system_broker_c.clone()));
         r.register(MemorySearchTool::new(memory_c.clone()));
         r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
         r.register(WorkflowManageTool::new(

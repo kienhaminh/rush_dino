@@ -42,6 +42,7 @@ function statusColor(status: string): string {
   switch (status) {
     case 'active': return '#17C4D6';
     case 'awaiting_approval': return '#f59e0b';
+    case 'awaiting_input': return '#f59e0b';
     case 'blocked': return '#f87171';
     case 'idle': return 'hsl(var(--muted-foreground) / 0.4)';
     default: return 'hsl(var(--muted-foreground) / 0.25)';
@@ -314,7 +315,9 @@ export function SessionsPage({
   );
 
   const activeCount = sessions.filter((s) => s.status === 'active').length;
-  const awaitingCount = sessions.filter((s) => s.status === 'awaiting_approval').length;
+  const awaitingCount = sessions.filter(
+    (s) => s.status === 'awaiting_approval' || s.status === 'awaiting_input',
+  ).length;
   const session = sessions.find((s) => s.id === selectedSessionId);
 
   return (

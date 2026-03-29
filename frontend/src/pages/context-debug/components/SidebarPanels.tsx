@@ -10,6 +10,7 @@ function runStateBadge(state: string) {
     aborted: 'bg-warning/10 text-warning',
     blocked: 'bg-destructive/10 text-destructive',
     awaiting_approval: 'bg-warning/10 text-warning',
+    awaiting_input: 'bg-warning/10 text-warning',
   };
   return styles[state] ?? 'bg-gray-100 text-gray-700';
 }

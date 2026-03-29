@@ -6,22 +6,29 @@ use serde_json::json;
 use tokio::process::Command;
 
 use rushdino_agent::{
-    tools::bash::is_dangerous_command, AgentRuntime, RunPolicySnapshot, ShellExecRequest,
-    ShellExecResult, SystemBroker,
+    tools::bash::is_dangerous_command, AgentRuntime, InputRequest, InputRequestResult,
+    RunPolicySnapshot, ShellExecRequest, ShellExecResult, SystemBroker,
 };
 use rushdino_common::{init, AppError, Result};
 
 use crate::approval_gate::ApprovalGate;
+use crate::input_request_gate::InputRequestGate;
 
 pub struct LocalSystemBroker {
     approval_gate: Arc<ApprovalGate>,
+    input_request_gate: Arc<InputRequestGate>,
     runtime: Arc<AgentRuntime>,
 }
 
 impl LocalSystemBroker {
-    pub fn new(approval_gate: Arc<ApprovalGate>, runtime: Arc<AgentRuntime>) -> Self {
+    pub fn new(
+        approval_gate: Arc<ApprovalGate>,
+        input_request_gate: Arc<InputRequestGate>,
+        runtime: Arc<AgentRuntime>,
+    ) -> Self {
         Self {
             approval_gate,
+            input_request_gate,
             runtime,
         }
     }
@@ -152,6 +159,34 @@ impl SystemBroker for LocalSystemBroker {
             source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
         })
     }
+
+    async fn request_user_input(&self, request: InputRequest) -> Result<InputRequestResult> {
+        if let Some(run_id) = request.run_id.as_deref() {
+            let _ = self
+                .runtime
+                .mark_awaiting_input(run_id, "request_user_input")
+                .await;
+        }
+
+        let result = self
+            .input_request_gate
+            .request_input(
+                &request.session_id,
+                &request.conversation_id,
+                request.run_id.as_deref(),
+                request.payload,
+            )
+            .await?;
+
+        if let Some(run_id) = request.run_id.as_deref() {
+            let _ = self
+                .runtime
+                .record_input_resolution(run_id, result.status.clone())
+                .await;
+        }
+
+        Ok(result)
+    }
 }
 
 fn resolve_cwd(requested: Option<&Path>) -> Result<PathBuf> {
@@ -191,13 +226,14 @@ mod tests {
     #[tokio::test]
     async fn dangerous_commands_are_routed_through_approval_gate() {
         let gate = ApprovalGate::with_timeout(Duration::from_secs(1));
+        let input_gate = InputRequestGate::with_timeout(Duration::from_secs(1));
         let pool = Arc::new(
             SqlitePool::connect("sqlite::memory:")
                 .await
                 .expect("in-memory sqlite should connect"),
         );
         let runtime = Arc::new(AgentRuntime::new(pool));
-        let broker = LocalSystemBroker::new(gate.clone(), runtime);
+        let broker = LocalSystemBroker::new(gate.clone(), input_gate, runtime);
         let mut rx = gate.register_session("session-1").await;
 
         let approval_task = tokio::spawn(async move {
