@@ -55,7 +55,7 @@ import { getAgentRuntime as getMockRuntime } from '@/pages/agents/agent-mock-dat
 
 export const DASHBOARD_AUTH_REQUIRED_EVENT = 'rushdino:dashboard-auth-required';
 
-async function parseJsonOrThrow(response: Response, endpoint: string) {
+export async function parseJsonOrThrow(response: Response, endpoint: string) {
   const contentType = response.headers.get('content-type') ?? '';
   const raw = await response.text();
 
