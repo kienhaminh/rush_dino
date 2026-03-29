@@ -1,3 +1,9 @@
+// Guardrail management API routes — trust level read/write, policy rule management,
+// and approval resolution for pending GuardrailBroker requests.
+//
+// All handlers use `State<AppState>` and will access `state.guardrail_registry`
+// once AppState integration is complete (deferred from this task).
+
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -28,12 +34,6 @@ pub struct SetTrustLevelRequest {
     pub level: TrustLevel,
 }
 
-#[derive(Deserialize)]
-pub struct AddPatternRequest {
-    pub category: ActionCategory,
-    pub pattern: String,
-}
-
 #[derive(Serialize)]
 pub struct PolicyRulesResponse {
     pub deny_rules: Vec<CategoryRules>,
@@ -47,9 +47,15 @@ pub struct CategoryRules {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleType {
+    Deny,
+    Allow,
+}
+
+#[derive(Deserialize)]
 pub struct AddRuleRequest {
-    /// "deny" or "allow"
-    pub rule_type: String,
+    pub rule_type: RuleType,
     pub category: ActionCategory,
     pub pattern: String,
 }
