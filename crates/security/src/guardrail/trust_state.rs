@@ -112,6 +112,14 @@ impl TrustState {
             .push(pattern);
     }
 
+    /// Return the approved patterns for a category.
+    pub fn approved_patterns(&self, category: ActionCategory) -> Vec<String> {
+        self.approved_patterns
+            .get(&category)
+            .cloned()
+            .unwrap_or_default()
+    }
+
     /// Return true if the given action string matches any approved pattern for the category.
     pub fn matches_pattern(&self, category: ActionCategory, action: &str) -> bool {
         let patterns = match self.approved_patterns.get(&category) {

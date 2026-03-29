@@ -14,6 +14,13 @@ use serde::{Deserialize, Serialize};
 use crate::state::AppState;
 use rushdino_security::guardrail::types::{ActionCategory, TrustLevel};
 
+const ALL_CATEGORIES: [ActionCategory; 4] = [
+    ActionCategory::Bash,
+    ActionCategory::Network,
+    ActionCategory::FsRead,
+    ActionCategory::FsWrite,
+];
+
 #[derive(Serialize)]
 pub struct TrustLevelResponse {
     pub agent_id: String,
@@ -68,21 +75,35 @@ pub struct ApprovalDecisionRequest {
 
 /// GET /api/agents/:agent_id/guardrail/trust
 pub async fn get_trust_levels(
-    State(_state): State<AppState>,
-    Path(_agent_id): Path<String>,
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
 ) -> Result<Json<TrustLevelResponse>, StatusCode> {
-    // TODO(Task 10 AppState integration): load trust state from guardrail registry
-    todo!("Implement after AppState integration")
+    let ts_arc = state.guardrail_registry.get_or_init_agent_state(&agent_id).await;
+    let ts = ts_arc.lock().unwrap();
+
+    let trust_levels = ALL_CATEGORIES
+        .iter()
+        .map(|&cat| CategoryTrustInfo {
+            category: cat,
+            level: ts.level(cat),
+            consecutive_approvals: ts.consecutive_approvals(cat),
+            approved_patterns: ts.approved_patterns(cat),
+        })
+        .collect();
+
+    Ok(Json(TrustLevelResponse { agent_id, trust_levels }))
 }
 
 /// PUT /api/agents/:agent_id/guardrail/trust
 pub async fn set_trust_level(
-    State(_state): State<AppState>,
-    Path(_agent_id): Path<String>,
-    Json(_body): Json<SetTrustLevelRequest>,
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+    Json(body): Json<SetTrustLevelRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    // TODO(Task 10 AppState integration): set trust level for category
-    todo!("Implement after AppState integration")
+    let ts_arc = state.guardrail_registry.get_or_init_agent_state(&agent_id).await;
+    let mut ts = ts_arc.lock().unwrap();
+    ts.set_level(body.category, body.level);
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// GET /api/agents/:agent_id/guardrail/policy
@@ -90,8 +111,11 @@ pub async fn get_policy_rules(
     State(_state): State<AppState>,
     Path(_agent_id): Path<String>,
 ) -> Result<Json<PolicyRulesResponse>, StatusCode> {
-    // TODO(Task 10 AppState integration): return deny/allow rules for agent
-    todo!("Implement after AppState integration")
+    // Policy rule persistence is not yet wired — return empty lists.
+    Ok(Json(PolicyRulesResponse {
+        deny_rules: vec![],
+        allow_rules: vec![],
+    }))
 }
 
 /// POST /api/agents/:agent_id/guardrail/policy/rule
@@ -100,8 +124,8 @@ pub async fn add_policy_rule(
     Path(_agent_id): Path<String>,
     Json(_body): Json<AddRuleRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    // TODO(Task 10 AppState integration): add deny or allow rule
-    todo!("Implement after AppState integration")
+    // Policy rule mutation is not yet wired.
+    Err(StatusCode::NOT_IMPLEMENTED)
 }
 
 /// POST /api/sessions/:session_id/guardrail/approve
@@ -112,6 +136,6 @@ pub async fn approve_action(
     Path(_session_id): Path<String>,
     Json(_body): Json<ApprovalDecisionRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    // TODO(Task 10 AppState integration): call guardrail_broker.resolve_approval(request_id, approved)
-    todo!("Implement after AppState integration")
+    // Approval resolution is not yet wired.
+    Err(StatusCode::NOT_IMPLEMENTED)
 }

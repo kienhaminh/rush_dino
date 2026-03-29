@@ -1,7 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Instant};
+use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex}, time::Instant};
 
 use rushdino_gateway::{GatewayControl, GatewayStateStore, SessionManager};
 use rushdino_security::guardrail::pipeline::GuardrailPipeline;
+use rushdino_security::guardrail::trust_state::TrustState;
 use rushdino_security::rate_limit::EndpointLimiters;
 use tokio::sync::RwLock;
 
@@ -28,7 +29,11 @@ use rushdino_common::{AppConfig, Result};
 /// Stored in `AppState` and cloned cheaply via `Arc`. Routes use it to
 /// retrieve the per-session pipeline for trust and policy state queries.
 pub struct GuardrailRegistry {
+    /// Active session pipelines, keyed by session_id.
     pub pipelines: RwLock<HashMap<String, Arc<GuardrailPipeline>>>,
+    /// Persisted per-agent trust state, keyed by agent_id.
+    /// Used by guardrail API routes when no active session exists for the agent.
+    agent_states: RwLock<HashMap<String, Arc<Mutex<TrustState>>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -95,7 +100,29 @@ impl GuardrailRegistry {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             pipelines: RwLock::new(HashMap::new()),
+            agent_states: RwLock::new(HashMap::new()),
         })
+    }
+
+    /// Return the trust state for an agent, preferring an active session pipeline.
+    /// Creates and stores a default state if none exists.
+    pub async fn get_or_init_agent_state(&self, agent_id: &str) -> Arc<Mutex<TrustState>> {
+        // Prefer the live trust state from an active session pipeline.
+        {
+            let pipelines = self.pipelines.read().await;
+            for pipeline in pipelines.values() {
+                let ts = pipeline.trust_state();
+                if ts.lock().unwrap().agent_id() == agent_id {
+                    return ts;
+                }
+            }
+        }
+        // Fall back to the persisted agent-level state.
+        let mut states = self.agent_states.write().await;
+        states
+            .entry(agent_id.to_owned())
+            .or_insert_with(|| Arc::new(Mutex::new(TrustState::new(agent_id))))
+            .clone()
     }
 
     /// Register the guardrail pipeline for a newly started agent session.

@@ -12,6 +12,7 @@ pub enum ActionCategory {
 
 /// Trust levels for the TrustGate filter.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum TrustLevel {
     /// L0: Every action requires user approval.
     Untrusted = 0,
