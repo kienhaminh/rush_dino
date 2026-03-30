@@ -171,15 +171,6 @@ export const ConversationTimeline = memo(function ConversationTimeline({
 
   const displayGroups = useMemo(() => groupItems(items), [items]);
 
-  const lastAssistantGroupIndex = useMemo(
-    () =>
-      displayGroups.reduce<number>(
-        (acc, g, i) => (g.type === 'item' && g.item.kind === 'assistant' ? i : acc),
-        -1,
-      ),
-    [displayGroups],
-  );
-
   if (items.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20 space-y-3">
@@ -217,10 +208,7 @@ export const ConversationTimeline = memo(function ConversationTimeline({
           const { item } = group;
           const showCursor = isStreaming === true && isLast && item.kind === 'assistant';
           const showMetrics =
-            !isStreaming &&
-            latestMetrics != null &&
-            index === lastAssistantGroupIndex &&
-            item.kind === 'assistant';
+            !isStreaming && latestMetrics != null && isLast && item.kind === 'assistant';
 
           return (
             <div key={item.id}>

@@ -32,7 +32,11 @@ export function ChatPage() {
   const [latestMetrics, setLatestMetrics] = useState<ConversationMetrics | null>(null);
   const prevIsStreamingRef = useRef(false);
 
-  const { sessions: agentSessions, liveRuns, refresh: refreshAgentSessions } = useSubAgentSessions(items);
+  const {
+    sessions: agentSessions,
+    liveRuns,
+    refresh: refreshAgentSessions,
+  } = useSubAgentSessions(items);
   const [panelWidth, setPanelWidth] = useState(260);
 
   // Load history from REST API only once (on first mount).
@@ -55,7 +59,9 @@ export function ChatPage() {
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [historyLoaded, resetWithItems, setHistoryLoaded]);
 
   // Re-fetch metrics when streaming ends (true → false transition).
@@ -105,7 +111,6 @@ export function ChatPage() {
   return (
     <div className="flex flex-1 min-w-0 h-full overflow-hidden bg-background">
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
-
         {!historyLoaded ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex items-center gap-2 text-muted-foreground/50 text-sm">
@@ -161,7 +166,12 @@ export function ChatPage() {
       <ResizeHandle panelWidth={panelWidth} onResize={setPanelWidth} min={200} max={500} />
 
       {/* Sub-agent side panel — always visible, shows empty state when idle */}
-      <SubAgentPanel sessions={agentSessions} liveRuns={liveRuns} width={panelWidth} onSessionDeleted={refreshAgentSessions} />
+      <SubAgentPanel
+        sessions={agentSessions}
+        liveRuns={liveRuns}
+        width={panelWidth}
+        onSessionDeleted={refreshAgentSessions}
+      />
     </div>
   );
 }

@@ -141,7 +141,8 @@ function normalizeSessionSummary(session: SessionSummary): SessionSummary {
 
 export async function fetchConversation(id: string): Promise<ConversationDetail> {
   const response = await fetch(`/api/conversations/${id}`);
-  return parseJsonOrThrow(response, `/api/conversations/${id}`);
+  const data = await parseJsonOrThrow(response, `/api/conversations/${id}`);
+  return data;
 }
 
 export async function resolveInputRequest(
