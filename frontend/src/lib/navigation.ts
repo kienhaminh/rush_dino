@@ -1,5 +1,6 @@
 import {
   BarChart,
+  CheckSquare,
   Database,
   FileText,
   Folder,
@@ -43,6 +44,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
   {
     label: 'operations',
     items: [
+      { id: 'approvals', label: 'Approvals', icon: CheckSquare, href: '/approvals', matchPrefix: '/approvals' },
       { id: 'agents', label: 'Agents', icon: Folder, href: '/agents', matchPrefix: '/agents' },
       { id: 'kanban', label: 'Task Board', icon: LayoutGrid, href: '/kanban', matchPrefix: '/kanban', advancedOnly: true },
       { id: 'agent-board', label: 'Team Status', icon: MonitorDot, href: '/agent-board', matchPrefix: '/agent-board', advancedOnly: true },

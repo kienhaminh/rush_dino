@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
+import { usePendingApprovalsCount } from '@/hooks/use-pending-approvals-count';
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -23,6 +24,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { enabled, logout } = useDashboardAuth();
+  const { count: pendingApprovalsCount } = usePendingApprovalsCount();
 
   const toggleGroup = (label: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -31,6 +33,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const renderItem = (item: SidebarItem) => {
     const Icon = item.icon;
     const active = isItemActive(item, location.pathname);
+    const badge = item.id === 'approvals' && pendingApprovalsCount > 0 ? pendingApprovalsCount : null;
 
     if (collapsed) {
       return (
@@ -39,13 +42,18 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           onClick={() => navigate(item.href)}
           title={item.label}
           className={cn(
-            'w-10 h-10 mx-auto flex items-center justify-center rounded-xl transition-all mb-1',
+            'w-10 h-10 mx-auto flex items-center justify-center rounded-xl transition-all mb-1 relative',
             active
               ? 'bg-primary text-primary-foreground shadow-md scale-105'
               : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
           )}
         >
           <Icon size={20} />
+          {badge !== null && (
+            <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
         </button>
       );
     }
@@ -69,6 +77,11 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           )}
         />
         <span className="truncate">{item.label}</span>
+        {badge !== null && (
+          <span className="ml-auto shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
       </button>
     );
   };

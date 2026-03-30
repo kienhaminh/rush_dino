@@ -193,7 +193,9 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       if (msg.type === 'chat_chunk') {
         if (msg.done) {
           lastStreamedConvIdRef.current = streamingConvIdRef.current;
-          setIsStreaming(false);
+          // Do NOT set isStreaming=false here — the assistant_message event
+          // arrives shortly after (post persist_assistant_turn) and handles it.
+          // Transitioning here would fire the metrics refetch too early (race condition).
           streamingConvIdRef.current = null;
           setItems((prev) =>
             prev.map((item) =>

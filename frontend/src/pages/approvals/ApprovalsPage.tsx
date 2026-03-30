@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, Clock, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { fetchChannelPairing, resolveChannelPairingRequest, revokeChannelPairedUser } from '@/lib/api';
+import { usePairingRequestEvents } from '@/hooks/use-chat-ws';
 import type { ChannelPairingState, ChannelPairingPendingRequest, ChannelPairedUser } from '@/lib/types';
 
 type Channel = 'telegram' | 'discord';
@@ -22,17 +24,31 @@ export function ApprovalsPage() {
     telegram: null,
     discord: null,
   });
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   const fetchAll = useCallback(async () => {
-    const [telegram, discord] = await Promise.all([
-      fetchChannelPairing('telegram'),
-      fetchChannelPairing('discord'),
-    ]);
-    setStates({ telegram, discord });
+    try {
+      const [telegram, discord] = await Promise.all([
+        fetchChannelPairing('telegram'),
+        fetchChannelPairing('discord'),
+      ]);
+      setStates({ telegram, discord });
+    } catch (err) {
+      console.error('Failed to fetch pairing state', err);
+      toast.error('Failed to load approvals');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const { pairingRequestCount } = usePairingRequestEvents();
+  useEffect(() => {
+    if (pairingRequestCount === 0) return;
+    fetchAll();
+  }, [pairingRequestCount, fetchAll]);
 
   const allPending: (ChannelPairingPendingRequest & { channel: Channel })[] = CHANNELS.flatMap(
     (ch) => (states[ch]?.pending ?? []).map((r) => ({ ...r, channel: ch })),
@@ -47,6 +63,9 @@ export function ApprovalsPage() {
     try {
       await resolveChannelPairingRequest(channel, requestId, approved);
       await fetchAll();
+    } catch (err) {
+      console.error('Failed to resolve pairing request', err);
+      toast.error('Action failed — please try again');
     } finally {
       setBusy((prev) => ({ ...prev, [requestId]: false }));
     }
@@ -58,6 +77,9 @@ export function ApprovalsPage() {
     try {
       await revokeChannelPairedUser(channel, senderId);
       await fetchAll();
+    } catch (err) {
+      console.error('Failed to revoke paired user', err);
+      toast.error('Revoke failed — please try again');
     } finally {
       setBusy((prev) => ({ ...prev, [key]: false }));
     }
@@ -77,7 +99,9 @@ export function ApprovalsPage() {
               </span>
             )}
           </h3>
-          {allPending.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : allPending.length === 0 ? (
             <p className="text-sm text-muted-foreground">No pending pairing requests.</p>
           ) : (
             <div className="space-y-3">
@@ -131,7 +155,7 @@ export function ApprovalsPage() {
         </section>
 
         {/* Paired users */}
-        {allPaired.length > 0 && (
+        {!loading && allPaired.length > 0 && (
           <section>
             <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
               Paired Users

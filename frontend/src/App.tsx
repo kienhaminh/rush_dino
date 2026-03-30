@@ -22,6 +22,7 @@ const NodesPage = lazy(() => import('./pages/nodes/NodesPage').then(m => ({ defa
 const CronPage = lazy(() => import('./pages/cron/CronPage').then(m => ({ default: m.CronPage })));
 const CodingAgentsPage = lazy(() => import('./pages/coding-agents/CodingAgentsPage').then(m => ({ default: m.CodingAgentsPage })));
 const AcpSessionsPage = lazy(() => import('./pages/acp-sessions/AcpSessionsPage').then(m => ({ default: m.AcpSessionsPage })));
+const ApprovalsPage = lazy(() => import('./pages/approvals/ApprovalsPage').then(m => ({ default: m.ApprovalsPage })));
 const ConfigPage = lazy(() => import('./pages/config/ConfigPage').then(m => ({ default: m.ConfigPage })));
 const DiagnosticsPage = lazy(() => import('./pages/diagnostics/DiagnosticsPage').then(m => ({ default: m.DiagnosticsPage })));
 const DebugPage = lazy(() => import('./pages/debug/DebugPage').then(m => ({ default: m.DebugPage })));
@@ -119,6 +120,7 @@ export default function App() {
                   <Route path="acp-sessions" element={<AcpSessionsPage />} />
                   <Route path="knowledge-graph" element={<KnowledgeGraphPage />} />
                   <Route path="messages" element={<MessagesPage />} />
+                  <Route path="approvals" element={<ApprovalsPage />} />
 
                   {/* System */}
                   <Route path="logs" element={<SystemPage />}>
