@@ -139,3 +139,17 @@ fn sessions_message_parses() {
         .expect("sessions message <id> <text> should parse");
     assert!(matches!(cli.command, Command::Sessions(_)));
 }
+
+#[test]
+fn agents_list_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "agents", "list"])
+        .expect("agents list should parse");
+    assert!(matches!(cli.command, Command::Agents(_)));
+}
+
+#[test]
+fn agents_list_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "agents", "list", "--json"])
+        .expect("agents list --json should parse");
+    assert!(matches!(cli.command, Command::Agents(_)));
+}

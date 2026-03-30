@@ -58,7 +58,7 @@ enum Command {
     Sessions(commands::sessions::SessionsArgs),
     Memory,
     Agent,
-    Agents,
+    Agents(commands::agents::AgentsArgs),
     Browser,
 }
 
@@ -99,7 +99,7 @@ async fn run() -> Result<()> {
         Command::Sessions(args) => commands::sessions::run(args).await,
         Command::Memory => commands::memory::run().await,
         Command::Agent => commands::agent::run().await,
-        Command::Agents => commands::agents::run().await,
+        Command::Agents(args) => commands::agents::run(args).await,
         Command::Browser => commands::browser::run().await,
     }
 }
