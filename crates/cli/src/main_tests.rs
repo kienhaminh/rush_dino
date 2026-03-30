@@ -180,3 +180,39 @@ fn workflow_run_parses_with_input() {
         .expect("workflow run --input should parse");
     assert!(matches!(cli.command, Command::Workflow(_)));
 }
+
+#[test]
+fn kanban_board_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "kanban", "board"])
+        .expect("kanban board should parse");
+    assert!(matches!(cli.command, Command::Kanban(_)));
+}
+
+#[test]
+fn kanban_list_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "kanban", "list"])
+        .expect("kanban list should parse");
+    assert!(matches!(cli.command, Command::Kanban(_)));
+}
+
+#[test]
+fn kanban_list_with_filters_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "kanban", "list", "--status", "backlog", "--agent", "planner",
+    ])
+    .expect("kanban list with filters should parse");
+    assert!(matches!(cli.command, Command::Kanban(_)));
+}
+
+#[test]
+fn kanban_get_requires_id() {
+    Cli::try_parse_from(["rushdino", "kanban", "get"])
+        .expect_err("kanban get without id should fail");
+}
+
+#[test]
+fn kanban_get_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "kanban", "get", "task-abc"])
+        .expect("kanban get <id> should parse");
+    assert!(matches!(cli.command, Command::Kanban(_)));
+}
