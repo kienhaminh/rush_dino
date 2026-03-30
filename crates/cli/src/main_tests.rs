@@ -216,3 +216,34 @@ fn kanban_get_parses() {
         .expect("kanban get <id> should parse");
     assert!(matches!(cli.command, Command::Kanban(_)));
 }
+
+#[test]
+fn approvals_list_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "approvals", "list"])
+        .expect("approvals list should parse");
+    assert!(matches!(cli.command, Command::Approvals(_)));
+}
+
+#[test]
+fn approvals_approve_requires_session() {
+    Cli::try_parse_from(["rushdino", "approvals", "approve", "req-1"])
+        .expect_err("approvals approve without --session should fail");
+}
+
+#[test]
+fn approvals_approve_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "approvals", "approve", "req-1", "--session", "sess-1",
+    ])
+    .expect("approvals approve with args should parse");
+    assert!(matches!(cli.command, Command::Approvals(_)));
+}
+
+#[test]
+fn approvals_deny_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "approvals", "deny", "req-1", "--session", "sess-1",
+    ])
+    .expect("approvals deny with args should parse");
+    assert!(matches!(cli.command, Command::Approvals(_)));
+}

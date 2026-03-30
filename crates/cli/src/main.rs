@@ -62,6 +62,7 @@ enum Command {
     Browser,
     Workflow(commands::workflow::WorkflowArgs),
     Kanban(commands::kanban::KanbanArgs),
+    Approvals(commands::approval::ApprovalsArgs),
 }
 
 #[cfg(test)]
@@ -105,5 +106,6 @@ async fn run() -> Result<()> {
         Command::Browser => commands::browser::run().await,
         Command::Workflow(args) => commands::workflow::run(args).await,
         Command::Kanban(args) => commands::kanban::run(args).await,
+        Command::Approvals(args) => commands::approval::run(args).await,
     }
 }
