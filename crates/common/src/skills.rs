@@ -21,4 +21,5 @@ pub const SKILL_PATHS: &[&str] = &[
     "skill-creator/scripts/run_loop.py",
     "skill-creator/scripts/utils.py",
     "image-generator/SKILL.md",
+    "rushdino-cli/SKILL.md",
 ];
