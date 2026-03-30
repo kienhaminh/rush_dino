@@ -1,6 +1,5 @@
 use clap::Subcommand;
 use colored::Colorize;
-use serde_json::json;
 
 use rushdino_common::Result;
 
@@ -86,10 +85,11 @@ pub async fn run(args: WorkflowArgs) -> Result<()> {
             }
         }
         WorkflowAction::Run { id, input, json } => {
-            let body = json!({
-                "input": input.unwrap_or_default(),
-                "triggered_by": "cli"
-            });
+            let mut body = serde_json::json!({ "triggered_by": "cli" });
+            if let Some(text) = input {
+                body["input"] = serde_json::Value::String(text);
+            }
+            let body = body;
             let data = client
                 .post(&format!("/api/workflows/{id}/runs"), body)
                 .await?;

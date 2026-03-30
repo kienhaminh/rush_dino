@@ -101,7 +101,7 @@ pub async fn run(args: ApprovalsArgs) -> Result<()> {
             if json {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());
             } else {
-                println!("{} Request {} denied.", "✔".green(), request_id.bold());
+                println!("{} Request {} denied.", "✔".red(), request_id.bold());
             }
         }
     }

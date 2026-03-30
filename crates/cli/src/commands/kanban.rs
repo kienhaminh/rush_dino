@@ -120,7 +120,7 @@ pub async fn run(args: KanbanArgs) -> Result<()> {
             } else {
                 let title = data["title"].as_str().unwrap_or("-");
                 let status = data["status"].as_str().unwrap_or("-");
-                let agent = data["assignedTo"].as_str().unwrap_or("unassigned");
+                let agent = data["assignedAgent"].as_str().unwrap_or("unassigned");
                 println!(
                     "{} {} {}",
                     "📋".bold(),
