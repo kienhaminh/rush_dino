@@ -3,13 +3,11 @@ use reqwest::Client;
 use rushdino_common::{AppConfig, AppError, Result};
 use serde_json::Value;
 
-#[allow(dead_code)]
 pub struct ApiClient {
     client: Client,
     base_url: String,
 }
 
-#[allow(dead_code)]
 impl ApiClient {
     pub fn new() -> Result<Self> {
         let config = AppConfig::load()?;
@@ -56,6 +54,11 @@ impl ApiClient {
 
     async fn parse_response(&self, res: reqwest::Response) -> Result<Value> {
         if res.status().is_success() {
+            if res.status() == reqwest::StatusCode::NO_CONTENT
+                || res.content_length() == Some(0)
+            {
+                return Ok(Value::Null);
+            }
             res.json::<Value>()
                 .await
                 .map_err(|e| AppError::Agent(format!("Failed to parse response: {e}")))
