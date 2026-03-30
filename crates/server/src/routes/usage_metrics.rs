@@ -232,7 +232,7 @@ struct ModelPrice {
     output: f64,
 }
 
-fn compute_usage_costs(
+pub(crate) fn compute_usage_costs(
     provider: &str,
     model: &str,
     prompt_tokens: i64,

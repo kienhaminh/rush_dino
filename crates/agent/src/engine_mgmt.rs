@@ -45,6 +45,41 @@ impl crate::engine::AgentEngine {
             .await
     }
 
+    /// Returns the response duration in milliseconds for the most recent completed
+    /// run associated with this conversation. Returns `None` if no completed run exists
+    /// or if timing data is unavailable.
+    pub async fn latest_run_timing_for_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Option<i64>> {
+        let runs = self
+            .runtime
+            .list_runs(crate::runtime::RunListFilter {
+                conversation_id: Some(conversation_id.to_owned()),
+                state: Some(crate::runtime::RunState::Completed),
+                limit: 1,
+                ..Default::default()
+            })
+            .await?;
+
+        let Some(run) = runs.into_iter().next() else {
+            return Ok(None);
+        };
+
+        let (Some(started), Some(completed)) = (run.started_at, run.completed_at) else {
+            return Ok(None);
+        };
+
+        let Ok(start) = chrono::DateTime::parse_from_rfc3339(&started) else {
+            return Ok(None);
+        };
+        let Ok(end) = chrono::DateTime::parse_from_rfc3339(&completed) else {
+            return Ok(None);
+        };
+
+        Ok(Some((end - start).num_milliseconds()))
+    }
+
     pub async fn get_conversation_messages(&self, id: &str) -> Result<Vec<Message>> {
         self.conversation.get_messages(id).await
     }
