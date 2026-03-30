@@ -153,3 +153,30 @@ fn agents_list_json_flag_parses() {
         .expect("agents list --json should parse");
     assert!(matches!(cli.command, Command::Agents(_)));
 }
+
+#[test]
+fn workflow_list_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "list"])
+        .expect("workflow list should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_run_requires_id() {
+    Cli::try_parse_from(["rushdino", "workflow", "run"])
+        .expect_err("workflow run without id should fail");
+}
+
+#[test]
+fn workflow_run_parses_with_id() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "run", "wf-abc"])
+        .expect("workflow run <id> should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_run_parses_with_input() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "run", "wf-abc", "--input", "hello"])
+        .expect("workflow run --input should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}

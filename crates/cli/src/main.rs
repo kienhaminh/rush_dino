@@ -60,6 +60,7 @@ enum Command {
     Agent,
     Agents(commands::agents::AgentsArgs),
     Browser,
+    Workflow(commands::workflow::WorkflowArgs),
 }
 
 #[cfg(test)]
@@ -101,5 +102,6 @@ async fn run() -> Result<()> {
         Command::Agent => commands::agent::run().await,
         Command::Agents(args) => commands::agents::run(args).await,
         Command::Browser => commands::browser::run().await,
+        Command::Workflow(args) => commands::workflow::run(args).await,
     }
 }
