@@ -171,3 +171,21 @@ fn bundled_agent_templates_do_not_pin_models() {
         );
     }
 }
+
+#[test]
+fn bundled_agent_templates_define_expected_team_skills() {
+    let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../common/src/agents");
+    let manager = AgentManager::new(common_agents_dir);
+
+    let designer = manager.get("designer").expect("designer template should load");
+    let planner = manager.get("planner").expect("planner template should load");
+    let workflow_generator = manager
+        .get("workflow-generator")
+        .expect("workflow-generator template should load");
+    let writer = manager.get("writer").expect("writer template should load");
+
+    assert_eq!(designer.skills.as_deref(), Some("image-generator"));
+    assert_eq!(planner.skills.as_deref(), Some("skill-creator"));
+    assert_eq!(workflow_generator.skills.as_deref(), Some("skill-creator"));
+    assert!(writer.skills.is_none());
+}

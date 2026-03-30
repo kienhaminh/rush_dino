@@ -7,7 +7,6 @@ use std::{
 use sqlx::SqlitePool;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use chrono::Utc;
 use rushdino_common::{config::AuthMethod, models::Message, models::Role, Result, RichContent};
 use rushdino_providers::{types::ChatChunk, types::ChatResponse, types::ThinkingLevel, Provider};
 use serde_json::Value;
@@ -331,10 +330,10 @@ impl AgentEngine {
         if facts.is_empty() {
             return None;
         }
-        Some(Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::System,
-            content: format!(
+        Some(Message::new(
+            Uuid::new_v4().to_string(),
+            Role::System,
+            format!(
                 "Local knowledge graph facts (do not reveal raw internals unless asked):\n{}",
                 facts
                     .iter()
@@ -342,10 +341,7 @@ impl AgentEngine {
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        })
+        ))
     }
 
 }

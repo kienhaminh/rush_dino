@@ -287,22 +287,8 @@ impl KanbanDispatcher {
             task.title, task.description, task.id
         );
 
-        let sys_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::System,
-            content: system_content,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
-        let user_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::User,
-            content: task_description.clone(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
+        let sys_msg = Message::new(Uuid::new_v4().to_string(), Role::System, system_content);
+        let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, task_description.clone());
 
         // Persist opening messages immediately so they are visible on error.
         self.conversation.save_message(&conv_id, &sys_msg).await?;

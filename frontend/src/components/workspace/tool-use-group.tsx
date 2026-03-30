@@ -1,17 +1,27 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ThinkingBlock } from './thinking-block';
 import { ToolUseBlock } from './tool-use-block';
 import type { ConversationItem } from '@/lib/types';
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool_use' }>;
+type ThinkingItem = Extract<ConversationItem, { kind: 'thinking' }>;
 
 interface ToolUseGroupProps {
   tools: ToolItem[];
+  thinking?: ThinkingItem[];
 }
 
-export function ToolUseGroup({ tools }: ToolUseGroupProps) {
-  const hasRunning = tools.some((t) => t.status === 'running');
+export function ToolUseGroup({ tools, thinking = [] }: ToolUseGroupProps) {
+  // Hide the entire group while request_user_input is running — the input card
+  // is already shown in the timeline and the tool details are noise at that point.
+  const isAwaitingUserInput = tools.every(
+    (t) => t.tool_name === 'request_user_input' && t.status === 'running',
+  );
+  if (isAwaitingUserInput) return null;
+
+  const hasRunning = tools.some((t) => t.status === 'running') || thinking.some((t) => !t.done);
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
   // Track whether tools have ever run during this component's lifetime so we can
   // keep the group expanded after the run completes (tools collapse on re-mount
@@ -62,9 +72,12 @@ export function ToolUseGroup({ tools }: ToolUseGroupProps) {
         )}
       </button>
 
-      {/* Expanded tool list */}
+      {/* Expanded content: thinking block(s) then tool list */}
       {isExpanded && (
         <div className="mt-1.5 pl-3 border-l border-border/25 space-y-1">
+          {thinking.map((t) => (
+            <ThinkingBlock key={t.id} content={t.content} done={t.done} nested />
+          ))}
           {tools.map((tool) => (
             <ToolUseBlock key={tool.id} item={tool} nested />
           ))}

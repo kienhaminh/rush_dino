@@ -365,25 +365,11 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn user_message(text: &str) -> Message {
-        Message {
-            id: "user-1".to_owned(),
-            role: Role::User,
-            content: text.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: chrono::Utc::now(),
-        }
+        Message::new("user-1", Role::User, text)
     }
 
     fn system_message(text: &str) -> Message {
-        Message {
-            id: "system-1".to_owned(),
-            role: Role::System,
-            content: text.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: chrono::Utc::now(),
-        }
+        Message::new("system-1", Role::System, text)
     }
 
     // -----------------------------------------------------------------------

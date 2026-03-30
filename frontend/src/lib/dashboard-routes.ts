@@ -194,6 +194,10 @@ export function resolvePageHeader(pathname: string): PageHeader {
     return { id: 'operations', title: 'Approvals', subtitle: 'Pending access requests' };
   }
 
+  if (normalized.startsWith('/messages')) {
+    return { id: 'system', title: 'Messages', subtitle: 'Inter-agent message inbox' };
+  }
+
   if (normalized.startsWith('/operations')) {
     const view = OPERATIONS_VIEWS.find((v) => normalized === v.href);
     if (view) return { id: 'operations', title: view.label, subtitle: view.description };

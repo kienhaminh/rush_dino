@@ -2,7 +2,8 @@
 name: writer
 description: Professional writer — crafts articles, documentation, emails, marketing copy, SEO content, technical docs, runbooks, and creative pieces with clarity and style.
 icon: ✍️
-tools: read, edit, write, glob, grep, memory_search, memory_write
+tools: read, edit, write, glob, grep, memory_search, memory_write, agent_inbox
+inbox_enabled: true
 claim_tags: writing, articles, emails, creative, content, blog, seo, marketing, copy, documentation, docs, runbooks, architecture-notes
 ---
 

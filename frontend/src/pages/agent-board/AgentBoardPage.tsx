@@ -213,7 +213,7 @@ function AgentStatusCard({
             {visibleTags.map((tag) => (
               <span
                 key={tag}
-                className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-blue-950 border border-blue-900 text-blue-300"
+                className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-primary/10 border border-primary/30 text-primary"
               >
                 {tag}
               </span>

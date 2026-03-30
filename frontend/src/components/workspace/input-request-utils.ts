@@ -95,6 +95,19 @@ export function normalizeAndValidateInputValues(
   return { values, errors };
 }
 
+export function describeInputRequestSubmitError(error: unknown): string {
+  const fallback = 'Failed to submit input request.';
+  if (!(error instanceof Error) || !error.message) {
+    return fallback;
+  }
+
+  if (/not found: input request '.*' not found/i.test(error.message)) {
+    return 'This request is no longer active. The server may have restarted. Ask the agent to request it again.';
+  }
+
+  return error.message;
+}
+
 function normalizeNumber(field: InputFieldSpec, rawValue: unknown) {
   const empty = rawValue === '' || rawValue == null;
   if (empty) {

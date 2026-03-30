@@ -744,7 +744,6 @@ impl CompletionsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use rushdino_common::models::{Message, Role};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -767,14 +766,7 @@ mod tests {
     }
 
     fn user_message(content: &str) -> Message {
-        Message {
-            id: String::new(),
-            role: Role::User,
-            content: content.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        }
+        Message::new(String::new(), Role::User, content)
     }
 
     fn simple_request(content: &str) -> ChatRequest {

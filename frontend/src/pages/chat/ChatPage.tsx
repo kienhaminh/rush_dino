@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, RefreshCw } from 'lucide-react';
 
 import { ConversationTimeline } from '@/components/workspace/conversation-timeline';
+import { InputRequestCard } from '@/components/workspace/input-request-card';
 import { SubAgentPanel } from '@/components/workspace/sub-agent-panel';
 import { ResizeHandle } from '@/components/workspace/resize-handle';
 import { useChatWs } from '@/hooks/use-chat-ws';
@@ -29,6 +30,11 @@ export function ChatPage() {
     setHistoryLoaded,
   } = useChatWs();
 
+  const pendingInputRequest = items.find(
+    (item) => item.kind === 'input_request' && item.status === 'pending',
+  ) as Extract<(typeof items)[number], { kind: 'input_request' }> | undefined;
+  const hasPendingForm = pendingInputRequest != null;
+
   const [latestMetrics, setLatestMetrics] = useState<ConversationMetrics | null>(null);
   const prevIsStreamingRef = useRef(false);
 
@@ -50,13 +56,15 @@ export function ChatPage() {
         if (!cancelled) {
           resetWithItems(messagesToItems(detail.messages, detail.pendingInputRequests ?? []));
           setLatestMetrics(detail.latestMetrics ?? null);
-          setHistoryLoaded(true);
         }
       } catch {
         if (!cancelled) {
           resetWithItems([]);
-          setHistoryLoaded(true);
         }
+      } finally {
+        // Always mark history as loaded so navigating away and back does not
+        // trigger a re-fetch that would overwrite optimistic / WS-streamed items.
+        setHistoryLoaded(true);
       }
     })();
     return () => {
@@ -127,39 +135,52 @@ export function ChatPage() {
           />
         )}
 
-        {/* Chat Input */}
-        <div className="border-t border-border/10 bg-background/50 backdrop-blur-md p-4">
-          <div className="max-w-3xl mx-auto flex gap-3 relative">
-            <Textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              className="min-h-[44px] h-[44px] py-2.5 pr-12 resize-none rounded-xl bg-muted/30 border-border/20 focus-visible:ring-primary/20 overflow-hidden"
-            />
-            <Button
-              size="icon"
-              variant="default"
-              className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-lg shadow-sm"
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isStreaming || !isConnected}
-            >
-              <Send size={16} />
-            </Button>
+        {/* Pending input request form — replaces chat input bar when active */}
+        {hasPendingForm && pendingInputRequest ? (
+          <div className="border-t border-border/10 bg-background/50 backdrop-blur-md px-4 pt-2 pb-4 overflow-y-auto max-h-[60vh]">
+            <div className="max-w-3xl mx-auto">
+              <InputRequestCard
+                item={pendingInputRequest}
+                standalone
+                onResolved={markInputRequestResolved}
+              />
+            </div>
           </div>
-          <div className="max-w-3xl mx-auto flex justify-center mt-2">
-            {!isConnected ? (
-              <span className="text-[10px] text-muted-foreground/40 italic">
-                Disconnected — reconnecting…
-              </span>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/30">
-                Press Enter to send, Shift+Enter for new line
-              </span>
-            )}
+        ) : (
+          /* Chat Input */
+          <div className="border-t border-border/10 bg-background/50 backdrop-blur-md p-4">
+            <div className="max-w-3xl mx-auto flex gap-3 relative">
+              <Textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message..."
+                className="min-h-[44px] h-[44px] py-2.5 pr-12 resize-none rounded-xl bg-muted/30 border-border/20 focus-visible:ring-primary/20 overflow-hidden"
+              />
+              <Button
+                size="icon"
+                variant="default"
+                className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-lg shadow-sm"
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isStreaming || !isConnected}
+              >
+                <Send size={16} />
+              </Button>
+            </div>
+            <div className="max-w-3xl mx-auto flex justify-center mt-2">
+              {!isConnected ? (
+                <span className="text-[10px] text-muted-foreground/40 italic">
+                  Disconnected — reconnecting…
+                </span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground/30">
+                  Press Enter to send, Shift+Enter for new line
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Resize handle */}

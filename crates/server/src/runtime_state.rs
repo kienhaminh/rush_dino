@@ -24,7 +24,7 @@ pub struct RuntimeState {
     config: Arc<ArcSwap<AppConfig>>,
     knowledge_graph: Arc<ArcSwapOption<KgGateway>>,
     skill_graph: Arc<ArcSwapOption<SkillGraphService>>,
-    status: Arc<RwLock<RuntimeStatus>>,
+    status: Arc<ArcSwap<RuntimeStatus>>,
     pool: Arc<SqlitePool>,
     runtime: Arc<AgentRuntime>,
     system_broker: SharedSystemBroker,
@@ -52,7 +52,7 @@ impl RuntimeState {
             config: Arc::new(ArcSwap::new(initial_config)),
             knowledge_graph: Arc::new(ArcSwapOption::new(None)),
             skill_graph: Arc::new(ArcSwapOption::new(None)),
-            status: Arc::new(RwLock::new(RuntimeStatus::default())),
+            status: Arc::new(ArcSwap::new(Arc::new(RuntimeStatus::default()))),
             pool,
             runtime,
             system_broker,
@@ -93,10 +93,7 @@ impl RuntimeState {
     }
 
     pub fn status(&self) -> RuntimeStatus {
-        self.status
-            .read()
-            .expect("runtime status lock poisoned")
-            .clone()
+        (*self.status.load_full()).clone()
     }
 
     pub fn engine_handle(&self) -> Arc<ArcSwapOption<AgentEngine>> {
@@ -137,13 +134,13 @@ impl RuntimeState {
         self.config.store(config);
         self.engine.store(Some(engine));
         self.knowledge_graph.store(knowledge_graph);
-        *self.status.write().expect("runtime status lock poisoned") = status;
+        self.status.store(Arc::new(status));
     }
 
     pub(crate) fn update_unavailable(&self, config: Arc<AppConfig>, status: RuntimeStatus) {
         self.config.store(config);
         self.engine.store(None);
         self.knowledge_graph.store(None);
-        *self.status.write().expect("runtime status lock poisoned") = status;
+        self.status.store(Arc::new(status));
     }
 }

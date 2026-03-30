@@ -192,6 +192,10 @@ mod tests {
         async fn request_user_input(&self, _request: InputRequest) -> Result<InputRequestResult> {
             Ok(InputRequestResult::cancelled())
         }
+
+        async fn resolve_secrets(&self, input: String) -> String {
+            input
+        }
     }
 
     #[tokio::test]

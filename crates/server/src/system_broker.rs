@@ -13,11 +13,13 @@ use rushdino_common::{init, AppError, Result};
 
 use crate::approval_gate::ApprovalGate;
 use crate::input_request_gate::InputRequestGate;
+use crate::secret_vault::SharedSecretVault;
 
 pub struct LocalSystemBroker {
     approval_gate: Arc<ApprovalGate>,
     input_request_gate: Arc<InputRequestGate>,
     runtime: Arc<AgentRuntime>,
+    secret_vault: SharedSecretVault,
 }
 
 impl LocalSystemBroker {
@@ -25,11 +27,13 @@ impl LocalSystemBroker {
         approval_gate: Arc<ApprovalGate>,
         input_request_gate: Arc<InputRequestGate>,
         runtime: Arc<AgentRuntime>,
+        secret_vault: SharedSecretVault,
     ) -> Self {
         Self {
             approval_gate,
             input_request_gate,
             runtime,
+            secret_vault,
         }
     }
 
@@ -138,10 +142,14 @@ impl LocalSystemBroker {
 impl SystemBroker for LocalSystemBroker {
     async fn execute_shell(&self, request: ShellExecRequest) -> Result<ShellExecResult> {
         let cwd = resolve_cwd(request.host_cwd.as_deref())?;
+        // Approval check uses the original command (tokens visible, not raw secrets).
         self.ensure_approval(&request, &cwd).await?;
 
+        // Resolve any secret://uuid tokens to their real values before execution.
+        let resolved_command = self.secret_vault.resolve_in_string(&request.command).await;
+
         let mut cmd = Command::new("sh");
-        cmd.args(["-c", &request.command]).current_dir(&cwd);
+        cmd.args(["-c", &resolved_command]).current_dir(&cwd);
 
         let output = tokio::time::timeout(
             std::time::Duration::from_secs(request.timeout_secs),
@@ -158,6 +166,10 @@ impl SystemBroker for LocalSystemBroker {
             cwd,
             source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
         })
+    }
+
+    async fn resolve_secrets(&self, input: String) -> String {
+        self.secret_vault.resolve_in_string(&input).await
     }
 
     async fn request_user_input(&self, request: InputRequest) -> Result<InputRequestResult> {
@@ -233,7 +245,8 @@ mod tests {
                 .expect("in-memory sqlite should connect"),
         );
         let runtime = Arc::new(AgentRuntime::new(pool));
-        let broker = LocalSystemBroker::new(gate.clone(), input_gate, runtime);
+        let vault = crate::secret_vault::SecretVault::new();
+        let broker = LocalSystemBroker::new(gate.clone(), input_gate, runtime, vault);
         let mut rx = gate.register_session("session-1").await;
 
         let approval_task = tokio::spawn(async move {

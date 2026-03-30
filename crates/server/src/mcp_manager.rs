@@ -76,16 +76,25 @@ struct McpServerState {
 /// Manages connections to all configured external MCP servers.
 pub struct McpManager {
     state: Arc<RwLock<HashMap<String, McpServerState>>>,
-    http: reqwest::Client,
+    /// Lazily initialised on first reconcile call so that creating a McpManager
+    /// at startup is free when no MCP servers are configured.
+    http: std::sync::OnceLock<reqwest::Client>,
 }
 
 impl McpManager {
     /// Create a new manager with an empty server list.
+    ///
+    /// This is intentionally cheap — no network client is allocated until
+    /// [`reconcile`](Self::reconcile) is first called.
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             state: Arc::new(RwLock::new(HashMap::new())),
-            http: reqwest::Client::new(),
+            http: std::sync::OnceLock::new(),
         })
+    }
+
+    fn http_client(&self) -> &reqwest::Client {
+        self.http.get_or_init(reqwest::Client::new)
     }
 
     /// Replace the server list and (re)connect to any changed or new servers.
@@ -138,7 +147,7 @@ impl McpManager {
 
             let name = cfg.name.clone();
             let cfg_clone = cfg.clone();
-            let http = self.http.clone();
+            let http = self.http_client().clone();
             let state = self.state.clone();
             let registry = registry.clone();
 
@@ -203,7 +212,7 @@ impl McpManager {
                     parameters: tool.parameters.clone(),
                     sse_url: server.config.url.clone(),
                     auth_header: server.config.auth_header.clone(),
-                    http: self.http.clone(),
+                    http: self.http_client().clone(),
                 };
                 debug!(tool = %full_name, "mcp: registering tool");
                 registry.register(mcp_tool);

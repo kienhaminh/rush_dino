@@ -88,8 +88,10 @@ pub async fn patch_credentials(
     let mut current_value = serde_json::to_value(&current)
         .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
 
-    // Strip "***" sentinel values from patch so they don't overwrite existing secrets.
+    // Strip "***" sentinel values, then resolve any secret://uuid vault tokens
+    // so the real credential value is written to disk, not the opaque reference.
     let patch = strip_redacted(patch);
+    let patch = resolve_secrets_in_value(patch, &state.secret_vault).await;
     json_merge(&mut current_value, patch);
 
     let updated: CredentialsConfig = serde_json::from_value(current_value)
@@ -140,6 +142,34 @@ fn strip_redacted(value: Value) -> Value {
         Value::Array(arr) => Value::Array(arr.into_iter().map(strip_redacted).collect()),
         other => other,
     }
+}
+
+/// Recursively walk a JSON value and replace any `secret://uuid` tokens in
+/// string fields with their real values from the vault.
+fn resolve_secrets_in_value<'a>(
+    value: Value,
+    vault: &'a crate::secret_vault::SecretVault,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value> + Send + 'a>> {
+    Box::pin(async move {
+        match value {
+            Value::String(s) => Value::String(vault.resolve_in_string(&s).await),
+            Value::Object(map) => {
+                let mut resolved = serde_json::Map::new();
+                for (k, v) in map {
+                    resolved.insert(k, resolve_secrets_in_value(v, vault).await);
+                }
+                Value::Object(resolved)
+            }
+            Value::Array(arr) => {
+                let mut resolved = Vec::with_capacity(arr.len());
+                for v in arr {
+                    resolved.push(resolve_secrets_in_value(v, vault).await);
+                }
+                Value::Array(resolved)
+            }
+            other => other,
+        }
+    })
 }
 
 /// Shallow/deep merge: `patch` values overwrite `base` values at the same path.

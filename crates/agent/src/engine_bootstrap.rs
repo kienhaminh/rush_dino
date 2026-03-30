@@ -1,4 +1,3 @@
-use chrono::Utc;
 use uuid::Uuid;
 
 use rushdino_common::models::{Message, Role};
@@ -140,25 +139,11 @@ pub fn system_message(
         workspace_dir: Some(memory.root().display().to_string()),
     });
 
-    Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::System,
-        content,
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    }
+    Message::new(Uuid::new_v4().to_string(), Role::System, content)
 }
 
 pub fn user_message(input: &str) -> Message {
-    Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::User,
-        content: input.to_owned(),
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    }
+    Message::new(Uuid::new_v4().to_string(), Role::User, input.to_owned())
 }
 
 #[cfg(test)]

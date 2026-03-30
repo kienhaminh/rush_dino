@@ -174,8 +174,8 @@ pub fn build_engine_deps(
             home_c.join("documents/images"),
         ));
         r.register(FileReadTool::new(home_c.clone()));
-        r.register(FileWriteTool::new(home_c.clone()));
-        r.register(FileEditTool::new(home_c.clone()));
+        r.register(FileWriteTool::new(home_c.clone()).with_broker(system_broker_c.clone()));
+        r.register(FileEditTool::new(home_c.clone()).with_broker(system_broker_c.clone()));
         r.register(GlobSearchTool::new(home_c.clone()));
         r.register(GrepSearchTool::new(home_c.clone()));
         r.register(shell_exec);

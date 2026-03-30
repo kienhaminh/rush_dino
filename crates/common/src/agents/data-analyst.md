@@ -2,7 +2,8 @@
 name: data-analyst
 description: Data analysis expert — interprets data, performs statistical analysis, and provides actionable insights.
 icon: 📊
-tools: bash, read, glob, grep, web_search, web_fetch
+tools: bash, read, glob, grep, web_search, web_fetch, agent_inbox
+inbox_enabled: true
 claim_tags: data, analytics, statistics, visualization
 ---
 

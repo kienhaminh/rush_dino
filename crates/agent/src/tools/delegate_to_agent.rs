@@ -4,7 +4,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -265,22 +264,8 @@ impl Tool for DelegateToAgentTool {
             .await?;
 
         // Build the initial message list: target system prompt followed by the task.
-        let sys_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::System,
-            content: system_content,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
-        let user_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::User,
-            content: task.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
+        let sys_msg = Message::new(Uuid::new_v4().to_string(), Role::System, system_content);
+        let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, task.to_owned());
 
         // Persist the opening messages before the loop so they are visible
         // even if the react loop errors out.

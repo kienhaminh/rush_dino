@@ -179,12 +179,13 @@ pub async fn get_system_prompt(
             description: s.description,
         })
         .collect();
+    let agents = engine.list_agent_templates();
     let msg = system_message(
         engine.config(),
         engine.memory(),
         skills,
         engine.session_ctx(),
-        &[],
+        &agents,
     );
     let content = msg.content.clone();
     let token_estimate = content.len() / 4;

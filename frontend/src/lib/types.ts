@@ -12,6 +12,7 @@ export interface Message {
   content: string;
   tool_calls?: ToolCall[];
   rich_content?: RichContent | null;
+  thinking?: string | null;
   created_at?: string;
 }
 
@@ -706,6 +707,8 @@ export interface InputFieldSpec {
   minLength?: number | null;
   maxLength?: number | null;
   options: InputFieldOption[];
+  /** When true the UI renders this field as a masked password input. */
+  secret?: boolean | null;
 }
 
 export interface InputRequestSpec {

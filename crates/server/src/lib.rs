@@ -4,6 +4,7 @@ pub mod guardrail_broker;
 pub mod mcp_manager;
 pub mod channel_pairing;
 pub mod mobile_gateway;
+pub mod secret_vault;
 mod chat_broadcast;
 mod cron_runtime;
 mod knowledge_graph_bridge;
@@ -72,12 +73,22 @@ pub async fn build_app(
     ));
     let gate = ApprovalGate::new();
     let input_gate = InputRequestGate::new();
+    let secret_vault = crate::secret_vault::SecretVault::new();
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
-    runtime.reconcile_incomplete_runs().await?;
+    // Reconcile stale runs in the background so it doesn't block server startup.
+    {
+        let runtime_bg = runtime.clone();
+        tokio::spawn(async move {
+            if let Err(e) = runtime_bg.reconcile_incomplete_runs().await {
+                tracing::warn!("background run reconciliation failed: {e}");
+            }
+        });
+    }
     let system_broker = Arc::new(LocalSystemBroker::new(
         gate.clone(),
         input_gate.clone(),
         runtime.clone(),
+        secret_vault.clone(),
     ))
         as rushdino_agent::SharedSystemBroker;
     let runtime_state = Arc::new(RuntimeState::new(
@@ -327,23 +338,29 @@ pub async fn build_app(
     let guardrail_registry = state::GuardrailRegistry::new();
     let pending_oauth = state::PendingOAuthStore::new();
 
-    // Skill graph: keyword-based routing for skill selection
+    // Skill graph: keyword-based routing for skill selection.
+    // Seeding runs in the background on first launch (~150 DB writes); subsequent
+    // starts skip it after a single is_seeded() check.
     let skill_graph_service = Arc::new(rushdino_skill_graph::SkillGraphService::new((*pool).clone()));
-    if let Err(err) = skill_graph_service.ensure_seeded().await {
-        tracing::warn!("skill graph seeding failed: {err}");
+    {
+        let sg = skill_graph_service.clone();
+        tokio::spawn(async move {
+            if let Err(err) = sg.ensure_seeded().await {
+                tracing::warn!("skill graph seeding failed: {err}");
+            }
+        });
     }
     runtime_state.set_skill_graph(skill_graph_service.clone());
 
-    // MCP: initialize manager. Reconcile (connect + register tools) happens after
-    // the engine is built in the startup spawn below, so MCP tools are present in
-    // the initial agent session.
+    // MCP: McpManager::new() is now instant (reqwest::Client is lazy).
+    // The HTTP client is created on first reconcile, which happens after
+    // the user configures MCP servers — not unconditionally at startup.
     let mcp_manager = McpManager::new();
     let servers_bg = config.mcp_servers.clone();
 
-    // Build the engine synchronously so the router is ready to serve accurate status
-    // immediately (e.g. /healthz). Non-critical follow-up work (MCP reconcile,
-    // workflow seeding, session bootstrap) is spawned in the background.
-    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None).await {
+    // Build the engine. Optional services (KG, MCP) are skipped on startup;
+    // they are activated when the user enables them via config update.
+    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None, false).await {
         tracing::error!("failed to perform initial runtime refresh: {err}");
     }
     if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
@@ -390,6 +407,7 @@ pub async fn build_app(
         pending_oauth,
         skill_graph_service,
         mcp_manager.clone(),
+        secret_vault,
     );
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
@@ -801,7 +819,9 @@ fn should_register_gateway_adapter(
 }
 
 pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
-    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref())).await
+    // init_optional_services=true: user explicitly triggered a config update,
+    // so KgGateway and MCP are connected/reconciled if enabled.
+    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref()), true).await
 }
 
 async fn shutdown_signal() {

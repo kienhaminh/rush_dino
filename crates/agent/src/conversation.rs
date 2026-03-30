@@ -116,7 +116,7 @@ impl ConversationManager {
     pub async fn list_agent_conversations(&self) -> Result<Vec<Conversation>> {
         let rows = sqlx::query(
             "SELECT id, title, created_at, updated_at FROM conversations \
-             WHERE kind = 'agent' AND archived_at IS NULL \
+             WHERE kind = 'agent' \
              ORDER BY updated_at DESC LIMIT 50",
         )
         .fetch_all(self.pool.as_ref())
@@ -249,7 +249,7 @@ impl ConversationManager {
             .map_err(|e| AppError::Validation(format!("invalid rich_content JSON: {e}")))?;
 
         sqlx::query(
-            "INSERT INTO messages (id, conversation_id, role, content, tool_calls, rich_content, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO messages (id, conversation_id, role, content, tool_calls, rich_content, thinking, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(&message.id)
         .bind(conversation_id)
@@ -257,6 +257,7 @@ impl ConversationManager {
         .bind(&message.content)
         .bind(tool_calls)
         .bind(rich_content)
+        .bind(&message.thinking)
         .bind(message.created_at.to_rfc3339())
         .execute(self.pool.as_ref())
         .await?;
@@ -315,15 +316,20 @@ mod tests {
 
     async fn setup_manager() -> ConversationManager {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
+        for migration in [
+            include_str!("../../common/migrations/001_init.sql"),
+            include_str!("../../common/migrations/012_message_thinking.sql"),
+        ] {
+            for statement in migration.split(';') {
+                let sql: &str = statement.trim();
+                if sql.is_empty() {
+                    continue;
+                }
+                sqlx::query(sql)
+                    .execute(&pool)
+                    .await
+                    .expect("run migration");
             }
-            sqlx::query(sql)
-                .execute(&pool)
-                .await
-                .expect("run init migration");
         }
         ConversationManager::new(Arc::new(pool))
     }
@@ -344,6 +350,7 @@ mod tests {
                     content: "hello".to_owned(),
                     tool_calls: None,
                     rich_content: None,
+                    thinking: None,
                     created_at: Utc::now(),
                 },
             )

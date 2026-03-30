@@ -83,7 +83,16 @@ pub fn validate_default_profile_execution(
     }
 }
 
-pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Option<&McpManager>) -> Result<()> {
+/// Reload configuration and rebuild the agent engine.
+///
+/// `init_optional_services`: when `true` (config-update path), connect
+/// KgGateway if enabled. Pass `false` on startup so optional integrations
+/// are only activated when the user explicitly enables them.
+pub async fn refresh_runtime_from_disk(
+    runtime: &RuntimeState,
+    mcp_manager: Option<&McpManager>,
+    init_optional_services: bool,
+) -> Result<()> {
     let config = Arc::new(AppConfig::load_from_path(runtime.config_path())?);
     let mut credentials = CredentialsConfig::load_from_path(runtime.credentials_path())?;
     let mut status = runtime_status_from_config(config.as_ref());
@@ -99,19 +108,29 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Opti
             let pool = runtime.pool();
             let provider = Arc::new(ProviderService::from_config(&resolved.provider_config)?);
 
-            let knowledge_graph_service = if config.knowledge_graph.enabled {
-                match KgGateway::from_config(
+            // KgGateway is only connected when the caller explicitly requests it
+            // (i.e. after the user enables it via config, not on every startup).
+            let knowledge_graph_service = if config.knowledge_graph.enabled && init_optional_services {
+                let kg_fut = KgGateway::from_config(
                     &config.knowledge_graph,
                     &credentials.knowledge_graph,
                     provider.clone(),
                     pool.clone(),
                     config.data_dir.clone(),
+                );
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(500),
+                    kg_fut,
                 )
                 .await
                 {
-                    Ok(gw) => Some(Arc::new(gw)),
-                    Err(err) => {
+                    Ok(Ok(gw)) => Some(Arc::new(gw)),
+                    Ok(Err(err)) => {
                         tracing::warn!("knowledge graph gateway init failed: {err}");
+                        None
+                    }
+                    Err(_) => {
+                        tracing::warn!("knowledge graph gateway init timed out");
                         None
                     }
                 }

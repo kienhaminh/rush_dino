@@ -11,6 +11,7 @@ use crate::channel_pairing::ChannelPairingService;
 use crate::chat_broadcast::ChatBroadcastHub;
 use crate::input_request_gate::InputRequestGate;
 use crate::mcp_manager::McpManager;
+use crate::secret_vault::SharedSecretVault;
 use crate::middleware::HmacAuthState;
 use crate::mobile_gateway::{MobileGatewayAdapter, MobileGatewayService};
 use crate::runtime_log_store::RuntimeLogStore;
@@ -181,6 +182,9 @@ pub struct AppState {
     pub skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
     /// MCP server manager — manages connections and discovered tools.
     pub mcp_manager: Arc<McpManager>,
+    /// In-memory vault for sensitive values collected via secret input fields.
+    /// Agent receives opaque tokens; real values are resolved server-side before execution.
+    pub secret_vault: SharedSecretVault,
 }
 
 impl AppState {
@@ -207,6 +211,7 @@ impl AppState {
         pending_oauth: Arc<PendingOAuthStore>,
         skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
         mcp_manager: Arc<McpManager>,
+        secret_vault: SharedSecretVault,
     ) -> Self {
         Self {
             runtime,
@@ -231,6 +236,7 @@ impl AppState {
             pending_oauth,
             skill_graph,
             mcp_manager,
+            secret_vault,
         }
     }
 

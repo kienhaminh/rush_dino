@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -365,22 +364,8 @@ async fn extract_with_llm(provider: &Provider, url: &str, text: &str) -> Result<
 
     let request = ChatRequest {
         messages: vec![
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::System,
-                content: system_instructions.to_owned(),
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::User,
-                content: user_prompt,
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
+            Message::new(Uuid::new_v4().to_string(), Role::System, system_instructions.to_owned()),
+            Message::new(Uuid::new_v4().to_string(), Role::User, user_prompt),
         ],
         tools: None,
         temperature: Some(0.1),

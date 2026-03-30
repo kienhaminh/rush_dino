@@ -9,7 +9,7 @@ export function MessagesPage() {
   const unreadCount = messages.filter((m) => !m.read).length;
 
   return (
-    <div className="flex flex-col gap-4 p-4 max-w-4xl">
+    <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-[13px] font-semibold tracking-wide">Agent Messages</h1>
@@ -38,15 +38,17 @@ export function MessagesPage() {
         {messages.map((msg) => (
           <Card key={msg.id} className={msg.read ? 'opacity-60' : ''}>
             <CardContent className="p-3">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5 text-[10px]">
-                  <span className="font-semibold">{msg.fromAgent}</span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-muted-foreground">From</span>
+                  <span className="font-semibold">{msg.from_agent}</span>
                   <span className="text-muted-foreground">→</span>
-                  <span className="font-semibold">{msg.toAgent}</span>
+                  <span className="text-muted-foreground">To</span>
+                  <span className="font-semibold">{msg.to_agent}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {!msg.read && <Badge variant="secondary" className="text-[7px] px-1">NEW</Badge>}
-                  <span className="text-[8px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
+                  <span className="text-[10px] text-muted-foreground">{formatTime(msg.created_at)}</span>
                 </div>
               </div>
               <p className="text-[9px] text-muted-foreground leading-relaxed">{msg.content}</p>

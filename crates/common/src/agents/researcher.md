@@ -2,7 +2,8 @@
 name: researcher
 description: Research specialist — finds information, synthesizes sources, and provides well-cited summaries on any topic.
 icon: 📚
-tools: web_search, web_fetch, memory_search, read, glob, grep
+tools: web_search, web_fetch, memory_search, read, glob, grep, agent_inbox
+inbox_enabled: true
 claim_tags: research, analysis, facts, summarization, web-search
 ---
 

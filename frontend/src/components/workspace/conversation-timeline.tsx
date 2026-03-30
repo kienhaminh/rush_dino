@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { AssistantRichContent } from './assistant-rich-content';
 import { DelegateBlock } from './delegate-block';
-import { InputRequestCard } from './input-request-card';
 import { ThinkingBlock } from './thinking-block';
 import { ToolUseBlock } from './tool-use-block';
 import { ToolUseGroup } from './tool-use-group';
@@ -23,8 +22,11 @@ interface ConversationTimelineProps {
 // ── Grouping ─────────────────────────────────────────────────────────────────
 // Consecutive tool_use items are bundled into a single collapsible group so
 // the timeline stays clean even when the agent calls many tools in a turn.
+// Thinking items that immediately precede a tool group are bundled into that
+// same group so they appear inside the collapsible alongside the tool calls.
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool_use' }>;
+type ThinkingItem = Extract<ConversationItem, { kind: 'thinking' }>;
 
 const DELEGATE_TOOLS = new Set(['delegate', 'delegate_to_agent', 'spawn_agents']);
 
@@ -34,14 +36,47 @@ function isDelegate(item: ConversationItem): item is ToolItem {
 
 type DisplayGroup =
   | { type: 'item'; item: ConversationItem }
-  | { type: 'tool_group'; tools: ToolItem[]; id: string }
+  | { type: 'tool_group'; thinking: ThinkingItem[]; tools: ToolItem[]; id: string }
   | { type: 'delegate_group'; delegates: ToolItem[]; id: string };
 
 function groupItems(items: ConversationItem[]): DisplayGroup[] {
   const result: DisplayGroup[] = [];
   let i = 0;
   while (i < items.length) {
-    if (items[i].kind === 'tool_use') {
+    // Collect a run of thinking items, then decide whether to attach them to
+    // the following tool group or emit them as standalone items.
+    if (items[i].kind === 'thinking') {
+      const thinking: ThinkingItem[] = [];
+      while (i < items.length && items[i].kind === 'thinking') {
+        thinking.push(items[i] as ThinkingItem);
+        i++;
+      }
+      // Peek: are the next items tool_use? If so, bundle thinking with them.
+      if (i < items.length && items[i].kind === 'tool_use') {
+        const tools: ToolItem[] = [];
+        const delegates: ToolItem[] = [];
+        while (i < items.length && items[i].kind === 'tool_use') {
+          if (isDelegate(items[i])) {
+            delegates.push(items[i] as ToolItem);
+          } else {
+            tools.push(items[i] as ToolItem);
+          }
+          i++;
+        }
+        if (tools.length > 0) {
+          result.push({ type: 'tool_group', thinking, tools, id: thinking[0]?.id ?? tools[0].id });
+        } else {
+          // Only delegates — emit thinking standalone, then delegates.
+          for (const t of thinking) result.push({ type: 'item', item: t });
+        }
+        if (delegates.length > 0) {
+          result.push({ type: 'delegate_group', delegates, id: delegates[0].id });
+        }
+      } else {
+        // Not followed by tools — keep thinking as standalone items.
+        for (const t of thinking) result.push({ type: 'item', item: t });
+      }
+    } else if (items[i].kind === 'tool_use') {
       const tools: ToolItem[] = [];
       const delegates: ToolItem[] = [];
       while (i < items.length && items[i].kind === 'tool_use') {
@@ -53,7 +88,7 @@ function groupItems(items: ConversationItem[]): DisplayGroup[] {
         i++;
       }
       if (tools.length > 0) {
-        result.push({ type: 'tool_group', tools, id: tools[0].id });
+        result.push({ type: 'tool_group', thinking: [], tools, id: tools[0].id });
       }
       if (delegates.length > 0) {
         result.push({ type: 'delegate_group', delegates, id: delegates[0].id });
@@ -71,17 +106,11 @@ function groupItems(items: ConversationItem[]): DisplayGroup[] {
 interface TimelineItemProps {
   item: ConversationItem;
   showCursor?: boolean;
-  onResolveInputRequest?: (
-    requestId: string,
-    status: 'submitted' | 'cancelled',
-    values?: Record<string, unknown> | null,
-  ) => void;
 }
 
 const TimelineItem = memo(function TimelineItem({
   item,
   showCursor,
-  onResolveInputRequest,
 }: TimelineItemProps) {
   if (item.kind === 'user') {
     return (
@@ -146,10 +175,6 @@ const TimelineItem = memo(function TimelineItem({
     );
   }
 
-  if (item.kind === 'input_request') {
-    return <InputRequestCard item={item} onResolved={onResolveInputRequest} />;
-  }
-
   return null;
 });
 
@@ -169,7 +194,14 @@ export const ConversationTimeline = memo(function ConversationTimeline({
     el.scrollTop = el.scrollHeight;
   }, [items, isStreaming]);
 
-  const displayGroups = useMemo(() => groupItems(items), [items]);
+  // input_request items are never rendered in the timeline (they live in the
+  // bottom panel while pending and are dismissed after resolution). Exclude them
+  // before grouping so they don't break the thinking↔tool bundling logic.
+  const timelineItems = useMemo(
+    () => items.filter((item) => item.kind !== 'input_request'),
+    [items],
+  );
+  const displayGroups = useMemo(() => groupItems(timelineItems), [timelineItems]);
 
   if (items.length === 0) {
     return (
@@ -198,7 +230,7 @@ export const ConversationTimeline = memo(function ConversationTimeline({
           const isLast = index === displayGroups.length - 1;
 
           if (group.type === 'tool_group') {
-            return <ToolUseGroup key={group.id} tools={group.tools} />;
+            return <ToolUseGroup key={group.id} thinking={group.thinking} tools={group.tools} />;
           }
 
           if (group.type === 'delegate_group') {
@@ -215,7 +247,6 @@ export const ConversationTimeline = memo(function ConversationTimeline({
               <TimelineItem
                 item={item}
                 showCursor={showCursor}
-                onResolveInputRequest={onResolveInputRequest}
               />
               {showMetrics && <ConversationMetricsBar metrics={latestMetrics} />}
             </div>

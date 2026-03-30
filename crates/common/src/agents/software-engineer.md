@@ -2,7 +2,8 @@
 name: software-engineer
 description: Software engineer — designs architecture, implements features, debugs complex issues, and ships end-to-end across any language or stack.
 icon: 💻
-tools: bash, read, edit, write, glob, grep, web_search, web_fetch, memory_search, memory_write
+tools: bash, read, edit, write, glob, grep, web_search, web_fetch, memory_search, memory_write, agent_inbox
+inbox_enabled: true
 claim_tags: code, architecture, implementation, debugging, api, frontend, backend, fullstack, web, errors, logs, diagnosis, root-cause
 ---
 

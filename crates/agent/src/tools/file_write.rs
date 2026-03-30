@@ -7,6 +7,7 @@ use tokio::fs;
 use rushdino_common::{AppError, Result};
 
 use crate::{
+    system_broker::SharedSystemBroker,
     tool_registry::Tool,
     tools::bash::current_tool_execution_context,
 };
@@ -14,11 +15,17 @@ use crate::{
 pub struct FileWriteTool {
     /// The workspace root. All writes are restricted to this directory.
     workspace: PathBuf,
+    broker: Option<SharedSystemBroker>,
 }
 
 impl FileWriteTool {
     pub fn new(workspace: PathBuf) -> Self {
-        Self { workspace }
+        Self { workspace, broker: None }
+    }
+
+    pub fn with_broker(mut self, broker: SharedSystemBroker) -> Self {
+        self.broker = Some(broker);
+        self
     }
 }
 
@@ -97,9 +104,19 @@ impl Tool for FileWriteTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("missing required parameter 'path'".to_owned()))?;
 
-        let content = args.get("content").and_then(Value::as_str).ok_or_else(|| {
+        let raw_content = args.get("content").and_then(Value::as_str).ok_or_else(|| {
             AppError::Validation("missing required parameter 'content'".to_owned())
         })?;
+
+        // Resolve any secret://uuid tokens before writing so secrets flow into
+        // the file without ever passing through the LLM context.
+        let content_owned;
+        let content = if let Some(broker) = &self.broker {
+            content_owned = broker.resolve_secrets(raw_content.to_owned()).await;
+            content_owned.as_str()
+        } else {
+            raw_content
+        };
 
         // Use workspace_override from task-local context if set, otherwise self.workspace.
         let effective_workspace = current_tool_execution_context()

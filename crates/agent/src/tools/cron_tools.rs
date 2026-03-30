@@ -75,14 +75,7 @@ async fn run_agent_turn(
         ),
     );
     let old_len = messages.len();
-    let user_message = Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::User,
-        content: input.to_owned(),
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    };
+    let user_message = Message::new(Uuid::new_v4().to_string(), Role::User, input.to_owned());
     conversation
         .save_message(conversation_id, &user_message)
         .await?;

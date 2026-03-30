@@ -77,6 +77,10 @@ pub struct InputFieldSpec {
     pub max_length: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<InputFieldOption>,
+    /// When true the UI renders this field as a password input (masked).
+    /// Set for API keys, passwords, tokens, or any other sensitive value.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub secret: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -146,6 +150,9 @@ impl InputRequestResult {
 pub trait SystemBroker: Send + Sync {
     async fn execute_shell(&self, request: ShellExecRequest) -> Result<ShellExecResult>;
     async fn request_user_input(&self, request: InputRequest) -> Result<InputRequestResult>;
+    /// Substitute any `secret://uuid` tokens in `input` with their stored values.
+    /// Used by file-writing tools so secrets flow into files without passing through the LLM.
+    async fn resolve_secrets(&self, input: String) -> String;
 }
 
 pub type SharedSystemBroker = Arc<dyn SystemBroker>;

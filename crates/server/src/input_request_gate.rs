@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::{mpsc, oneshot, Mutex};
 use uuid::Uuid;
 
-use rushdino_agent::{InputRequest, InputRequestPayload, InputRequestResult};
+use rushdino_agent::{InputRequest, InputRequestPayload, InputRequestResult, InputRequestSpec};
 use rushdino_common::{AppError, Result};
 
 const DEFAULT_INPUT_REQUEST_TIMEOUT: Duration = Duration::from_secs(1800);
@@ -131,6 +131,16 @@ impl InputRequestGate {
             .map(|entry| entry.request.clone())
     }
 
+    /// Peek at the spec for a pending request without removing or resolving it.
+    /// Returns `None` if the request has already been resolved or does not exist.
+    pub async fn get_spec(&self, request_id: &str) -> Option<InputRequestSpec> {
+        self.pending
+            .lock()
+            .await
+            .get(request_id)
+            .map(|entry| entry.request.payload.spec.clone())
+    }
+
     pub async fn resolve(
         &self,
         request_id: &str,
@@ -190,6 +200,7 @@ mod tests {
                         value: "gateway".to_owned(),
                     },
                 ],
+                secret: false,
             }],
         }
     }

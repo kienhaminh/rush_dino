@@ -81,12 +81,8 @@ pub async fn run_react_loop(
         if response.tool_calls.is_empty() {
             finalize_response_content(&mut response, last_presented_content.take());
             let assistant_message = Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::Assistant,
-                content: response.content.clone(),
-                tool_calls: None,
                 rich_content: response.rich_content.clone(),
-                created_at: Utc::now(),
+                ..Message::new(Uuid::new_v4().to_string(), Role::Assistant, response.content.clone())
             };
             messages.push(assistant_message);
             response.usage = total_usage.clone();
@@ -94,12 +90,8 @@ pub async fn run_react_loop(
         }
 
         let assistant_message = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::Assistant,
-            content: response.content.clone(),
             tool_calls: Some(response.tool_calls.clone()).filter(|x| !x.is_empty()),
-            rich_content: None,
-            created_at: Utc::now(),
+            ..Message::new(Uuid::new_v4().to_string(), Role::Assistant, response.content.clone())
         };
         messages.push(assistant_message);
 
@@ -147,6 +139,7 @@ pub async fn run_react_loop(
         content: response.content.clone(),
         tool_calls: None,
         rich_content: response.rich_content.clone(),
+        thinking: None,
         created_at: Utc::now(),
     });
     Ok((response, messages))
@@ -174,6 +167,7 @@ pub async fn run_react_loop_streaming(
             .await?;
 
         let mut content = String::new();
+        let mut thinking = String::new();
         let mut tool_calls: Vec<ToolCall> = Vec::new();
         let mut emitted_text = false;
 
@@ -187,15 +181,16 @@ pub async fn run_react_loop_streaming(
                 tool_calls.extend(chunk.tool_calls);
             }
 
-            // Forward thinking delta before text delta
-            if let Some(thinking) = chunk.thinking_delta {
+            // Forward thinking delta before text delta and accumulate for persistence
+            if let Some(thinking_delta) = chunk.thinking_delta {
+                thinking.push_str(&thinking_delta);
                 let _ = event_tx
                     .send(StreamingEvent::ChatChunk(ChatChunk {
                         delta: String::new(),
                         tool_calls: Vec::new(),
                         done: false,
                         usage: None,
-                        thinking_delta: Some(thinking),
+                        thinking_delta: Some(thinking_delta),
                     }))
                     .await;
             }
@@ -237,6 +232,7 @@ pub async fn run_react_loop_streaming(
                 content: final_response.content.clone(),
                 tool_calls: None,
                 rich_content: final_response.rich_content.clone(),
+                thinking: if thinking.is_empty() { None } else { Some(thinking) },
                 created_at: Utc::now(),
             });
             let _ = event_tx
@@ -265,6 +261,7 @@ pub async fn run_react_loop_streaming(
             content: response.content.clone(),
             tool_calls: Some(tool_calls),
             rich_content: None,
+            thinking: if thinking.is_empty() { None } else { Some(thinking) },
             created_at: Utc::now(),
         });
 
@@ -298,16 +295,18 @@ pub async fn run_react_loop_streaming(
 
     let mut stream = provider.stream_chat(wrap_up_request).await?;
     let mut content = String::new();
+    let mut wrap_up_thinking = String::new();
 
     while let Some(chunk) = stream.recv().await {
-        if let Some(thinking) = chunk.thinking_delta {
+        if let Some(thinking_delta) = chunk.thinking_delta {
+            wrap_up_thinking.push_str(&thinking_delta);
             let _ = event_tx
                 .send(StreamingEvent::ChatChunk(ChatChunk {
                     delta: String::new(),
                     tool_calls: Vec::new(),
                     done: false,
                     usage: None,
-                    thinking_delta: Some(thinking),
+                    thinking_delta: Some(thinking_delta),
                 }))
                 .await;
         }
@@ -345,6 +344,7 @@ pub async fn run_react_loop_streaming(
         content: final_response.content.clone(),
         tool_calls: None,
         rich_content: final_response.rich_content.clone(),
+        thinking: if wrap_up_thinking.is_empty() { None } else { Some(wrap_up_thinking) },
         created_at: Utc::now(),
     });
     let _ = event_tx
@@ -471,6 +471,7 @@ mod tests {
                 content: "system prompt".to_owned(),
                 tool_calls: None,
                 rich_content: None,
+                thinking: None,
                 created_at: Utc::now(),
             },
             Message {
@@ -479,6 +480,7 @@ mod tests {
                 content: "user prompt".to_owned(),
                 tool_calls: None,
                 rich_content: None,
+                thinking: None,
                 created_at: Utc::now(),
             },
         ];
@@ -705,14 +707,11 @@ async fn append_tool_outputs(
                 })
                 .await;
         }
-        messages.push(Message {
-            id: call.id.clone(),
-            role: Role::Tool,
-            content: format!("[tool_error:{}] {msg}", call.name),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        });
+        messages.push(Message::new(
+            call.id.clone(),
+            Role::Tool,
+            format!("[tool_error:{}] {msg}", call.name),
+        ));
     }
 
     // Append normally executed tool results.
@@ -727,14 +726,7 @@ async fn append_tool_outputs(
         } else {
             output
         };
-        messages.push(Message {
-            id: call.id.clone(),
-            role: Role::Tool,
-            content: payload,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        });
+        messages.push(Message::new(call.id.clone(), Role::Tool, payload));
     }
 
     presented_content

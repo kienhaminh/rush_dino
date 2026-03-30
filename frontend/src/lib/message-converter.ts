@@ -25,6 +25,14 @@ export function messagesToItems(
     }
 
     if (msg.role === 'assistant') {
+      if (msg.thinking) {
+        items.push({
+          kind: 'thinking',
+          id: `${msg.id}-thinking`,
+          content: msg.thinking,
+          done: true,
+        });
+      }
       if (msg.content) {
         items.push({
           kind: 'assistant',

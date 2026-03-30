@@ -2,7 +2,8 @@
 name: code-reviewer
 description: Expert code reviewer — analyzes code for bugs, security vulnerabilities, style issues, and performs safe refactoring to improve maintainability.
 icon: 🔍
-tools: read, glob, grep, memory_search
+tools: read, glob, grep, memory_search, agent_inbox
+inbox_enabled: true
 claim_tags: review, code-quality, bugs, security, style, refactoring, simplification, cleanup, complexity
 ---
 

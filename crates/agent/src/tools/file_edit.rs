@@ -8,6 +8,7 @@ use rushdino_common::{AppError, Result};
 use rushdino_security::validation::validate_path;
 
 use crate::{
+    system_broker::SharedSystemBroker,
     tool_registry::Tool,
     tools::bash::current_tool_execution_context,
 };
@@ -15,11 +16,17 @@ use crate::{
 pub struct FileEditTool {
     /// The workspace root. All edits are restricted to this directory.
     workspace: PathBuf,
+    broker: Option<SharedSystemBroker>,
 }
 
 impl FileEditTool {
     pub fn new(workspace: PathBuf) -> Self {
-        Self { workspace }
+        Self { workspace, broker: None }
+    }
+
+    pub fn with_broker(mut self, broker: SharedSystemBroker) -> Self {
+        self.broker = Some(broker);
+        self
     }
 }
 
@@ -72,10 +79,19 @@ impl Tool for FileEditTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("oldText is required".to_owned()))?;
 
-        let new_text = args
+        let raw_new_text = args
             .get("newText")
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("newText is required".to_owned()))?;
+
+        // Resolve any secret://uuid tokens in the replacement text before writing.
+        let new_text_owned;
+        let new_text = if let Some(broker) = &self.broker {
+            new_text_owned = broker.resolve_secrets(raw_new_text.to_owned()).await;
+            new_text_owned.as_str()
+        } else {
+            raw_new_text
+        };
 
         let replace_all = args
             .get("replaceAll")

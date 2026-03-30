@@ -79,34 +79,22 @@ pub fn truncate_messages(messages: &[Message], max_tokens: usize) -> Vec<Message
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use rushdino_common::models::{Message, Role, ToolCall};
 
     use super::truncate_messages;
 
     fn msg(id: &str, role: Role, content: &str) -> Message {
-        Message {
-            id: id.to_owned(),
-            role,
-            content: content.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        }
+        Message::new(id, role, content)
     }
 
     fn assistant_with_tool_calls(id: &str, content: &str) -> Message {
         Message {
-            id: id.to_owned(),
-            role: Role::Assistant,
-            content: content.to_owned(),
             tool_calls: Some(vec![ToolCall {
                 id: format!("call_{id}"),
                 name: "test_tool".to_owned(),
                 arguments: serde_json::json!({}),
             }]),
-            rich_content: None,
-            created_at: Utc::now(),
+            ..Message::new(id, Role::Assistant, content)
         }
     }
 

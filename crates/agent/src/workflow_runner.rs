@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use chrono::Utc;
 use tokio::task::JoinSet;
 use tokio::time;
 use uuid::Uuid;
@@ -560,22 +559,8 @@ impl WorkflowRunner {
         };
 
         let messages = vec![
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::System,
-                content: system_content,
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::User,
-                content: step_input.to_owned(),
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
+            Message::new(Uuid::new_v4().to_string(), Role::System, system_content),
+            Message::new(Uuid::new_v4().to_string(), Role::User, step_input.to_owned()),
         ];
 
         let tool_context = ToolExecutionContext {

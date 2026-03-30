@@ -86,7 +86,7 @@ export function ApprovalsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-auto p-6">
+    <div className="flex flex-1 flex-col overflow-auto p-6">
       <div className="mx-auto w-full max-w-3xl space-y-6">
 
         {/* Pending requests */}

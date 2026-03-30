@@ -81,6 +81,7 @@ pub async fn create_profile(
     }
 
     if let Some(api_key) = payload.api_key {
+        let api_key = state.secret_vault.resolve_in_string(&api_key).await;
         let secrets = ProfileSecrets {
             api_key: Some(api_key),
             ..Default::default()
@@ -117,6 +118,7 @@ pub async fn update_profile(
     profile.base_url = payload.base_url;
 
     if let Some(api_key) = payload.api_key {
+        let api_key = state.secret_vault.resolve_in_string(&api_key).await;
         let mut secrets = credentials.profiles.entry(id.clone()).or_default().clone();
         if api_key.is_empty() {
             secrets.api_key = None;

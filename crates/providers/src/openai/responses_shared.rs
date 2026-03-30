@@ -518,6 +518,7 @@ mod tests {
             content: content.to_owned(),
             tool_calls: None,
             rich_content: None,
+            thinking: None,
             created_at: chrono::Utc::now(),
         }
     }

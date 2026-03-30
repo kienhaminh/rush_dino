@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type AgentMessageRecord = {
   id: string;
-  fromAgent: string;
-  toAgent: string;
+  from_agent: string;
+  to_agent: string;
   content: string;
   read: boolean;
-  createdAt: string;
+  created_at: string;
 };
 
 const POLL_INTERVAL_MS = 5000;

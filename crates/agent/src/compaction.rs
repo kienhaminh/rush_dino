@@ -126,6 +126,7 @@ pub async fn compact_messages(
         content: format!("[Conversation history — compacted]\n\n{summary}"),
         tool_calls: None,
         rich_content: None,
+        thinking: None,
         created_at: Utc::now(),
     });
     result.push(Message {
@@ -135,6 +136,7 @@ pub async fn compact_messages(
             .to_owned(),
         tool_calls: None,
         rich_content: None,
+        thinking: None,
         created_at: Utc::now(),
     });
     result.extend_from_slice(&messages[keep_start..]);
@@ -172,14 +174,7 @@ async fn summarize_history(provider: &Provider, messages: &[Message]) -> Result<
 
     let response = provider
         .chat(ChatRequest {
-            messages: vec![Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::User,
-                content: prompt,
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            }],
+            messages: vec![Message::new(Uuid::new_v4().to_string(), Role::User, prompt)],
             tools: None,
             temperature: Some(0.1),
             max_tokens: Some(SUMMARY_MAX_TOKENS),
@@ -193,20 +188,12 @@ async fn summarize_history(provider: &Provider, messages: &[Message]) -> Result<
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use rushdino_common::models::{Message, Role};
 
     use super::{group_indices, needs_compaction};
 
     fn msg(role: Role, content: &str) -> Message {
-        Message {
-            id: uuid::Uuid::new_v4().to_string(),
-            role,
-            content: content.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        }
+        Message::new(uuid::Uuid::new_v4().to_string(), role, content)
     }
 
     #[test]

@@ -2,7 +2,8 @@
 name: tester
 description: Quality assurance specialist — designs test strategies, writes test cases, and validates behavior across layers.
 icon: ✅
-tools: bash, read, edit, write, glob, grep
+tools: bash, read, edit, write, glob, grep, agent_inbox
+inbox_enabled: true
 claim_tags: testing, test-cases, coverage, regression, quality
 ---
 

@@ -1,7 +1,6 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -81,14 +80,7 @@ async fn run_session_turn(
     );
 
     let old_len = messages.len();
-    let user_msg = Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::User,
-        content: input.to_owned(),
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    };
+    let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, input.to_owned());
     deps.conversation
         .save_message(conversation_id, &user_msg)
         .await?;
@@ -465,13 +457,13 @@ mod tests {
             }))
             .await;
 
-        // After delegation completes, the agent session is auto-archived
-        // so it no longer appears in the active agent-session list.
+        // After delegation completes the agent session is archived but still
+        // returned by list_agent_conversations (panel shows all agent sessions).
         let active_agent_sessions = conversation.list_agent_conversations().await.unwrap();
         assert_eq!(
             active_agent_sessions.len(),
-            0,
-            "agent session should be archived after delegation completes"
+            1,
+            "completed agent session should still appear in the agent-session list"
         );
 
         // It must NOT appear in the regular user session list.

@@ -50,6 +50,8 @@ struct RequestUserInputArgs {
     choices: Vec<ChoiceInput>,
     #[serde(default)]
     fields: Vec<InputFieldArgs>,
+    #[serde(default)]
+    secret: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +72,8 @@ struct InputFieldArgs {
     max_length: Option<usize>,
     #[serde(default)]
     choices: Vec<ChoiceInput>,
+    #[serde(default)]
+    secret: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -155,7 +159,8 @@ impl Tool for RequestUserInputTool {
                 "max": {"type": "integer"},
                 "minLength": {"type": "integer"},
                 "maxLength": {"type": "integer"},
-                "choices": {"type": "array", "items": choice_items.clone()}
+                "choices": {"type": "array", "items": choice_items.clone()},
+                "secret": {"type": "boolean", "description": "Render as a masked password input. Set for API keys, tokens, passwords, or any sensitive value."}
             }
         });
         json!({
@@ -183,6 +188,7 @@ impl Tool for RequestUserInputTool {
                 "max": {"type": "integer"},
                 "minLength": {"type": "integer"},
                 "maxLength": {"type": "integer"},
+                "secret": {"type": "boolean", "description": "Render as a masked password input. Set for API keys, tokens, passwords, or any sensitive value."},
                 "choices": {
                     "type": "array",
                     "description": "For select/multiselect questions: strings or {label, value} objects",
@@ -258,6 +264,7 @@ fn normalize_spec(args: RequestUserInputArgs) -> Result<InputRequestSpec> {
                 min_length: args.min_length,
                 max_length: args.max_length,
                 choices: args.choices,
+                secret: args.secret,
             })?;
             Ok(InputRequestSpec {
                 kind: InputRequestKind::Question,
@@ -347,6 +354,7 @@ fn normalize_field(field: InputFieldArgs) -> Result<InputFieldSpec> {
         min_length: field.min_length,
         max_length: field.max_length,
         options,
+        secret: field.secret,
     })
 }
 
@@ -546,6 +554,10 @@ mod tests {
                 .expect("mock broker mutex should not be poisoned") = Some(request);
             Ok(self.response.clone())
         }
+
+        async fn resolve_secrets(&self, input: String) -> String {
+            input
+        }
     }
 
     fn context() -> ToolExecutionContext {
@@ -672,6 +684,7 @@ mod tests {
             min_length: None,
             max_length: None,
             choices: vec![ChoiceInput::Value("unexpected".to_owned())],
+            secret: false,
         })
         .expect_err("text fields should reject choices");
 

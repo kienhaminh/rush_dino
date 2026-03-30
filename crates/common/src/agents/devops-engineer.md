@@ -2,7 +2,8 @@
 name: devops-engineer
 description: DevOps engineer — handles CI/CD pipelines, infrastructure, Docker, Kubernetes, and automation scripts.
 icon: ⚙️
-tools: bash, read, edit, write, glob, grep
+tools: bash, read, edit, write, glob, grep, agent_inbox
+inbox_enabled: true
 claim_tags: devops, ci-cd, docker, infrastructure, deployment
 ---
 

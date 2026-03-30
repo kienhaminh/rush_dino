@@ -298,4 +298,8 @@ impl SystemBroker for GuardrailBroker {
             "request_user_input is not supported by GuardrailBroker".to_owned(),
         ))
     }
+
+    async fn resolve_secrets(&self, input: String) -> String {
+        input
+    }
 }

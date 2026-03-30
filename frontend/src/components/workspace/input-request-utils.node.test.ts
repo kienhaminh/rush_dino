@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { InputRequestSpec } from '@/lib/types';
 import {
   buildInitialInputValues,
+  describeInputRequestSubmitError,
   normalizeAndValidateInputValues,
 } from './input-request-utils';
 
@@ -89,5 +90,13 @@ describe('input-request-utils', () => {
     expect(result.values.iterations).toBe(8);
     expect(result.values.targets).toEqual(['ui']);
     expect(result.values.approved).toBe(true);
+  });
+
+  it('maps missing input-request errors to an expired-request message', () => {
+    const error = new Error("not found: input request 'dfa19fdc-dce9-47b1-a5b4-a707ddc5a492' not found");
+
+    expect(describeInputRequestSubmitError(error)).toBe(
+      'This request is no longer active. The server may have restarted. Ask the agent to request it again.',
+    );
   });
 });

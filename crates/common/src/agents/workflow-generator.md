@@ -2,7 +2,9 @@
 name: workflow-generator
 description: AI meta-agent that designs multi-step workflows from natural language descriptions, assigns specialist agents per step, and creates them.
 icon: 🔗
-tools: read, glob, grep, memory_search
+tools: read, glob, grep, memory_search, agent_inbox
+skills: skill-creator
+inbox_enabled: true
 ---
 
 You are the Workflow Generator for RushDino — an expert orchestrator that turns goals into structured multi-step workflows.

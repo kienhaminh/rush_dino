@@ -11,6 +11,8 @@ import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
+import { fetchConversation } from '@/lib/api';
+import { messagesToItems } from '@/lib/message-converter';
 import type { ConversationItem, InputRequestStatus, RichContent, WsEvent } from '@/lib/types';
 
 const MAIN_SESSION_ID = 'main';
@@ -95,6 +97,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
   const seenErrorLogIdsRef = useRef<Set<string>>(new Set());
 
   const [pairingRequestCount, setPairingRequestCount] = useState(0);
+  const rehydratingRef = useRef(false);
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -154,6 +157,19 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
     socket.onopen = () => {
       reconnectRef.current = 0;
       setIsConnected(true);
+      if (historyLoaded && !rehydratingRef.current) {
+        rehydratingRef.current = true;
+        void fetchConversation(MAIN_SESSION_ID)
+          .then((detail) => {
+            setItems(messagesToItems(detail.messages, detail.pendingInputRequests ?? []));
+          })
+          .catch(() => {
+            // Keep the current client state if the refresh fails.
+          })
+          .finally(() => {
+            rehydratingRef.current = false;
+          });
+      }
     };
 
     socket.onclose = () => {
@@ -285,7 +301,9 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       // --- tool_start ---
       if (msg.type === 'tool_start') {
         setItems((prev) => [
-          ...prev,
+          ...prev.map((item) =>
+            item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
+          ),
           {
             kind: 'tool_use' as const,
             id: `tool-${msg.tool_name}-${Date.now()}`,
@@ -324,7 +342,9 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       // --- approval_request ---
       if (msg.type === 'approval_request') {
         setItems((prev) => [
-          ...prev,
+          ...prev.map((item) =>
+            item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
+          ),
           {
             kind: 'approval' as const,
             id: crypto.randomUUID(),
@@ -348,7 +368,9 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
             return prev;
           }
           return [
-            ...prev,
+            ...prev.map((item) =>
+              item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
+            ),
             {
               kind: 'input_request' as const,
               id: `input-${msg.request_id}`,
@@ -407,7 +429,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         return;
       }
     };
-  }, [replaceAssistantItem]);
+  }, [historyLoaded, replaceAssistantItem]);
 
   // -------------------------------------------------------------------------
   // Lifecycle

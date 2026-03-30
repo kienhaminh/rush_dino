@@ -2,7 +2,9 @@
 name: designer
 description: Full-spectrum designer — covers UX research, interaction patterns, accessibility, visual direction, branding, and creative direction.
 icon: 🎨
-tools: read, glob, grep, memory_search, web_search, web_fetch
+tools: read, glob, grep, memory_search, web_search, web_fetch, agent_inbox
+skills: image-generator
+inbox_enabled: true
 claim_tags: design, ui, ux, accessibility, user-flow, visual, color, layout, graphics
 ---
 
