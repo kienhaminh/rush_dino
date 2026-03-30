@@ -3,6 +3,7 @@ import { Bot, Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, MessageSqu
 import { cn } from '@/lib/utils';
 import { fetchConversation, deleteConversation } from '@/lib/api';
 import { agentColor } from './agent-colors';
+import { sessionLabel } from '@/lib/session-id-utils';
 import { SubAgentMarkdown } from './sub-agent-markdown';
 import type { SessionSummary } from '@/lib/types';
 import type { ConversationItem } from '@/lib/types';
@@ -121,9 +122,10 @@ function LiveRunRow({ run }: { run: LiveRun }) {
 function SessionRow({ session, onDelete }: { session: SessionSummary; onDelete: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
 
-  // Derive agent name from title e.g. "researcher: find info about X"
+  // Agent name comes from the session ID (e.g. "code-reviewer" → "Code Reviewer").
+  // Task description is still parsed from the title.
+  const agentName = sessionLabel(session.id);
   const colonIdx = session.title.indexOf(':');
-  const agentName = colonIdx > 0 ? session.title.slice(0, colonIdx).trim() : session.title;
   const task = colonIdx > 0 ? session.title.slice(colonIdx + 1).trim() : '';
   const isActive = session.activeRunCount > 0;
 

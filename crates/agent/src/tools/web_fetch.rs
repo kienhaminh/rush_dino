@@ -295,12 +295,13 @@ fn strip_html(html: &str) -> String {
         // Regular tag: skip to '>' and emit whitespace.
         if let Some(end) = html[i..].find('>') {
             let tag_snippet = &html_lower[i..i + end + 1];
-            let is_block = ["<div", "<p>", "<p ", "<br", "<h1", "<h2", "<h3", "<h4", "<h5",
-                            "<h6", "<li", "<tr", "<td", "<th", "<section", "<article",
-                            "<header", "<footer", "<main", "<nav", "</div", "</p", "</h1",
-                            "</h2", "</h3", "</h4", "</h5", "</h6", "</li", "</tr"]
-                .iter()
-                .any(|t| tag_snippet.starts_with(t));
+            let is_block = [
+                "<div", "<p>", "<p ", "<br", "<h1", "<h2", "<h3", "<h4", "<h5", "<h6", "<li",
+                "<tr", "<td", "<th", "<section", "<article", "<header", "<footer", "<main", "<nav",
+                "</div", "</p", "</h1", "</h2", "</h3", "</h4", "</h5", "</h6", "</li", "</tr",
+            ]
+            .iter()
+            .any(|t| tag_snippet.starts_with(t));
             i += end + 1;
             if is_block {
                 out.push('\n');
@@ -356,9 +357,11 @@ async fn extract_with_llm(provider: &Provider, url: &str, text: &str) -> Result<
          Write in clean, readable prose. \
          Be comprehensive but concise.";
 
-    let user_prompt = format!("Extract the key information from this web page.\n\
+    let user_prompt = format!(
+        "Extract the key information from this web page.\n\
          URL: {url}\n\n\
-         Page content:\n{truncated_text}");
+         Page content:\n{truncated_text}"
+    );
 
     let request = ChatRequest {
         messages: vec![

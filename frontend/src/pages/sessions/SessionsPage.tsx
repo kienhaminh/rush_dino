@@ -11,6 +11,7 @@ import type {
   ToolCall,
 } from '@/lib/types';
 import { getCatalogModels } from '@/lib/model-catalog';
+import { isSystemSession, sessionLabel } from '@/lib/session-id-utils';
 import { TokenUsageBar } from '../context-debug/components/TokenUsageBar';
 import { MessageThread } from '../context-debug/components/MessageThread';
 import {
@@ -79,7 +80,7 @@ function SessionRow({
           style={{ background: color }}
         />
         <span className={`text-[12px] font-medium truncate ${selected ? 'text-foreground' : 'text-foreground/70'}`}>
-          {session.title || session.id.slice(0, 20)}
+          {session.title || sessionLabel(session.id)}
         </span>
       </div>
 
@@ -98,8 +99,8 @@ function SessionRow({
             : 'no measurements'}
       </div>
 
-      {/* Hover-reveal delete (hidden for main session) */}
-      {session.id !== 'main' && (
+      {/* Hover-reveal delete (hidden for system sessions: main, main::*) */}
+      {!isSystemSession(session.id) && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           className="absolute right-2 top-2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-destructive/60"
@@ -398,7 +399,7 @@ export function SessionsPage({
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <h1 className="text-lg font-semibold leading-tight">
-                    {session?.title || selectedSessionId.slice(0, 20)}
+                    {session?.title || sessionLabel(selectedSessionId)}
                   </h1>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {session?.status} · {allMessages.length} messages

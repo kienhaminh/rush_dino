@@ -42,7 +42,6 @@ import type {
 import type {
   AgentRecord,
   AgentRuntimeData,
-  AgentSkillRecord,
   AgentFileRecord,
   AgentProgressBoardResponse,
   AgentHealth,
@@ -184,31 +183,14 @@ export async function fetchAgents(): Promise<AgentRecord[]> {
   return data.items ?? [];
 }
 
-function mergeSkills(runtimeSkills: AgentSkillRecord[], globalSkills: SkillRecord[]): AgentSkillRecord[] {
-  const runtimeNames = new Set(runtimeSkills.map((s) => s.name));
-  const fromGlobal: AgentSkillRecord[] = globalSkills
-    .filter((s) => !runtimeNames.has(s.name))
-    .map((s) => ({
-      name: s.name,
-      description: s.description,
-      group: s.isBuiltIn ? ('built-in' as const) : ('workspace' as const),
-      source: s.isBuiltIn ? 'builtin' : 'workspace',
-      enabled: true,
-    }));
-  return [...runtimeSkills, ...fromGlobal].sort((a, b) => a.name.localeCompare(b.name));
-}
-
 export async function fetchAgentRuntime(agentId: string): Promise<AgentRuntimeData> {
   const endpoint = `/api/agents/${encodeURIComponent(agentId)}/runtime`;
   try {
-    const [data, globalSkills] = await Promise.all([
-      fetch(endpoint).then((r) => parseJsonOrThrow(r, endpoint)),
-      fetchSkills().catch(() => [] as SkillRecord[]),
-    ]);
+    const data = await fetch(endpoint).then((r) => parseJsonOrThrow(r, endpoint));
     const mockFallback = getMockRuntime(agentId);
     return {
       ...data,
-      skills: mergeSkills(data.skills ?? [], globalSkills),
+      skills: data.skills ?? [],
       soul: data.soul ?? mockFallback.soul,
       memory: data.memory ?? mockFallback.memory,
     };

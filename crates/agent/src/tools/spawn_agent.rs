@@ -96,6 +96,7 @@ impl Tool for SpawnAgentTool {
             system_prompt: system_prompt.to_owned(),
             icon,
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,

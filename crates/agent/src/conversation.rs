@@ -69,6 +69,16 @@ impl ConversationManager {
         Ok(conversation)
     }
 
+    /// Ensure a conversation exists for `id`, creating it with `title` if it has no messages yet.
+    /// Returns the existing messages (empty vec if newly created).
+    pub async fn ensure_conversation(&self, id: &str, title: &str) -> Result<Vec<rushdino_common::models::Message>> {
+        let messages = self.get_messages(id).await.unwrap_or_default();
+        if messages.is_empty() {
+            let _ = self.create_conversation_with_id(id, title).await?;
+        }
+        Ok(messages)
+    }
+
     /// Create an isolated conversation for a sub-agent delegation. These are marked
     /// `kind = 'agent'` so they are excluded from the main session list.
     pub async fn create_agent_conversation(&self, id: &str, title: &str) -> Result<Conversation> {

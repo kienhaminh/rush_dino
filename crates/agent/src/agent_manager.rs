@@ -14,6 +14,9 @@ pub struct AgentTemplate {
     /// Informational list of tools available to this agent (e.g. "shell,web_search").
     #[serde(default)]
     pub tools: Option<String>,
+    /// Informational list of skills available to this agent (e.g. "skill-creator").
+    #[serde(default)]
+    pub skills: Option<String>,
     /// UI hint — a hex color or named color string for the agent's visual identity.
     #[serde(default)]
     pub color: Option<String>,
@@ -77,6 +80,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
     let mut description: Option<String> = None;
     let mut icon: Option<String> = None;
     let mut tools: Option<String> = None;
+    let mut skills: Option<String> = None;
     let mut color: Option<String> = None;
     let mut model: Option<String> = None;
     let mut claims_tasks: Option<bool> = None;
@@ -91,6 +95,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
                 "description" => description = Some(value),
                 "icon" => icon = Some(value),
                 "tools" => tools = Some(value),
+                "skills" => skills = Some(value),
                 "color" => color = Some(value),
                 "model" => model = Some(value),
                 "claims_tasks" => claims_tasks = Some(value == "true"),
@@ -117,6 +122,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         system_prompt,
         icon,
         tools,
+        skills,
         color,
         model,
         claims_tasks: claims_tasks.unwrap_or(true),
@@ -194,12 +200,13 @@ impl AgentManager {
                     };
                     if let Some(mut template) = parse_agent_markdown(&content) {
                         // Attach sandbox policy if a per-agent sandbox.yaml exists.
-                        template.sandbox_policy = rushdino_security::policy::types::SandboxPolicy::load_for_agent(
-                            &self.agents_dir,
-                            &template.name,
-                        )
-                        .ok()
-                        .flatten();
+                        template.sandbox_policy =
+                            rushdino_security::policy::types::SandboxPolicy::load_for_agent(
+                                &self.agents_dir,
+                                &template.name,
+                            )
+                            .ok()
+                            .flatten();
                         entries.push((true, template));
                     }
                 }
@@ -209,12 +216,13 @@ impl AgentManager {
                     };
                     if let Ok(mut template) = toml::from_str::<AgentTemplate>(&content) {
                         // Attach sandbox policy if a per-agent sandbox.yaml exists.
-                        template.sandbox_policy = rushdino_security::policy::types::SandboxPolicy::load_for_agent(
-                            &self.agents_dir,
-                            &template.name,
-                        )
-                        .ok()
-                        .flatten();
+                        template.sandbox_policy =
+                            rushdino_security::policy::types::SandboxPolicy::load_for_agent(
+                                &self.agents_dir,
+                                &template.name,
+                            )
+                            .ok()
+                            .flatten();
                         entries.push((false, template));
                     }
                 }
@@ -255,6 +263,9 @@ impl AgentManager {
         }
         if let Some(tools) = &template.tools {
             content.push_str(&format!("tools: {}\n", tools));
+        }
+        if let Some(skills) = &template.skills {
+            content.push_str(&format!("skills: {}\n", skills));
         }
         if let Some(color) = &template.color {
             content.push_str(&format!("color: {}\n", color));

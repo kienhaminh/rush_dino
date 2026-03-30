@@ -59,7 +59,8 @@ async fn run_session_turn(
             .create_conversation_with_id(conversation_id, input)
             .await?;
     }
-    let skills = deps.skill_manager
+    let skills = deps
+        .skill_manager
         .list()
         .unwrap_or_default()
         .into_iter()
@@ -180,19 +181,20 @@ impl Tool for SessionManageTool {
 
         match action {
             "create" => {
-                let title = args
-                    .get("title")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| AppError::Validation("title is required for 'create'".to_owned()))?;
+                let title = args.get("title").and_then(Value::as_str).ok_or_else(|| {
+                    AppError::Validation("title is required for 'create'".to_owned())
+                })?;
                 let session = self.conversation.create_conversation(title.trim()).await?;
                 serde_json::to_string_pretty(&json!(session))
                     .map_err(|e| AppError::Agent(e.to_string()))
             }
             "get" => {
-                let session_id = args
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| AppError::Validation("sessionId is required for 'get'".to_owned()))?;
+                let session_id =
+                    args.get("sessionId")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            AppError::Validation("sessionId is required for 'get'".to_owned())
+                        })?;
                 let session = self
                     .conversation
                     .get_conversation_record(session_id)
@@ -211,10 +213,12 @@ impl Tool for SessionManageTool {
                 .map_err(|e| AppError::Agent(e.to_string()))
             }
             "delete" => {
-                let session_id = args
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| AppError::Validation("sessionId is required for 'delete'".to_owned()))?;
+                let session_id =
+                    args.get("sessionId")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            AppError::Validation("sessionId is required for 'delete'".to_owned())
+                        })?;
                 if session_id == "main" {
                     return Err(AppError::Validation(
                         "Cannot delete the main session".to_owned(),
@@ -349,8 +353,14 @@ mod tests {
         let conversation = Arc::new(ConversationManager::new(pool.clone()));
         let tool = SessionManageTool::new(conversation.clone());
 
-        let r1 = tool.execute(serde_json::json!({"action": "create", "title": "Task A"})).await.unwrap();
-        let r2 = tool.execute(serde_json::json!({"action": "create", "title": "Task B"})).await.unwrap();
+        let r1 = tool
+            .execute(serde_json::json!({"action": "create", "title": "Task A"}))
+            .await
+            .unwrap();
+        let r2 = tool
+            .execute(serde_json::json!({"action": "create", "title": "Task B"}))
+            .await
+            .unwrap();
 
         let v1: serde_json::Value = serde_json::from_str(&r1).unwrap();
         let v2: serde_json::Value = serde_json::from_str(&r2).unwrap();
@@ -395,8 +405,7 @@ mod tests {
         use crate::tools::delegate_to_agent::DelegateToAgentTool;
         use rushdino_providers::CompletionsProvider;
 
-        let dir =
-            std::env::temp_dir().join(format!("test-sess-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("test-sess-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
 
         // Shared DB with full schema so conversation inserts succeed.
@@ -412,6 +421,7 @@ mod tests {
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: false,

@@ -60,6 +60,48 @@ pub fn title_from(input: &str) -> &str {
     &input[..clamp_to_char_boundary(input, 60)]
 }
 
+/// Derive a human-readable title from a structured session ID.
+/// Returns `None` for opaque UUIDs (fall back to first-message title).
+///
+/// Examples:
+///   "main"                    → "Main"
+///   "main::telegram"          → "Telegram"
+///   "main::mobile::842UGSWI"  → "Mobile · 842UGSWI"
+///   "writer"                  → "Writer"
+///   "code-reviewer"           → "Code Reviewer"
+pub fn session_title_from_id(id: &str) -> Option<String> {
+    // UUID: 36 chars, exactly 4 hyphens at fixed positions — use first-message title.
+    if id.len() == 36 && id.chars().filter(|c| *c == '-').count() == 4 {
+        return None;
+    }
+    if id == "main" {
+        return Some("Main".to_owned());
+    }
+    if let Some(rest) = id.strip_prefix("main::") {
+        let parts: Vec<&str> = rest.split("::").collect();
+        let channel = capitalize_word(parts[0]);
+        if parts.len() > 1 {
+            return Some(format!("{} · {}", channel, parts[1..].join(" · ")));
+        }
+        return Some(channel);
+    }
+    // Agent name: "code-reviewer" → "Code Reviewer"
+    Some(
+        id.split('-')
+            .map(capitalize_word)
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
+fn capitalize_word(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
 pub fn system_message(
     config: &AgentConfig,
     memory: &MemoryManager,
@@ -136,6 +178,7 @@ mod tests {
             system_prompt: String::new(),
             icon: Some("📚".to_owned()),
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,

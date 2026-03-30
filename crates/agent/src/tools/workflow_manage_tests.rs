@@ -43,6 +43,7 @@ async fn setup() -> (Arc<WorkflowManager>, WorkflowManageTool) {
             system_prompt: "You are helpful".to_owned(),
             icon: None,
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,
@@ -270,9 +271,6 @@ async fn rejects_invalid_action() {
 #[tokio::test]
 async fn rejects_missing_action() {
     let (_manager, tool) = setup().await;
-    let err = tool
-        .execute(json!({}))
-        .await
-        .expect_err("missing action");
+    let err = tool.execute(json!({})).await.expect_err("missing action");
     assert!(err.to_string().contains("action is required"));
 }

@@ -39,7 +39,14 @@ pub const MAX_DELEGATION_DEPTH: u8 = 3;
 /// `ToolRegistry → DelegateToAgentTool → ToolRegistry`.
 /// Tools that are always available to every delegated agent, regardless of
 /// the agent template's `tools` field.
-const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search", "post_task", "claim_task", "update_task"];
+const AGENT_BASE_TOOLS: &[&str] = &[
+    "delegate",
+    "message",
+    "tool_search",
+    "post_task",
+    "claim_task",
+    "update_task",
+];
 
 /// Parses the agent template's `tools` field (comma-separated) into a list of
 /// tool names, merging in the always-available base tools.
@@ -198,10 +205,13 @@ impl Tool for DelegateToAgentTool {
         };
 
         // --- Per-agent workspace isolation ---
-        let agent_workspace = self.home_dir.join("agents").join(agent_name).join("workspace");
-        std::fs::create_dir_all(&agent_workspace).map_err(|e| {
-            AppError::Agent(format!("failed to create agent workspace: {e}"))
-        })?;
+        let agent_workspace = self
+            .home_dir
+            .join("agents")
+            .join(agent_name)
+            .join("workspace");
+        std::fs::create_dir_all(&agent_workspace)
+            .map_err(|e| AppError::Agent(format!("failed to create agent workspace: {e}")))?;
 
         // Build the full system content: agent prompt + workspace/tool context + task history.
         let mut system_content = template.system_prompt.clone();
@@ -233,8 +243,8 @@ impl Tool for DelegateToAgentTool {
         }
 
         // Inject parent context summary so the child agent knows what the delegating agent was doing.
-        if let Some(parent_ctx_str) = current_tool_execution_context()
-            .and_then(|ctx| ctx.parent_context.clone())
+        if let Some(parent_ctx_str) =
+            current_tool_execution_context().and_then(|ctx| ctx.parent_context.clone())
         {
             system_content.push_str(&format!("\n\n## Parent Context\n\n{parent_ctx_str}"));
         }
@@ -247,8 +257,8 @@ impl Tool for DelegateToAgentTool {
 
         // Create an isolated conversation for this delegation so the sub-agent's
         // message history is persisted and traceable independently.
-        let conv_id = Uuid::new_v4();
-        let conv_id_str = conv_id.to_string();
+        // Use agent name as the stable session ID so each team agent gets one persistent session.
+        let conv_id_str = agent_name.to_lowercase().replace(' ', "-");
         let conv_title = format!("{agent_name}: {}", title_from(task));
         self.conversation
             .create_agent_conversation(&conv_id_str, &conv_title)
@@ -427,6 +437,7 @@ mod tests {
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: true,

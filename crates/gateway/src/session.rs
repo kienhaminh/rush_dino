@@ -38,7 +38,14 @@ impl SessionManager {
         sender_id: &str,
     ) -> Result<GatewaySessionRecord> {
         let session_id = Uuid::new_v4().to_string();
-        let conversation_id = Uuid::new_v4().to_string();
+        // Derive a stable, human-readable conversation ID from channel + sender context.
+        // mobile sender_id is "mobile-{device_id}" from key issuance, so strip the prefix.
+        let conversation_id = if channel_id == "mobile" {
+            let device_id = sender_id.strip_prefix("mobile-").unwrap_or(sender_id);
+            format!("main::mobile::{}", device_id)
+        } else {
+            format!("main::{}", channel_id)
+        };
         let now = chrono::Utc::now().to_rfc3339();
 
         // Atomic insert: if the row already exists the IGNORE silently skips it.
@@ -52,6 +59,21 @@ impl SessionManager {
         .bind(sender_id)
         .bind(&conversation_id)
         .bind(&now)
+        .execute(&self.pool)
+        .await?;
+
+        // Migrate any existing row that still has an old opaque UUID as conversation_id.
+        // UUID format: 36 chars with 4 hyphens — replace with the structured name.
+        sqlx::query(
+            "UPDATE gateway_sessions \
+             SET conversation_id = ?, last_active = ? \
+             WHERE channel_id = ? AND sender_id = ? \
+               AND length(conversation_id) = 36 AND instr(conversation_id, '-') > 0",
+        )
+        .bind(&conversation_id)
+        .bind(&now)
+        .bind(channel_id)
+        .bind(sender_id)
         .execute(&self.pool)
         .await?;
 
@@ -230,6 +252,7 @@ mod tests {
             .expect("new session");
 
         assert_ne!(first.id, second.id);
-        assert_ne!(first.conversation_id, second.conversation_id);
+        // conversation_id is derived from (channel_id, sender_id) — stable across resets.
+        assert_eq!(first.conversation_id, second.conversation_id);
     }
 }

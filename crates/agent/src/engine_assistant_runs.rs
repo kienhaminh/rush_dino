@@ -17,7 +17,7 @@ use rushdino_providers::types::ChatResponse;
 
 use crate::{
     engine::{AgentConfig, AssistantRunJob, GatewayRunHandle, WsStreamEvent},
-    engine_bootstrap::{resolve_skills_for_prompt, system_message, title_from, user_message},
+    engine_bootstrap::{resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message},
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
     tools::bash::{with_tool_execution_context, ToolExecutionContext},
@@ -91,7 +91,9 @@ impl crate::engine::AgentEngine {
             .submit_assistant_run_with_origin(
                 gateway_session_id,
                 conversation_id,
-                title_from(user_input),
+                session_title_from_id(conversation_id)
+                    .as_deref()
+                    .unwrap_or_else(|| title_from(user_input)),
                 user_input,
                 &self.provider_name,
                 self.provider.model(),
@@ -471,17 +473,9 @@ impl crate::engine::AgentEngine {
         conversation_id: &str,
         user_input: &str,
     ) -> Result<(Vec<Message>, usize)> {
-        let mut messages = self
-            .conversation
-            .get_messages(conversation_id)
-            .await
-            .unwrap_or_default();
-        if messages.is_empty() {
-            let _ = self
-                .conversation
-                .create_conversation_with_id(conversation_id, title_from(user_input))
-                .await?;
-        }
+        let title = session_title_from_id(conversation_id)
+            .unwrap_or_else(|| title_from(user_input).to_owned());
+        let mut messages = self.conversation.ensure_conversation(conversation_id, &title).await?;
 
         let skills = resolve_skills_for_prompt(
             self.skill_manager.as_ref(),

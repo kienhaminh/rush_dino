@@ -200,7 +200,8 @@ impl KanbanDispatcher {
         self.store.claim_task(&task.id, agent_name).await?;
 
         // 4. Create an isolated conversation for this task run.
-        let conv_id = Uuid::new_v4().to_string();
+        // Use agent name as the stable session ID so each team agent gets one persistent session.
+        let conv_id = agent_name.to_lowercase().replace(' ', "-");
         let conv_title = format!("{agent_name}: {}", title_from(&task.title));
         self.conversation
             .create_agent_conversation(&conv_id, &conv_title)
