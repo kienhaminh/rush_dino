@@ -1,5 +1,6 @@
 use axum::{extract::Path, extract::State, Json};
 use serde::Serialize;
+use tracing::debug;
 
 use rushdino_agent::InputRequest;
 use rushdino_common::Result;
@@ -71,8 +72,10 @@ async fn build_latest_metrics(
     let response_time_ms = engine
         .latest_run_timing_for_conversation(conversation_id)
         .await
-        .ok()
-        .flatten();
+        .unwrap_or_else(|err| {
+            debug!("Could not fetch run timing for conversation {conversation_id}: {err}");
+            None
+        });
     Ok(Some(ConversationMetrics {
         provider: usage.provider,
         model: usage.model,
