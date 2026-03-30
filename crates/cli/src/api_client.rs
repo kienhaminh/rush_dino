@@ -9,6 +9,7 @@ pub struct ApiClient {
 }
 
 impl ApiClient {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Result<Self> {
         let config = AppConfig::load()?;
         let base_url = format!("http://{}:{}", config.host, config.port);

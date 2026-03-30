@@ -44,7 +44,7 @@ pub fn upsert_value(doc: String, key: &str, value: &str) -> String {
     if doc.is_empty() {
         format!("{quoted}\n")
     } else {
-        format!("{doc}\n{quoted}\n")
+        format!("{}\n{quoted}\n", doc.trim_end_matches('\n'))
     }
 }
 

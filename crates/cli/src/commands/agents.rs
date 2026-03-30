@@ -38,7 +38,7 @@ pub async fn run(args: AgentsArgs) -> Result<()> {
             if json {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());
             } else {
-                let items = data.as_array().cloned().unwrap_or_default();
+                let items = data["items"].as_array().cloned().unwrap_or_default();
                 println!("{} {}", "🤖".bold(), "Agents".blue().bold());
                 println!("{}", "========================================".dimmed());
                 if items.is_empty() {
@@ -55,7 +55,7 @@ pub async fn run(args: AgentsArgs) -> Result<()> {
             }
         }
         AgentsAction::Get { id, json } => {
-            let data = client.get(&format!("/api/agents/{id}")).await?;
+            let data = client.get(&format!("/api/agents/{id}/runtime")).await?;
             if json {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());
             } else {
