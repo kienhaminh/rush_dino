@@ -5,7 +5,7 @@ use std::fs;
 use rushdino_auth::{auth_options_for_provider, AuthMethod, AuthProviderId};
 use rushdino_common::{init, AppError, Result};
 
-use super::{rewrite_active_provider, rewrite_value};
+use super::{rewrite_active_provider, rewrite_value, upsert_value};
 
 /// Arguments for the `rushdino configure` command.
 ///
@@ -58,22 +58,22 @@ pub async fn run(args: ConfigureArgs) -> Result<()> {
         let mut credentials = fs::read_to_string(&creds_path).unwrap_or_default();
 
         if let Some(key) = &args.openai_key {
-            credentials = rewrite_value(credentials, "openai_api_key", key);
+            credentials = upsert_value(credentials, "openai_api_key", key);
         }
         if let Some(key) = &args.anthropic_key {
-            credentials = rewrite_value(credentials, "anthropic_api_key", key);
+            credentials = upsert_value(credentials, "anthropic_api_key", key);
         }
         if let Some(key) = &args.brave_api_key {
-            credentials = rewrite_value(credentials, "brave_api_key", key);
+            credentials = upsert_value(credentials, "brave_api_key", key);
         }
         if let Some(key) = &args.gemini_key {
-            credentials = rewrite_value(credentials, "gemini_api_key", key);
+            credentials = upsert_value(credentials, "gemini_api_key", key);
         }
         if let Some(token) = &args.telegram_token {
-            credentials = rewrite_value(credentials, "telegram_token", token);
+            credentials = upsert_value(credentials, "telegram_token", token);
         }
         if let Some(token) = &args.discord_token {
-            credentials = rewrite_value(credentials, "discord_token", token);
+            credentials = upsert_value(credentials, "discord_token", token);
         }
 
         fs::write(&creds_path, credentials)?;

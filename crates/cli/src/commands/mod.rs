@@ -33,6 +33,21 @@ pub fn rewrite_value(mut doc: String, key: &str, value: &str) -> String {
     doc
 }
 
+/// Like `rewrite_value` but appends the key=value line if the key is not already present.
+pub fn upsert_value(doc: String, key: &str, value: &str) -> String {
+    let quoted = format!("{key} = \"{value}\"");
+    for line in doc.lines() {
+        if line.trim_start().starts_with(&format!("{key} =")) {
+            return doc.replace(line, &quoted);
+        }
+    }
+    if doc.is_empty() {
+        format!("{quoted}\n")
+    } else {
+        format!("{doc}\n{quoted}\n")
+    }
+}
+
 pub fn rewrite_active_provider(doc: String, provider: &str) -> String {
     rewrite_value(doc, "active_provider", provider)
 }
