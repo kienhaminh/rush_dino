@@ -155,6 +155,13 @@ fn agents_list_json_flag_parses() {
 }
 
 #[test]
+fn agents_get_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "agents", "get", "agent-123"])
+        .expect("agents get <id> should parse");
+    assert!(matches!(cli.command, Command::Agents(_)));
+}
+
+#[test]
 fn workflow_list_parses() {
     let cli = Cli::try_parse_from(["rushdino", "workflow", "list"])
         .expect("workflow list should parse");

@@ -18,6 +18,12 @@ pub enum AgentsAction {
         #[arg(long)]
         json: bool,
     },
+    /// Get details for a specific agent
+    Get {
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 pub async fn run(args: AgentsArgs) -> Result<()> {
@@ -46,6 +52,19 @@ pub async fn run(args: AgentsArgs) -> Result<()> {
                     }
                     println!("\n{} {} agents", "✔".green(), items.len());
                 }
+            }
+        }
+        AgentsAction::Get { id, json } => {
+            let data = client.get(&format!("/api/agents/{id}")).await?;
+            if json {
+                println!("{}", serde_json::to_string(&data).unwrap_or_default());
+            } else {
+                let name = data["name"].as_str().unwrap_or("-");
+                let emoji = data["emoji"].as_str().unwrap_or("🤖");
+                let agent_id = data["id"].as_str().unwrap_or("-");
+                println!("{} {}", "🤖".bold(), "Agent".blue().bold());
+                println!("{}", "========================================".dimmed());
+                println!("  {} {} {}", emoji, name.bold(), agent_id.dimmed());
             }
         }
     }
