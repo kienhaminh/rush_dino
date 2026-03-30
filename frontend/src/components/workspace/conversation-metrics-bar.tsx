@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react';
 import type { ConversationMetrics } from '@/lib/types';
 
 function formatTokens(n: number): string {
@@ -61,7 +62,7 @@ export function ConversationMetricsBar({ metrics }: ConversationMetricsBarProps)
 
   const ratio = limitTokens && limitTokens > 0 ? totalTokens / limitTokens : null;
 
-  const parts: React.ReactNode[] = [];
+  const parts: ReactNode[] = [];
 
   if (ratio !== null) {
     parts.push(
