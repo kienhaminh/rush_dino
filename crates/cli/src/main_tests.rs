@@ -254,3 +254,28 @@ fn approvals_deny_parses() {
     .expect("approvals deny with args should parse");
     assert!(matches!(cli.command, Command::Approvals(_)));
 }
+
+#[test]
+fn configure_openai_key_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "configure", "--openai-key", "sk-test"])
+        .expect("configure --openai-key should parse");
+    assert!(matches!(cli.command, Command::Configure(_)));
+}
+
+#[test]
+fn configure_brave_api_key_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "configure", "--brave-api-key", "brave-test"])
+        .expect("configure --brave-api-key should parse");
+    assert!(matches!(cli.command, Command::Configure(_)));
+}
+
+#[test]
+fn configure_multiple_keys_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "configure",
+        "--openai-key", "sk-test",
+        "--anthropic-key", "ant-test",
+    ])
+    .expect("configure with multiple flags should parse");
+    assert!(matches!(cli.command, Command::Configure(_)));
+}

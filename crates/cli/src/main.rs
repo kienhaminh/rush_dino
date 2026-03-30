@@ -39,10 +39,7 @@ enum Command {
         #[arg(long)]
         version: String,
     },
-    Configure {
-        #[arg(long)]
-        login: Option<String>,
-    },
+    Configure(commands::configure::ConfigureArgs),
     Dashboard {
         #[command(subcommand)]
         action: Option<DashboardAction>,
@@ -91,7 +88,7 @@ async fn run() -> Result<()> {
         Command::Status => commands::status::run().await,
         Command::Upgrade { beta, version } => commands::upgrade::run(beta, version).await,
         Command::Downgrade { version } => commands::downgrade::run(version).await,
-        Command::Configure { login } => commands::configure::run(login).await,
+        Command::Configure(args) => commands::configure::run(args).await,
         Command::Dashboard { action, no_open } => commands::dashboard::run(action, no_open).await,
         Command::Health => commands::health::run().await,
         Command::Doctor => commands::doctor::run().await,
