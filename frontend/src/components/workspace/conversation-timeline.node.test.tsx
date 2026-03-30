@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ConversationTimeline } from './conversation-timeline';
-import type { ConversationItem } from '@/lib/types';
+import type { ConversationItem, ConversationMetrics } from '@/lib/types';
 
 const userItem: ConversationItem = {
   kind: 'user', id: 'u1', content: 'Hello',
@@ -50,5 +50,53 @@ describe('ConversationTimeline', () => {
     // Cursor should appear exactly once (only for the last item)
     const cursorCount = (html.match(/w-\[2px\]/g) ?? []).length;
     expect(cursorCount).toBe(1);
+  });
+
+  const testMetrics: ConversationMetrics = {
+    provider: 'anthropic',
+    model: 'claude-opus-4-6',
+    promptTokens: 5000,
+    completionTokens: 500,
+    totalTokens: 5500,
+    limitTokens: 200000,
+    inputCost: 0,
+    outputCost: 0,
+    totalCost: 0,
+    responseTimeMs: 2000,
+    measuredAt: '2026-03-30T00:00:00Z',
+  };
+
+  it('renders metrics bar below last assistant item when not streaming', () => {
+    const html = renderToStaticMarkup(
+      <ConversationTimeline
+        items={[userItem, assistantItem]}
+        isStreaming={false}
+        latestMetrics={testMetrics}
+      />,
+    );
+    expect(html).toContain('2.8%');   // 5500/200000 = 2.75% → rounds to 2.8%
+    expect(html).toContain('2.0s');
+  });
+
+  it('does not render metrics bar when streaming', () => {
+    const html = renderToStaticMarkup(
+      <ConversationTimeline
+        items={[userItem, assistantItem]}
+        isStreaming={true}
+        latestMetrics={testMetrics}
+      />,
+    );
+    expect(html).not.toContain('2.8%');
+  });
+
+  it('does not render metrics bar when latestMetrics is null', () => {
+    const html = renderToStaticMarkup(
+      <ConversationTimeline
+        items={[userItem, assistantItem]}
+        isStreaming={false}
+        latestMetrics={null}
+      />,
+    );
+    expect(html).not.toContain('⏱');
   });
 });

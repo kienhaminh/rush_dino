@@ -6,11 +6,13 @@ import { InputRequestCard } from './input-request-card';
 import { ThinkingBlock } from './thinking-block';
 import { ToolUseBlock } from './tool-use-block';
 import { ToolUseGroup } from './tool-use-group';
-import type { ConversationItem } from '@/lib/types';
+import { ConversationMetricsBar } from './conversation-metrics-bar';
+import type { ConversationItem, ConversationMetrics } from '@/lib/types';
 
 interface ConversationTimelineProps {
   items: ConversationItem[];
   isStreaming?: boolean;
+  latestMetrics?: ConversationMetrics | null;
   onResolveInputRequest?: (
     requestId: string,
     status: 'submitted' | 'cancelled',
@@ -156,6 +158,7 @@ const TimelineItem = memo(function TimelineItem({
 export const ConversationTimeline = memo(function ConversationTimeline({
   items,
   isStreaming,
+  latestMetrics,
   onResolveInputRequest,
 }: ConversationTimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -167,6 +170,15 @@ export const ConversationTimeline = memo(function ConversationTimeline({
   }, [items, isStreaming]);
 
   const displayGroups = useMemo(() => groupItems(items), [items]);
+
+  const lastAssistantGroupIndex = useMemo(
+    () =>
+      displayGroups.reduce<number>(
+        (acc, g, i) => (g.type === 'item' && g.item.kind === 'assistant' ? i : acc),
+        -1,
+      ),
+    [displayGroups],
+  );
 
   if (items.length === 0) {
     return (
@@ -204,13 +216,21 @@ export const ConversationTimeline = memo(function ConversationTimeline({
 
           const { item } = group;
           const showCursor = isStreaming === true && isLast && item.kind === 'assistant';
+          const showMetrics =
+            !isStreaming &&
+            latestMetrics != null &&
+            index === lastAssistantGroupIndex &&
+            item.kind === 'assistant';
+
           return (
-            <TimelineItem
-              key={item.id}
-              item={item}
-              showCursor={showCursor}
-              onResolveInputRequest={onResolveInputRequest}
-            />
+            <div key={item.id}>
+              <TimelineItem
+                item={item}
+                showCursor={showCursor}
+                onResolveInputRequest={onResolveInputRequest}
+              />
+              {showMetrics && <ConversationMetricsBar metrics={latestMetrics} />}
+            </div>
           );
         })}
 
