@@ -77,15 +77,17 @@ enabled = true
 #[tokio::test]
 async fn pairing_requests_are_reused_for_repeated_sender() {
     let service = setup_pairing_service().await;
-    let first = service
+    let (first, first_is_new) = service
         .create_or_refresh_request("telegram", "42", Some("Alice"), "42")
         .await
         .expect("first request");
-    let second = service
+    let (second, second_is_new) = service
         .create_or_refresh_request("telegram", "42", Some("Alice B"), "42")
         .await
         .expect("second request");
 
+    assert!(first_is_new, "first request should be new");
+    assert!(!second_is_new, "second request should be a refresh");
     assert_eq!(first.id, second.id);
     assert_eq!(first.code, second.code);
     assert_eq!(second.sender_display.as_deref(), Some("Alice B"));
@@ -94,7 +96,7 @@ async fn pairing_requests_are_reused_for_repeated_sender() {
 #[tokio::test]
 async fn approving_request_moves_sender_to_paired_list() {
     let service = setup_pairing_service().await;
-    let request = service
+    let (request, _) = service
         .create_or_refresh_request("telegram", "42", Some("Alice"), "42")
         .await
         .expect("request");
@@ -115,7 +117,7 @@ async fn approving_request_moves_sender_to_paired_list() {
 #[tokio::test]
 async fn expired_requests_are_pruned() {
     let service = setup_pairing_service().await;
-    let request = service
+    let (request, _) = service
         .create_or_refresh_request("telegram", "42", Some("Alice"), "42")
         .await
         .expect("request");
