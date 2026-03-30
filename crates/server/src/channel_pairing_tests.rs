@@ -7,6 +7,10 @@ use sqlx::sqlite::SqlitePoolOptions;
 
 use super::*;
 
+fn dummy_broadcast_tx() -> tokio::sync::broadcast::Sender<serde_json::Value> {
+    tokio::sync::broadcast::channel(1).0
+}
+
 async fn setup_pairing_service() -> ChannelPairingService {
     let pool = SqlitePoolOptions::new()
         .max_connections(1)
@@ -146,7 +150,7 @@ async fn ingress_policy_blocks_unpaired_direct_messages() {
         .expect("connect sqlite");
     run_migrations(&pool).await.expect("run migrations");
     let logs = Arc::new(RuntimeLogStore::new(Arc::new(pool), None));
-    let policy = ChannelPairingIngressPolicy::new(config_path, service.clone(), logs);
+    let policy = ChannelPairingIngressPolicy::new(config_path, service.clone(), logs, dummy_broadcast_tx());
 
     let decision = policy
         .evaluate(&IncomingMessage {
@@ -194,7 +198,7 @@ async fn ingress_policy_allows_manual_allowlist_sender() {
         .expect("connect sqlite");
     run_migrations(&pool).await.expect("run migrations");
     let logs = Arc::new(RuntimeLogStore::new(Arc::new(pool), None));
-    let policy = ChannelPairingIngressPolicy::new(config_path, service, logs);
+    let policy = ChannelPairingIngressPolicy::new(config_path, service, logs, dummy_broadcast_tx());
 
     let decision = policy
         .evaluate(&IncomingMessage {

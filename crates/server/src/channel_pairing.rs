@@ -378,6 +378,7 @@ pub struct ChannelPairingIngressPolicy {
     config_path: PathBuf,
     pairing: Arc<ChannelPairingService>,
     runtime_logs: Arc<RuntimeLogStore>,
+    broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
 impl ChannelPairingIngressPolicy {
@@ -385,11 +386,13 @@ impl ChannelPairingIngressPolicy {
         config_path: PathBuf,
         pairing: Arc<ChannelPairingService>,
         runtime_logs: Arc<RuntimeLogStore>,
+        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Self {
         Self {
             config_path,
             pairing,
             runtime_logs,
+            broadcast_tx,
         }
     }
 
@@ -465,7 +468,7 @@ impl GatewayIngressPolicy for ChannelPairingIngressPolicy {
                 })
             }
             DmPolicy::Pairing => {
-                let (request, _is_new) = self
+                let (request, is_new) = self
                     .pairing
                     .create_or_refresh_request(
                         &msg.channel_id,
@@ -474,6 +477,19 @@ impl GatewayIngressPolicy for ChannelPairingIngressPolicy {
                         &msg.reply_target,
                     )
                     .await?;
+
+                if is_new {
+                    let _ = self.broadcast_tx.send(serde_json::json!({
+                        "type": "pairing_request_created",
+                        "id": request.id,
+                        "channel_id": request.channel_id,
+                        "sender_id": request.sender_id,
+                        "sender_display": request.sender_display,
+                        "code": request.code,
+                        "created_at": request.created_at,
+                    }));
+                }
+
                 self.log_pairing_event(
                     "pairing request emitted",
                     json!({

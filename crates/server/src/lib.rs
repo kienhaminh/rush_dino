@@ -102,6 +102,7 @@ pub async fn build_app(
         config_path.clone(),
         channel_pairing.clone(),
         runtime_logs.clone(),
+        chat_broadcast.sender(),
     ));
     gateway_state
         .seed_channel(
