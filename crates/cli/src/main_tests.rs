@@ -279,3 +279,17 @@ fn configure_multiple_keys_parses() {
     .expect("configure with multiple flags should parse");
     assert!(matches!(cli.command, Command::Configure(_)));
 }
+
+#[test]
+fn doctor_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "doctor"])
+        .expect("doctor should parse");
+    assert!(matches!(cli.command, Command::Doctor(_)));
+}
+
+#[test]
+fn doctor_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "doctor", "--json"])
+        .expect("doctor --json should parse");
+    assert!(matches!(cli.command, Command::Doctor(_)));
+}
