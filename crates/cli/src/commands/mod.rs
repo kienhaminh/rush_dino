@@ -1,3 +1,6 @@
+pub mod approval;
+pub mod kanban;
+pub mod workflow;
 pub mod agent;
 pub mod agents;
 pub mod browser;

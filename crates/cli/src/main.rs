@@ -1,4 +1,5 @@
 mod commands;
+mod api_client;
 mod service;
 
 use clap::{Parser, Subcommand};
