@@ -184,13 +184,13 @@ async fn handle_mobile_socket(
             tokio::select! {
                 outbound = outbound_rx.recv() => {
                     let Some(payload) = outbound else { break };
-                    if ws_sink.send(Message::Text(payload.to_string().into())).await.is_err() {
+                    if ws_sink.send(Message::Text(payload.to_string())).await.is_err() {
                         break;
                     }
                 }
                 outbound = adapter_rx.recv() => {
                     let Some(payload) = outbound else { break };
-                    if ws_sink.send(Message::Text(payload.into())).await.is_err() {
+                    if ws_sink.send(Message::Text(payload)).await.is_err() {
                         break;
                     }
                 }
@@ -205,7 +205,7 @@ async fn handle_mobile_socket(
                         "args": request.args,
                         "session_id": session_id_for_send,
                     });
-                    if ws_sink.send(Message::Text(payload.to_string().into())).await.is_err() {
+                    if ws_sink.send(Message::Text(payload.to_string())).await.is_err() {
                         break;
                     }
                 }
