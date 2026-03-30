@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThinkingBlock } from './thinking-block';
@@ -13,29 +13,37 @@ interface ToolUseGroupProps {
   thinking?: ThinkingItem[];
 }
 
-export function ToolUseGroup({ tools, thinking = [] }: ToolUseGroupProps) {
+// Stable empty array to avoid creating a new reference on every render
+const EMPTY_THINKING: ThinkingItem[] = [];
+
+export function ToolUseGroup({ tools, thinking = EMPTY_THINKING }: ToolUseGroupProps) {
   // Hide the entire group while request_user_input is running — the input card
   // is already shown in the timeline and the tool details are noise at that point.
   const isAwaitingUserInput = tools.every(
     (t) => t.tool_name === 'request_user_input' && t.status === 'running',
   );
-  if (isAwaitingUserInput) return null;
 
   const hasRunning = tools.some((t) => t.status === 'running') || thinking.some((t) => !t.done);
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
   // Track whether tools have ever run during this component's lifetime so we can
   // keep the group expanded after the run completes (tools collapse on re-mount
   // from history, but stay open after a live run finishes in the same session).
-  const [locallyRan, setLocallyRan] = useState(false);
+  const locallyRanRef = useRef(false);
 
-  useEffect(() => {
+  // Derived state: detect when hasRunning transitions true → auto-expand and reset user override.
+  // This uses React's render-time state update pattern to avoid a useEffect.
+  const [prevHasRunning, setPrevHasRunning] = useState(hasRunning);
+  if (hasRunning !== prevHasRunning) {
+    setPrevHasRunning(hasRunning);
     if (hasRunning) {
-      setLocallyRan(true);
-      setUserOverride(null); // auto-expand when a new run starts
+      locallyRanRef.current = true;
+      setUserOverride(null);
     }
-  }, [hasRunning]);
+  }
 
-  const isExpanded = userOverride !== null ? userOverride : (hasRunning || locallyRan);
+  if (isAwaitingUserInput) return null;
+
+  const isExpanded = userOverride !== null ? userOverride : (hasRunning || locallyRanRef.current);
 
   const count = tools.length;
   const label = hasRunning

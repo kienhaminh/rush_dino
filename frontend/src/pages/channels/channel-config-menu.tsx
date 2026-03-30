@@ -223,6 +223,97 @@ function sectionDescription(section: string): string {
   return 'Tune the core reply and history behavior for this channel.';
 }
 
+interface ChannelSettingFieldRowProps {
+  field: ChannelSettingField;
+  formValues: Record<string, unknown>;
+  saving: boolean;
+  setFieldValue: (path: string, value: unknown) => void;
+}
+
+function ChannelSettingFieldRow({ field, formValues, saving, setFieldValue }: ChannelSettingFieldRowProps) {
+  const value = getPathValue(formValues, field.key);
+
+  if (field.type === 'boolean') {
+    return (
+      <div className="flex h-full items-center justify-between rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
+        <div>
+          <Label className="text-xs font-medium">{field.label}</Label>
+          {field.description && (
+            <p className="mt-1 text-[11px] text-muted-foreground">{field.description}</p>
+          )}
+        </div>
+        <Switch
+          checked={Boolean(value)}
+          onCheckedChange={(checked) => setFieldValue(field.key, checked)}
+          disabled={saving}
+        />
+      </div>
+    );
+  }
+
+  if (field.type === 'select') {
+    const unsetValue = '__unset__';
+    const selectValue = typeof value === 'string' ? value : '';
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs font-medium">{field.label}</Label>
+        <Select
+          value={selectValue || unsetValue}
+          onValueChange={(next) => setFieldValue(field.key, next === unsetValue ? '' : next)}
+          disabled={saving}
+        >
+          <SelectTrigger className="h-9 text-xs">
+            <SelectValue placeholder="Select an option" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={unsetValue}>Unset</SelectItem>
+            {(field.options ?? []).map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
+      </div>
+    );
+  }
+
+  const inputValue = toFieldInputValue(field, value);
+
+  if (field.type === 'textarea' || field.type === 'list') {
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs font-medium">{field.label}</Label>
+        <Textarea
+          className="min-h-[90px] text-xs"
+          value={inputValue}
+          placeholder={field.placeholder}
+          onChange={(event) => setFieldValue(field.key, event.target.value)}
+          disabled={saving}
+        />
+        {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs font-medium">{field.label}</Label>
+      <Input
+        type={field.type === 'number' ? 'number' : field.type === 'secret' ? 'password' : 'text'}
+        autoComplete="off"
+        value={inputValue}
+        placeholder={field.placeholder}
+        onChange={(event) => setFieldValue(field.key, event.target.value)}
+        disabled={saving}
+        className="text-xs"
+      />
+      {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
+    </div>
+  );
+}
+
 export function ChannelConfigMenu({
   channel,
   config,
@@ -401,90 +492,6 @@ export function ChannelConfigMenu({
     return patch;
   };
 
-  const renderField = (field: ChannelSettingField) => {
-    const value = getPathValue(formValues, field.key);
-
-    if (field.type === 'boolean') {
-      return (
-        <div className="flex h-full items-center justify-between rounded-md border border-border/50 bg-muted/20 px-3 py-2.5">
-          <div>
-            <Label className="text-xs font-medium">{field.label}</Label>
-            {field.description && (
-              <p className="mt-1 text-[11px] text-muted-foreground">{field.description}</p>
-            )}
-          </div>
-          <Switch
-            checked={Boolean(value)}
-            onCheckedChange={(checked) => setFieldValue(field.key, checked)}
-            disabled={saving}
-          />
-        </div>
-      );
-    }
-
-    if (field.type === 'select') {
-      const unsetValue = '__unset__';
-      const selectValue = typeof value === 'string' ? value : '';
-      return (
-        <div className="space-y-1">
-          <Label className="text-xs font-medium">{field.label}</Label>
-          <Select
-            value={selectValue || unsetValue}
-            onValueChange={(next) => setFieldValue(field.key, next === unsetValue ? '' : next)}
-            disabled={saving}
-          >
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="Select an option" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={unsetValue}>Unset</SelectItem>
-              {(field.options ?? []).map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
-        </div>
-      );
-    }
-
-    const inputValue = toFieldInputValue(field, value);
-
-    if (field.type === 'textarea' || field.type === 'list') {
-      return (
-        <div className="space-y-1">
-          <Label className="text-xs font-medium">{field.label}</Label>
-          <Textarea
-            className="min-h-[90px] text-xs"
-            value={inputValue}
-            placeholder={field.placeholder}
-            onChange={(event) => setFieldValue(field.key, event.target.value)}
-            disabled={saving}
-          />
-          {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-1">
-        <Label className="text-xs font-medium">{field.label}</Label>
-        <Input
-          type={field.type === 'number' ? 'number' : field.type === 'secret' ? 'password' : 'text'}
-          autoComplete="off"
-          value={inputValue}
-          placeholder={field.placeholder}
-          onChange={(event) => setFieldValue(field.key, event.target.value)}
-          disabled={saving}
-          className="text-xs"
-        />
-        {field.description && <p className="text-[11px] text-muted-foreground">{field.description}</p>}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6">
       {sections.map(([section, sectionFields], index) => (
@@ -501,7 +508,12 @@ export function ChannelConfigMenu({
               const spanTwoColumns = field.type === 'textarea' || field.type === 'list';
               return (
                 <div key={field.key} className={spanTwoColumns ? 'lg:col-span-2' : undefined}>
-                  {renderField(field)}
+                  <ChannelSettingFieldRow
+                    field={field}
+                    formValues={formValues}
+                    saving={saving}
+                    setFieldValue={setFieldValue}
+                  />
                 </div>
               );
             })}

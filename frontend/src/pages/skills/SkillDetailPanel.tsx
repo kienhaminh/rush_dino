@@ -54,6 +54,8 @@ export function SkillDetailPanel({
       {/* Backdrop */}
       <div
         onClick={onClose}
+        onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+        role="presentation"
         style={{
           position: 'absolute',
           inset: 0,
@@ -68,6 +70,7 @@ export function SkillDetailPanel({
       {/* Panel — slides in from right */}
       <div
         onClick={(e) => e.stopPropagation()}
+        role="presentation"
         style={{
           position: 'absolute',
           top: 0,

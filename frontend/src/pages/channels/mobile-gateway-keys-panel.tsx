@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Copy, KeyRound, QrCode, ShieldX } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
@@ -42,12 +42,15 @@ export function MobileGatewayKeysPanel({
   onDismissIssuedKey,
 }: MobileGatewayKeysPanelProps) {
   const [label, setLabel] = useState('');
+  const prevIssuedKeyRef = useRef(lastIssuedKey);
 
-  useEffect(() => {
-    if (lastIssuedKey) {
-      setLabel('');
-    }
-  }, [lastIssuedKey]);
+  // Clear the label input when a new key is issued, without using an effect.
+  // Comparing identity lets us detect the prop change during render and
+  // reset state before the next paint — avoids the useEffect-as-event-handler pattern.
+  if (lastIssuedKey !== prevIssuedKeyRef.current) {
+    prevIssuedKeyRef.current = lastIssuedKey;
+    if (lastIssuedKey) setLabel('');
+  }
 
   const qrPayloadJson = useMemo(
     () => (lastIssuedKey ? JSON.stringify(lastIssuedKey.qrPayload, null, 2) : ''),

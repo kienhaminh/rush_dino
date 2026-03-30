@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import {
   ReactFlow,
   type Node,
@@ -12,6 +12,17 @@ import type { GraphSnapshot, SkillNode as SkillNodeType } from './skill-graph-ty
 import { getCategoryColor } from './skill-graph-types';
 import { CategoryNode } from './nodes/category-node';
 import { SkillNode } from './nodes/skill-node';
+
+type LoadState<T> = { status: 'loading' } | { status: 'success'; data: T } | { status: 'error'; error: string };
+type LoadAction<T> = { type: 'start' } | { type: 'success'; data: T } | { type: 'error'; error: string };
+
+function loadReducer<T>(state: LoadState<T>, action: LoadAction<T>): LoadState<T> {
+  switch (action.type) {
+    case 'start': return { status: 'loading' };
+    case 'success': return { status: 'success', data: action.data };
+    case 'error': return { status: 'error', error: action.error };
+  }
+}
 
 // Register node types outside component (xyflow requirement)
 const nodeTypes = {
@@ -168,28 +179,28 @@ export function SkillGraphView({
   highlightedIds,
   filter = 'all',
 }: SkillGraphViewProps) {
-  const [internalSnapshot, setInternalSnapshot] = useState<GraphSnapshot | null>(null);
-  const [loading, setLoading] = useState(externalSnapshot === undefined);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchState, dispatch] = useReducer(
+    loadReducer<GraphSnapshot>,
+    externalSnapshot === undefined ? { status: 'loading' } : { status: 'success', data: null as unknown as GraphSnapshot },
+  );
 
   // Only fetch internally when no external snapshot is provided
   useEffect(() => {
     if (externalSnapshot !== undefined) return;
+    dispatch({ type: 'start' });
     import('./skill-graph-api').then(({ fetchSkillGraph }) => {
-      setLoading(true);
       fetchSkillGraph()
-        .then((data) => {
-          setInternalSnapshot(data);
-          setError(null);
-        })
-        .catch((err) => {
-          setError(err instanceof Error ? err.message : 'Failed to load skill graph');
-        })
-        .finally(() => setLoading(false));
+        .then((data) => dispatch({ type: 'success', data }))
+        .catch((err) => dispatch({ type: 'error', error: err instanceof Error ? err.message : 'Failed to load skill graph' }));
     });
   }, [externalSnapshot]);
 
-  const snapshot = externalSnapshot !== undefined ? externalSnapshot : internalSnapshot;
+  const snapshot = externalSnapshot !== undefined
+    ? externalSnapshot
+    : fetchState.status === 'success' ? fetchState.data : null;
+
+  const loading = externalSnapshot === undefined && fetchState.status === 'loading';
+  const error = externalSnapshot === undefined && fetchState.status === 'error' ? fetchState.error : null;
 
   const layout = useMemo(() => {
     if (!snapshot) return { nodes: [], edges: [] };

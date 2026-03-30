@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,46 +45,67 @@ type Status =
   | { kind: 'success' }
   | { kind: 'error'; message: string };
 
+// Reducer for the fetch lifecycle: loading → ready | error
+type FetchState =
+  | { status: 'loading' }
+  | { status: 'ready'; config: AppConfigView; credentials: CredentialsView }
+  | { status: 'error'; error: string };
+
+type FetchAction =
+  | { type: 'start' }
+  | { type: 'success'; config: AppConfigView; credentials: CredentialsView }
+  | { type: 'error'; error: string }
+  | { type: 'setConfig'; config: AppConfigView }
+  | { type: 'setCredentials'; credentials: CredentialsView };
+
+function fetchReducer(state: FetchState, action: FetchAction): FetchState {
+  switch (action.type) {
+    case 'start':
+      return { status: 'loading' };
+    case 'success':
+      return { status: 'ready', config: action.config, credentials: action.credentials };
+    case 'error':
+      return { status: 'error', error: action.error };
+    case 'setConfig':
+      return state.status === 'ready' ? { ...state, config: action.config } : state;
+    case 'setCredentials':
+      return state.status === 'ready' ? { ...state, credentials: action.credentials } : state;
+  }
+}
+
 export function ConfigPage() {
   const [activeSection, setActiveSection] = useState<Section>('profiles');
-
-  const [config, setConfig] = useState<AppConfigView | null>(null);
-  const [credentials, setCredentials] = useState<CredentialsView | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchState, dispatch] = useReducer(fetchReducer, { status: 'loading' });
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
   // Load config + credentials in parallel on mount
   useEffect(() => {
-    setLoading(true);
+    dispatch({ type: 'start' });
     Promise.all([fetchConfig(), fetchCredentials()])
-      .then(([cfg, creds]) => {
-        setConfig(cfg);
-        setCredentials(creds);
-        setFetchError(null);
-      })
-      .catch((err: Error) => setFetchError(err.message))
-      .finally(() => setLoading(false));
+      .then(([cfg, creds]) => dispatch({ type: 'success', config: cfg, credentials: creds }))
+      .catch((err: Error) => dispatch({ type: 'error', error: err.message }));
   }, []);
 
   function handleConfigChange(patch: Partial<AppConfigView>) {
-    setConfig((prev) => (prev ? { ...prev, ...patch } : prev));
+    if (fetchState.status !== 'ready') return;
+    dispatch({ type: 'setConfig', config: { ...fetchState.config, ...patch } });
   }
 
   function handleCredentialsChange(patch: Partial<CredentialsView>) {
-    setCredentials((prev) => (prev ? { ...prev, ...patch } : prev));
+    if (fetchState.status !== 'ready') return;
+    dispatch({ type: 'setCredentials', credentials: { ...fetchState.credentials, ...patch } });
   }
 
   async function handleSave() {
-    if (!config || !credentials) return;
+    if (fetchState.status !== 'ready') return;
+    const { config, credentials } = fetchState;
     setStatus({ kind: 'saving' });
     try {
       const [updatedConfig, updatedCreds] = await Promise.all([
         patchConfig(config),
         patchCredentials(credentials),
       ]);
-      setConfig(updatedConfig);
-      setCredentials(updatedCreds);
+      dispatch({ type: 'success', config: updatedConfig, credentials: updatedCreds });
       setStatus({ kind: 'success' });
       setTimeout(() => setStatus({ kind: 'idle' }), 3000);
     } catch (err) {
@@ -93,22 +114,18 @@ export function ConfigPage() {
   }
 
   async function handleReload() {
-    setLoading(true);
-    setFetchError(null);
+    dispatch({ type: 'start' });
     try {
       const [cfg, creds] = await Promise.all([fetchConfig(), fetchCredentials()]);
-      setConfig(cfg);
-      setCredentials(creds);
+      dispatch({ type: 'success', config: cfg, credentials: creds });
       setStatus({ kind: 'idle' });
     } catch (err) {
-      setFetchError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
+      dispatch({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' });
     }
   }
 
   // Loading skeleton
-  if (loading) {
+  if (fetchState.status === 'loading') {
     return (
       <div className="flex-1 flex items-center justify-center">
         <p className="text-sm text-muted-foreground animate-pulse">Loading configuration…</p>
@@ -117,16 +134,19 @@ export function ConfigPage() {
   }
 
   // Fetch error
-  if (fetchError || !config || !credentials) {
+  if (fetchState.status === 'error') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-destructive">{fetchError ?? 'Failed to load configuration.'}</p>
+        <p className="text-sm text-destructive">{fetchState.error}</p>
         <Button size="sm" variant="outline" onClick={handleReload}>
           Retry
         </Button>
       </div>
     );
   }
+
+  // At this point fetchState.status === 'ready'
+  const { config, credentials } = fetchState;
 
   return (
     <div className="flex-1 w-full min-w-0 flex h-full bg-background overflow-hidden">

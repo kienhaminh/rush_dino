@@ -11,6 +11,15 @@ interface AssistantRichContentProps {
   showCursor?: boolean;
 }
 
+function blockKey(block: RichContent['blocks'][number]): string {
+  // Create stable key from block type and content slice
+  const content = (block as Record<string, unknown>).text as string | undefined ??
+                  (block as Record<string, unknown>).code as string | undefined ??
+                  (block as Record<string, unknown>).url as string | undefined ??
+                  String(((block as Record<string, unknown>).items as unknown[] | undefined)?.length ?? '');
+  return `${block.type}::${content.slice(0, 30)}`;
+}
+
 export function AssistantRichContent({ content, richContent, showCursor }: AssistantRichContentProps) {
   if (!richContent || richContent.blocks.length === 0) {
     return (
@@ -23,26 +32,26 @@ export function AssistantRichContent({ content, richContent, showCursor }: Assis
 
   return (
     <div className="space-y-3">
-      {richContent.blocks.map((block, index) => {
+      {richContent.blocks.map((block) => {
         if (block.type === 'formatted_text') {
           if (block.format === 'plain_text') {
             return (
-              <p key={`${block.type}-${index}`} className="whitespace-pre-wrap leading-relaxed text-sm">
+              <p key={blockKey(block)} className="whitespace-pre-wrap leading-relaxed text-sm">
                 {block.text}
               </p>
             );
           }
-          return <MarkdownBlock key={`${block.type}-${index}`} content={block.text} />;
+          return <MarkdownBlock key={blockKey(block)} content={block.text} />;
         }
 
         if (block.type === 'code_block') {
-          return <CodeBlock key={`${block.type}-${index}`} language={block.language ?? undefined} code={block.code} />;
+          return <CodeBlock key={blockKey(block)} language={block.language ?? undefined} code={block.code} />;
         }
 
         if (block.type === 'image') {
           return (
             <a
-              key={`${block.type}-${index}`}
+              key={blockKey(block)}
               href={block.url}
               target="_blank"
               rel="noreferrer"
@@ -62,7 +71,7 @@ export function AssistantRichContent({ content, richContent, showCursor }: Assis
 
         if (block.type === 'link_list') {
           return (
-            <div key={`${block.type}-${index}`} className="space-y-1.5">
+            <div key={blockKey(block)} className="space-y-1.5">
               {block.items.map((item) => (
                 <LinkCard key={`${item.url}-${item.label}`} item={item} />
               ))}
@@ -71,7 +80,7 @@ export function AssistantRichContent({ content, richContent, showCursor }: Assis
         }
 
         return (
-          <div key={`${block.type}-${index}`} className="flex flex-wrap gap-2">
+          <div key={blockKey(block)} className="flex flex-wrap gap-2">
             {block.items.map((item) => (
               <a
                 key={`${item.url}-${item.label}`}

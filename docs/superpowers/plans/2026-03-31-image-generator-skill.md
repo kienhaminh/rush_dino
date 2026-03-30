@@ -13,7 +13,7 @@
 ### Task 1: Create the skill file
 
 **Files:**
-- Create: `~/.rushdino/skills/image-generator/SKILL.md`
+- Create: `crates/common/src/skills/image-generator/SKILL.md` (installed to `~/.rushdino/skills/image-generator/SKILL.md` on setup)
 
 - [ ] **Step 1: Create the skill directory**
 

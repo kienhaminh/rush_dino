@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   deleteConversation,
@@ -22,20 +22,69 @@ import type {
 } from '@/lib/types';
 import { SessionsPage } from './SessionsPage';
 
+// --- Session detail reducer ---
+type SessionDetailState = {
+  loading: boolean;
+  error: string | null;
+  messages: Message[];
+  runs: RunSnapshot[];
+};
+type SessionDetailAction =
+  | { type: 'loading' }
+  | { type: 'loaded'; runs: RunSnapshot[]; messages: Message[] }
+  | { type: 'error'; message: string };
+
+function sessionDetailReducer(state: SessionDetailState, action: SessionDetailAction): SessionDetailState {
+  switch (action.type) {
+    case 'loading': return { loading: true, error: null, messages: state.messages, runs: state.runs };
+    case 'loaded': return { loading: false, error: null, messages: action.messages, runs: action.runs };
+    case 'error': return { loading: false, error: action.message, messages: [], runs: [] };
+  }
+}
+
+// --- Meta reducer ---
+type MetaState = {
+  sessions: SessionSummary[];
+  soulMemory: SoulMemoryStateResponse | null;
+  systemPrompt: string | null;
+  registeredTools: RegisteredTool[];
+  agentConfig: SystemSummaryResponse['agentConfig'];
+};
+type MetaAction =
+  | { type: 'loaded'; sessions: SessionSummary[]; soulMemory: SoulMemoryStateResponse; systemPrompt: string; registeredTools: RegisteredTool[]; agentConfig: SystemSummaryResponse['agentConfig'] }
+  | { type: 'error' };
+
+function metaReducer(state: MetaState, action: MetaAction): MetaState {
+  if (action.type === 'loaded') {
+    return {
+      sessions: action.sessions,
+      soulMemory: action.soulMemory,
+      systemPrompt: action.systemPrompt,
+      registeredTools: action.registeredTools,
+      agentConfig: action.agentConfig,
+    };
+  }
+  return state;
+}
+
 const POLL_INTERVAL_MS = 30_000;
 
 export function SessionsRoute() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [detailState, dispatchDetail] = useReducer(sessionDetailReducer, {
+    loading: false,
+    error: null,
+    messages: [],
+    runs: [],
+  });
+  const [metaState, dispatchMeta] = useReducer(metaReducer, {
+    sessions: [],
+    soulMemory: null,
+    systemPrompt: null,
+    registeredTools: [],
+    agentConfig: null,
+  });
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [runs, setRuns] = useState<RunSnapshot[]>([]);
-  const [soulMemory, setSoulMemory] = useState<SoulMemoryStateResponse | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
-  const [registeredTools, setRegisteredTools] = useState<RegisteredTool[]>([]);
-  const [agentConfig, setAgentConfig] = useState<SystemSummaryResponse['agentConfig']>(null);
   const [thinkingLevelOverride, setThinkingLevelOverride] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef(false);
 
   // Fetch sessions + soul memory + system prompt
@@ -48,18 +97,22 @@ export function SessionsRoute() {
         fetchRegisteredTools(),
         fetchSystemSummary(),
       ]);
-      setSessions(s);
-      setSoulMemory(mem);
-      setSystemPrompt(prompt.content);
-      setRegisteredTools(tools);
-      setAgentConfig(summary.agentConfig ?? null);
+      dispatchMeta({
+        type: 'loaded',
+        sessions: s,
+        soulMemory: mem,
+        systemPrompt: prompt.content,
+        registeredTools: tools,
+        agentConfig: summary.agentConfig ?? null,
+      });
       if (isInitial) {
         // Always connect to the main session by its fixed ID.
         const main = s.find((x) => x.id === 'main') ?? s[0] ?? null;
         if (main) setSelectedSessionId(main.id);
       }
     } catch (e) {
-      if (isInitial) setError(e instanceof Error ? e.message : 'Failed to load sessions');
+      dispatchMeta({ type: 'error' });
+      if (isInitial) dispatchDetail({ type: 'error', message: e instanceof Error ? e.message : 'Failed to load sessions' });
     }
   }, []);
 
@@ -88,34 +141,25 @@ export function SessionsRoute() {
 
     async function loadSession() {
       if (!selectedSessionId) return;
-      setLoading(true);
-      setError(null);
+      dispatchDetail({ type: 'loading' });
       try {
         const sessionRuns = await fetchSessionRuns(selectedSessionId, 30);
-        setRuns(sessionRuns);
         const conversationId = sessionRuns[0]?.conversationId;
+        let messages: Message[] = [];
         if (conversationId) {
           const conv = await fetchConversation(conversationId);
-          setMessages(conv.messages);
-        } else {
-          setMessages([]);
+          messages = conv.messages;
         }
+        dispatchDetail({ type: 'loaded', runs: sessionRuns, messages });
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load session detail');
-      } finally {
-        setLoading(false);
+        dispatchDetail({ type: 'error', message: e instanceof Error ? e.message : 'Failed to load session detail' });
       }
     }
     loadSession();
   }, [selectedSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = async () => {
-    setError(null);
-    try {
-      await refreshMeta(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Refresh failed');
-    }
+    await refreshMeta(false);
     setSelectedSessionId((prev) => prev);
   };
 
@@ -155,16 +199,16 @@ export function SessionsRoute() {
 
   return (
     <SessionsPage
-      sessions={sessions}
+      sessions={metaState.sessions}
       selectedSessionId={selectedSessionId}
-      messages={messages}
-      runs={runs}
-      soulMemory={soulMemory}
-      systemPrompt={systemPrompt}
-      registeredTools={registeredTools}
-      agentConfig={agentConfig}
-      loading={loading}
-      error={error}
+      messages={detailState.messages}
+      runs={detailState.runs}
+      soulMemory={metaState.soulMemory}
+      systemPrompt={metaState.systemPrompt}
+      registeredTools={metaState.registeredTools}
+      agentConfig={metaState.agentConfig}
+      loading={detailState.loading}
+      error={detailState.error}
       onSelectSession={setSelectedSessionId}
       onRefresh={handleRefresh}
       onReset={handleReset}

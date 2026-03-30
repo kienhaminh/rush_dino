@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useReducer, useState, useCallback } from 'react';
 import { SearchIcon, NetworkIcon } from 'lucide-react';
 
 import { fetchAgents } from '@/lib/api';
@@ -13,29 +13,62 @@ import { SkillDetailPanel } from './SkillDetailPanel';
 
 type FilterTab = 'all' | 'core' | 'custom';
 
-export function SkillsPage() {
-  // Data
-  const [graph, setGraph] = useState<GraphSnapshot | null>(null);
-  const [graphLoading, setGraphLoading] = useState(true);
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
+// Groups the two tightly coupled graph fields: the snapshot data and its loading flag
+type GraphState = { loading: true; graph: null } | { loading: false; graph: GraphSnapshot | null };
 
-  // Selection & UI state
-  const [selectedSkill, setSelectedSkill] = useState<SkillNode | null>(null);
+type GraphAction =
+  | { type: 'start' }
+  | { type: 'success'; graph: GraphSnapshot }
+  | { type: 'error' };
+
+function graphReducer(_state: GraphState, action: GraphAction): GraphState {
+  switch (action.type) {
+    case 'start': return { loading: true, graph: null };
+    case 'success': return { loading: false, graph: action.graph };
+    case 'error': return { loading: false, graph: null };
+  }
+}
+
+type UiState = { selectedSkill: SkillNode | null; filter: FilterTab };
+type UiAction =
+  | { type: 'select'; skill: SkillNode | null }
+  | { type: 'setFilter'; filter: FilterTab };
+function uiReducer(state: UiState, action: UiAction): UiState {
+  switch (action.type) {
+    case 'select': return { ...state, selectedSkill: action.skill };
+    case 'setFilter': return { ...state, filter: action.filter };
+  }
+}
+
+type HighlightAction = { type: 'clear' } | { type: 'set'; ids: Set<string> };
+function highlightReducer(_: Set<string> | null, action: HighlightAction): Set<string> | null {
+  return action.type === 'clear' ? null : action.ids;
+}
+
+export function SkillsPage() {
+  // Grouped fetch state: graph data + its loading flag change together
+  const [graphState, dispatchGraph] = useReducer(graphReducer, { loading: true, graph: null });
+  const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<FilterTab>('all');
+
+  // Selection & UI state grouped together
+  const [uiState, dispatchUi] = useReducer(uiReducer, { selectedSkill: null, filter: 'all' as FilterTab });
+  const { selectedSkill, filter } = uiState;
 
   // Highlighted IDs from semantic search results — null means "no active search"
-  const [highlightedIds, setHighlightedIds] = useState<Set<string> | null>(null);
+  const [highlightedIds, dispatchHighlight] = useReducer(highlightReducer, null);
 
   const debouncedSearch = useDebounced(searchQuery, 300);
 
   // Fetch graph on mount
   useEffect(() => {
-    setGraphLoading(true);
+    dispatchGraph({ type: 'start' });
     fetchSkillGraph()
-      .then((data) => setGraph(data))
-      .catch((err) => console.error('Failed to load skill graph:', err))
-      .finally(() => setGraphLoading(false));
+      .then((data) => dispatchGraph({ type: 'success', graph: data }))
+      .catch((err) => {
+        console.error('Failed to load skill graph:', err);
+        dispatchGraph({ type: 'error' });
+      });
   }, []);
 
   // Fetch agents on mount
@@ -49,30 +82,30 @@ export function SkillsPage() {
   // A cancellation flag prevents stale responses from overwriting fresh results.
   useEffect(() => {
     if (!debouncedSearch.trim()) {
-      setHighlightedIds(null);
+      dispatchHighlight({ type: 'clear' });
       return;
     }
     let cancelled = false;
     querySkillGraph(debouncedSearch, 20)
       .then((results) => {
-        if (!cancelled && graph) {
+        if (!cancelled && graphState.graph) {
           // Map scored result names back to node IDs — search returns names, graph dims by ID
           const nameSet = new Set(results.map((r) => r.name.toLowerCase()));
           const ids = new Set(
-            graph.nodes
+            graphState.graph.nodes
               .filter((n) => n.nodeType === 'skill' && nameSet.has(n.name.toLowerCase()))
               .map((n) => n.id),
           );
-          setHighlightedIds(ids);
+          dispatchHighlight({ type: 'set', ids });
         }
       })
       .catch(() => {
-        if (!cancelled) setHighlightedIds(null);
+        if (!cancelled) dispatchHighlight({ type: 'clear' });
       });
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, graph]);
+  }, [debouncedSearch, graphState.graph]);
 
   // Assign/unassign stubs with optimistic local state
   // TODO: wire up real API calls when assign/unassign endpoints exist
@@ -99,8 +132,8 @@ export function SkillsPage() {
   }, []);
 
   const handleSkillSelect = useCallback((skill: SkillNode | null) => {
-    setSelectedSkill(skill);
-  }, []);
+    dispatchUi({ type: 'select', skill });
+  }, [dispatchUi]);
 
   const filterTabs: { key: FilterTab; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -119,9 +152,9 @@ export function SkillsPage() {
         <div className="flex items-center gap-2 mr-2">
           <NetworkIcon className="w-4 h-4 text-primary opacity-70" />
           <span className="text-sm font-bold text-foreground">Skill Pool</span>
-          {graph && (
+          {graphState.graph && (
             <span className="text-xs text-muted-foreground">
-              ({graph.nodes.filter((n) => n.nodeType === 'skill').length})
+              ({graphState.graph.nodes.filter((n) => n.nodeType === 'skill').length})
             </span>
           )}
         </div>
@@ -169,7 +202,7 @@ export function SkillsPage() {
         )}
 
         {/* Loading indicator */}
-        {graphLoading && (
+        {graphState.loading && (
           <div
             className="w-4 h-4 rounded-full animate-spin flex-shrink-0"
             style={{
@@ -184,7 +217,7 @@ export function SkillsPage() {
       <div className="relative flex-1 min-h-0">
         <div className="h-full overflow-auto px-4 py-4">
           <SkillGraphView
-            snapshot={graph}
+            snapshot={graphState.graph}
             onSkillSelect={handleSkillSelect}
             selectedSkillId={selectedSkill?.id}
             highlightedIds={debouncedSearch.trim() && highlightedIds ? highlightedIds : undefined}

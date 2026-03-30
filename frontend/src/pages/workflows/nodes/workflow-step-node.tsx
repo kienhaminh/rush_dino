@@ -22,7 +22,8 @@ export function WorkflowStepNode({ data }: NodeProps) {
       : null;
 
   return (
-    <div
+    <button
+      type="button"
       onClick={() => onSelect(step.id)}
       style={{
         width: '220px',
@@ -46,9 +47,12 @@ export function WorkflowStepNode({ data }: NodeProps) {
         boxShadow: isActive
           ? `0 0 0 1px ${accentColor}50, 0 6px 24px ${accentColor}22`
           : '0 2px 10px rgba(0,0,0,0.08)',
-        transition: 'all 0.15s ease',
+        transition: 'background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
         overflow: 'hidden',
         userSelect: 'none',
+        textAlign: 'left',
+        padding: 0,
+        display: 'block',
       }}
     >
       <div style={{ padding: '11px 13px' }}>
@@ -152,6 +156,6 @@ export function WorkflowStepNode({ data }: NodeProps) {
           height: '10px',
         }}
       />
-    </div>
+    </button>
   );
 }

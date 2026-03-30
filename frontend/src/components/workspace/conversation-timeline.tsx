@@ -8,6 +8,12 @@ import { ToolUseGroup } from './tool-use-group';
 import { ConversationMetricsBar } from './conversation-metrics-bar';
 import type { ConversationItem, ConversationMetrics } from '@/lib/types';
 
+const TYPING_DOTS = [
+  { key: 'a', delay: '0s' },
+  { key: 'b', delay: '0.15s' },
+  { key: 'c', delay: '0.3s' },
+] as const;
+
 interface ConversationTimelineProps {
   items: ConversationItem[];
   isStreaming?: boolean;
@@ -256,11 +262,11 @@ export const ConversationTimeline = memo(function ConversationTimeline({
         {showTypingBubble && (
           <div className="flex justify-start py-1 animate-in fade-in duration-200">
             <div className="flex items-center gap-1.5 py-2">
-              {[0, 1, 2].map((i) => (
+              {TYPING_DOTS.map(({ key, delay }) => (
                 <span
-                  key={i}
+                  key={key}
                   className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
+                  style={{ animationDelay: delay }}
                 />
               ))}
             </div>

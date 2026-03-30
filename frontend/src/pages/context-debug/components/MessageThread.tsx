@@ -68,8 +68,8 @@ function MessageCard({ msg, index }: { msg: Message; index: number }) {
 
       {toolCalls.length > 0 && (
         <div className="space-y-1">
-          {toolCalls.map((tc, idx) => (
-            <ToolCallRow key={`${tc.id}-${idx}`} call={tc} />
+          {toolCalls.map((tc) => (
+            <ToolCallRow key={tc.id} call={tc} />
           ))}
         </div>
       )}

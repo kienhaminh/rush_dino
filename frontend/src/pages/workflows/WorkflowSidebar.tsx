@@ -93,7 +93,6 @@ export function WorkflowSidebar({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search workflows..."
-                autoFocus
                 className="w-full h-7 pl-8 pr-2 rounded-md border border-border/50 bg-background/60 text-xs outline-none focus:border-border transition-colors"
               />
             </div>

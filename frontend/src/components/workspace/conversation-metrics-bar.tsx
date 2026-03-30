@@ -62,39 +62,54 @@ export function ConversationMetricsBar({ metrics }: ConversationMetricsBarProps)
 
   const ratio = limitTokens && limitTokens > 0 ? totalTokens / limitTokens : null;
 
-  const parts: ReactNode[] = [];
+  const parts: { key: string; node: ReactNode }[] = [];
 
   if (ratio !== null) {
-    parts.push(
-      <span key="ctx" className="flex items-center gap-1">
-        <span>{(ratio * 100).toFixed(1)}%</span>
-        <ContextRing ratio={ratio} />
-      </span>,
-    );
+    parts.push({
+      key: 'ctx',
+      node: (
+        <span className="flex items-center gap-1">
+          <span>{(ratio * 100).toFixed(1)}%</span>
+          <ContextRing ratio={ratio} />
+        </span>
+      ),
+    });
   }
 
   if (responseTimeMs !== null) {
-    parts.push(<span key="time">⏱ {formatDuration(responseTimeMs)}</span>);
+    parts.push({
+      key: 'time',
+      node: <span>⏱ {formatDuration(responseTimeMs)}</span>,
+    });
   }
 
-  parts.push(
-    <span key="tokens">
-      ↑ {formatTokens(promptTokens)} ↓ {formatTokens(completionTokens)}
-    </span>,
-  );
+  parts.push({
+    key: 'tokens',
+    node: (
+      <span>
+        ↑ {formatTokens(promptTokens)} ↓ {formatTokens(completionTokens)}
+      </span>
+    ),
+  });
 
-  parts.push(<span key="model">{model} · {provider}</span>);
+  parts.push({
+    key: 'model',
+    node: <span>{model} · {provider}</span>,
+  });
 
   if (totalCost > 0) {
-    parts.push(<span key="cost">{formatCost(totalCost)}</span>);
+    parts.push({
+      key: 'cost',
+      node: <span>{formatCost(totalCost)}</span>,
+    });
   }
 
   return (
     <div className="flex items-center gap-2 flex-wrap mt-1.5 ml-0.5 text-[11px] text-muted-foreground/50">
-      {parts.map((part, i) => (
-        <span key={i} className="flex items-center gap-2">
+      {parts.map(({ key, node }, i) => (
+        <span key={key} className="flex items-center gap-2">
           {i > 0 && SEP}
-          {part}
+          {node}
         </span>
       ))}
     </div>

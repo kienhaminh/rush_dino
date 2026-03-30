@@ -1,13 +1,47 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 import { resolveInputRequest } from '@/lib/api';
 import type { ConversationItem, InputFieldSpec } from '@/lib/types';
+import type { InputRequestSpec } from '@/lib/types';
 import {
   buildInitialInputValues,
   describeInputRequestSubmitError,
   normalizeAndValidateInputValues,
 } from './input-request-utils';
+
+type CardState = {
+  values: Record<string, unknown>;
+  errors: Record<string, string>;
+  submitError: string | null;
+  submitting: boolean;
+  revealed: Record<string, boolean>;
+};
+
+type CardAction =
+  | { type: 'reset'; spec: InputRequestSpec }
+  | { type: 'setValues'; values: Record<string, unknown> }
+  | { type: 'setErrors'; errors: Record<string, string> }
+  | { type: 'setSubmitError'; error: string | null }
+  | { type: 'setSubmitting'; submitting: boolean }
+  | { type: 'toggleReveal'; field: string };
+
+function cardReducer(state: CardState, action: CardAction): CardState {
+  switch (action.type) {
+    case 'reset': return {
+      values: buildInitialInputValues(action.spec),
+      errors: {},
+      submitError: null,
+      submitting: false,
+      revealed: {},
+    };
+    case 'setValues': return { ...state, values: action.values };
+    case 'setErrors': return { ...state, errors: action.errors };
+    case 'setSubmitError': return { ...state, submitError: action.error };
+    case 'setSubmitting': return { ...state, submitting: action.submitting };
+    case 'toggleReveal': return { ...state, revealed: { ...state.revealed, [action.field]: !state.revealed[action.field] } };
+  }
+}
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,31 +71,31 @@ interface InputRequestCardProps {
 }
 
 export function InputRequestCard({ item, standalone, onResolved }: InputRequestCardProps) {
-  const [values, setValues] = useState(() => buildInitialInputValues(item.payload.spec));
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  // Tracks which secret fields the user has chosen to reveal
-  const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [state, dispatch] = useReducer(cardReducer, undefined, () => ({
+    values: buildInitialInputValues(item.payload.spec),
+    errors: {},
+    submitError: null,
+    submitting: false,
+    revealed: {},
+  }));
 
+  const { values, errors, submitError, submitting, revealed } = state;
+
+  // Reset all card state when the request changes (single dispatch replaces 5 setState calls)
   useEffect(() => {
-    setValues(buildInitialInputValues(item.payload.spec));
-    setErrors({});
-    setSubmitError(null);
-    setSubmitting(false);
-    setRevealed({});
+    dispatch({ type: 'reset', spec: item.payload.spec });
   }, [item.requestId, item.payload.spec]);
 
   const isPending = item.status === 'pending';
 
   async function handleSubmit() {
     const normalized = normalizeAndValidateInputValues(item.payload.spec, values);
-    setErrors(normalized.errors);
+    dispatch({ type: 'setErrors', errors: normalized.errors });
     if (Object.keys(normalized.errors).length > 0) {
       return;
     }
-    setSubmitting(true);
-    setSubmitError(null);
+    dispatch({ type: 'setSubmitting', submitting: true });
+    dispatch({ type: 'setSubmitError', error: null });
     try {
       await resolveInputRequest(item.requestId, {
         status: 'submitted',
@@ -69,33 +103,33 @@ export function InputRequestCard({ item, standalone, onResolved }: InputRequestC
       });
       onResolved?.(item.requestId, 'submitted', normalized.values as Record<string, unknown>);
     } catch (error) {
-      setSubmitError(describeInputRequestSubmitError(error));
+      dispatch({ type: 'setSubmitError', error: describeInputRequestSubmitError(error) });
     } finally {
-      setSubmitting(false);
+      dispatch({ type: 'setSubmitting', submitting: false });
     }
   }
 
   async function handleCancel() {
-    setSubmitting(true);
-    setSubmitError(null);
+    dispatch({ type: 'setSubmitting', submitting: true });
+    dispatch({ type: 'setSubmitError', error: null });
     try {
       await resolveInputRequest(item.requestId, { status: 'cancelled' });
       onResolved?.(item.requestId, 'cancelled', null);
     } catch (error) {
-      setSubmitError(describeInputRequestSubmitError(error));
+      dispatch({ type: 'setSubmitError', error: describeInputRequestSubmitError(error) });
     } finally {
-      setSubmitting(false);
+      dispatch({ type: 'setSubmitting', submitting: false });
     }
   }
 
   function updateValue(name: string, nextValue: unknown) {
-    setValues((current) => ({ ...current, [name]: nextValue }));
-    setErrors((current) => {
-      if (!(name in current)) return current;
-      const nextErrors = { ...current };
+    const nextValues = { ...values, [name]: nextValue };
+    dispatch({ type: 'setValues', values: nextValues });
+    if (name in errors) {
+      const nextErrors = { ...errors };
       delete nextErrors[name];
-      return nextErrors;
-    });
+      dispatch({ type: 'setErrors', errors: nextErrors });
+    }
   }
 
   const cardBody = (
@@ -142,7 +176,7 @@ export function InputRequestCard({ item, standalone, onResolved }: InputRequestC
                     <button
                       type="button"
                       tabIndex={-1}
-                      onClick={() => setRevealed((prev) => ({ ...prev, [field.name]: !prev[field.name] }))}
+                      onClick={() => dispatch({ type: 'toggleReveal', field: field.name })}
                       className="absolute inset-y-0 right-0 flex items-center px-2.5 text-muted-foreground/50 hover:text-muted-foreground/80 transition-colors"
                       aria-label={revealed[field.name] ? 'Hide value' : 'Show value'}
                     >

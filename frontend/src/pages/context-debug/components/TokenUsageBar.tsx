@@ -47,9 +47,9 @@ interface BarSegment {
 function SegmentBar({ segments }: { segments: BarSegment[] }) {
   return (
     <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-      {segments.map((seg, i) => (
+      {segments.map((seg) => (
         <div
-          key={i}
+          key={seg.label}
           className={`h-full transition-all ${seg.color}`}
           style={{ width: `${seg.pct.toFixed(2)}%` }}
           title={`${seg.label}: ${seg.pct.toFixed(1)}%`}

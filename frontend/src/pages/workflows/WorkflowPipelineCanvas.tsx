@@ -72,6 +72,212 @@ interface CanvasProps {
   agents: AgentRecord[];
 }
 
+interface WorkflowStepPanelProps {
+  activeStep: WorkflowStep | null;
+  activeIndex: number;
+  activeAccent: string;
+  agents: AgentRecord[];
+  onClose: () => void;
+}
+
+// ── Step detail side panel (read-only) ────────────────────────────────────────
+
+function WorkflowStepPanel({ activeStep, activeIndex, activeAccent, agents, onClose }: WorkflowStepPanelProps) {
+  const panelOpen = !!activeStep;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '12px',
+        right: '12px',
+        bottom: '12px',
+        width: '260px',
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'hsl(var(--card) / 0.92)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: activeAccent,
+        borderRightWidth: '1px',
+        borderRightStyle: 'solid',
+        borderRightColor: 'hsl(var(--border))',
+        borderBottomWidth: '1px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: 'hsl(var(--border))',
+        borderLeftWidth: '1px',
+        borderLeftStyle: 'solid',
+        borderLeftColor: 'hsl(var(--border))',
+        borderRadius: '12px',
+        boxShadow: `0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px ${activeAccent}20`,
+        transform: panelOpen ? 'translateX(0) scale(1)' : 'translateX(calc(100% + 20px)) scale(0.97)',
+        opacity: panelOpen ? 1 : 0,
+        transition: 'transform 0.22s cubic-bezier(0.22,1,0.36,1), opacity 0.18s ease, border-top-color 0.15s ease, box-shadow 0.15s ease',
+        pointerEvents: panelOpen ? 'auto' : 'none',
+      }}
+    >
+      {activeStep && (
+        <>
+          {/* Header */}
+          <div
+            style={{
+              padding: '10px 12px 9px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+              borderBottom: '1px solid hsl(var(--border) / 0.6)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <div
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '4px',
+                  background: activeAccent,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '7px',
+                  fontWeight: '800',
+                  color: '#fff',
+                  flexShrink: 0,
+                }}
+              >
+                {String(activeIndex + 1).padStart(2, '0')}
+              </div>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: 'hsl(var(--foreground))',
+                }}
+              >
+                {activeStep.name || 'Untitled step'}
+              </span>
+            </div>
+
+            <button
+              onClick={onClose}
+              title="Close"
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '6px',
+                border: '1px solid hsl(var(--border))',
+                background: 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'hsl(var(--muted-foreground))',
+              }}
+            >
+              <XIcon style={{ width: '11px', height: '11px' }} />
+            </button>
+          </div>
+
+          {/* Fields (read-only) */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            {/* Step name */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <span
+                style={{
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.14em',
+                  color: 'hsl(var(--muted-foreground) / 0.7)',
+                }}
+              >
+                NAME
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'hsl(var(--foreground))',
+                  padding: '4px 0',
+                }}
+              >
+                {activeStep.name || '—'}
+              </span>
+            </div>
+
+            {/* Agent */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <span
+                style={{
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.14em',
+                  color: 'hsl(var(--muted-foreground) / 0.7)',
+                }}
+              >
+                AGENT
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'hsl(var(--foreground))',
+                  padding: '4px 0',
+                }}
+              >
+                {agents.find((a) => a.id === activeStep.agentId)
+                  ? `${agents.find((a) => a.id === activeStep.agentId)!.emoji ?? '🤖'} ${agents.find((a) => a.id === activeStep.agentId)!.name}`
+                  : activeStep.agentId || '—'}
+              </span>
+            </div>
+
+            {/* Instructions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+              <span
+                style={{
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.14em',
+                  color: 'hsl(var(--muted-foreground) / 0.7)',
+                }}
+              >
+                INSTRUCTIONS
+              </span>
+              <p
+                style={{
+                  flex: 1,
+                  minHeight: '140px',
+                  padding: '7px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid hsl(var(--border) / 0.5)',
+                  background: 'hsl(var(--background) / 0.4)',
+                  color: 'hsl(var(--foreground))',
+                  fontSize: '11px',
+                  lineHeight: 1.6,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {activeStep.instructions || <span style={{ opacity: 0.4 }}>No instructions</span>}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Inner canvas component (ReactFlowProvider must wrap this) ─────────────────
 
 function WorkflowCanvasInner({ workflow, agents }: CanvasProps) {
@@ -166,8 +372,6 @@ function WorkflowCanvasInner({ workflow, agents }: CanvasProps) {
     : 0;
   const activeAccent = STEP_ACCENT_COLORS[activeIndex % STEP_ACCENT_COLORS.length];
 
-  const panelOpen = !!activeStep;
-
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -241,196 +445,13 @@ function WorkflowCanvasInner({ workflow, agents }: CanvasProps) {
         )}
       </ReactFlow>
 
-      {/* Step detail side panel (read-only) */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '12px',
-          right: '12px',
-          bottom: '12px',
-          width: '260px',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'hsl(var(--card) / 0.92)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderTopWidth: '2px',
-          borderTopStyle: 'solid',
-          borderTopColor: activeAccent,
-          borderRightWidth: '1px',
-          borderRightStyle: 'solid',
-          borderRightColor: 'hsl(var(--border))',
-          borderBottomWidth: '1px',
-          borderBottomStyle: 'solid',
-          borderBottomColor: 'hsl(var(--border))',
-          borderLeftWidth: '1px',
-          borderLeftStyle: 'solid',
-          borderLeftColor: 'hsl(var(--border))',
-          borderRadius: '12px',
-          boxShadow: `0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px ${activeAccent}20`,
-          transform: panelOpen ? 'translateX(0) scale(1)' : 'translateX(calc(100% + 20px)) scale(0.97)',
-          opacity: panelOpen ? 1 : 0,
-          transition: 'transform 0.22s cubic-bezier(0.22,1,0.36,1), opacity 0.18s ease, border-top-color 0.15s ease, box-shadow 0.15s ease',
-          pointerEvents: panelOpen ? 'auto' : 'none',
-        }}
-      >
-        {activeStep && (
-          <>
-            {/* Header */}
-            <div
-              style={{
-                padding: '10px 12px 9px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexShrink: 0,
-                borderBottom: '1px solid hsl(var(--border) / 0.6)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                <div
-                  style={{
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '4px',
-                    background: activeAccent,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '7px',
-                    fontWeight: '800',
-                    color: '#fff',
-                    flexShrink: 0,
-                  }}
-                >
-                  {String(activeIndex + 1).padStart(2, '0')}
-                </div>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: 'hsl(var(--foreground))',
-                  }}
-                >
-                  {activeStep.name || 'Untitled step'}
-                </span>
-              </div>
-
-              <button
-                onClick={() => setActiveId(null)}
-                title="Close"
-                style={{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '6px',
-                  border: '1px solid hsl(var(--border))',
-                  background: 'transparent',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'hsl(var(--muted-foreground))',
-                }}
-              >
-                <XIcon style={{ width: '11px', height: '11px' }} />
-              </button>
-            </div>
-
-            {/* Fields (read-only) */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-              }}
-            >
-              {/* Step name */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <span
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    letterSpacing: '0.14em',
-                    color: 'hsl(var(--muted-foreground) / 0.7)',
-                  }}
-                >
-                  NAME
-                </span>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    color: 'hsl(var(--foreground))',
-                    padding: '4px 0',
-                  }}
-                >
-                  {activeStep.name || '—'}
-                </span>
-              </div>
-
-              {/* Agent */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <span
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    letterSpacing: '0.14em',
-                    color: 'hsl(var(--muted-foreground) / 0.7)',
-                  }}
-                >
-                  AGENT
-                </span>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    color: 'hsl(var(--foreground))',
-                    padding: '4px 0',
-                  }}
-                >
-                  {agents.find((a) => a.id === activeStep.agentId)
-                    ? `${agents.find((a) => a.id === activeStep.agentId)!.emoji ?? '🤖'} ${agents.find((a) => a.id === activeStep.agentId)!.name}`
-                    : activeStep.agentId || '—'}
-                </span>
-              </div>
-
-              {/* Instructions */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
-                <span
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    letterSpacing: '0.14em',
-                    color: 'hsl(var(--muted-foreground) / 0.7)',
-                  }}
-                >
-                  INSTRUCTIONS
-                </span>
-                <p
-                  style={{
-                    flex: 1,
-                    minHeight: '140px',
-                    padding: '7px 8px',
-                    borderRadius: '6px',
-                    border: '1px solid hsl(var(--border) / 0.5)',
-                    background: 'hsl(var(--background) / 0.4)',
-                    color: 'hsl(var(--foreground))',
-                    fontSize: '11px',
-                    lineHeight: 1.6,
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {activeStep.instructions || <span style={{ opacity: 0.4 }}>No instructions</span>}
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+      <WorkflowStepPanel
+        activeStep={activeStep}
+        activeIndex={activeIndex}
+        activeAccent={activeAccent}
+        agents={agents}
+        onClose={() => setActiveId(null)}
+      />
     </div>
   );
 }

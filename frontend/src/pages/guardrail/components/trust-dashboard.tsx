@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -93,31 +93,47 @@ function TrustCategoryCard({ info, agentId, onLevelChange }: TrustCategoryCardPr
   );
 }
 
+type LoadState<T> = { status: 'loading' } | { status: 'success'; data: T } | { status: 'error'; error: string };
+type LoadAction<T> =
+  | { type: 'start' }
+  | { type: 'success'; data: T }
+  | { type: 'error'; error: string }
+  | { type: 'update'; data: T };
+
+function loadReducer<T>(state: LoadState<T>, action: LoadAction<T>): LoadState<T> {
+  switch (action.type) {
+    case 'start': return { status: 'loading' };
+    case 'success': return { status: 'success', data: action.data };
+    case 'update': return { status: 'success', data: action.data };
+    case 'error': return { status: 'error', error: action.error };
+  }
+}
+
 interface TrustDashboardProps {
   agentId: string;
 }
 
 export function TrustDashboard({ agentId }: TrustDashboardProps) {
-  const [trustLevels, setTrustLevels] = useState<CategoryTrustInfo[] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(
+    loadReducer<CategoryTrustInfo[]>,
+    { status: 'loading' },
+  );
 
   useEffect(() => {
     if (!agentId) return;
-    setLoading(true);
-    setError(null);
+    dispatch({ type: 'start' });
     getTrustLevels(agentId)
-      .then((res) => setTrustLevels(res.trust_levels))
-      .catch(() => setError('Trust level data is not yet available.'))
-      .finally(() => setLoading(false));
+      .then((res) => dispatch({ type: 'success', data: res.trust_levels }))
+      .catch(() => dispatch({ type: 'error', error: 'Trust level data is not yet available.' }));
   }, [agentId]);
 
   function handleLevelChange(category: ActionCategory, level: TrustLevel) {
-    setTrustLevels((prev) =>
-      prev
-        ? prev.map((info) => (info.category === category ? { ...info, level } : info))
-        : prev
-    );
+    if (state.status === 'success') {
+      dispatch({
+        type: 'update',
+        data: state.data.map((info) => (info.category === category ? { ...info, level } : info)),
+      });
+    }
   }
 
   return (
@@ -129,15 +145,15 @@ export function TrustDashboard({ agentId }: TrustDashboardProps) {
         </p>
       </CardHeader>
       <CardContent>
-        {loading && (
+        {state.status === 'loading' && (
           <p className="text-sm text-muted-foreground animate-pulse">Loading trust levels…</p>
         )}
-        {error && (
-          <p className="text-sm text-muted-foreground">{error}</p>
+        {state.status === 'error' && (
+          <p className="text-sm text-muted-foreground">{state.error}</p>
         )}
-        {!loading && !error && trustLevels && (
+        {state.status === 'success' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {trustLevels.map((info) => (
+            {state.data.map((info) => (
               <TrustCategoryCard
                 key={info.category}
                 info={info}

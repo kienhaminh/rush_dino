@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -215,6 +215,28 @@ function AgentTabBar({
 }
 
 // -----------------------------------------------------------------------
+// AgentFocusPage — fetch state reducer
+// -----------------------------------------------------------------------
+
+type FetchState =
+  | { status: 'loading'; agents: AgentRecord[]; runtime: AgentRuntimeData | null }
+  | { status: 'loaded'; agents: AgentRecord[]; runtime: AgentRuntimeData }
+  | { status: 'error'; agents: AgentRecord[]; runtime: AgentRuntimeData | null; error: string };
+
+type FetchAction =
+  | { type: 'start' }
+  | { type: 'loaded'; agents: AgentRecord[]; runtime: AgentRuntimeData }
+  | { type: 'error'; message: string };
+
+function fetchReducer(state: FetchState, action: FetchAction): FetchState {
+  switch (action.type) {
+    case 'start': return { status: 'loading', agents: state.agents, runtime: state.runtime };
+    case 'loaded': return { status: 'loaded', agents: action.agents, runtime: action.runtime };
+    case 'error': return { status: 'error', agents: state.agents, runtime: state.runtime ?? null, error: action.message };
+  }
+}
+
+// -----------------------------------------------------------------------
 // AgentFocusPage
 // -----------------------------------------------------------------------
 
@@ -222,27 +244,20 @@ export function AgentFocusPage() {
   const { id } = useParams<{ id: string }>();
   const agentId = id ?? '';
 
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
-  const [runtime, setRuntime] = useState<AgentRuntimeData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchState, dispatch] = useReducer(fetchReducer, { status: 'loading', agents: [], runtime: null });
   const [activePanel, setActivePanel] = useState<AgentPanel>('overview');
 
   const load = useCallback(async () => {
     if (!agentId) return;
-    setLoading(true);
-    setError(null);
+    dispatch({ type: 'start' });
     try {
       const [agentList, runtimeData] = await Promise.all([
         fetchAgents(),
         fetchAgentRuntime(agentId),
       ]);
-      setAgents(agentList);
-      setRuntime(runtimeData);
+      dispatch({ type: 'loaded', agents: agentList, runtime: runtimeData });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load agent');
-    } finally {
-      setLoading(false);
+      dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Failed to load agent' });
     }
   }, [agentId]);
 
@@ -251,12 +266,12 @@ export function AgentFocusPage() {
   }, [load]);
 
   // Fetch messages for the badge count — only enabled when panel is messages
-  const currentAgent = agents.find((a) => a.id === agentId);
+  const currentAgent = fetchState.agents.find((a) => a.id === agentId);
   const agentName = currentAgent?.name ?? agentId;
   const { messages: badgeMessages } = useMessages(activePanel === 'messages', agentName);
   const unreadCount = badgeMessages.filter((m) => !m.read).length;
 
-  if (loading && !runtime) {
+  if (fetchState.status === 'loading' && !fetchState.runtime) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
         <div className="w-7 h-7 rounded-full animate-spin border-2 border-primary/20 border-t-primary/80" />
@@ -265,10 +280,10 @@ export function AgentFocusPage() {
     );
   }
 
-  if (error && !runtime) {
+  if (fetchState.status === 'error' && !fetchState.runtime) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-destructive">{error}</p>
+        <p className="text-sm text-destructive">{fetchState.error}</p>
         <Link to="/agents" className="text-xs underline text-muted-foreground hover:text-foreground">
           Back to agents
         </Link>
@@ -288,9 +303,9 @@ export function AgentFocusPage() {
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <AgentTabBar
-        agents={agents}
+        agents={fetchState.agents}
         activeId={agentId}
-        runtime={runtime}
+        runtime={fetchState.runtime}
         activePanel={activePanel}
         onPanelChange={setActivePanel}
         unreadCount={unreadCount}
@@ -298,8 +313,8 @@ export function AgentFocusPage() {
       <div className="relative flex-1 overflow-hidden">
         {activePanel === 'overview' && (
           <>
-            {runtime ? (
-              <AgentOverviewPanel agent={agent} runtime={runtime} />
+            {fetchState.runtime ? (
+              <AgentOverviewPanel agent={agent} runtime={fetchState.runtime} />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-6 h-6 rounded-full animate-spin border-2 border-primary/20 border-t-primary/70" />

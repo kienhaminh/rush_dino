@@ -3,7 +3,7 @@
 // Loads the full skill graph on mount, supports debounced semantic search,
 // and splits results into CORE / CUSTOM sections based on a tag heuristic.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { PlusIcon, SearchIcon, Loader2Icon } from 'lucide-react';
 
 import type { AgentSkillRecord } from './agent-types';
@@ -24,27 +24,61 @@ export interface SkillsTabProps {
   onAssign: (skill: SkillNode) => void;
 }
 
+// ── Reducer ────────────────────────────────────────────────────────────────
+
+type TabState = {
+  query: string;
+  loading: boolean;
+  allSkills: SkillNode[];
+  searchResults: SkillNode[] | null;
+};
+
+type TabAction =
+  | { type: 'setQuery'; query: string }
+  | { type: 'loadStart' }
+  | { type: 'loadDone'; skills: SkillNode[] }
+  | { type: 'searchDone'; results: SkillNode[] | null };
+
+function tabReducer(state: TabState, action: TabAction): TabState {
+  switch (action.type) {
+    case 'setQuery':
+      return { ...state, query: action.query };
+    case 'loadStart':
+      return { ...state, loading: true };
+    case 'loadDone':
+      return { ...state, loading: false, allSkills: action.skills };
+    case 'searchDone':
+      return { ...state, searchResults: action.results };
+  }
+}
+
+const initialTabState: TabState = {
+  query: '',
+  loading: false,
+  allSkills: [],
+  searchResults: null,
+};
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsTabProps) {
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [allSkills, setAllSkills] = useState<SkillNode[]>([]);
-  const [searchResults, setSearchResults] = useState<SkillNode[] | null>(null);
+  const [{ query, loading, allSkills, searchResults }, dispatch] = useReducer(
+    tabReducer,
+    initialTabState,
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load full skill graph on mount
   useEffect(() => {
-    setLoading(true);
+    dispatch({ type: 'loadStart' });
     fetchSkillGraph()
       .then((snapshot) => {
         // Filter to skill nodes only (exclude category nodes)
-        setAllSkills(snapshot.nodes.filter((n) => n.nodeType === 'skill'));
+        dispatch({ type: 'loadDone', skills: snapshot.nodes.filter((n) => n.nodeType === 'skill') });
       })
       .catch(() => {
-        setAllSkills([]);
-      })
-      .finally(() => setLoading(false));
+        dispatch({ type: 'loadDone', skills: [] });
+      });
   }, []);
 
   // Debounced search — 250 ms after typing stops
@@ -52,7 +86,7 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (!query.trim()) {
-      setSearchResults(null);
+      dispatch({ type: 'searchDone', results: null });
       return;
     }
 
@@ -63,9 +97,9 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
           // Use case-insensitive comparison so "Web Search" matches "web search".
           const nameSet = new Set(scored.map((s) => s.name.toLowerCase()));
           const matched = allSkills.filter((n) => nameSet.has(n.name.toLowerCase()));
-          setSearchResults(matched);
+          dispatch({ type: 'searchDone', results: matched });
         })
-        .catch(() => setSearchResults([]));
+        .catch(() => dispatch({ type: 'searchDone', results: [] }));
     }, 250);
 
     return () => {
@@ -160,7 +194,7 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => dispatch({ type: 'setQuery', query: e.target.value })}
             placeholder="Search skills…"
             className="flex-1 bg-transparent text-[11px] text-white placeholder-zinc-600 outline-none"
           />

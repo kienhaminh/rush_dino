@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { RefreshCwIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,7 @@ import {
 } from './agent-board-status';
 import { AgentHealthIndicator } from './agent-health-indicator';
 import { useAgentHealth } from './use-agent-health';
+import { useAgentRecords, useKanbanStats } from './use-agent-board-data';
 
 // ------------------------------------------------------------------
 // Team activity summary bar
@@ -57,22 +58,10 @@ export function AgentBoardPage() {
   const { board, loading, refreshing, error, refresh } = useAgentProgressBoard(true);
 
   // Fetch agent records for claimTags and tools
-  const [agentRecords, setAgentRecords] = useState<AgentRecord[]>([]);
-  useEffect(() => {
-    fetch('/api/agents')
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load agents')))
-      .then((data: { items: AgentRecord[] }) => setAgentRecords(data.items ?? []))
-      .catch(() => { /* silent — agents list is optional enrichment */ });
-  }, []);
+  const agentRecords = useAgentRecords();
 
   // Fetch kanban stats for team activity bar
-  const [kanbanStats, setKanbanStats] = useState<KanbanBoardStats | null>(null);
-  useEffect(() => {
-    fetch('/api/kanban/board')
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load kanban')))
-      .then((data: { stats: KanbanBoardStats }) => setKanbanStats(data.stats))
-      .catch(() => { /* silent — kanban stats are optional */ });
-  }, []);
+  const kanbanStats = useKanbanStats();
 
   const columns = useMemo(
     () => buildOverviewBoardColumns(board?.lanes ?? []),

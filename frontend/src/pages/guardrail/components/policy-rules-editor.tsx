@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,17 @@ const CATEGORY_LABELS: Record<ActionCategory, string> = {
 };
 
 const ALL_CATEGORIES: ActionCategory[] = ['bash', 'network', 'fs_read', 'fs_write'];
+
+type LoadState<T> = { status: 'loading' } | { status: 'success'; data: T } | { status: 'error'; error: string };
+type LoadAction<T> = { type: 'start' } | { type: 'success'; data: T } | { type: 'error'; error: string };
+
+function loadReducer<T>(state: LoadState<T>, action: LoadAction<T>): LoadState<T> {
+  switch (action.type) {
+    case 'start': return { status: 'loading' };
+    case 'success': return { status: 'success', data: action.data };
+    case 'error': return { status: 'error', error: action.error };
+  }
+}
 
 interface CategoryRulesRowProps {
   category: ActionCategory;
@@ -84,36 +95,35 @@ interface PolicyRulesEditorProps {
 }
 
 export function PolicyRulesEditor({ agentId }: PolicyRulesEditorProps) {
-  const [rules, setRules] = useState<PolicyRulesResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(
+    loadReducer<PolicyRulesResponse>,
+    { status: 'loading' },
+  );
 
   useEffect(() => {
     if (!agentId) return;
-    setLoading(true);
-    setError(null);
+    dispatch({ type: 'start' });
     getPolicyRules(agentId)
-      .then(setRules)
-      .catch(() => setError('Policy rules are not yet available.'))
-      .finally(() => setLoading(false));
+      .then((data) => dispatch({ type: 'success', data }))
+      .catch(() => dispatch({ type: 'error', error: 'Policy rules are not yet available.' }));
   }, [agentId]);
 
   function handlePatternAdded(ruleType: RuleType, category: ActionCategory, pattern: string) {
-    setRules((prev) => {
-      if (!prev) return prev;
-      const updateList = (list: CategoryRules[]) => {
-        const existing = list.find((r) => r.category === category);
-        if (existing) {
-          return list.map((r) =>
-            r.category === category ? { ...r, patterns: [...r.patterns, pattern] } : r
-          );
-        }
-        return [...list, { category, patterns: [pattern] }];
-      };
-      return ruleType === 'deny'
-        ? { ...prev, deny_rules: updateList(prev.deny_rules) }
-        : { ...prev, allow_rules: updateList(prev.allow_rules) };
-    });
+    if (state.status !== 'success') return;
+    const prev = state.data;
+    const updateList = (list: CategoryRules[]) => {
+      const existing = list.find((r) => r.category === category);
+      if (existing) {
+        return list.map((r) =>
+          r.category === category ? { ...r, patterns: [...r.patterns, pattern] } : r
+        );
+      }
+      return [...list, { category, patterns: [pattern] }];
+    };
+    const updated = ruleType === 'deny'
+      ? { ...prev, deny_rules: updateList(prev.deny_rules) }
+      : { ...prev, allow_rules: updateList(prev.allow_rules) };
+    dispatch({ type: 'success', data: updated });
   }
 
   function getRulesFor(list: CategoryRules[], category: ActionCategory) {
@@ -129,13 +139,13 @@ export function PolicyRulesEditor({ agentId }: PolicyRulesEditorProps) {
         </p>
       </CardHeader>
       <CardContent>
-        {loading && (
+        {state.status === 'loading' && (
           <p className="text-sm text-muted-foreground animate-pulse">Loading policy rules…</p>
         )}
-        {error && (
-          <p className="text-sm text-muted-foreground">{error}</p>
+        {state.status === 'error' && (
+          <p className="text-sm text-muted-foreground">{state.error}</p>
         )}
-        {!loading && !error && rules && (
+        {state.status === 'success' && (
           <Tabs defaultValue="deny">
             <TabsList className="mb-4">
               <TabsTrigger value="deny">Always Deny</TabsTrigger>
@@ -147,7 +157,7 @@ export function PolicyRulesEditor({ agentId }: PolicyRulesEditorProps) {
                 <CategoryRulesRow
                   key={category}
                   category={category}
-                  rules={getRulesFor(rules.deny_rules, category)}
+                  rules={getRulesFor(state.data.deny_rules, category)}
                   ruleType="deny"
                   agentId={agentId}
                   onPatternAdded={(cat, pat) => handlePatternAdded('deny', cat, pat)}
@@ -160,7 +170,7 @@ export function PolicyRulesEditor({ agentId }: PolicyRulesEditorProps) {
                 <CategoryRulesRow
                   key={category}
                   category={category}
-                  rules={getRulesFor(rules.allow_rules, category)}
+                  rules={getRulesFor(state.data.allow_rules, category)}
                   ruleType="allow"
                   agentId={agentId}
                   onPatternAdded={(cat, pat) => handlePatternAdded('allow', cat, pat)}
