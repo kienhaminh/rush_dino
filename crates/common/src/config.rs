@@ -228,6 +228,9 @@ pub struct ExecutionConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AgentSection {
     pub max_context_tokens: Option<usize>,
+    /// Maximum number of react-loop iterations per run. Defaults to 10.
+    /// Increase this for long-running tasks that require many tool calls.
+    pub max_iterations: Option<usize>,
 }
 
 /// Configuration for a single external MCP server (HTTP/SSE transport).

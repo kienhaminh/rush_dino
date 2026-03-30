@@ -187,25 +187,50 @@ pub fn cron_manage_tool(
     json_tool!(
         "cron_manage",
         "Manage cron jobs: get, create, update, pause, resume, run_now, or delete.",
-        json!({
-            "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["get", "create", "update", "pause", "resume", "run_now", "delete"],
-                    "description": "The action to perform on a cron job."
+        {
+            let schedule_schema = json!({
+                "type": "object",
+                "description": "Schedule definition. Use one of: {kind:'cron', expr:'0 8 * * *'} | {kind:'every', interval_seconds:3600} | {kind:'at', run_at:'2026-01-01T08:00:00Z'}",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["cron", "every", "at"]},
+                    "expr": {"type": "string", "description": "Cron expression (required when kind=cron)"},
+                    "interval_seconds": {"type": "integer", "description": "Interval in seconds (required when kind=every)"},
+                    "run_at": {"type": "string", "description": "ISO8601 datetime (required when kind=at)"}
                 },
-                "jobId": {"type": "string", "description": "Cron job ID (required for get, update, pause, resume, run_now, delete)"},
-                "name": {"type": "string", "description": "Job name (required for create)"},
-                "schedule": {"type": "string", "description": "Cron expression, e.g. '0 9 * * 1' (required for create, optional for update)"},
-                "enabled": {"type": "boolean", "description": "Whether the job is enabled (optional for create/update)"},
-                "target": {
-                    "type": "object",
-                    "description": "Either {type:'agentTurn', message, conversationId?, title?} or {type:'workflowRun', workflowId, input?, triggeredBy?} (required for create)"
-                }
-            },
-            "required": ["action"]
-        }),
+                "required": ["kind"]
+            });
+            let target_schema = json!({
+                "type": "object",
+                "description": "Target to execute. Use one of: {kind:'agent_turn', message:'...', conversation_id?:'...', title?:'...'} | {kind:'workflow_run', workflow_id:'...', input?:'...', triggered_by?:'...'}",
+                "properties": {
+                    "kind": {"type": "string", "enum": ["agent_turn", "workflow_run"]},
+                    "message": {"type": "string", "description": "Message to send (required when kind=agent_turn)"},
+                    "conversation_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "agent_id": {"type": "string"},
+                    "workflow_id": {"type": "string", "description": "Workflow ID (required when kind=workflow_run)"},
+                    "input": {"type": "string"},
+                    "triggered_by": {"type": "string"}
+                },
+                "required": ["kind"]
+            });
+            json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["get", "create", "update", "pause", "resume", "run_now", "delete"],
+                        "description": "The action to perform on a cron job."
+                    },
+                    "jobId": {"type": "string", "description": "Cron job ID (required for get, update, pause, resume, run_now, delete)"},
+                    "name": {"type": "string", "description": "Job name (required for create)"},
+                    "schedule": schedule_schema,
+                    "enabled": {"type": "boolean", "description": "Whether the job is enabled (optional for create/update)"},
+                    "target": target_schema
+                },
+                "required": ["action"]
+            })
+        },
         CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();

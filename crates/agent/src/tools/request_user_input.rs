@@ -123,71 +123,75 @@ impl Tool for RequestUserInputTool {
     }
 
     fn parameters(&self) -> Value {
+        let choice_items = json!({
+            "oneOf": [
+                {"type": "string"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "label": {"type": "string"},
+                        "value": {"type": "string"}
+                    },
+                    "required": ["label", "value"]
+                }
+            ]
+        });
+        let field_type_enum = json!({
+            "type": "string",
+            "enum": ["text", "textarea", "select", "multiselect", "boolean", "number"]
+        });
+        let fields_items = json!({
+            "type": "object",
+            "required": ["name", "label", "type"],
+            "properties": {
+                "name": {"type": "string"},
+                "label": {"type": "string"},
+                "description": {"type": "string"},
+                "type": field_type_enum,
+                "required": {"type": "boolean"},
+                "placeholder": {"type": "string"},
+                "defaultValue": {},
+                "min": {"type": "integer"},
+                "max": {"type": "integer"},
+                "minLength": {"type": "integer"},
+                "maxLength": {"type": "integer"},
+                "choices": {"type": "array", "items": choice_items.clone()}
+            }
+        });
         json!({
             "type": "object",
             "required": ["kind"],
             "additionalProperties": false,
             "properties": {
-                "kind": {
-                    "type": "string",
-                    "enum": ["question", "form"]
-                },
-                "prompt": {
-                    "type": "string",
-                    "description": "Question prompt for kind=question"
-                },
-                "title": {
-                    "type": "string",
-                    "description": "Form title for kind=form"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "submitLabel": {
-                    "type": "string"
-                },
-                "cancelLabel": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Optional field name for kind=question; defaults to answer"
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Optional field label for kind=question"
-                },
+                "kind": {"type": "string", "enum": ["question", "form"]},
+                "prompt": {"type": "string", "description": "Question prompt for kind=question"},
+                "title": {"type": "string", "description": "Form title for kind=form"},
+                "description": {"type": "string"},
+                "submitLabel": {"type": "string"},
+                "cancelLabel": {"type": "string"},
+                "name": {"type": "string", "description": "Optional field name for kind=question; defaults to answer"},
+                "label": {"type": "string", "description": "Optional field label for kind=question"},
                 "type": {
                     "type": "string",
                     "enum": ["text", "textarea", "select", "multiselect", "boolean", "number"],
                     "description": "Field type for kind=question"
                 },
-                "required": {
-                    "type": "boolean"
-                },
-                "placeholder": {
-                    "type": "string"
-                },
+                "required": {"type": "boolean"},
+                "placeholder": {"type": "string"},
                 "defaultValue": {},
-                "min": {
-                    "type": "integer"
-                },
-                "max": {
-                    "type": "integer"
-                },
-                "minLength": {
-                    "type": "integer"
-                },
-                "maxLength": {
-                    "type": "integer"
-                },
+                "min": {"type": "integer"},
+                "max": {"type": "integer"},
+                "minLength": {"type": "integer"},
+                "maxLength": {"type": "integer"},
                 "choices": {
                     "type": "array",
-                    "description": "For select/multiselect questions: strings or {label, value} objects"
+                    "description": "For select/multiselect questions: strings or {label, value} objects",
+                    "items": choice_items
                 },
                 "fields": {
                     "type": "array",
-                    "description": "For kind=form: array of field specs with name, label, type, and optional validation"
+                    "description": "For kind=form: array of field specs with name, label, type, and optional validation",
+                    "items": fields_items
                 }
             }
         })

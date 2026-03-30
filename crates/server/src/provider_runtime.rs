@@ -162,6 +162,10 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Opti
                             .agent
                             .max_context_tokens
                             .unwrap_or(200_000),
+                        max_iterations: config
+                            .agent
+                            .max_iterations
+                            .unwrap_or(AgentConfig::default().max_iterations),
                         ..AgentConfig::default()
                     }
                 },

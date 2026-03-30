@@ -125,9 +125,31 @@ pub async fn run_react_loop(
         }
     }
 
-    let mut fallback = last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
-    fallback.usage = total_usage;
-    Ok((fallback, messages))
+    // Max iterations reached — make one final no-tools call so the model can
+    // summarise what it has done and give the user a coherent response.
+    // The persisted conversation history means the user can continue with a follow-up.
+    last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
+
+    let mut wrap_up_request = build_chat_request(messages.clone(), &session_ctx, config);
+    wrap_up_request.tools = None; // force text response, no more tool calls
+
+    let mut response = provider.chat(wrap_up_request).await?;
+    let wrap_up_usage = response.usage.clone().unwrap_or_else(|| {
+        estimate_turn_usage(&messages, &response.content, &[])
+    });
+    accumulate_usage(&mut total_usage, &wrap_up_usage);
+    response.usage = total_usage.clone();
+
+    finalize_response_content(&mut response, last_presented_content.take());
+    messages.push(Message {
+        id: Uuid::new_v4().to_string(),
+        role: Role::Assistant,
+        content: response.content.clone(),
+        tool_calls: None,
+        rich_content: response.rich_content.clone(),
+        created_at: Utc::now(),
+    });
+    Ok((response, messages))
 }
 
 pub async fn run_react_loop_streaming(
@@ -266,8 +288,65 @@ pub async fn run_react_loop_streaming(
         }
     }
 
-    let mut fallback = last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
-    fallback.usage = total_usage;
+    // Max iterations reached — make one final no-tools call so the model can
+    // summarise what it has done and stream a coherent response to the user.
+    // The persisted conversation history means the user can continue with a follow-up.
+    last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
+
+    let mut wrap_up_request = build_chat_request(messages.clone(), &session_ctx, config);
+    wrap_up_request.tools = None; // force text response, no more tool calls
+
+    let mut stream = provider.stream_chat(wrap_up_request).await?;
+    let mut content = String::new();
+
+    while let Some(chunk) = stream.recv().await {
+        if let Some(thinking) = chunk.thinking_delta {
+            let _ = event_tx
+                .send(StreamingEvent::ChatChunk(ChatChunk {
+                    delta: String::new(),
+                    tool_calls: Vec::new(),
+                    done: false,
+                    usage: None,
+                    thinking_delta: Some(thinking),
+                }))
+                .await;
+        }
+        if !chunk.delta.is_empty() {
+            content.push_str(&chunk.delta);
+            let _ = event_tx
+                .send(StreamingEvent::ChatChunk(ChatChunk {
+                    delta: chunk.delta,
+                    tool_calls: Vec::new(),
+                    done: false,
+                    usage: None,
+                    thinking_delta: None,
+                }))
+                .await;
+        }
+        if chunk.done {
+            break;
+        }
+    }
+
+    let wrap_up_usage = estimate_turn_usage(&messages, &content, &[]);
+    accumulate_usage(&mut total_usage, &wrap_up_usage);
+
+    let mut final_response = ChatResponse {
+        content,
+        tool_calls: Vec::new(),
+        rich_content: None,
+        usage: total_usage.clone(),
+        finish_reason: "stop".to_owned(),
+    };
+    finalize_response_content(&mut final_response, last_presented_content.take());
+    messages.push(Message {
+        id: Uuid::new_v4().to_string(),
+        role: Role::Assistant,
+        content: final_response.content.clone(),
+        tool_calls: None,
+        rich_content: final_response.rich_content.clone(),
+        created_at: Utc::now(),
+    });
     let _ = event_tx
         .send(StreamingEvent::ChatChunk(ChatChunk {
             delta: String::new(),
@@ -277,7 +356,7 @@ pub async fn run_react_loop_streaming(
             thinking_delta: None,
         }))
         .await;
-    Ok((fallback, messages))
+    Ok((final_response, messages))
 }
 
 fn finalize_response_content(response: &mut ChatResponse, presented_content: Option<RichContent>) {

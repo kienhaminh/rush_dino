@@ -191,12 +191,18 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
           setItems((prev) => {
             const lastIdx = [...prev].map((x, i) => [x, i] as const).reverse()
               .find(([x]) => x.kind === 'thinking')?.[1] ?? -1;
-            if (lastIdx === -1) return prev;
-            const item = prev[lastIdx];
-            if (item.kind !== 'thinking') return prev;
+            const lastItem = lastIdx !== -1 ? prev[lastIdx] : null;
+            // Create a new thinking item if none exists or the last one is already done
+            // (each react-loop iteration should have its own thinking block)
+            if (!lastItem || lastItem.kind !== 'thinking' || lastItem.done) {
+              return [
+                ...prev,
+                { kind: 'thinking' as const, id: crypto.randomUUID(), content: msg.thinking_delta },
+              ];
+            }
             return [
               ...prev.slice(0, lastIdx),
-              { ...item, content: (item.content ?? '') + msg.thinking_delta },
+              { ...lastItem, content: (lastItem.content ?? '') + msg.thinking_delta },
               ...prev.slice(lastIdx + 1),
             ];
           });

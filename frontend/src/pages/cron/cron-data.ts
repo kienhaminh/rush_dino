@@ -1,5 +1,4 @@
 import type { ApiCronJobRecord, ApiCronRunRecord } from '@/lib/types';
-
 import type { CronJob, CronRunLogEntry, CronStatus } from './cron-types';
 
 function parseTimestamp(value: string | null | undefined): number | null {
@@ -11,26 +10,22 @@ function parseTimestamp(value: string | null | undefined): number | null {
 function formatSchedule(job: ApiCronJobRecord): string {
   switch (job.schedule.kind) {
     case 'cron':
-      return job.schedule.expr;
+      return job.schedule.expr ?? '';
     case 'every':
-      return `Every ${job.schedule.intervalSeconds} seconds`;
+      return `Every ${job.schedule.intervalSeconds}s`;
     case 'at':
-      return job.schedule.runAt;
+      return job.schedule.runAt ?? '';
   }
 }
 
 function deriveTarget(job: ApiCronJobRecord): { agentId: string; targetLabel: string } {
   if (job.target.kind === 'agent_turn') {
     const agentId = job.target.agentId?.trim() || '';
-    return {
-      agentId,
-      targetLabel: `Agent: ${agentId}`,
-    };
+    return { agentId, targetLabel: `Agent: ${agentId}` };
   }
-
   return {
     agentId: 'workflow',
-    targetLabel: `Workflow: ${job.target.workflowId}`,
+    targetLabel: `Workflow: ${job.target.workflowId ?? ''}`,
   };
 }
 
@@ -44,6 +39,8 @@ export function mapCronJobRecordToCard(job: ApiCronJobRecord): CronJob {
     schedule: formatSchedule(job),
     scheduleKind: job.schedule.kind,
     nextRunAtMs: parseTimestamp(job.nextRunAt),
+    lastRunAtMs: parseTimestamp(job.lastRunAt),
+    lastError: job.lastError ?? null,
     agentId: target.agentId,
     targetLabel: target.targetLabel,
     enabled: job.enabled,
@@ -65,12 +62,14 @@ export function mapCronRunRecordToEntry(
     id: run.id,
     jobId: run.jobId,
     jobName: jobsById.get(run.jobId)?.name ?? run.jobId,
-    status: run.status === 'ok' ? 'ok' : 'error',
+    status: run.status,
+    triggerKind: run.triggerKind,
     startedAtMs,
     durationMs,
     summary: run.summary ?? undefined,
     error: run.error ?? undefined,
-    deliveryStatus: 'not-requested',
+    sessionId: run.sessionId ?? undefined,
+    workflowRunId: run.workflowRunId ?? undefined,
   };
 }
 

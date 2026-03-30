@@ -13,13 +13,19 @@ interface ToolUseGroupProps {
 export function ToolUseGroup({ tools }: ToolUseGroupProps) {
   const hasRunning = tools.some((t) => t.status === 'running');
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
+  // Track whether tools have ever run during this component's lifetime so we can
+  // keep the group expanded after the run completes (tools collapse on re-mount
+  // from history, but stay open after a live run finishes in the same session).
+  const [locallyRan, setLocallyRan] = useState(false);
 
-  // Reset override when running state changes so auto-behaviour kicks in
   useEffect(() => {
-    setUserOverride(null);
+    if (hasRunning) {
+      setLocallyRan(true);
+      setUserOverride(null); // auto-expand when a new run starts
+    }
   }, [hasRunning]);
 
-  const isExpanded = userOverride !== null ? userOverride : hasRunning;
+  const isExpanded = userOverride !== null ? userOverride : (hasRunning || locallyRan);
 
   const count = tools.length;
   const label = hasRunning

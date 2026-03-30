@@ -11,9 +11,12 @@ export type CronJob = {
   schedule: string;
   scheduleKind: 'every' | 'at' | 'cron';
   nextRunAtMs: number | null;
+  lastRunAtMs: number | null;
+  lastError: string | null;
   agentId: string;
+  targetLabel: string;
   enabled: boolean;
-  status: 'active' | 'paused' | 'error';
+  status: 'active' | 'idle' | 'paused' | 'error';
   updatedAtMs: number;
 };
 
@@ -21,17 +24,17 @@ export type CronRunLogEntry = {
   id: string;
   jobId: string;
   jobName: string;
-  status: 'ok' | 'error' | 'skipped';
+  status: 'ok' | 'error' | 'blocked';
+  triggerKind: string;
   startedAtMs: number;
   durationMs: number;
   summary?: string;
   error?: string;
-  deliveryStatus: 'delivered' | 'not-delivered' | 'unknown' | 'not-requested';
+  sessionId?: string;
+  workflowRunId?: string;
 };
 
 export type CronJobsEnabledFilter = 'all' | 'enabled' | 'disabled';
 export type CronJobsSortBy = 'nextRunAtMs' | 'updatedAtMs' | 'name';
 export type CronSortDir = 'asc' | 'desc';
-export type CronRunScope = 'all' | 'job';
-export type CronRunsStatusValue = 'ok' | 'error' | 'skipped';
-export type CronDeliveryStatus = 'delivered' | 'not-delivered' | 'unknown' | 'not-requested';
+export type CronRunsStatusFilter = 'all' | 'ok' | 'error' | 'blocked';
