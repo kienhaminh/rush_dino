@@ -8,6 +8,7 @@ import { useChatWs } from '@/hooks/use-chat-ws';
 import { useSubAgentSessions } from '@/hooks/use-sub-agent-sessions';
 import { fetchConversation } from '@/lib/api';
 import { messagesToItems } from '@/lib/message-converter';
+import type { ConversationMetrics } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -28,6 +29,9 @@ export function ChatPage() {
     setHistoryLoaded,
   } = useChatWs();
 
+  const [latestMetrics, setLatestMetrics] = useState<ConversationMetrics | null>(null);
+  const prevIsStreamingRef = useRef(false);
+
   const { sessions: agentSessions, liveRuns, refresh: refreshAgentSessions } = useSubAgentSessions(items);
   const [panelWidth, setPanelWidth] = useState(260);
 
@@ -41,6 +45,7 @@ export function ChatPage() {
         const detail = await fetchConversation(MAIN_SESSION_ID);
         if (!cancelled) {
           resetWithItems(messagesToItems(detail.messages, detail.pendingInputRequests ?? []));
+          setLatestMetrics(detail.latestMetrics ?? null);
           setHistoryLoaded(true);
         }
       } catch {
@@ -52,6 +57,25 @@ export function ChatPage() {
     })();
     return () => { cancelled = true; };
   }, [historyLoaded, resetWithItems, setHistoryLoaded]);
+
+  // Re-fetch metrics when streaming ends (true → false transition).
+  useEffect(() => {
+    const wasStreaming = prevIsStreamingRef.current;
+    prevIsStreamingRef.current = isStreaming;
+    if (!wasStreaming || isStreaming || !historyLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await fetchConversation(MAIN_SESSION_ID);
+        if (!cancelled) setLatestMetrics(detail.latestMetrics ?? null);
+      } catch {
+        // ignore — metrics stay stale on error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isStreaming, historyLoaded]);
 
   const handleSendMessage = useCallback(() => {
     if (!inputValue.trim() || isStreaming) return;
@@ -93,6 +117,7 @@ export function ChatPage() {
           <ConversationTimeline
             items={items}
             isStreaming={isStreaming}
+            latestMetrics={latestMetrics}
             onResolveInputRequest={markInputRequestResolved}
           />
         )}
