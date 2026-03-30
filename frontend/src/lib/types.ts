@@ -846,6 +846,17 @@ export interface WsTaskReviewReadyEvent {
   notification: string;
 }
 
+/** Emitted when a new Telegram/Discord pairing request is created. */
+export interface WsPairingRequestCreatedEvent {
+  type: 'pairing_request_created';
+  id: string;
+  channel_id: string;
+  sender_id: string;
+  sender_display: string | null;
+  code: string;
+  created_at: string;
+}
+
 export type WsEvent =
   | WsChatChunkEvent
   | WsAssistantResetEvent
@@ -858,7 +869,8 @@ export type WsEvent =
   | WsErrorEvent
   | WsRuntimeLogErrorEvent
   | WsUserMessageEvent
-  | WsTaskReviewReadyEvent;
+  | WsTaskReviewReadyEvent
+  | WsPairingRequestCreatedEvent;
 
 export type ConversationItem =
   | { kind: 'user'; id: string; content: string }

@@ -28,6 +28,19 @@ const ChatWsConnectionContext = createContext<ChatWsConnectionValue>({
 });
 
 // ---------------------------------------------------------------------------
+// Context: pairing request notifications (used by sidebar badge + ApprovalsPage)
+// ---------------------------------------------------------------------------
+
+interface PairingRequestValue {
+  /** Increments each time a pairing_request_created WS event arrives. */
+  pairingRequestCount: number;
+}
+
+const PairingRequestContext = createContext<PairingRequestValue>({
+  pairingRequestCount: 0,
+});
+
+// ---------------------------------------------------------------------------
 // Context: chat items & actions (changes on every streaming chunk — only
 // consumed by ChatPage)
 // ---------------------------------------------------------------------------
@@ -80,6 +93,8 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
 
   // Error dedup for runtime_log_error toasts
   const seenErrorLogIdsRef = useRef<Set<string>>(new Set());
+
+  const [pairingRequestCount, setPairingRequestCount] = useState(0);
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -383,6 +398,12 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         ]);
         return;
       }
+
+      // --- pairing_request_created ---
+      if (msg.type === 'pairing_request_created') {
+        setPairingRequestCount((n) => n + 1);
+        return;
+      }
     };
   }, [replaceAssistantItem]);
 
@@ -453,6 +474,11 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
 
   const connectionValue = useMemo(() => ({ isConnected }), [isConnected]);
 
+  const pairingRequestValue = useMemo(
+    () => ({ pairingRequestCount }),
+    [pairingRequestCount],
+  );
+
   const chatValue = useMemo(
     () => ({
       items,
@@ -479,7 +505,9 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
 
   return (
     <ChatWsConnectionContext.Provider value={connectionValue}>
-      <ChatWsContext.Provider value={chatValue}>{children}</ChatWsContext.Provider>
+      <PairingRequestContext.Provider value={pairingRequestValue}>
+        <ChatWsContext.Provider value={chatValue}>{children}</ChatWsContext.Provider>
+      </PairingRequestContext.Provider>
     </ChatWsConnectionContext.Provider>
   );
 }
@@ -498,4 +526,9 @@ export function useChatWs() {
   const ctx = useContext(ChatWsContext);
   if (!ctx) throw new Error('useChatWs must be used within ChatWsProvider');
   return ctx;
+}
+
+/** Subscribe to pairing request arrival events (used by sidebar badge). */
+export function usePairingRequestEvents() {
+  return useContext(PairingRequestContext);
 }
