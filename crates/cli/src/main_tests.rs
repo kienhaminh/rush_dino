@@ -99,3 +99,43 @@ fn downgrade_subcommand_parses_version_flag() {
         other => panic!("expected downgrade command, got {other:?}"),
     }
 }
+
+#[test]
+fn sessions_list_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "sessions", "list"])
+        .expect("sessions list should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
+
+#[test]
+fn sessions_list_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "sessions", "list", "--json"])
+        .expect("sessions list --json should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
+
+#[test]
+fn sessions_create_requires_title() {
+    Cli::try_parse_from(["rushdino", "sessions", "create"])
+        .expect_err("sessions create without --title should fail");
+}
+
+#[test]
+fn sessions_create_parses_with_title() {
+    let cli = Cli::try_parse_from(["rushdino", "sessions", "create", "--title", "My session"])
+        .expect("sessions create --title should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
+
+#[test]
+fn sessions_message_requires_id_and_text() {
+    Cli::try_parse_from(["rushdino", "sessions", "message"])
+        .expect_err("sessions message without args should fail");
+}
+
+#[test]
+fn sessions_message_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "sessions", "message", "abc123", "hello"])
+        .expect("sessions message <id> <text> should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
