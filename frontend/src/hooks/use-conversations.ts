@@ -1,38 +1,42 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
-import { deleteConversation, fetchConversations } from '../lib/api';
+import { useConversationsQuery, useDeleteConversationMutation, sessionKeys } from '../lib/queries/sessions';
 import type { Conversation } from '../lib/types';
 
 export function useConversations() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const queryClient = useQueryClient();
+  const { data: conversationsData } = useConversationsQuery();
+  const conversations: Conversation[] = conversationsData ?? [];
+
   const [activeId, setActiveId] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    const items = await fetchConversations();
-    setConversations(items);
-    if (!activeId && items.length > 0) {
-      setActiveId(items[0].id);
-    }
-  }, [activeId]);
-
+  // Auto-select first conversation when data loads and nothing is selected
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (!activeId && conversations.length > 0) {
+      setActiveId(conversations[0].id);
+    }
+  }, [activeId, conversations]);
+
+  const deleteMutation = useDeleteConversationMutation();
 
   const removeConversation = useCallback(
     async (id: string) => {
-      await deleteConversation(id);
-      await refresh();
+      await deleteMutation.mutateAsync(id);
       if (activeId === id) {
         setActiveId(null);
       }
     },
-    [activeId, refresh],
+    [activeId, deleteMutation],
   );
 
   const createNew = useCallback(() => {
     setActiveId(null);
   }, []);
+
+  const refresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: sessionKeys.conversations() });
+  }, [queryClient]);
 
   return {
     conversations,

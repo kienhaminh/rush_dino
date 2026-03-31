@@ -1,172 +1,82 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  deleteConversation,
-  resetSession,
-  fetchConversation,
-  fetchRegisteredTools,
-  fetchSessionRuns,
-  fetchSessions,
-  fetchSoulMemoryState,
-  fetchSystemPrompt,
-  fetchSystemSummary,
-  patchThinkingLevel,
-} from '@/lib/api';
 import type {
   Message,
   RegisteredTool,
   RunSnapshot,
   SessionSummary,
   SoulMemoryStateResponse,
-  SystemSummaryResponse,
 } from '@/lib/types';
+import {
+  useSessionsQuery,
+  useSessionRunsQuery,
+  useConversationQuery,
+  useDeleteConversationMutation,
+  useResetSessionMutation,
+  sessionKeys,
+} from '@/lib/queries/sessions';
+import { useSystemPromptQuery, useRegisteredToolsQuery, usePatchThinkingLevelMutation } from '@/lib/queries/config';
+import { useSoulMemoryQuery } from '@/lib/queries/soul-memory';
+import { useOverviewQuery } from '@/lib/queries/misc';
 import { SessionsPage } from './SessionsPage';
 
-// --- Session detail reducer ---
-type SessionDetailState = {
-  loading: boolean;
-  error: string | null;
-  messages: Message[];
-  runs: RunSnapshot[];
-};
-type SessionDetailAction =
-  | { type: 'loading' }
-  | { type: 'loaded'; runs: RunSnapshot[]; messages: Message[] }
-  | { type: 'error'; message: string };
-
-function sessionDetailReducer(state: SessionDetailState, action: SessionDetailAction): SessionDetailState {
-  switch (action.type) {
-    case 'loading': return { loading: true, error: null, messages: state.messages, runs: state.runs };
-    case 'loaded': return { loading: false, error: null, messages: action.messages, runs: action.runs };
-    case 'error': return { loading: false, error: action.message, messages: [], runs: [] };
-  }
-}
-
-// --- Meta reducer ---
-type MetaState = {
-  sessions: SessionSummary[];
-  soulMemory: SoulMemoryStateResponse | null;
-  systemPrompt: string | null;
-  registeredTools: RegisteredTool[];
-  agentConfig: SystemSummaryResponse['agentConfig'];
-};
-type MetaAction =
-  | { type: 'loaded'; sessions: SessionSummary[]; soulMemory: SoulMemoryStateResponse; systemPrompt: string; registeredTools: RegisteredTool[]; agentConfig: SystemSummaryResponse['agentConfig'] }
-  | { type: 'error' };
-
-function metaReducer(state: MetaState, action: MetaAction): MetaState {
-  if (action.type === 'loaded') {
-    return {
-      sessions: action.sessions,
-      soulMemory: action.soulMemory,
-      systemPrompt: action.systemPrompt,
-      registeredTools: action.registeredTools,
-      agentConfig: action.agentConfig,
-    };
-  }
-  return state;
-}
-
-const POLL_INTERVAL_MS = 30_000;
-
 export function SessionsRoute() {
-  const [detailState, dispatchDetail] = useReducer(sessionDetailReducer, {
-    loading: false,
-    error: null,
-    messages: [],
-    runs: [],
-  });
-  const [metaState, dispatchMeta] = useReducer(metaReducer, {
-    sessions: [],
-    soulMemory: null,
-    systemPrompt: null,
-    registeredTools: [],
-    agentConfig: null,
-  });
+  const queryClient = useQueryClient();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [thinkingLevelOverride, setThinkingLevelOverride] = useState<string | null>(null);
-  const pollingRef = useRef(false);
 
-  // Fetch sessions + soul memory + system prompt
-  const refreshMeta = useCallback(async (isInitial = false) => {
-    try {
-      const [s, mem, prompt, tools, summary] = await Promise.all([
-        fetchSessions(),
-        fetchSoulMemoryState(),
-        fetchSystemPrompt(),
-        fetchRegisteredTools(),
-        fetchSystemSummary(),
-      ]);
-      dispatchMeta({
-        type: 'loaded',
-        sessions: s,
-        soulMemory: mem,
-        systemPrompt: prompt.content,
-        registeredTools: tools,
-        agentConfig: summary.agentConfig ?? null,
-      });
-      if (isInitial) {
-        // Always connect to the main session by its fixed ID.
-        const main = s.find((x) => x.id === 'main') ?? s[0] ?? null;
-        if (main) setSelectedSessionId(main.id);
-      }
-    } catch (e) {
-      dispatchMeta({ type: 'error' });
-      if (isInitial) dispatchDetail({ type: 'error', message: e instanceof Error ? e.message : 'Failed to load sessions' });
-    }
-  }, []);
+  // --- Server state via React Query ---
+  const sessionsQuery = useSessionsQuery();
+  const soulMemoryQuery = useSoulMemoryQuery();
+  const systemPromptQuery = useSystemPromptQuery();
+  const registeredToolsQuery = useRegisteredToolsQuery();
+  const overviewQuery = useOverviewQuery();
 
-  // Mount: load meta
-  useEffect(() => {
-    refreshMeta(true);
-  }, [refreshMeta]);
+  // Auto-select main session on first load
+  const sessions: SessionSummary[] = sessionsQuery.data ?? [];
+  if (!selectedSessionId && sessions.length > 0) {
+    const main = sessions.find((x) => x.id === 'main') ?? sessions[0];
+    // Use a deferred set to avoid setState-during-render
+    Promise.resolve().then(() => setSelectedSessionId(main.id));
+  }
 
-  // Poll every 30s to keep context window token counts live
-  useEffect(() => {
-    const id = setInterval(async () => {
-      if (pollingRef.current) return;
-      pollingRef.current = true;
-      try {
-        await refreshMeta(false);
-      } finally {
-        pollingRef.current = false;
-      }
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [refreshMeta]);
+  // Session detail: runs and then conversation messages derived from the first run
+  const runsQuery = useSessionRunsQuery(selectedSessionId ?? '', 30);
+  const runs: RunSnapshot[] = runsQuery.data ?? [];
+  const conversationId = runs[0]?.conversationId ?? '';
+  const conversationQuery = useConversationQuery(conversationId);
+  const messages: Message[] = conversationQuery.data?.messages ?? [];
 
-  // Load conversation + runs when selected session changes
-  useEffect(() => {
-    if (!selectedSessionId) return;
+  // Derived meta values
+  const soulMemory: SoulMemoryStateResponse | null = soulMemoryQuery.data ?? null;
+  const systemPrompt: string = systemPromptQuery.data?.content ?? '';
+  const registeredTools: RegisteredTool[] = registeredToolsQuery.data ?? [];
+  const agentConfig = overviewQuery.data?.agentConfig ?? null;
 
-    async function loadSession() {
-      if (!selectedSessionId) return;
-      dispatchDetail({ type: 'loading' });
-      try {
-        const sessionRuns = await fetchSessionRuns(selectedSessionId, 30);
-        const conversationId = sessionRuns[0]?.conversationId;
-        let messages: Message[] = [];
-        if (conversationId) {
-          const conv = await fetchConversation(conversationId);
-          messages = conv.messages;
-        }
-        dispatchDetail({ type: 'loaded', runs: sessionRuns, messages });
-      } catch (e) {
-        dispatchDetail({ type: 'error', message: e instanceof Error ? e.message : 'Failed to load session detail' });
-      }
-    }
-    loadSession();
-  }, [selectedSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Loading / error: reflect detail loading (runs + conversation)
+  const loading = runsQuery.isFetching || (!!conversationId && conversationQuery.isFetching);
+  const error =
+    runsQuery.isError
+      ? (runsQuery.error instanceof Error ? runsQuery.error.message : 'Failed to load session detail')
+      : conversationQuery.isError
+      ? (conversationQuery.error instanceof Error ? conversationQuery.error.message : 'Failed to load conversation')
+      : null;
 
-  const handleRefresh = async () => {
-    await refreshMeta(false);
-    setSelectedSessionId((prev) => prev);
+  // --- Mutations ---
+  const deleteMutation = useDeleteConversationMutation();
+  const resetMutation = useResetSessionMutation();
+  const patchThinkingMutation = usePatchThinkingLevelMutation();
+
+  // --- Handlers ---
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all() });
   };
 
   const handleThinkingLevelChange = async (level: string) => {
     setThinkingLevelOverride(level); // optimistic update
     try {
-      await patchThinkingLevel(level);
+      await patchThinkingMutation.mutateAsync(level);
     } catch (err) {
       setThinkingLevelOverride(null); // revert on error
       toast.error(err instanceof Error ? err.message : 'Failed to update thinking level');
@@ -176,9 +86,9 @@ export function SessionsRoute() {
   const handleReset = async (sessionId: string) => {
     if (!window.confirm('Reset this session? This will clear the conversation history and cannot be undone.')) return;
     try {
-      await resetSession(sessionId);
+      await resetMutation.mutateAsync(sessionId);
       toast.success('Session reset.');
-      await refreshMeta(false);
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all() });
       setSelectedSessionId(sessionId); // re-trigger conversation reload
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reset session.');
@@ -188,10 +98,9 @@ export function SessionsRoute() {
   const handleDelete = async (sessionId: string) => {
     if (!window.confirm('Delete this conversation session? This cannot be undone.')) return;
     try {
-      await deleteConversation(sessionId);
+      await deleteMutation.mutateAsync(sessionId);
       toast.success('Session deleted.');
       if (selectedSessionId === sessionId) setSelectedSessionId(null);
-      await refreshMeta(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete session.');
     }
@@ -199,16 +108,16 @@ export function SessionsRoute() {
 
   return (
     <SessionsPage
-      sessions={metaState.sessions}
+      sessions={sessions}
       selectedSessionId={selectedSessionId}
-      messages={detailState.messages}
-      runs={detailState.runs}
-      soulMemory={metaState.soulMemory}
-      systemPrompt={metaState.systemPrompt}
-      registeredTools={metaState.registeredTools}
-      agentConfig={metaState.agentConfig}
-      loading={detailState.loading}
-      error={detailState.error}
+      messages={messages}
+      runs={runs}
+      soulMemory={soulMemory}
+      systemPrompt={systemPrompt}
+      registeredTools={registeredTools}
+      agentConfig={agentConfig}
+      loading={loading}
+      error={error}
       onSelectSession={setSelectedSessionId}
       onRefresh={handleRefresh}
       onReset={handleReset}
