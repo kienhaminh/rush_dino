@@ -22,7 +22,7 @@ export function isAnthropicOAuthProfile(
 
 export function formatAuthLabel(profile: Pick<ProviderProfile, 'provider_kind' | 'auth_method'>) {
   if (isCodexOAuthProfile(profile)) return 'Codex (OAuth)';
-  if (isAnthropicOAuthProfile(profile)) return 'Anthropic OAuth';
+  if (isAnthropicOAuthProfile(profile)) return 'OAuth';
   if (profile.auth_method === 'apikey') return 'API Key';
   if (profile.auth_method === 'oauth') return 'OAuth';
   return profile.auth_method;

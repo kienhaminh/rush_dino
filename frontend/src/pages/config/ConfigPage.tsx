@@ -162,15 +162,10 @@ export function ConfigPage() {
       {/* Main content */}
       <main className="flex-1 min-w-0 p-6 md:p-8 overflow-y-auto">
         <Card className="bg-card border-border/70">
-          <CardHeader className="flex flex-row items-start justify-between">
-            <div>
-              <CardTitle className="text-lg">
-                {SECTIONS.find((s) => s.key === activeSection)?.label}
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {SECTIONS.find((s) => s.key === activeSection)?.description}
-              </p>
-            </div>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {SECTIONS.find((s) => s.key === activeSection)?.label}
+            </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4">

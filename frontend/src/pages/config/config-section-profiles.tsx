@@ -270,11 +270,11 @@ function ProfileCard({
           : 'border-border/40 bg-card/50 hover:border-border/60 hover:bg-card/80'
       }`}
     >
-      <div className="flex items-center gap-3 pr-4">
+      <div className="flex items-center gap-3 px-5 py-4">
         <button
           type="button"
           onClick={onToggleExpand}
-          className="flex-1 flex items-center gap-4 px-5 py-4 text-left min-w-0"
+          className="flex items-center gap-4 flex-1 text-left min-w-0"
         >
           <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-background/50 border border-border/40 shrink-0">
             {PROVIDER_ICONS[profile.provider_kind] || <Server className="w-5 h-5 text-muted-foreground" />}
@@ -287,36 +287,38 @@ function ProfileCard({
               {formatProviderLabel(profile.provider_kind)} — {formatAuthLabel(profile)}
             </p>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
-            {isConnected && (
-              <Badge
-                variant="outline"
-                className="text-[10px] bg-success/10 text-success border-success/20 gap-1 px-1.5 py-0"
-              >
-                <div className="w-1 h-1 rounded-full bg-success animate-pulse" />
-                Connected
-              </Badge>
-            )}
-            {isDefault && (
-              <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex">
-                Default
-              </Badge>
-            )}
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {isDefault && (
+            <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex">
+              Default
+            </Badge>
+          )}
+          {!isDefault && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onSetDefault}
+              className="text-[10px] h-7 px-2"
+            >
+              Set Default
+            </Button>
+          )}
+          {isConnected && (
+            <Badge
+              variant="outline"
+              className="text-[10px] bg-success/10 text-success border-success/20 gap-1 px-1.5 py-0"
+            >
+              <div className="w-1 h-1 rounded-full bg-success animate-pulse" />
+              Connected
+            </Badge>
+          )}
+          <button type="button" onClick={onToggleExpand} className="p-0.5">
             <ChevronDown
               className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
             />
-          </div>
-        </button>
-        {!isDefault && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onSetDefault}
-            className="text-[10px] h-7 px-2"
-          >
-            Set Default
-          </Button>
-        )}
+          </button>
+        </div>
       </div>
 
       {isExpanded && (

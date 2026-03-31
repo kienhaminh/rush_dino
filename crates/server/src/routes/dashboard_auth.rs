@@ -58,11 +58,15 @@ pub async fn get_status(State(state): State<AppState>, headers: HeaderMap) -> im
             expires_at: None,
         })
         .into_response(),
-        Err(err) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": format!("dashboard auth status failed: {err}") })),
-        )
-            .into_response(),
+        Err(err) => {
+            tracing::warn!("dashboard auth status: session validation failed: {err}");
+            Json(DashboardAuthStatusResponse {
+                enabled: true,
+                authenticated: false,
+                expires_at: None,
+            })
+            .into_response()
+        }
     }
 }
 
