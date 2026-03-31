@@ -273,7 +273,7 @@ impl ConversationManager {
 
     pub async fn get_messages(&self, conversation_id: &str) -> Result<Vec<Message>> {
         let rows = sqlx::query(
-            "SELECT id, role, content, tool_calls, rich_content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, role, content, tool_calls, rich_content, thinking, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .bind(conversation_id)
         .fetch_all(self.pool.as_ref())
