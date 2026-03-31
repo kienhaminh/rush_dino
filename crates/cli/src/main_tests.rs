@@ -353,3 +353,113 @@ fn sessions_history_json_flag_parses() {
     .expect("sessions history --json should parse");
     assert!(matches!(cli.command, Command::Sessions(_)));
 }
+
+#[test]
+fn cron_list_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "list"])
+        .expect("cron list should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_list_json_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "list", "--json"])
+        .expect("cron list --json should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_get_requires_id() {
+    Cli::try_parse_from(["rushdino", "cron", "get"])
+        .expect_err("cron get without id should fail");
+}
+
+#[test]
+fn cron_get_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "get", "job-123"])
+        .expect("cron get <id> should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_create_requires_schedule_and_prompt() {
+    Cli::try_parse_from(["rushdino", "cron", "create", "--schedule", "0 * * * *"])
+        .expect_err("cron create without --prompt should fail");
+}
+
+#[test]
+fn cron_create_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "cron", "create",
+        "--schedule", "0 * * * *",
+        "--prompt", "run daily report",
+    ])
+    .expect("cron create with required args should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_create_with_agent_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "cron", "create",
+        "--schedule", "0 * * * *",
+        "--prompt", "run daily report",
+        "--agent", "agent-123",
+    ])
+    .expect("cron create --agent should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_delete_requires_id() {
+    Cli::try_parse_from(["rushdino", "cron", "delete"])
+        .expect_err("cron delete without id should fail");
+}
+
+#[test]
+fn cron_delete_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "delete", "job-123"])
+        .expect("cron delete <id> should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_pause_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "pause", "job-123"])
+        .expect("cron pause <id> should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_resume_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "resume", "job-123"])
+        .expect("cron resume <id> should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_trigger_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "trigger", "job-123"])
+        .expect("cron trigger <id> should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_runs_requires_id() {
+    Cli::try_parse_from(["rushdino", "cron", "runs"])
+        .expect_err("cron runs without id should fail");
+}
+
+#[test]
+fn cron_runs_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "runs", "job-123"])
+        .expect("cron runs <id> should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_runs_limit_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "runs", "job-123", "--limit", "5"])
+        .expect("cron runs --limit should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}

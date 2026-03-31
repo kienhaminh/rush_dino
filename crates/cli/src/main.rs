@@ -58,6 +58,7 @@ enum Command {
     Agents(commands::agents::AgentsArgs),
     Browser,
     Workflow(commands::workflow::WorkflowArgs),
+    Cron(commands::cron::CronArgs),
     Kanban(commands::kanban::KanbanArgs),
     Approvals(commands::approval::ApprovalsArgs),
 }
@@ -102,6 +103,7 @@ async fn run() -> Result<()> {
         Command::Agents(args) => commands::agents::run(args).await,
         Command::Browser => commands::browser::run().await,
         Command::Workflow(args) => commands::workflow::run(args).await,
+        Command::Cron(args) => commands::cron::run(args).await,
         Command::Kanban(args) => commands::kanban::run(args).await,
         Command::Approvals(args) => commands::approval::run(args).await,
     }
