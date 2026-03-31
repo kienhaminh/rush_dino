@@ -40,9 +40,6 @@ impl Tool for WebSearchTool {
          to read specific URLs rather than searching again."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["internet", "search", "google", "browse"]
-    }
 
     fn max_calls_per_turn(&self) -> Option<usize> {
         Some(1)

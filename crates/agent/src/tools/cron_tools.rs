@@ -114,24 +114,6 @@ async fn run_agent_turn(ctx: AgentTurnCtx, conversation_id: &str, input: &str) -
 }
 
 macro_rules! json_tool {
-    // 5-argument form: name, description, schema, keywords, body
-    ($name:expr, $desc:expr, $schema:expr, $kw:expr, $body:expr) => {{
-        struct ToolImpl<F>(F, Value);
-        #[async_trait]
-        impl<F, Fut> Tool for ToolImpl<F>
-        where
-            F: Send + Sync + Fn(Value) -> Fut,
-            Fut: std::future::Future<Output = Result<String>> + Send,
-        {
-            fn name(&self) -> &str { $name }
-            fn description(&self) -> &str { $desc }
-            fn parameters(&self) -> Value { self.1.clone() }
-            fn keywords(&self) -> Vec<&str> { $kw.to_vec() }
-            async fn execute(&self, args: Value) -> Result<String> { (self.0)(args).await }
-        }
-        ToolImpl($body, $schema)
-    }};
-    // 4-argument form: name, description, schema, body (no keywords)
     ($name:expr, $desc:expr, $schema:expr, $body:expr) => {{
         struct ToolImpl<F>(F, Value);
         #[async_trait]
@@ -153,14 +135,12 @@ macro_rules! json_tool {
     };
 }
 
-const CRON_KEYWORDS: &[&str] = &["cron", "schedule", "recurring", "job", "timer"];
 
 pub fn cron_list_tool(manager: Arc<CronManager>) -> impl Tool {
     json_tool!(
         "cron_list",
         "List configured cron jobs.",
         json!({"type": "object", "properties": {}}),
-        CRON_KEYWORDS,
         move |_args| {
             let manager = manager.clone();
             async move {
@@ -226,7 +206,6 @@ pub fn cron_manage_tool(
                 "required": ["action"]
             })
         },
-        CRON_KEYWORDS,
         move |args: Value| {
             let manager = manager.clone();
             let ctx = ctx.clone();

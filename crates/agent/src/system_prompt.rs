@@ -43,11 +43,6 @@ fn build_tooling_section(tools: &[ToolDefinition]) -> Vec<String> {
     for tool in tools {
         lines.push(format!("- {}: {}", tool.name, tool.description));
     }
-    if tools.iter().any(|t| t.name == "tool_search") {
-        lines.push(
-            "Use `tool_search` to discover and activate additional tools by keyword.".to_owned(),
-        );
-    }
     lines.push(String::new());
     lines
 }

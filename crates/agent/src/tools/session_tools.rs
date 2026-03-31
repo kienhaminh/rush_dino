@@ -139,9 +139,6 @@ impl Tool for SessionManageTool {
         "Manage sessions: create, get, or delete. Use `action` to specify the operation."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["session", "conversation", "history"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -264,9 +261,6 @@ impl Tool for SessionSendTool {
         "Send a message into an existing session and wait for the agent reply."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["session", "conversation", "history"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -424,7 +418,7 @@ mod tests {
 
         // Alive Arc references so the Weak upgrades succeed inside execute().
         let registry = Arc::new(ToolRegistry::new());
-        let session_ctx = Arc::new(SessionToolContext::new(vec![], &[]));
+        let session_ctx = Arc::new(SessionToolContext::new(vec![]));
 
         // Dummy provider that cannot connect — react loop will fail after the
         // conversation row is already committed to the DB.

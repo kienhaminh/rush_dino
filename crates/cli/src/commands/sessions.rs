@@ -46,7 +46,7 @@ pub enum SessionsAction {
 }
 
 pub async fn run(args: SessionsArgs) -> Result<()> {
-    let client = ApiClient::new().map_err(|e| {
+    let client = ApiClient::try_new().map_err(|e| {
         eprintln!("{} Cannot connect: {e}", "✖".red());
         e
     })?;

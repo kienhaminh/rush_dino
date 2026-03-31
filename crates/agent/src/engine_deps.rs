@@ -41,7 +41,6 @@ use crate::{
         session_tools::{SessionManageTool, SessionSendTool},
         bash::ShellExecTool,
         spawn_agent::SpawnAgentTool,
-        tool_search::ToolSearchTool,
         web_fetch::WebFetchTool,
         web_search::WebSearchTool,
         workflow_manage::WorkflowManageTool,
@@ -66,45 +65,6 @@ pub struct EngineBuildInput {
     pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
-pub const CORE_TOOLS: &[&str] = &[
-    // File & shell
-    "bash",
-    "edit",
-    "glob",
-    "grep",
-    "read",
-    "write",
-    // Memory
-    "memory_search",
-    "memory_write",
-    // Communication
-    "message",
-    "request_user_input",
-    // Web
-    "web_fetch",
-    "web_search",
-    // Agent coordination
-    "delegate",
-    "session_manage",
-    "session_send",
-    "spawn_agent",
-    // Workflows
-    "run_workflow",
-    "workflow_manage",
-    // Scheduling
-    "cron_list",
-    "cron_manage",
-    // Kanban / inter-agent task board
-    "claim_task",
-    "post_task",
-    "review_task",
-    "update_task",
-    "team_status",
-    // Inter-agent messaging
-    "agent_inbox",
-    // Tool discovery
-    "tool_search",
-];
 
 pub struct EngineDeps {
     pub pool: Arc<SqlitePool>,
@@ -295,10 +255,8 @@ pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
             runtime.clone(),
             provider.model().to_owned(),
         ));
-        let tool_search = ToolSearchTool::new(weak.clone());
-        registry.register(tool_search);
         let pool = registry.all_tools();
-        SessionToolContext::new(pool, CORE_TOOLS)
+        SessionToolContext::new(pool)
     });
 
     // SAFETY: session_ctx's Arc::new_cyclic closure always sets workflow_runner_once.

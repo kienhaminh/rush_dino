@@ -156,7 +156,7 @@ mod tests {
         let config = AgentConfig::default();
         let temp = tempfile::tempdir().unwrap();
         let memory = MemoryManager::new(temp.path().to_owned());
-        let session_ctx = SessionToolContext::new(vec![], &[]);
+        let session_ctx = SessionToolContext::new(vec![]);
         let agents = vec![AgentTemplate {
             name: "researcher".to_owned(),
             description: "Research specialist".to_owned(),

@@ -5,7 +5,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use rushdino_agent::engine_bootstrap::system_message;
-use rushdino_agent::engine_deps::CORE_TOOLS;
 use rushdino_agent::memory_bootstrap::{build_bootstrap_context, build_truncation_warning_lines};
 use rushdino_agent::system_prompt::SkillEntry;
 use rushdino_common::{AppError, Result};
@@ -200,8 +199,6 @@ pub async fn get_system_prompt(
 pub struct RegisteredToolItem {
     pub name: String,
     pub description: String,
-    /// True if this tool is active from session start; false = pool-only, activated via tool_search.
-    pub is_core: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -219,7 +216,6 @@ pub async fn get_registered_tools(
         .definitions()
         .into_iter()
         .map(|def| RegisteredToolItem {
-            is_core: CORE_TOOLS.contains(&def.name.as_str()),
             name: def.name,
             description: def.description,
         })

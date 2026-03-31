@@ -149,9 +149,6 @@ impl Tool for GlobSearchTool {
          `{a,b}` (alternation), `[abc]` (character class)."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["file", "find", "search", "pattern", "glob", "directory"]
-    }
 
     fn parameters(&self) -> Value {
         json!({

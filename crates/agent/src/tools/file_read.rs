@@ -28,6 +28,13 @@ impl FileReadTool {
     }
 }
 
+/// Returns `true` for files that contain private credentials and must never be
+/// read directly by an agent. Agents should use the `secret_get` tool instead.
+fn is_sensitive_path(path: &Path) -> bool {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    name == "credentials.toml" || name == ".env" || name.starts_with(".env.")
+}
+
 /// Read a file with offset/limit and return content with line numbers.
 fn read_with_pagination(path: &Path, offset: usize, limit: usize) -> Result<String> {
     let file = fs::File::open(path)?;
@@ -126,6 +133,13 @@ impl Tool for FileReadTool {
         // The agent is trusted — the operator controls which agents run and what
         // they can access. This is not exposed to untrusted external input.
         if path.is_absolute() {
+            if is_sensitive_path(path) {
+                return Err(AppError::Validation(
+                    "Access denied: this file contains private credentials. \
+                     Use the `secret_get` tool to retrieve a credential as a secure token."
+                        .to_owned(),
+                ));
+            }
             read_with_pagination(path, offset, limit)
         } else {
             // Relative paths always resolve under home_dir (~/.rushdino).
@@ -135,6 +149,13 @@ impl Tool for FileReadTool {
             let target = self.home_dir.join(path_str);
             let canonical = validate_path(&target, std::slice::from_ref(&self.home_dir))
                 .map_err(|e| AppError::Validation(format!("invalid path: {e}")))?;
+            if is_sensitive_path(&canonical) {
+                return Err(AppError::Validation(
+                    "Access denied: this file contains private credentials. \
+                     Use the `secret_get` tool to retrieve a credential as a secure token."
+                        .to_owned(),
+                ));
+            }
             read_with_pagination(&canonical, offset, limit)
         }
     }
@@ -214,6 +235,49 @@ mod tests {
             .await;
 
         assert!(result.is_err(), "expected Err for non-existent path");
+    }
+
+    #[tokio::test]
+    async fn credentials_toml_denied_absolute() {
+        let home_dir = tempfile::tempdir().unwrap();
+        // Create the file so the path exists (denial should happen before open).
+        let creds_path = home_dir.path().join("credentials.toml");
+        fs::write(&creds_path, "anthropic_api_key = \"sk-secret\"").unwrap();
+
+        let tool = make_tool(home_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({"path": creds_path.to_str().unwrap()}))
+            .await;
+
+        assert!(result.is_err(), "credentials.toml must be denied");
+        assert!(result.unwrap_err().to_string().contains("Access denied"));
+    }
+
+    #[tokio::test]
+    async fn credentials_toml_denied_relative() {
+        let home_dir = tempfile::tempdir().unwrap();
+        fs::write(home_dir.path().join("credentials.toml"), "secret = \"x\"").unwrap();
+
+        let tool = make_tool(home_dir.path().to_path_buf());
+        let result = tool.execute(json!({"path": "credentials.toml"})).await;
+
+        assert!(result.is_err(), "credentials.toml must be denied via relative path");
+        assert!(result.unwrap_err().to_string().contains("Access denied"));
+    }
+
+    #[tokio::test]
+    async fn env_file_denied_absolute() {
+        let home_dir = tempfile::tempdir().unwrap();
+        let env_path = home_dir.path().join(".env");
+        fs::write(&env_path, "SECRET=value").unwrap();
+
+        let tool = make_tool(home_dir.path().to_path_buf());
+        let result = tool
+            .execute(json!({"path": env_path.to_str().unwrap()}))
+            .await;
+
+        assert!(result.is_err(), ".env must be denied");
+        assert!(result.unwrap_err().to_string().contains("Access denied"));
     }
 
     #[tokio::test]

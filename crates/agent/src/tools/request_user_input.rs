@@ -122,9 +122,6 @@ impl Tool for RequestUserInputTool {
         "Ask the workspace user a question or form, pause the current run, and resume when they respond."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["form", "question", "input", "prompt", "user"]
-    }
 
     fn parameters(&self) -> Value {
         let choice_items = json!({

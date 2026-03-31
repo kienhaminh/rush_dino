@@ -18,7 +18,6 @@ pub mod session_tools;
 pub mod bash;
 pub mod spawn_agent;
 pub mod team_status;
-pub mod tool_search;
 pub mod web_fetch;
 pub mod web_search;
 pub mod workflow_manage;

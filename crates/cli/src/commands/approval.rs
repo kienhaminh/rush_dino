@@ -38,7 +38,7 @@ pub enum ApprovalsAction {
 }
 
 pub async fn run(args: ApprovalsArgs) -> Result<()> {
-    let client = ApiClient::new().map_err(|e| {
+    let client = ApiClient::try_new().map_err(|e| {
         eprintln!("{} Cannot connect: {e}", "✖".red());
         e
     })?;

@@ -84,6 +84,10 @@ rushdino configure --openai-key sk-... --anthropic-key ant-...
 ```
 Output: `✔ Credentials saved.`
 
+> **Security policy:** Agents cannot read credential files directly (`credentials.toml`, `.env`).
+> All credential management must go through `rushdino configure`. The CLI writes to the
+> secure store on behalf of the agent — the agent never sees the stored values.
+
 ---
 
 ## Error handling

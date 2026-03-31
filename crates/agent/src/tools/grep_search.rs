@@ -131,11 +131,6 @@ impl Tool for GrepSearchTool {
          `count` (match counts per file). Skips binary files and common build directories."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec![
-            "search", "grep", "find", "regex", "pattern", "content", "code",
-        ]
-    }
 
     fn parameters(&self) -> Value {
         json!({

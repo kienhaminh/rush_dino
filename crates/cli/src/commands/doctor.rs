@@ -18,7 +18,7 @@ pub struct DoctorArgs {
 }
 
 pub async fn run(args: DoctorArgs) -> Result<()> {
-    let client = match ApiClient::new() {
+    let client = match ApiClient::try_new() {
         Ok(c) => c,
         Err(_) => {
             println!(

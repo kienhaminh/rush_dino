@@ -41,7 +41,6 @@ pub const MAX_DELEGATION_DEPTH: u8 = 3;
 const AGENT_BASE_TOOLS: &[&str] = &[
     "delegate",
     "message",
-    "tool_search",
     "post_task",
     "claim_task",
     "update_task",

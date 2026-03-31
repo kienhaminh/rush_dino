@@ -32,9 +32,6 @@ impl Tool for SpawnAgentTool {
          fits the user's specialized need."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["agent", "spawn", "subagent"]
-    }
 
     fn parameters(&self) -> Value {
         json!({

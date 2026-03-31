@@ -38,9 +38,6 @@ impl Tool for WorkflowManageTool {
         "Manage workflows — create, update, delete, or inspect"
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["workflow", "pipeline", "automation"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
