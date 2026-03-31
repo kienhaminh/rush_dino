@@ -5,11 +5,10 @@ import { cn } from '@/lib/utils';
 interface ThinkingBlockProps {
   content?: string;
   done?: boolean;
-  /** When rendered inside a ToolUseGroup the outer ml-9 indent is unwanted. */
   nested?: boolean;
 }
 
-export function ThinkingBlock({ content, done, nested }: ThinkingBlockProps) {
+export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(true);
   const prevDoneRef = useRef(done);
 
@@ -24,7 +23,7 @@ export function ThinkingBlock({ content, done, nested }: ThinkingBlockProps) {
   }, [done]);
 
   return (
-    <div className={cn('py-0.5 animate-in fade-in duration-200', !nested && 'ml-9')}>
+    <div className="py-0.5 animate-in fade-in duration-200">
       <button
         type="button"
         onClick={() => done && setExpanded((v) => !v)}
