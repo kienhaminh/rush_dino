@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { DatabaseIcon, RefreshCwIcon, ScrollTextIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { fetchSoulMemoryState } from '@/lib/api';
+import { useSoulMemoryQuery } from '../../lib/queries';
 import type { SoulMemoryFile, SoulMemoryStateResponse } from '@/lib/types';
 
 const EMPTY_STATE: SoulMemoryStateResponse = {
@@ -76,42 +76,26 @@ function FileSnapshotCard({
 }
 
 export function SoulMemoryPage() {
-  const [state, setState] = useState<SoulMemoryStateResponse>(EMPTY_STATE);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: state,
+    isPending: loading,
+    isRefetching: refreshing,
+    error: queryError,
+    refetch,
+  } = useSoulMemoryQuery();
+  const error = queryError?.message ?? null;
 
-  const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
-    if (mode === 'initial') {
-      setLoading(true);
-    } else {
-      setRefreshing(true);
-    }
-
-    try {
-      const nextState = await fetchSoulMemoryState();
-      setState(nextState);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load shared soul and memory.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  // Fall back to empty state while data is loading
+  const resolvedState = state ?? EMPTY_STATE;
 
   const stats = useMemo(
     () => ({
-      soulLines: state.soul.lineCount,
-      memoryLines: state.memory.lineCount,
-      dailyFiles: state.dailyFiles.length,
-      identityFiles: state.identityFiles.filter((file) => file.exists).length,
+      soulLines: resolvedState.soul.lineCount,
+      memoryLines: resolvedState.memory.lineCount,
+      dailyFiles: resolvedState.dailyFiles.length,
+      identityFiles: resolvedState.identityFiles.filter((file) => file.exists).length,
     }),
-    [state],
+    [resolvedState],
   );
 
   return (
@@ -137,7 +121,7 @@ export function SoulMemoryPage() {
             </div>
           </div>
           <Button
-            onClick={() => void load('refresh')}
+            onClick={() => void refetch()}
             disabled={loading || refreshing}
             variant="outline"
             size="sm"
@@ -174,7 +158,7 @@ export function SoulMemoryPage() {
                   Soul file
                 </p>
                 <p className="mt-2 text-sm text-foreground/80">
-                  {formatTimestamp(state.soul.updatedAt)}
+                  {formatTimestamp(resolvedState.soul.updatedAt)}
                 </p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
@@ -182,7 +166,7 @@ export function SoulMemoryPage() {
                   Memory file
                 </p>
                 <p className="mt-2 text-sm text-foreground/80">
-                  {formatTimestamp(state.memory.updatedAt)}
+                  {formatTimestamp(resolvedState.memory.updatedAt)}
                 </p>
               </div>
               <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4">
@@ -190,7 +174,7 @@ export function SoulMemoryPage() {
                   Tools notes
                 </p>
                 <p className="mt-2 text-sm text-foreground/80">
-                  {state.identityFiles.find((file) => file.name === 'TOOLS.md')?.exists
+                  {resolvedState.identityFiles.find((file) => file.name === 'TOOLS.md')?.exists
                     ? 'TOOLS.md present'
                     : 'TOOLS.md missing'}
                 </p>
@@ -199,7 +183,7 @@ export function SoulMemoryPage() {
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   Daily memory files
                 </p>
-                <p className="mt-2 text-sm text-foreground/80">{state.dailyFiles.length}</p>
+                <p className="mt-2 text-sm text-foreground/80">{resolvedState.dailyFiles.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -207,14 +191,14 @@ export function SoulMemoryPage() {
           <FileSnapshotCard
             title="Soul"
             description="Current contents of `.rushdino/SOUL.md`, which the runtime loads as part of its identity context."
-            file={state.soul}
+            file={resolvedState.soul}
             icon={<DatabaseIcon className="h-4 w-4 text-primary" />}
           />
 
           <FileSnapshotCard
             title="Memory"
             description="Current contents of canonical `.rushdino/MEMORY.md`, with fallback support for legacy `.rushdino/memory/MEMORY.md` during migration."
-            file={state.memory}
+            file={resolvedState.memory}
             icon={<ScrollTextIcon className="h-4 w-4 text-primary" />}
           />
 
@@ -223,7 +207,7 @@ export function SoulMemoryPage() {
               <CardTitle className="text-base">Identity Context Files</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {state.identityFiles.map((file) => (
+              {resolvedState.identityFiles.map((file) => (
                 <div
                   key={file.name}
                   className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4"
@@ -251,10 +235,10 @@ export function SoulMemoryPage() {
               <CardTitle className="text-base">Recent Daily Memory</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {state.dailyFiles.length === 0 ? (
+              {resolvedState.dailyFiles.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No daily memory files found.</p>
               ) : (
-                state.dailyFiles.slice(0, 7).map((file) => (
+                resolvedState.dailyFiles.slice(0, 7).map((file) => (
                   <div
                     key={file.path}
                     className="rounded-2xl border border-border/50 bg-background/50 px-4 py-4"
