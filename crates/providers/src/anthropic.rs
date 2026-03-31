@@ -306,19 +306,25 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool) -> Value
 
     let mut body = json!({
         "model": model,
-        "system": system,
         "messages": messages,
-        "tools": tools,
         "max_tokens": request.max_tokens.unwrap_or(1024),
         "stream": stream,
     });
+
+    if !system.is_empty() {
+        body["system"] = json!(system);
+    }
+
+    if let Some(tools_vec) = tools {
+        body["tools"] = json!(tools_vec);
+    }
 
     if let Some(budget) = thinking_budget {
         // Extended thinking requires temperature=1
         body["thinking"] = json!({ "type": "enabled", "budget_tokens": budget });
         body["temperature"] = json!(1);
-    } else {
-        body["temperature"] = json!(request.temperature);
+    } else if let Some(temperature) = request.temperature {
+        body["temperature"] = json!(temperature);
     }
 
     body
