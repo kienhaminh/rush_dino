@@ -43,6 +43,23 @@ pub enum SessionsAction {
     Archive { id: String },
     /// Delete a session
     Delete { id: String },
+    /// Spawn an async run with an agent
+    Spawn {
+        #[arg(long)]
+        agent: String,
+        #[arg(long)]
+        prompt: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// List runs for a session
+    History {
+        id: String,
+        #[arg(long, default_value = "20")]
+        limit: i64,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 pub async fn run(args: SessionsArgs) -> Result<()> {
@@ -129,6 +146,54 @@ pub async fn run(args: SessionsArgs) -> Result<()> {
         SessionsAction::Delete { id } => {
             client.delete(&format!("/api/sessions/{id}")).await?;
             println!("{} Session {} deleted.", "✔".green(), id.bold());
+        }
+        SessionsAction::Spawn { agent, prompt, json } => {
+            let data = client
+                .post(
+                    "/api/runs",
+                    serde_json::json!({ "agentId": agent, "input": prompt }),
+                )
+                .await?;
+            if json {
+                println!("{}", serde_json::to_string(&data).unwrap_or_default());
+            } else {
+                let run_id = data["id"].as_str().unwrap_or("-");
+                let session_id = data["sessionId"].as_str().unwrap_or("-");
+                println!(
+                    "{} Run started: {} (session: {})",
+                    "✔".green(),
+                    run_id.bold(),
+                    session_id.dimmed()
+                );
+            }
+        }
+        SessionsAction::History { id, limit, json } => {
+            let data = client
+                .get(&format!("/api/sessions/{id}/runs?limit={limit}"))
+                .await?;
+            if json {
+                println!("{}", serde_json::to_string(&data).unwrap_or_default());
+            } else {
+                let items = data["items"].as_array().cloned().unwrap_or_default();
+                println!("{} {}", "📜".bold(), "Session History".blue().bold());
+                println!("{}", "========================================".dimmed());
+                if items.is_empty() {
+                    println!("{} No runs found.", "i".yellow());
+                } else {
+                    for item in &items {
+                        let run_id = item["id"].as_str().unwrap_or("-");
+                        let status = item["status"].as_str().unwrap_or("-");
+                        let created = item["createdAt"].as_str().unwrap_or("-");
+                        println!(
+                            "  {} {} {}",
+                            run_id.dimmed(),
+                            format!("[{status}]").yellow(),
+                            created.dimmed()
+                        );
+                    }
+                    println!("\n{} {} runs", "✔".green(), items.len());
+                }
+            }
         }
     }
     Ok(())

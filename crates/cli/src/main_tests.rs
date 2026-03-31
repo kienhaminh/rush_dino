@@ -293,3 +293,54 @@ fn doctor_json_flag_parses() {
         .expect("doctor --json should parse");
     assert!(matches!(cli.command, Command::Doctor(_)));
 }
+
+#[test]
+fn sessions_spawn_requires_agent_and_prompt() {
+    Cli::try_parse_from(["rushdino", "sessions", "spawn"])
+        .expect_err("sessions spawn without args should fail");
+}
+
+#[test]
+fn sessions_spawn_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "sessions", "spawn",
+        "--agent", "agent-123",
+        "--prompt", "do the thing",
+    ])
+    .expect("sessions spawn with args should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
+
+#[test]
+fn sessions_spawn_json_flag_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "sessions", "spawn",
+        "--agent", "agent-123",
+        "--prompt", "do the thing",
+        "--json",
+    ])
+    .expect("sessions spawn --json should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
+
+#[test]
+fn sessions_history_requires_id() {
+    Cli::try_parse_from(["rushdino", "sessions", "history"])
+        .expect_err("sessions history without id should fail");
+}
+
+#[test]
+fn sessions_history_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "sessions", "history", "sess-abc"])
+        .expect("sessions history <id> should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
+
+#[test]
+fn sessions_history_limit_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "sessions", "history", "sess-abc", "--limit", "10",
+    ])
+    .expect("sessions history --limit should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
