@@ -1,4 +1,4 @@
-// Provider profiles API — CRUD for profiles and Codex OAuth connect flow.
+// Provider profiles API — CRUD for profiles and OAuth connect flow.
 
 import { parseJsonOrThrow } from './client';
 import type { ProviderProfile } from '../types';
@@ -26,12 +26,12 @@ export interface UpdateProfileRequest {
   api_key?: string;
 }
 
-export type StartCodexConnectResponse = {
+export type StartOAuthConnectResponse = {
   session_id: string;
   auth_url: string;
 };
 
-export type CompleteCodexConnectRequest = {
+export type CompleteOAuthConnectRequest = {
   session_id: string;
   redirect_url: string;
 };
@@ -76,15 +76,15 @@ export async function fetchProviderModels(profileId: string): Promise<ModelInfo[
   return parseJsonOrThrow(response, endpoint);
 }
 
-export async function startCodexConnect(profileId: string): Promise<StartCodexConnectResponse> {
+export async function startOAuthConnect(profileId: string): Promise<StartOAuthConnectResponse> {
   const endpoint = `/api/providers/${encodeURIComponent(profileId)}/connect-oauth/start`;
   const response = await fetch(endpoint, { method: 'POST' });
   return parseJsonOrThrow(response, endpoint);
 }
 
-export async function completeCodexConnect(
+export async function completeOAuthConnect(
   profileId: string,
-  payload: CompleteCodexConnectRequest,
+  payload: CompleteOAuthConnectRequest,
 ): Promise<{ status: string }> {
   const endpoint = `/api/providers/${encodeURIComponent(profileId)}/connect-oauth/complete`;
   const response = await fetch(endpoint, {

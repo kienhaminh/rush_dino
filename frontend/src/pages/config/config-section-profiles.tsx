@@ -10,8 +10,8 @@ import {
   createProfile,
   updateProfile,
   deleteProfile,
-  completeCodexConnect,
-  startCodexConnect,
+  completeOAuthConnect,
+  startOAuthConnect,
   type ModelInfo,
 } from '@/lib/api';
 import { formatProviderLabel } from '@/lib/provider-display';
@@ -225,7 +225,7 @@ function ProfileCard({
       description: 'Open the link on your local machine, then paste the redirect URL here.',
     });
     try {
-      const started = await startCodexConnect(profile.id);
+      const started = await startOAuthConnect(profile.id);
       setOauthSessionId(started.session_id);
       setOauthAuthUrl(started.auth_url);
       setOauthRedirectUrl('');
@@ -244,7 +244,7 @@ function ProfileCard({
       description: 'Validating the pasted redirect URL and exchanging the code.',
     });
     try {
-      await completeCodexConnect(profile.id, {
+      await completeOAuthConnect(profile.id, {
         session_id: oauthSessionId,
         redirect_url: normalizedOAuthRedirectUrl,
       });
