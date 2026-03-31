@@ -45,7 +45,9 @@ export async function resolveInputRequest(
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+  const endpoint = `/api/conversations/${encodeURIComponent(id)}`;
+  const response = await fetch(endpoint, { method: 'DELETE' });
+  await parseJsonOrThrow(response, endpoint);
 }
 
 export async function resetSession(id: string): Promise<void> {

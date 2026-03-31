@@ -1,7 +1,7 @@
 // Agents API — agent listing, runtime, progress board, health, messages, sessions, and file mutations.
 
 import { parseJsonOrThrow } from './client';
-import type { SessionSummary, AgentFileRecord as _AgentFileRecord } from '../types';
+import type { SessionSummary } from '../types';
 import type {
   AgentRecord,
   AgentRuntimeData,

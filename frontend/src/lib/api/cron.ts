@@ -43,5 +43,6 @@ export async function runCronJobNow(id: string): Promise<{ job: ApiCronJobRecord
 
 export async function deleteCronJob(id: string): Promise<void> {
   const endpoint = `/api/cron/${encodeURIComponent(id)}`;
-  await fetch(endpoint, { method: 'DELETE' });
+  const response = await fetch(endpoint, { method: 'DELETE' });
+  await parseJsonOrThrow(response, endpoint);
 }
