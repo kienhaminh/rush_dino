@@ -352,10 +352,19 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth
         .as_ref()
         .and_then(|l| l.anthropic_budget_tokens());
 
+    // When thinking is enabled, max_tokens must exceed budget_tokens.
+    // Ensure at least budget_tokens + 1024 output tokens are available.
+    let max_tokens = match (request.max_tokens, thinking_budget) {
+        (Some(mt), Some(budget)) => mt.max(budget + 1024),
+        (None, Some(budget)) => budget + 1024,
+        (Some(mt), None) => mt,
+        (None, None) => 1024,
+    };
+
     let mut body = json!({
         "model": model,
         "messages": messages,
-        "max_tokens": request.max_tokens.unwrap_or(1024),
+        "max_tokens": max_tokens,
         "stream": stream,
     });
 
