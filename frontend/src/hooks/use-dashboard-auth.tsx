@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -59,10 +60,16 @@ export function DashboardAuthProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authStatus]);
 
-  // Initial fetch on mount (query won't auto-run until enabled+authenticated are true)
+  // Keep a stable ref to the latest refetchAuthStatus to avoid stale closure on mount
+  const refetchAuthStatusRef = useRef(refetchAuthStatus);
   useEffect(() => {
-    void refetchAuthStatus();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    refetchAuthStatusRef.current = refetchAuthStatus;
+  });
+
+  // Initial fetch on mount — uses ref to avoid stale closure
+  // (query won't auto-run until enabled+authenticated are true)
+  useEffect(() => {
+    void refetchAuthStatusRef.current();
   }, []);
 
   const exchangeCode = useCallback(async (code: string) => {

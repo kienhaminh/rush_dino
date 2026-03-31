@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import { useChannelPairingQuery } from '@/lib/queries';
 import { usePairingRequestEvents } from './use-chat-ws';
@@ -26,10 +26,13 @@ export function usePendingApprovalsCount(): UsePendingApprovalsCountResult {
   const discordPending = discordQuery.data?.pending.length ?? 0;
   const baseCount = telegramPending + discordPending;
 
-  // Reset baseline whenever a fresh fetch completes
-  if (telegramQuery.isSuccess && discordQuery.isSuccess) {
-    baselinePairingCountRef.current = pairingRequestCount;
-  }
+  // Reset baseline whenever a fresh fetch completes — must be in useEffect to avoid
+  // resetting on every re-render and discarding WS increments
+  useEffect(() => {
+    if (telegramQuery.isSuccess && discordQuery.isSuccess) {
+      baselinePairingCountRef.current = pairingRequestCount;
+    }
+  }, [telegramQuery.data, discordQuery.data]);
 
   const wsIncrement = pairingRequestCount - baselinePairingCountRef.current;
   const count = baseCount + Math.max(0, wsIncrement);
