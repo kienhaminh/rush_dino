@@ -28,19 +28,28 @@ impl AnthropicProvider {
     }
 
     /// Applies the correct authentication headers based on auth method.
-    /// OAuth requires both a Bearer token and the `anthropic-beta: oauth-2025-04-20` header.
+    /// OAuth requires Bearer token + specific beta flags + Claude Code identity headers.
     fn authenticate(&self, req: RequestBuilder) -> RequestBuilder {
         match &self.auth {
             AnthropicAuth::ApiKey { api_key } => req.header("x-api-key", api_key),
             AnthropicAuth::OAuth { access_token } => req
                 .bearer_auth(access_token)
-                .header("anthropic-beta", "oauth-2025-04-20"),
+                .header(
+                    "anthropic-beta",
+                    "claude-code-20250219,oauth-2025-04-20,fine-grained-tool-streaming-2025-05-14",
+                )
+                .header("user-agent", "claude-cli/1.0.0")
+                .header("x-app", "cli"),
         }
+    }
+
+    fn is_oauth(&self) -> bool {
+        matches!(self.auth, AnthropicAuth::OAuth { .. })
     }
 
     pub async fn chat(&self, mut request: ChatRequest) -> Result<ChatResponse> {
         let model = request.model.take().unwrap_or_else(|| self.model.clone());
-        let body = to_anthropic_body(request, model, false);
+        let body = to_anthropic_body(request, model, false, self.is_oauth());
 
         tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic chat request");
 
@@ -107,7 +116,7 @@ impl AnthropicProvider {
     pub async fn stream_chat(&self, request: ChatRequest) -> Result<mpsc::Receiver<ChatChunk>> {
         let (tx, rx) = mpsc::channel(128);
         let model = request.model.clone().unwrap_or_else(|| self.model.clone());
-        let body = to_anthropic_body(request, model, true);
+        let body = to_anthropic_body(request, model, true, self.is_oauth());
 
         tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic stream_chat request");
 
@@ -289,14 +298,28 @@ impl AnthropicProvider {
     }
 }
 
-fn to_anthropic_body(request: ChatRequest, model: String, stream: bool) -> Value {
-    let system = request
+const CLAUDE_CODE_IDENTITY: &str =
+    "You are Claude Code, Anthropic's official CLI for Claude.";
+
+fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth: bool) -> Value {
+    let user_system = request
         .messages
         .iter()
         .filter(|m| matches!(m.role, rushdino_common::models::Role::System))
         .map(|m| m.content.clone())
         .collect::<Vec<_>>()
         .join("\n\n");
+
+    // OAuth tokens require the Claude Code identity prepended to the system prompt.
+    let system = if is_oauth {
+        if user_system.is_empty() {
+            CLAUDE_CODE_IDENTITY.to_owned()
+        } else {
+            format!("{CLAUDE_CODE_IDENTITY}\n\n{user_system}")
+        }
+    } else {
+        user_system
+    };
 
     let messages = request
         .messages
