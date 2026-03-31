@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type {
@@ -35,11 +35,12 @@ export function SessionsRoute() {
 
   // Auto-select main session on first load
   const sessions: SessionSummary[] = sessionsQuery.data ?? [];
-  if (!selectedSessionId && sessions.length > 0) {
-    const main = sessions.find((x) => x.id === 'main') ?? sessions[0];
-    // Use a deferred set to avoid setState-during-render
-    Promise.resolve().then(() => setSelectedSessionId(main.id));
-  }
+  useEffect(() => {
+    if (!selectedSessionId && sessions.length > 0) {
+      const main = sessions.find((x) => x.id === 'main') ?? sessions[0];
+      setSelectedSessionId(main.id);
+    }
+  }, [sessions, selectedSessionId]);
 
   // Session detail: runs and then conversation messages derived from the first run
   const runsQuery = useSessionRunsQuery(selectedSessionId ?? '', 30);
@@ -77,6 +78,7 @@ export function SessionsRoute() {
     setThinkingLevelOverride(level); // optimistic update
     try {
       await patchThinkingMutation.mutateAsync(level);
+      setThinkingLevelOverride(null);
     } catch (err) {
       setThinkingLevelOverride(null); // revert on error
       toast.error(err instanceof Error ? err.message : 'Failed to update thinking level');
@@ -100,6 +102,7 @@ export function SessionsRoute() {
     try {
       await deleteMutation.mutateAsync(sessionId);
       toast.success('Session deleted.');
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all() });
       if (selectedSessionId === sessionId) setSelectedSessionId(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete session.');
