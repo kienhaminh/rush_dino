@@ -1,10 +1,15 @@
-import { useEffect, useReducer, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Settings2Icon } from 'lucide-react';
-import { fetchConfig, fetchCredentials, patchConfig, patchCredentials } from '@/lib/api';
 import type { AppConfigView, CredentialsView } from '@/lib/types';
+import {
+  useConfigQuery,
+  useCredentialsQuery,
+  usePatchConfigMutation,
+  usePatchCredentialsMutation,
+} from '../../lib/queries';
 import { ConfigSectionProfiles } from './config-section-profiles';
 import { ConfigSectionCredentials } from './config-section-credentials';
 import { ConfigSectionServer } from './config-section-server';
@@ -45,67 +50,49 @@ type Status =
   | { kind: 'success' }
   | { kind: 'error'; message: string };
 
-// Reducer for the fetch lifecycle: loading → ready | error
-type FetchState =
-  | { status: 'loading' }
-  | { status: 'ready'; config: AppConfigView; credentials: CredentialsView }
-  | { status: 'error'; error: string };
-
-type FetchAction =
-  | { type: 'start' }
-  | { type: 'success'; config: AppConfigView; credentials: CredentialsView }
-  | { type: 'error'; error: string }
-  | { type: 'setConfig'; config: AppConfigView }
-  | { type: 'setCredentials'; credentials: CredentialsView };
-
-function fetchReducer(state: FetchState, action: FetchAction): FetchState {
-  switch (action.type) {
-    case 'start':
-      return { status: 'loading' };
-    case 'success':
-      return { status: 'ready', config: action.config, credentials: action.credentials };
-    case 'error':
-      return { status: 'error', error: action.error };
-    case 'setConfig':
-      return state.status === 'ready' ? { ...state, config: action.config } : state;
-    case 'setCredentials':
-      return state.status === 'ready' ? { ...state, credentials: action.credentials } : state;
-  }
-}
-
 export function ConfigPage() {
   const [activeSection, setActiveSection] = useState<Section>('profiles');
-  const [fetchState, dispatch] = useReducer(fetchReducer, { status: 'loading' });
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
-  // Load config + credentials in parallel on mount
+  const configQuery = useConfigQuery();
+  const credentialsQuery = useCredentialsQuery();
+  const patchConfigMutation = usePatchConfigMutation();
+  const patchCredentialsMutation = usePatchCredentialsMutation();
+
+  const loading = configQuery.isPending || credentialsQuery.isPending;
+  const error = configQuery.error?.message ?? credentialsQuery.error?.message ?? null;
+
+  // Local form state — initialized from server data, kept in sync on refetch
+  const [config, setConfig] = useState<AppConfigView | undefined>(configQuery.data);
+  const [credentials, setCredentials] = useState<CredentialsView | undefined>(credentialsQuery.data);
+
+  // Sync local form state when server data loads or reloads
   useEffect(() => {
-    dispatch({ type: 'start' });
-    Promise.all([fetchConfig(), fetchCredentials()])
-      .then(([cfg, creds]) => dispatch({ type: 'success', config: cfg, credentials: creds }))
-      .catch((err: Error) => dispatch({ type: 'error', error: err.message }));
-  }, []);
+    if (configQuery.data) setConfig(configQuery.data);
+  }, [configQuery.data]);
+
+  useEffect(() => {
+    if (credentialsQuery.data) setCredentials(credentialsQuery.data);
+  }, [credentialsQuery.data]);
 
   function handleConfigChange(patch: Partial<AppConfigView>) {
-    if (fetchState.status !== 'ready') return;
-    dispatch({ type: 'setConfig', config: { ...fetchState.config, ...patch } });
+    if (!config) return;
+    setConfig({ ...config, ...patch });
   }
 
   function handleCredentialsChange(patch: Partial<CredentialsView>) {
-    if (fetchState.status !== 'ready') return;
-    dispatch({ type: 'setCredentials', credentials: { ...fetchState.credentials, ...patch } });
+    if (!credentials) return;
+    setCredentials({ ...credentials, ...patch });
   }
 
   async function handleSave() {
-    if (fetchState.status !== 'ready') return;
-    const { config, credentials } = fetchState;
+    if (!config || !credentials) return;
     setStatus({ kind: 'saving' });
     try {
-      const [updatedConfig, updatedCreds] = await Promise.all([
-        patchConfig(config),
-        patchCredentials(credentials),
+      await Promise.all([
+        patchConfigMutation.mutateAsync(config),
+        patchCredentialsMutation.mutateAsync(credentials),
       ]);
-      dispatch({ type: 'success', config: updatedConfig, credentials: updatedCreds });
       setStatus({ kind: 'success' });
       setTimeout(() => setStatus({ kind: 'idle' }), 3000);
     } catch (err) {
@@ -114,18 +101,12 @@ export function ConfigPage() {
   }
 
   async function handleReload() {
-    dispatch({ type: 'start' });
-    try {
-      const [cfg, creds] = await Promise.all([fetchConfig(), fetchCredentials()]);
-      dispatch({ type: 'success', config: cfg, credentials: creds });
-      setStatus({ kind: 'idle' });
-    } catch (err) {
-      dispatch({ type: 'error', error: err instanceof Error ? err.message : 'Unknown error' });
-    }
+    setStatus({ kind: 'idle' });
+    await Promise.all([configQuery.refetch(), credentialsQuery.refetch()]);
   }
 
   // Loading skeleton
-  if (fetchState.status === 'loading') {
+  if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <p className="text-sm text-muted-foreground animate-pulse">Loading configuration…</p>
@@ -134,19 +115,16 @@ export function ConfigPage() {
   }
 
   // Fetch error
-  if (fetchState.status === 'error') {
+  if (error) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-destructive">{fetchState.error}</p>
+        <p className="text-sm text-destructive">{error}</p>
         <Button size="sm" variant="outline" onClick={handleReload}>
           Retry
         </Button>
       </div>
     );
   }
-
-  // At this point fetchState.status === 'ready'
-  const { config, credentials } = fetchState;
 
   return (
     <div className="flex-1 w-full min-w-0 flex h-full bg-background overflow-hidden">
@@ -195,17 +173,17 @@ export function ConfigPage() {
 
           <CardContent className="space-y-4">
             {activeSection === 'profiles' && <ConfigSectionProfiles />}
-            {activeSection === 'credentials' && (
+            {activeSection === 'credentials' && credentials && (
               <ConfigSectionCredentials
                 credentials={credentials}
                 onChange={handleCredentialsChange}
               />
             )}
-            {activeSection === 'server' && (
+            {activeSection === 'server' && config && (
               <ConfigSectionServer config={config} onChange={handleConfigChange} />
             )}
             {activeSection === 'core-files' && <ConfigSectionCoreFiles />}
-            {activeSection === 'knowledge-graph' && (
+            {activeSection === 'knowledge-graph' && config && credentials && (
               <ConfigSectionKnowledgeGraph
                 config={config}
                 credentials={credentials}
