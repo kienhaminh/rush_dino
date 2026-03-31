@@ -71,16 +71,14 @@ export function LogsPage() {
         q: filters.query || undefined,
         limit: 300,
       }),
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      [filters.query, filters.levels],
+      [filters.query, levelFilter],
     ),
   );
   const loading = logsQuery.isPending;
   const error = logsQuery.error?.message ?? null;
-  const logs = (logsQuery.data?.items ?? []).map(mapRecord);
 
   const filteredLogs = useMemo(() => {
-    return logs.filter((log) => {
+    return (logsQuery.data?.items ?? []).map(mapRecord).filter((log) => {
       if (!filters.levels[log.level]) return false;
       if (!filters.query) return true;
       const q = filters.query.toLowerCase();
@@ -89,7 +87,7 @@ export function LogsPage() {
         (log.subsystem?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [logs, filters]);
+  }, [logsQuery.data, filters.levels, filters.query]);
 
   const handleExport = () => {
     const blob = new Blob([filteredLogs.map((l) => l.raw).join('\n')], { type: 'text/plain' });
