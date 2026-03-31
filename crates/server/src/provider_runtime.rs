@@ -5,10 +5,10 @@ use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
-use rushdino_auth::refresh_access_token;
+use rushdino_auth::{refresh_access_token, refresh_anthropic_token};
 use rushdino_knowledge_graph::KgGateway;
 use rushdino_providers::{
-    types::{OpenAIAuth, ProviderConfig},
+    types::{AnthropicAuth, OpenAIAuth, ProviderConfig},
     ProviderService,
 };
 
@@ -154,7 +154,10 @@ pub async fn refresh_runtime_from_disk(
                         AuthMethod::ApiKey
                     }
                 }
-                ProviderConfig::Anthropic { .. } => AuthMethod::ApiKey,
+                ProviderConfig::Anthropic { auth, .. } => match auth {
+                    AnthropicAuth::ApiKey { .. } => AuthMethod::ApiKey,
+                    AnthropicAuth::OAuth { .. } => AuthMethod::OAuth,
+                },
             };
             let agent_config = {
                 use rushdino_agent::memory_bootstrap::{
@@ -293,9 +296,17 @@ async fn provider_config_from_profile(
             }
         }
         Provider::Anthropic => {
-            let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+            let auth = if profile.auth_method == AuthMethod::OAuth {
+                let access_token =
+                    resolve_anthropic_oauth_api_key(credentials, credentials_path, profile).await?;
+                AnthropicAuth::OAuth { access_token }
+            } else {
+                let api_key =
+                    require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+                AnthropicAuth::ApiKey { api_key }
+            };
             Ok(ProviderConfig::Anthropic {
-                api_key,
+                auth,
                 model: profile.default_model.clone(),
             })
         }
@@ -381,6 +392,68 @@ async fn resolve_openai_oauth_api_key(
 
     Err(AppError::Provider(format!(
         "default profile '{}' is connected with OAuth but no valid credentials were found — please log in again",
+        profile.id
+    )))
+}
+
+async fn resolve_anthropic_oauth_api_key(
+    credentials: &mut CredentialsConfig,
+    credentials_path: &Path,
+    profile: &ProviderProfile,
+) -> Result<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let secrets = credentials.profiles.get(&profile.id);
+
+    let access_token = secrets
+        .and_then(|s| s.access_token.as_deref())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_owned);
+    let expires_at = secrets.and_then(|s| s.token_expires_at);
+    let is_expired = expires_at.is_some_and(|exp| exp <= now);
+
+    if let Some(token) = access_token {
+        if !is_expired {
+            return Ok(token);
+        }
+
+        let refresh_token = secrets
+            .and_then(|s| s.refresh_token.as_deref())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned);
+
+        if let Some(ref_token) = refresh_token {
+            let client = reqwest::Client::new();
+            match refresh_anthropic_token(&client, &ref_token).await {
+                Ok(new_tokens) => {
+                    let entry = credentials
+                        .profiles
+                        .entry(profile.id.clone())
+                        .or_default();
+                    entry.access_token = Some(new_tokens.access_token.clone());
+                    entry.refresh_token = Some(new_tokens.refresh_token);
+                    entry.token_expires_at = Some(new_tokens.expires_at);
+                    credentials.save_to_path(credentials_path)?;
+                    return Ok(new_tokens.access_token);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Anthropic OAuth token refresh failed for profile '{}': {err}; falling back to cached access token",
+                        profile.id
+                    );
+                    return Ok(token);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Provider(format!(
+        "default profile '{}' is connected with Anthropic OAuth but no valid credentials were found — please log in again",
         profile.id
     )))
 }

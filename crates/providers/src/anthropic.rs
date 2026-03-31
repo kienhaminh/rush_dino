@@ -1,25 +1,37 @@
 use futures::StreamExt;
-use reqwest::Client;
+use reqwest::{Client, RequestBuilder};
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
 use rushdino_common::{models::ToolCall, AppError, Result};
 
-use crate::types::{ChatChunk, ChatRequest, ChatResponse};
+use crate::types::{AnthropicAuth, ChatChunk, ChatRequest, ChatResponse};
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
     client: Client,
     pub model: String,
-    api_key: String,
+    auth: AnthropicAuth,
 }
 
 impl AnthropicProvider {
-    pub fn new(model: String, api_key: String) -> Self {
+    pub fn new(model: String, auth: AnthropicAuth) -> Self {
+        let auth = match auth {
+            AnthropicAuth::ApiKey { api_key } => AnthropicAuth::ApiKey { api_key: api_key.trim().to_owned() },
+            AnthropicAuth::OAuth { access_token } => AnthropicAuth::OAuth { access_token: access_token.trim().to_owned() },
+        };
         Self {
             client: Client::new(),
             model: model.trim().to_owned(),
-            api_key: api_key.trim().to_owned(),
+            auth,
+        }
+    }
+
+    /// Applies the correct authentication header based on auth method.
+    fn authenticate(&self, req: RequestBuilder) -> RequestBuilder {
+        match &self.auth {
+            AnthropicAuth::ApiKey { api_key } => req.header("x-api-key", api_key),
+            AnthropicAuth::OAuth { access_token } => req.bearer_auth(access_token),
         }
     }
 
@@ -30,9 +42,7 @@ impl AnthropicProvider {
         tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic chat request");
 
         let response = self
-            .client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
+            .authenticate(self.client.post("https://api.anthropic.com/v1/messages"))
             .header("anthropic-version", "2023-06-01")
             .json(&body)
             .timeout(std::time::Duration::from_secs(60))
@@ -99,9 +109,7 @@ impl AnthropicProvider {
         tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic stream_chat request");
 
         let response = self
-            .client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
+            .authenticate(self.client.post("https://api.anthropic.com/v1/messages"))
             .header("anthropic-version", "2023-06-01")
             .json(&body)
             .timeout(std::time::Duration::from_secs(60))

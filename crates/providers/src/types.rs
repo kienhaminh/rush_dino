@@ -113,6 +113,16 @@ pub enum OpenAIAuth {
     Codex { access_token: String },
 }
 
+/// Authentication method for Anthropic providers.
+/// - `ApiKey`: standard API key sent as `x-api-key` header
+/// - `OAuth`: OAuth access token sent as `Authorization: Bearer` header
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "method", rename_all = "snake_case")]
+pub enum AnthropicAuth {
+    ApiKey { api_key: String },
+    OAuth { access_token: String },
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ProviderConfig {
@@ -127,7 +137,7 @@ pub enum ProviderConfig {
         base_url: Option<String>,
     },
     Anthropic {
-        api_key: String,
+        auth: AnthropicAuth,
         model: String,
     },
 }

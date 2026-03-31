@@ -10,7 +10,7 @@ use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
-use rushdino_providers::types::{ModelInfo, OpenAIAuth, ProviderConfig};
+use rushdino_providers::types::{AnthropicAuth, ModelInfo, OpenAIAuth, ProviderConfig};
 use rushdino_providers::ProviderService;
 use serde::{Deserialize, Serialize};
 
@@ -343,13 +343,31 @@ pub async fn list_provider_models(
             }
         }
         Provider::Anthropic => {
-            if secrets.api_key.is_none()
-                || secrets.api_key.as_deref().unwrap_or_default().is_empty()
-            {
-                return Ok(Json(defaults));
-            }
+            let auth = if profile.auth_method == AuthMethod::OAuth {
+                let token = secrets
+                    .access_token
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned);
+                let Some(access_token) = token else {
+                    return Ok(Json(defaults));
+                };
+                AnthropicAuth::OAuth { access_token }
+            } else {
+                let key = secrets
+                    .api_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned);
+                let Some(api_key) = key else {
+                    return Ok(Json(defaults));
+                };
+                AnthropicAuth::ApiKey { api_key }
+            };
             ProviderConfig::Anthropic {
-                api_key: secrets.api_key.unwrap_or_default(),
+                auth,
                 model: profile.default_model.clone(),
             }
         }
