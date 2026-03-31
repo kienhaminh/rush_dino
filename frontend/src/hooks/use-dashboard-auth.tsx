@@ -11,9 +11,9 @@ import {
 import {
   DASHBOARD_AUTH_REQUIRED_EVENT,
   exchangeDashboardAuthCode,
-  fetchDashboardAuthStatus,
   logoutDashboardAuthSession,
 } from '@/lib/api';
+import { useDashboardAuthStatusQuery } from '@/lib/queries';
 
 interface DashboardAuthContextValue {
   loading: boolean;
@@ -21,7 +21,7 @@ interface DashboardAuthContextValue {
   authenticated: boolean;
   expiresAt: string | null;
   readyForProtectedRoutes: boolean;
-  refreshStatus: () => Promise<void>;
+  refreshStatus: () => void;
   exchangeCode: (code: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -32,7 +32,7 @@ const DashboardAuthContext = createContext<DashboardAuthContextValue>({
   authenticated: false,
   expiresAt: null,
   readyForProtectedRoutes: false,
-  refreshStatus: async () => {},
+  refreshStatus: () => {},
   exchangeCode: async () => {},
   logout: async () => {},
 });
@@ -43,12 +43,26 @@ export function DashboardAuthProvider({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(false);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
 
-  const refreshStatus = useCallback(async () => {
-    const status = await fetchDashboardAuthStatus();
-    setEnabled(status.enabled);
-    setAuthenticated(status.enabled ? status.authenticated : true);
-    setExpiresAt(status.expiresAt ?? null);
+  // Poll auth status every 30s when enabled and authenticated — React Query handles the interval
+  const { data: authStatus, refetch: refetchAuthStatus } = useDashboardAuthStatusQuery(
+    enabled && authenticated,
+  );
+
+  // Sync query result into local state
+  useEffect(() => {
+    if (!authStatus) return;
+    setEnabled(authStatus.enabled);
+    setAuthenticated(authStatus.enabled ? authStatus.authenticated : true);
+    setExpiresAt(authStatus.expiresAt ?? null);
     setLoading(false);
+  // enabled/authenticated intentionally excluded to avoid sync loops
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus]);
+
+  // Initial fetch on mount (query won't auto-run until enabled+authenticated are true)
+  useEffect(() => {
+    void refetchAuthStatus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const exchangeCode = useCallback(async (code: string) => {
@@ -66,10 +80,6 @@ export function DashboardAuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void refreshStatus();
-  }, [refreshStatus]);
-
-  useEffect(() => {
     const onAuthRequired = () => {
       setAuthenticated(false);
       setExpiresAt(null);
@@ -82,19 +92,7 @@ export function DashboardAuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (!enabled || !authenticated) {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      void refreshStatus();
-    }, 30_000);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [authenticated, enabled, refreshStatus]);
+  const refreshStatus = useCallback(() => void refetchAuthStatus(), [refetchAuthStatus]);
 
   const value = useMemo(
     () => ({

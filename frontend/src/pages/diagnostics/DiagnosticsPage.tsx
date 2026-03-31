@@ -1,11 +1,9 @@
-import { useEffect, useState } from 'react';
 import { RefreshCw, Shield, Wrench } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { fetchDoctorReport, fetchSystemSummary } from '@/lib/api';
-import type { DoctorReportResponse, SystemSummaryResponse } from '@/lib/types';
+import { useDoctorQuery, useOverviewQuery } from '@/lib/queries';
 
 function severityTone(severity: string) {
   switch (severity) {
@@ -19,28 +17,15 @@ function severityTone(severity: string) {
 }
 
 export function DiagnosticsPage() {
-  const [report, setReport] = useState<DoctorReportResponse | null>(null);
-  const [summary, setSummary] = useState<SystemSummaryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data: report, isPending: reportLoading, error: reportError, refetch: refetchDoctor } = useDoctorQuery();
+  const { data: summary, isPending: summaryLoading, error: summaryError, refetch: refetchOverview } = useOverviewQuery();
+  const loading = reportLoading || summaryLoading;
+  const error = reportError?.message ?? summaryError?.message ?? null;
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const [doctor, system] = await Promise.all([fetchDoctorReport(), fetchSystemSummary()]);
-      setReport(doctor);
-      setSummary(system);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load diagnostics.');
-    } finally {
-      setLoading(false);
-    }
+  const load = () => {
+    void refetchDoctor();
+    void refetchOverview();
   };
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   return (
     <div className="flex-1 min-w-0 h-full overflow-y-auto bg-background px-6 py-6 md:px-8 md:py-8 flex flex-col gap-6 w-full">

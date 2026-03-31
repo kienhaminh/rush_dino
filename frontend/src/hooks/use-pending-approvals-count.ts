@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 
-import { fetchChannelPairing } from '@/lib/api';
+import { useChannelPairingQuery } from '@/lib/queries';
 import { usePairingRequestEvents } from './use-chat-ws';
 
 interface UsePendingApprovalsCountResult {
@@ -11,41 +11,33 @@ interface UsePendingApprovalsCountResult {
 /**
  * Tracks the number of pending channel pairing approvals.
  *
- * Fetches from both telegram and discord on mount and on refetch.
+ * Fetches from both telegram and discord via React Query.
  * Increments by 1 for each pairing_request_created WS event received since
  * the last fetch, keeping the badge live without a round-trip per event.
  */
 export function usePendingApprovalsCount(): UsePendingApprovalsCountResult {
-  const [baseCount, setBaseCount] = useState<number>(0);
-  const [refetchKey, setRefetchKey] = useState(0);
   const { pairingRequestCount } = usePairingRequestEvents();
   const baselinePairingCountRef = useRef(pairingRequestCount);
 
-  useEffect(() => {
-    let cancelled = false;
+  const telegramQuery = useChannelPairingQuery('telegram');
+  const discordQuery = useChannelPairingQuery('discord');
 
-    Promise.all([
-      fetchChannelPairing('telegram'),
-      fetchChannelPairing('discord'),
-    ]).then(([telegramState, discordState]) => {
-      if (!cancelled) {
-        setBaseCount(telegramState.pending.length + discordState.pending.length);
-        baselinePairingCountRef.current = pairingRequestCount;
-      }
-    });
+  const telegramPending = telegramQuery.data?.pending.length ?? 0;
+  const discordPending = discordQuery.data?.pending.length ?? 0;
+  const baseCount = telegramPending + discordPending;
 
-    return () => {
-      cancelled = true;
-    };
-    // pairingRequestCount intentionally excluded — only refetchKey drives re-fetches
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refetchKey]);
+  // Reset baseline whenever a fresh fetch completes
+  if (telegramQuery.isSuccess && discordQuery.isSuccess) {
+    baselinePairingCountRef.current = pairingRequestCount;
+  }
 
   const wsIncrement = pairingRequestCount - baselinePairingCountRef.current;
   const count = baseCount + Math.max(0, wsIncrement);
 
   const refetch = useCallback(() => {
-    setRefetchKey((k) => k + 1);
+    void telegramQuery.refetch();
+    void discordQuery.refetch();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { count, refetch };

@@ -1,32 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
-import { fetchVersionCheck, skipVersion, triggerUpgrade, triggerRestart } from '@/lib/api';
-import type { VersionCheckResponse, UpgradeResponse } from '@/lib/api';
+import { skipVersion, triggerUpgrade, triggerRestart } from '@/lib/api';
+import type { UpgradeResponse } from '@/lib/api';
+import { useVersionCheckQuery } from '@/lib/queries';
 
 type UpgradeState = 'idle' | 'upgrading' | 'upgraded' | 'restarting' | 'error';
 
 export function useVersionCheck() {
-  const [data, setData] = useState<VersionCheckResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isPending: isLoading, refetch } = useVersionCheckQuery();
   const [upgradeState, setUpgradeState] = useState<UpgradeState>('idle');
   const [upgradeResult, setUpgradeResult] = useState<UpgradeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const check = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const result = await fetchVersionCheck();
-      setData(result);
-    } catch (err) {
-      console.warn('Version check failed:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    check();
-  }, [check]);
 
   const doUpgrade = useCallback(async () => {
     try {
@@ -55,14 +39,15 @@ export function useVersionCheck() {
     if (!data) return;
     try {
       await skipVersion(data.latest_version);
-      setData((prev) => (prev ? { ...prev, skipped: true } : prev));
+      // Invalidate query to re-fetch with updated skipped flag
+      await refetch();
     } catch (err) {
       console.warn('Skip version failed:', err);
     }
-  }, [data]);
+  }, [data, refetch]);
 
   return {
-    data,
+    data: data ?? null,
     isLoading,
     upgradeState,
     upgradeResult,
@@ -70,6 +55,6 @@ export function useVersionCheck() {
     doUpgrade,
     doRestart,
     doSkip,
-    refresh: check,
+    refresh: () => void refetch(),
   };
 }
