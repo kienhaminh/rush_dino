@@ -56,7 +56,7 @@ pub enum SessionsAction {
     History {
         id: String,
         #[arg(long, default_value = "20")]
-        limit: i64,
+        limit: u32,
         #[arg(long)]
         json: bool,
     },
