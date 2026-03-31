@@ -2,10 +2,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { RefreshCw } from 'lucide-react';
-import { useMessages } from './use-messages';
+import { useMessagesQuery } from '../../lib/queries';
 
 export function MessagesPage() {
-  const { messages, loading, error, refresh } = useMessages(true);
+  const { data: messages = [], isPending: loading, error: queryError, refetch } = useMessagesQuery(true);
+  const error = queryError?.message ?? null;
   const unreadCount = messages.filter((m) => !m.read).length;
 
   return (
@@ -17,7 +18,7 @@ export function MessagesPage() {
             <Badge variant="secondary" className="text-[8px]">{unreadCount} unread</Badge>
           )}
         </div>
-        <Button variant="ghost" size="sm" onClick={refresh} className="h-6 px-2 text-[9px]">
+        <Button variant="ghost" size="sm" onClick={() => void refetch()} className="h-6 px-2 text-[9px]">
           <RefreshCw className="w-3 h-3 mr-1" /> Refresh
         </Button>
       </div>
@@ -41,14 +42,14 @@ export function MessagesPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-muted-foreground">From</span>
-                  <span className="font-semibold">{msg.from_agent}</span>
+                  <span className="font-semibold">{msg.fromAgent}</span>
                   <span className="text-muted-foreground">→</span>
                   <span className="text-muted-foreground">To</span>
-                  <span className="font-semibold">{msg.to_agent}</span>
+                  <span className="font-semibold">{msg.toAgent}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   {!msg.read && <Badge variant="secondary" className="text-[7px] px-1">NEW</Badge>}
-                  <span className="text-[10px] text-muted-foreground">{formatTime(msg.created_at)}</span>
+                  <span className="text-[10px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
                 </div>
               </div>
               <p className="text-[9px] text-muted-foreground leading-relaxed">{msg.content}</p>

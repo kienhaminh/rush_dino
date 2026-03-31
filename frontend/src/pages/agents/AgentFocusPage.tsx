@@ -6,8 +6,8 @@ import { cn } from '@/lib/utils';
 import type { AgentPanel, AgentRecord, AgentRuntimeData } from './agent-types';
 import { fetchAgents, fetchAgentRuntime } from '@/lib/api';
 import { AgentOverviewPanel } from './agent-overview-panel';
-import { useMessages } from '@/pages/messages/use-messages';
-import type { AgentMessageRecord } from '@/pages/messages/use-messages';
+import { useMessagesQuery } from '@/lib/queries';
+import type { AgentMessageRecord } from '@/lib/api';
 
 // -----------------------------------------------------------------------
 // Helpers
@@ -31,7 +31,8 @@ function formatMessageTime(iso: string): string {
 // -----------------------------------------------------------------------
 
 function AgentMessagesPanel({ agentName }: { agentName: string }) {
-  const { messages, loading, error } = useMessages(true, agentName);
+  const { data: messages = [], isPending: loading, error: queryError } = useMessagesQuery(true, agentName);
+  const error = queryError?.message ?? null;
 
   if (loading && messages.length === 0) {
     return <p className="text-[10px] text-muted-foreground p-4">Loading...</p>;
@@ -268,7 +269,7 @@ export function AgentFocusPage() {
   // Fetch messages for the badge count — only enabled when panel is messages
   const currentAgent = fetchState.agents.find((a) => a.id === agentId);
   const agentName = currentAgent?.name ?? agentId;
-  const { messages: badgeMessages } = useMessages(activePanel === 'messages', agentName);
+  const { data: badgeMessages = [] } = useMessagesQuery(activePanel === 'messages', agentName);
   const unreadCount = badgeMessages.filter((m) => !m.read).length;
 
   if (fetchState.status === 'loading' && !fetchState.runtime) {
