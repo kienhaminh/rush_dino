@@ -463,3 +463,23 @@ fn cron_runs_limit_parses() {
         .expect("cron runs --limit should parse");
     assert!(matches!(cli.command, Command::Cron(_)));
 }
+
+#[test]
+fn cron_create_missing_schedule_fails() {
+    Cli::try_parse_from(["rushdino", "cron", "create", "--prompt", "do something"])
+        .expect_err("cron create without --schedule should fail");
+}
+
+#[test]
+fn cron_trigger_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "trigger", "job-123", "--json"])
+        .expect("cron trigger --json should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
+
+#[test]
+fn cron_runs_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "cron", "runs", "job-123", "--json"])
+        .expect("cron runs --json should parse");
+    assert!(matches!(cli.command, Command::Cron(_)));
+}
