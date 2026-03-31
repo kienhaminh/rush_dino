@@ -3,95 +3,150 @@ use rushdino_common::config::{AuthMethod, Provider};
 
 fn openai_api_key_models() -> Vec<ModelInfo> {
     vec![
+        // --- GPT-5.4 family ---
         ModelInfo {
-            id: "gpt-5".into(),
-            name: Some("GPT-5".into()),
-            description: Some("Next-generation flagship model".into()),
-            context_window: Some(256_000),
-            is_reasoning: Some(false),
+            id: "gpt-5.4-pro".into(),
+            name: Some("GPT-5.4 Pro".into()),
+            description: Some("Extended-context frontier reasoning model".into()),
+            context_window: Some(1_050_000),
+            is_reasoning: Some(true),
         },
         ModelInfo {
-            id: "gpt-5-pro".into(),
-            name: Some("GPT-5 Pro".into()),
-            description: Some("Highly capable professional model".into()),
-            context_window: Some(256_000),
+            id: "gpt-5.4".into(),
+            name: Some("GPT-5.4".into()),
+            description: Some("Frontier reasoning model".into()),
+            context_window: Some(272_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5.4-mini".into(),
+            name: Some("GPT-5.4 Mini".into()),
+            description: Some("Fast frontier reasoning model".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5.4-nano".into(),
+            name: Some("GPT-5.4 Nano".into()),
+            description: Some("Lightweight frontier reasoning model".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        // --- GPT-5.x family ---
+        ModelInfo {
+            id: "gpt-5.2".into(),
+            name: Some("GPT-5.2".into()),
+            description: Some("Strong reasoning model".into()),
+            context_window: Some(400_000),
             is_reasoning: Some(true),
         },
         ModelInfo {
             id: "gpt-5.1".into(),
             name: Some("GPT-5.1".into()),
-            description: Some("Incremental update to GPT-5".into()),
-            context_window: Some(256_000),
-            is_reasoning: Some(false),
+            description: Some("Solid general-purpose reasoning model".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
         },
+        // --- GPT-5 family ---
         ModelInfo {
-            id: "gpt-5.2".into(),
-            name: Some("GPT-5.2".into()),
-            description: Some("Latest GPT-5 iteration".into()),
-            context_window: Some(256_000),
-            is_reasoning: Some(false),
-        },
-        ModelInfo {
-            id: "gpt-5.4".into(),
-            name: Some("GPT-5.4".into()),
-            description: Some("Frontier model for complex professional work".into()),
-            context_window: Some(1_050_000),
+            id: "gpt-5".into(),
+            name: Some("GPT-5".into()),
+            description: Some("Flagship reasoning model".into()),
+            context_window: Some(400_000),
             is_reasoning: Some(true),
         },
         ModelInfo {
+            id: "gpt-5-pro".into(),
+            name: Some("GPT-5 Pro".into()),
+            description: Some("Professional reasoning model".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5-mini".into(),
+            name: Some("GPT-5 Mini".into()),
+            description: Some("Lightweight flagship reasoning model".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5-nano".into(),
+            name: Some("GPT-5 Nano".into()),
+            description: Some("Smallest flagship reasoning model".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        // --- GPT-4.1 family ---
+        ModelInfo {
             id: "gpt-4.1".into(),
             name: Some("GPT-4.1".into()),
-            description: Some("Advanced GPT-4 capability".into()),
-            context_window: Some(128_000),
+            description: Some("Large-context non-reasoning model".into()),
+            context_window: Some(1_047_576),
             is_reasoning: Some(false),
         },
         ModelInfo {
             id: "gpt-4.1-mini".into(),
             name: Some("GPT-4.1 Mini".into()),
-            description: Some("Fast, efficient iteration of 4.1".into()),
-            context_window: Some(128_000),
+            description: Some("Fast, efficient non-reasoning model".into()),
+            context_window: Some(1_047_576),
             is_reasoning: Some(false),
         },
         ModelInfo {
+            id: "gpt-4.1-nano".into(),
+            name: Some("GPT-4.1 Nano".into()),
+            description: Some("Cheapest non-reasoning model".into()),
+            context_window: Some(1_047_576),
+            is_reasoning: Some(false),
+        },
+        // --- o-series reasoning ---
+        ModelInfo {
             id: "o4-mini".into(),
             name: Some("o4 Mini".into()),
-            description: Some("Latest compact reasoning model".into()),
+            description: Some("Compact reasoning model".into()),
             context_window: Some(200_000),
             is_reasoning: Some(true),
         },
         ModelInfo {
             id: "o3".into(),
             name: Some("o3".into()),
-            description: Some("Fastest reasoning model framework".into()),
+            description: Some("Strong reasoning model".into()),
+            context_window: Some(200_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "o3-pro".into(),
+            name: Some("o3 Pro".into()),
+            description: Some("Pro-tier reasoning model".into()),
             context_window: Some(200_000),
             is_reasoning: Some(true),
         },
         ModelInfo {
             id: "o3-mini".into(),
             name: Some("o3 Mini".into()),
-            description: Some("Fastest reasoning model for coding/math".into()),
+            description: Some("Fast reasoning model for coding/math".into()),
             context_window: Some(200_000),
             is_reasoning: Some(true),
         },
+        // --- Legacy ---
         ModelInfo {
             id: "gpt-4o".into(),
             name: Some("GPT-4o".into()),
-            description: Some("Omni model, most capable and versatile".into()),
+            description: Some("Omni model (Legacy)".into()),
             context_window: Some(128_000),
             is_reasoning: Some(false),
         },
         ModelInfo {
             id: "gpt-4o-mini".into(),
             name: Some("GPT-4o Mini".into()),
-            description: Some("Fast, affordable small model for lightweight tasks".into()),
+            description: Some("Small omni model (Legacy)".into()),
             context_window: Some(128_000),
             is_reasoning: Some(false),
         },
         ModelInfo {
             id: "o1".into(),
             name: Some("o1".into()),
-            description: Some("Reasoning model for complex technical tasks".into()),
-            context_window: Some(128_000),
+            description: Some("Reasoning model (Legacy)".into()),
+            context_window: Some(200_000),
             is_reasoning: Some(true),
         },
     ]
@@ -99,6 +154,7 @@ fn openai_api_key_models() -> Vec<ModelInfo> {
 
 fn openai_codex_only_models() -> Vec<ModelInfo> {
     vec![
+        // gpt-5.4 is also in api_key_models but Codex overrides with higher context
         ModelInfo {
             id: "gpt-5.4".into(),
             name: Some("GPT-5.4".into()),
@@ -109,26 +165,58 @@ fn openai_codex_only_models() -> Vec<ModelInfo> {
         ModelInfo {
             id: "gpt-5.3-codex".into(),
             name: Some("GPT-5.3 Codex".into()),
-            description: Some(
-                "Codex model — requires Codex (OAuth) authentication".into(),
-            ),
-            context_window: Some(256_000),
-            is_reasoning: Some(false),
+            description: Some("Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5.3-codex-spark".into(),
+            name: Some("GPT-5.3 Codex Spark".into()),
+            description: Some("Lightweight Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(128_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5.2-codex".into(),
+            name: Some("GPT-5.2 Codex".into()),
+            description: Some("Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5.2-pro".into(),
+            name: Some("GPT-5.2 Pro".into()),
+            description: Some("Pro-tier Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
         },
         ModelInfo {
             id: "gpt-5.1-codex-max".into(),
             name: Some("GPT-5.1 Codex Max".into()),
-            description: Some(
-                "High-capacity Codex model — requires Codex (OAuth) authentication".into(),
-            ),
-            context_window: Some(256_000),
-            is_reasoning: Some(false),
+            description: Some("High-capacity Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5.1-codex-mini".into(),
+            name: Some("GPT-5.1 Codex Mini".into()),
+            description: Some("Compact Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "gpt-5-codex".into(),
+            name: Some("GPT-5 Codex".into()),
+            description: Some("Codex model — requires Codex (OAuth) authentication".into()),
+            context_window: Some(400_000),
+            is_reasoning: Some(true),
         },
     ]
 }
 
 fn anthropic_models() -> Vec<ModelInfo> {
     vec![
+        // --- Claude 4.6 family ---
         ModelInfo {
             id: "claude-opus-4-6".into(),
             name: Some("Claude Opus 4.6".into()),
@@ -143,13 +231,29 @@ fn anthropic_models() -> Vec<ModelInfo> {
             context_window: Some(1_000_000),
             is_reasoning: Some(true),
         },
+        // --- Claude 4.5 family ---
+        ModelInfo {
+            id: "claude-opus-4-5-20250620".into(),
+            name: Some("Claude Opus 4.5".into()),
+            description: Some("Powerful reasoning model with extended thinking".into()),
+            context_window: Some(200_000),
+            is_reasoning: Some(true),
+        },
+        ModelInfo {
+            id: "claude-sonnet-4-5-20250514".into(),
+            name: Some("Claude Sonnet 4.5".into()),
+            description: Some("Balanced intelligence and speed with extended thinking".into()),
+            context_window: Some(200_000),
+            is_reasoning: Some(true),
+        },
         ModelInfo {
             id: "claude-haiku-4-5-20251001".into(),
             name: Some("Claude Haiku 4.5".into()),
             description: Some("Fast, cost-effective model for lightweight tasks".into()),
             context_window: Some(200_000),
-            is_reasoning: Some(false),
+            is_reasoning: Some(true),
         },
+        // --- Legacy ---
         ModelInfo {
             id: "claude-3-7-sonnet-20250219".into(),
             name: Some("Claude 3.7 Sonnet".into()),
