@@ -344,3 +344,12 @@ fn sessions_history_limit_parses() {
     .expect("sessions history --limit should parse");
     assert!(matches!(cli.command, Command::Sessions(_)));
 }
+
+#[test]
+fn sessions_history_json_flag_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "sessions", "history", "sess-abc", "--json",
+    ])
+    .expect("sessions history --json should parse");
+    assert!(matches!(cli.command, Command::Sessions(_)));
+}
