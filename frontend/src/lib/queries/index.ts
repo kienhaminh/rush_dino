@@ -1,10 +1,10 @@
-// Domain query hooks — exports added as each domain task is completed
+// All domain query hooks
 export * from './agents'
 export * from './config'
 export * from './workflows'
 export * from './messages'
 export * from './soul-memory'
 export * from './sessions'
-export * from './misc'
 export * from './channels'
 export * from './logs'
+export * from './misc'
