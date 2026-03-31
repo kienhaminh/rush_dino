@@ -341,6 +341,14 @@ function handleWsMessage(msg: WsEvent, deps: HandleWsMsgDeps): void {
     return;
   }
 
+  // --- session_reset (profile changed, session cleared) ---
+  if (msg.type === 'session_reset') {
+    dispatchChat({ type: 'setItems', items: [] });
+    dispatchChat({ type: 'setStreaming', streaming: false });
+    toast.info('Profile changed — conversation reset.');
+    return;
+  }
+
   // --- error ---
   if (msg.type === 'error') {
     dispatchChat({ type: 'updateItems', updater: (prev) => [

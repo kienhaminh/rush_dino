@@ -14,6 +14,7 @@ export type WsEventType =
   | 'runtime_log_error'
   | 'task_review_ready'
   | 'pairing_request_created'
+  | 'session_reset'
   | 'error';
 
 export interface WsChatChunkEvent {
@@ -120,6 +121,12 @@ export interface WsTaskReviewReadyEvent {
   notification: string;
 }
 
+/** Emitted when the active profile changes and the main session is cleared. */
+export interface WsSessionResetEvent {
+  type: 'session_reset';
+  conversation_id: string;
+}
+
 /** Emitted when a new Telegram/Discord pairing request is created. */
 export interface WsPairingRequestCreatedEvent {
   type: 'pairing_request_created';
@@ -144,4 +151,5 @@ export type WsEvent =
   | WsRuntimeLogErrorEvent
   | WsUserMessageEvent
   | WsTaskReviewReadyEvent
-  | WsPairingRequestCreatedEvent;
+  | WsPairingRequestCreatedEvent
+  | WsSessionResetEvent;
