@@ -1,177 +1,97 @@
-# Agent CLI System — Design Spec
+# Agent CLI Design
 
 **Date:** 2026-03-31
 **Status:** Approved
 
----
+## Problem
 
-## Context
+Agents currently manage sessions, cron jobs, and workflows through individual registered tools (`sessions_spawn`, `create_job`, `create_workflow`, etc.). This creates tool sprawl — every new capability requires a new tool. The `rushdino` CLI already provides a human-facing management surface over the same HTTP API. Agents can reach it via `shell_exec`, making the CLI a natural unified interface for both humans and agents.
 
-RushDino agents currently have no programmatic way to interact with system-level operations (sessions, workflows, kanban, approvals). The existing `rushdino sessions`, `rushdino agents`, `rushdino message` commands are all stubs that print "use the web UI." Agents that need to create sessions, trigger workflows, post tasks, or approve pending requests must either do it through the Tool trait (Rust-only) or call the REST API via `web_fetch` — neither is ergonomic or discoverable.
+## Goal
 
-This spec defines:
-1. A fully implemented CLI layer on the existing `rushdino` binary covering five system areas
-2. A bundled RushDino skill (`rushdino-cli`) that agents activate to discover and use these commands
+Expand the `rushdino` CLI so agents can fully manage their operational lifecycle — sessions, cron jobs, and workflows — through `shell_exec` calls. Provide a SKILL.md that teaches agents the CLI vocabulary and when to use it.
 
----
+## Out of scope (this phase)
 
-## Architecture
+- Agent create/update/delete (agent management requires governance rules, deferred)
+- Memory commands (stays tool-side: `memory_read`, `memory_write`, `memory_search`)
+- Skills commands (handled via system prompt injection, not CLI)
 
-**Pattern:** All new commands follow the existing `health.rs` pattern — load `AppConfig`, create a `reqwest::Client`, call `http://localhost:{port}/api/...`, format the response.
+## Approach
 
-**Shared client:** A new `crates/cli/src/api_client.rs` module wraps `reqwest::Client` with the base URL from `AppConfig`. It exposes typed `get`, `post`, `patch`, `delete` helpers and a uniform error handler that maps HTTP error bodies to `AppError`.
+Extend the existing `rushdino` binary following its established pattern:
 
-**Output modes:** Every system management command accepts a `--json` flag. Without it, output is human-readable colored text. With `--json`, raw JSON is printed to stdout and the command exits 0 on success, non-zero on failure. Agents always use `--json`.
+- New subcommands wired into `main.rs`
+- New command files in `crates/cli/src/commands/`
+- Each command calls the existing HTTP API via `ApiClient`
+- `--json` flag on all commands for machine-readable output
+- Human-readable output by default (colored, emoji-prefixed) — consistent with existing commands
 
-**Configure (non-interactive mode):** When any credential flag is passed to `rushdino configure`, the command skips interactive prompts, writes directly to `~/.rushdino/credentials.toml`, and prints a one-line confirmation.
+## Command Inventory
 
----
+### Sessions (extend `crates/cli/src/commands/sessions.rs`)
 
-## Commands
+| Command | API endpoint | Notes |
+|---|---|---|
+| `sessions spawn --agent <id> --prompt <text> [--json]` | `POST /api/runs` | Spawns an async run; returns run ID and session ID |
+| `sessions history <id> [--limit N] [--json]` | `GET /api/sessions/:id/runs` | Lists runs for a session |
 
-### Sessions
-File: `crates/cli/src/commands/sessions.rs` (rewrite existing stub)
+### Cron (new `crates/cli/src/commands/cron.rs`)
 
-```
-rushdino sessions list [--json]
-rushdino sessions create --title <title> [--json]
-rushdino sessions get <id> [--json]
-rushdino sessions message <id> <message> [--json]
-rushdino sessions archive <id>
-rushdino sessions delete <id>
-```
+| Command | API endpoint | Notes |
+|---|---|---|
+| `cron list [--json]` | `GET /api/cron` | Lists all cron jobs |
+| `cron get <id> [--json]` | `GET /api/cron/:id` | Job detail + recent runs |
+| `cron create --schedule <expr> --prompt <text> [--agent <id>] [--json]` | `POST /api/cron` | Creates a scheduled job |
+| `cron delete <id>` | `DELETE /api/cron/:id` | Deletes a job |
+| `cron pause <id>` | `POST /api/cron/:id/pause` | Pauses a job |
+| `cron resume <id>` | `POST /api/cron/:id/resume` | Resumes a paused job |
+| `cron trigger <id> [--json]` | `POST /api/cron/:id/run` | Manually fires a job now |
+| `cron runs <id> [--limit N] [--json]` | `GET /api/cron/:id/runs` | Lists run history for a job |
 
-API mapping:
-- `list`    → `GET  /api/sessions`
-- `create`  → `POST /api/sessions`  `{ "title": "..." }`
-- `get`     → `GET  /api/sessions/:id`
-- `message` → `POST /api/sessions/:id/message`  `{ "message": "..." }`
-- `archive` → `POST /api/sessions/:id/archive`
-- `delete`  → `DELETE /api/sessions/:id`
+### Workflow (extend `crates/cli/src/commands/workflow.rs`)
 
-### Agents
-File: `crates/cli/src/commands/agents.rs` (rewrite existing stub)
+| Command | API endpoint | Notes |
+|---|---|---|
+| `workflow create --name <n> --steps <json> [--json]` | `POST /api/workflows` | Creates a workflow definition |
+| `workflow delete <id>` | `DELETE /api/workflows/:id` | Deletes a workflow |
+| `workflow runs <id> [--limit N] [--json]` | `GET /api/workflows/:id/runs` | Lists runs for a workflow |
+| `workflow run-status <run-id> [--json]` | `GET /api/workflow-runs/:run_id` | Gets status of a specific run |
 
-```
-rushdino agents list [--json]
-rushdino agents get <id> [--json]
-```
+### Agents (no change)
 
-API mapping:
-- `list` → `GET /api/agents`
-- `get`  → `GET /api/agents/:id`
+`rushdino agents list` and `rushdino agents get <id>` already exist and are sufficient for this phase.
 
-### Workflow
-File: `crates/cli/src/commands/workflow.rs` (new)
+## SKILL.md Design
 
-```
-rushdino workflow list [--json]
-rushdino workflow get <id> [--json]
-rushdino workflow run <id> [--input <text>] [--json]
-```
+Structure: hybrid — brief mental model paragraph, CLI-vs-tool decision table, compact command reference.
 
-API mapping:
-- `list` → `GET  /api/workflows`
-- `get`  → `GET  /api/workflows/:id`
-- `run`  → `POST /api/workflows/:id/runs`  `{ "input": "...", "triggered_by": "cli" }`
+**Mental model paragraph:**
+> You manage your operational lifecycle through the `rushdino` CLI via `shell_exec`. Always pass `--json` for machine-readable output. Use the CLI for sessions, cron scheduling, and workflows. Use tools for memory, files, and web access.
 
-### Kanban
-File: `crates/cli/src/commands/kanban.rs` (new)
+**CLI vs tool decision table:**
 
-```
-rushdino kanban board [--json]
-rushdino kanban list [--status <status>] [--agent <name>] [--json]
-rushdino kanban get <id> [--json]
-```
+| Need | Use |
+|---|---|
+| Spawn a session with an agent | `rushdino sessions spawn` (CLI) |
+| Check session run history | `rushdino sessions history` (CLI) |
+| Schedule recurring work | `rushdino cron create` (CLI) |
+| Trigger / pause / resume a job | `rushdino cron trigger/pause/resume` (CLI) |
+| Define or run a workflow | `rushdino workflow create / run` (CLI) |
+| Read or write memory | `memory_read` / `memory_write` tool |
+| Search memory | `memory_search` tool |
+| Read or edit files | `file_read` / `file_edit` tool |
+| Web search or fetch | `web_search` / `web_fetch` tool |
 
-API mapping:
-- `board` → `GET /api/kanban/board`
-- `list`  → `GET /api/kanban/tasks?status=...&agent=...`
-- `get`   → `GET /api/kanban/tasks/:id`
+**Command reference:** all commands above with required args and return shape.
 
-### Approvals
-File: `crates/cli/src/commands/approval.rs` (new)
+## File Changes
 
-```
-rushdino approvals list [--json]
-rushdino approvals approve <request-id> --session <session-id>
-rushdino approvals deny <request-id> --session <session-id>
-```
-
-API mapping:
-- `list`    → `GET  /api/approvals`
-- `approve` → `POST /api/approval/:id`  `{ "approved": true,  "session_id": "..." }`
-- `deny`    → `POST /api/approval/:id`  `{ "approved": false, "session_id": "..." }`
-
-### Configure (extended)
-File: `crates/cli/src/commands/configure.rs` (extend existing)
-
-New non-interactive flags (can be combined, sets credentials directly without prompts):
-```
-rushdino configure --openai-key <key>
-rushdino configure --anthropic-key <key>
-rushdino configure --brave-api-key <key>
-rushdino configure --gemini-key <key>
-rushdino configure --telegram-token <token>
-rushdino configure --discord-token <token>
-```
-
-When any of these flags are present, skip interactive mode, write to `~/.rushdino/credentials.toml`, print `✔ Credentials saved.` No restart message needed — credentials are read per-request.
-
----
-
-## Skill File
-
-**Source:** `crates/common/src/skills/rushdino-cli/SKILL.md`
-**Distributed:** downloaded to `~/.rushdino/skills/rushdino-cli/SKILL.md` via `asset_sync`
-**Registration:** add `"rushdino-cli/SKILL.md"` to `SKILL_PATHS` in `crates/common/src/skills.rs`
-
-The skill is a reference card. Agents invoke it when they need to manage sessions, trigger workflows, check tasks, or handle approvals. The description field is crafted for accurate triggering by the skill graph.
-
-Skill frontmatter:
-```yaml
-name: rushdino-cli
-description: Use the rushdino CLI to manage RushDino system operations. Covers session management, sending messages to agents, triggering workflows, viewing the kanban board, posting or updating tasks, and approving pending requests. Use when you need to interact with the RushDino system programmatically rather than through tool calls.
-```
-
-Content structure:
-- **How to invoke:** use the `bash` tool; add `--json` for machine-readable output
-- **Sessions** — table: command → purpose → example
-- **Agents** — table
-- **Workflows** — table
-- **Kanban** — table
-- **Approvals** — table
-- **Configure** — table of credential flags
-- **Error handling:** non-zero exit = failure; error message on stderr
-
----
-
-## Files to Create / Modify
-
-| File | Action |
-|------|--------|
-| `crates/cli/src/api_client.rs` | Create — shared HTTP client helper |
-| `crates/cli/src/commands/sessions.rs` | Rewrite stub → full subcommand group |
-| `crates/cli/src/commands/agents.rs` | Rewrite stub → full subcommand group |
-| `crates/cli/src/commands/workflow.rs` | Create — new command |
-| `crates/cli/src/commands/kanban.rs` | Create — new command |
-| `crates/cli/src/commands/approval.rs` | Create — new command |
-| `crates/cli/src/commands/configure.rs` | Extend — add non-interactive flags |
-| `crates/cli/src/commands/mod.rs` | Add new command modules |
-| `crates/cli/src/main.rs` | Add `Workflow`, `Kanban`, `Approvals` variants + routing |
-| `crates/common/src/skills/rushdino-cli/SKILL.md` | Create — bundled skill |
-| `crates/common/src/skills.rs` | Add `"rushdino-cli/SKILL.md"` to `SKILL_PATHS` |
-
----
-
-## Verification
-
-1. `cargo build -p rushdino-cli` compiles cleanly
-2. With the server running: `rushdino sessions list --json` returns valid JSON
-3. `rushdino sessions create --title "Test" --json` creates a session and returns its ID
-4. `rushdino workflow list --json` returns the workflows array
-5. `rushdino kanban board` prints a human-readable board view
-6. `rushdino approvals list --json` returns `{ "pending": [...], "recent": [...] }`
-7. `rushdino configure --brave-api-key test123` writes to `~/.rushdino/credentials.toml` without interactive prompts
-8. Skill is loadable: after `rushdino init`, `~/.rushdino/skills/rushdino-cli/SKILL.md` exists and parses correctly
-9. With server stopped: commands print a clear "server not running" error and exit non-zero
+| File | Change |
+|---|---|
+| `crates/cli/src/commands/sessions.rs` | Add `Spawn` and `History` variants to `SessionsAction` |
+| `crates/cli/src/commands/cron.rs` | New file — full cron command implementation |
+| `crates/cli/src/commands/workflow.rs` | Add `Create`, `Delete`, `Runs`, `RunStatus` variants |
+| `crates/cli/src/commands/mod.rs` | Add `pub mod cron` |
+| `crates/cli/src/main.rs` | Wire `Cron` variant into `Command` enum and match arm |
+| `~/.rushdino/skills/agent-cli/SKILL.md` | New skill file (frontmatter + body) teaching CLI usage to agents; installed on first run or via `rushdino` setup |
