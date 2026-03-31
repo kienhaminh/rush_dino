@@ -158,12 +158,12 @@ pub async fn run(args: WorkflowArgs) -> Result<()> {
                     for item in &items {
                         let run_id = item["id"].as_str().unwrap_or("-");
                         let status = item["status"].as_str().unwrap_or("-");
-                        let created = item["createdAt"].as_str().unwrap_or("-");
+                        let started = item["startedAt"].as_str().unwrap_or("-");
                         println!(
                             "  {} {} {}",
                             run_id.dimmed(),
                             format!("[{status}]").yellow(),
-                            created.dimmed()
+                            started.dimmed()
                         );
                     }
                     println!("\n{} {} runs", "✔".green(), items.len());
@@ -177,14 +177,14 @@ pub async fn run(args: WorkflowArgs) -> Result<()> {
             } else {
                 let status = data["status"].as_str().unwrap_or("-");
                 let workflow_id = data["workflowId"].as_str().unwrap_or("-");
-                let created = data["createdAt"].as_str().unwrap_or("-");
+                let started = data["startedAt"].as_str().unwrap_or("-");
                 println!(
                     "{} Run {} — {} — workflow: {} — started: {}",
                     "⚙️".bold(),
                     id.bold(),
                     format!("[{status}]").yellow(),
                     workflow_id.dimmed(),
-                    created.dimmed()
+                    started.dimmed()
                 );
             }
         }
