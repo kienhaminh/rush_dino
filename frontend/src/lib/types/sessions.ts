@@ -1,5 +1,3 @@
-import type { RunState } from './runs';
-
 export interface SessionSummary {
   id: string;
   title: string;

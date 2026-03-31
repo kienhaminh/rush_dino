@@ -12,6 +12,8 @@ export type WsEventType =
   | 'input_request'
   | 'user_message'
   | 'runtime_log_error'
+  | 'task_review_ready'
+  | 'pairing_request_created'
   | 'error';
 
 export interface WsChatChunkEvent {
