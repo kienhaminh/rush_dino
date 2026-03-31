@@ -51,6 +51,18 @@ impl ThinkingLevel {
         }
     }
 
+    /// Effort level for Anthropic adaptive thinking models (Opus 4.6, Sonnet 4.6).
+    /// Returns `None` for `Off`.
+    pub fn anthropic_effort(&self) -> Option<&'static str> {
+        match self {
+            ThinkingLevel::Off => None,
+            ThinkingLevel::Minimal | ThinkingLevel::Low => Some("low"),
+            ThinkingLevel::Medium | ThinkingLevel::Adaptive => Some("medium"),
+            ThinkingLevel::High => Some("high"),
+            ThinkingLevel::Xhigh => Some("high"),
+        }
+    }
+
     /// OpenAI `reasoning_effort` string. Returns `None` for `Off`.
     pub fn openai_reasoning_effort(&self) -> Option<&'static str> {
         match self {

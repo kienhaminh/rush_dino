@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use rushdino_common::{models::ToolCall, AppError, Result};
 
-use crate::types::{AnthropicAuth, ChatChunk, ChatRequest, ChatResponse};
+use crate::types::{AnthropicAuth, ChatChunk, ChatRequest, ChatResponse, ThinkingLevel};
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
@@ -347,18 +347,25 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth
             .collect::<Vec<_>>()
     });
 
-    let thinking_budget = request
-        .thinking_level
-        .as_ref()
-        .and_then(|l| l.anthropic_budget_tokens());
+    // Opus 4.6 and Sonnet 4.6 use adaptive thinking (model decides when/how much).
+    // Older models use budget-based thinking with an explicit token budget.
+    let is_adaptive_model =
+        model.contains("opus-4-6") || model.contains("sonnet-4-6");
 
-    // When thinking is enabled, max_tokens must exceed budget_tokens.
-    // Ensure at least budget_tokens + 1024 output tokens are available.
-    let max_tokens = match (request.max_tokens, thinking_budget) {
-        (Some(mt), Some(budget)) => mt.max(budget + 1024),
-        (None, Some(budget)) => budget + 1024,
-        (Some(mt), None) => mt,
-        (None, None) => 1024,
+    let thinking_level = request.thinking_level.as_ref();
+    let thinking_budget = thinking_level.and_then(|l| l.anthropic_budget_tokens());
+    let thinking_effort = thinking_level.and_then(|l| l.anthropic_effort());
+
+    // When budget-based thinking is enabled, max_tokens must exceed budget_tokens.
+    let max_tokens = if !is_adaptive_model {
+        match (request.max_tokens, thinking_budget) {
+            (Some(mt), Some(budget)) => mt.max(budget + 1024),
+            (None, Some(budget)) => budget + 1024,
+            (Some(mt), None) => mt,
+            (None, None) => 1024,
+        }
+    } else {
+        request.max_tokens.unwrap_or(16384)
     };
 
     let mut body = json!({
@@ -376,10 +383,20 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth
         body["tools"] = json!(tools_vec);
     }
 
-    if let Some(budget) = thinking_budget {
-        // Extended thinking requires temperature=1
-        body["thinking"] = json!({ "type": "enabled", "budget_tokens": budget });
-        body["temperature"] = json!(1);
+    let thinking_enabled = thinking_level.is_some_and(|l| *l != ThinkingLevel::Off);
+
+    if thinking_enabled {
+        if is_adaptive_model {
+            // Adaptive thinking: model decides when and how much to think.
+            body["thinking"] = json!({ "type": "adaptive" });
+            if let Some(effort) = thinking_effort {
+                body["output_config"] = json!({ "effort": effort });
+            }
+        } else if let Some(budget) = thinking_budget {
+            // Budget-based thinking for older models.
+            body["thinking"] = json!({ "type": "enabled", "budget_tokens": budget });
+            body["temperature"] = json!(1);
+        }
     } else if let Some(temperature) = request.temperature {
         body["temperature"] = json!(temperature);
     }
