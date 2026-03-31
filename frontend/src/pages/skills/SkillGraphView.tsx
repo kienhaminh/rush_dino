@@ -10,6 +10,7 @@ import '@xyflow/react/dist/style.css';
 
 import type { GraphSnapshot, SkillNode as SkillNodeType } from './skill-graph-types';
 import { getCategoryColor } from './skill-graph-types';
+import { fetchSkillGraph } from './skill-graph-api';
 import { CategoryNode } from './nodes/category-node';
 import { SkillNode } from './nodes/skill-node';
 
@@ -188,11 +189,9 @@ export function SkillGraphView({
   useEffect(() => {
     if (externalSnapshot !== undefined) return;
     dispatch({ type: 'start' });
-    import('./skill-graph-api').then(({ fetchSkillGraph }) => {
-      fetchSkillGraph()
-        .then((data) => dispatch({ type: 'success', data }))
-        .catch((err) => dispatch({ type: 'error', error: err instanceof Error ? err.message : 'Failed to load skill graph' }));
-    });
+    fetchSkillGraph()
+      .then((data) => dispatch({ type: 'success', data }))
+      .catch((err) => dispatch({ type: 'error', error: err instanceof Error ? err.message : 'Failed to load skill graph' }));
   }, [externalSnapshot]);
 
   const snapshot = externalSnapshot !== undefined
