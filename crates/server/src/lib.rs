@@ -28,7 +28,7 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
-use state::AppState;
+use state::{AppState, AppStateConfig};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
@@ -385,8 +385,8 @@ pub async fn build_app(
         }
     });
 
-    let state = AppState::new(
-        runtime_state.clone(),
+    let state = AppState::new(AppStateConfig {
+        runtime: runtime_state.clone(),
         config_path,
         credentials_path,
         webchat,
@@ -397,7 +397,7 @@ pub async fn build_app(
         gateway_control,
         hmac_auth,
         rate_limiters,
-        runtime_logs.clone(),
+        runtime_logs: runtime_logs.clone(),
         chat_broadcast,
         channel_pairing,
         dashboard_auth,
@@ -405,10 +405,10 @@ pub async fn build_app(
         mobile_gateway_adapter,
         guardrail_registry,
         pending_oauth,
-        skill_graph_service,
-        mcp_manager.clone(),
+        skill_graph: skill_graph_service,
+        mcp_manager: mcp_manager.clone(),
         secret_vault,
-    );
+    });
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
         .route(

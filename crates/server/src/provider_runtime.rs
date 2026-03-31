@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 
-use rushdino_agent::{AgentConfig, AgentEngine, KnowledgeGraphAccess};
+use rushdino_agent::{engine_deps::EngineBuildInput, AgentConfig, AgentEngine, KnowledgeGraphAccess};
 use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
@@ -156,45 +156,44 @@ pub async fn refresh_runtime_from_disk(
                 }
                 ProviderConfig::Anthropic { .. } => AuthMethod::ApiKey,
             };
+            let agent_config = {
+                use rushdino_agent::memory_bootstrap::{
+                    DEFAULT_BOOTSTRAP_MAX_CHARS, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
+                };
+                AgentConfig {
+                    bootstrap_max_chars: config
+                        .bootstrap
+                        .max_chars_per_file
+                        .unwrap_or(DEFAULT_BOOTSTRAP_MAX_CHARS),
+                    bootstrap_total_max_chars: config
+                        .bootstrap
+                        .max_total_chars
+                        .unwrap_or(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS),
+                    max_context_tokens: config.agent.max_context_tokens.unwrap_or(200_000),
+                    max_iterations: config
+                        .agent
+                        .max_iterations
+                        .unwrap_or(AgentConfig::default().max_iterations),
+                    ..AgentConfig::default()
+                }
+            };
             let mut engine_inner = AgentEngine::new(
-                provider,
-                pool,
-                config.data_dir.clone(),
-                credentials.brave_api_key.clone(),
-                credentials.gemini_api_key.clone(),
+                EngineBuildInput {
+                    provider,
+                    pool,
+                    home_dir: config.data_dir.clone(),
+                    brave_api_key: credentials.brave_api_key.clone(),
+                    gemini_api_key: credentials.gemini_api_key.clone(),
+                    config: agent_config,
+                    runtime: runtime.agent_runtime(),
+                    system_broker: runtime.system_broker(),
+                    knowledge_graph: knowledge_graph_bridge,
+                    // No per-agent sandbox policy at global engine build time.
+                    guardrail_pipeline: None,
+                    broadcast_tx: runtime.broadcast_tx(),
+                },
                 provider_kind_label(&resolved.provider_kind).to_owned(),
                 auth_method,
-                {
-                    use rushdino_agent::memory_bootstrap::{
-                        DEFAULT_BOOTSTRAP_MAX_CHARS, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
-                    };
-                    AgentConfig {
-                        bootstrap_max_chars: config
-                            .bootstrap
-                            .max_chars_per_file
-                            .unwrap_or(DEFAULT_BOOTSTRAP_MAX_CHARS),
-                        bootstrap_total_max_chars: config
-                            .bootstrap
-                            .max_total_chars
-                            .unwrap_or(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS),
-                        max_context_tokens: config
-                            .agent
-                            .max_context_tokens
-                            .unwrap_or(200_000),
-                        max_iterations: config
-                            .agent
-                            .max_iterations
-                            .unwrap_or(AgentConfig::default().max_iterations),
-                        ..AgentConfig::default()
-                    }
-                },
-                runtime.agent_runtime(),
-                runtime.system_broker(),
-                knowledge_graph_bridge,
-                // No per-agent sandbox policy at global engine build time.
-                // Sandboxed agents attach their egress proxy at session creation.
-                None,
-                runtime.broadcast_tx(),
             )?;
             engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
             if let Some(sg) = runtime.skill_graph() {

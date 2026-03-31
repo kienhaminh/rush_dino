@@ -70,43 +70,18 @@ pub(crate) fn parse_tool_list(tools: &Option<String>) -> Vec<String> {
 }
 
 pub struct DelegateToAgentTool {
-    agent_manager: Arc<AgentManager>,
-    provider: Arc<Provider>,
-    config: AgentConfig,
+    pub agent_manager: Arc<AgentManager>,
+    pub provider: Arc<Provider>,
+    pub config: AgentConfig,
     /// Weak reference prevents a retain-cycle with the registry that owns this tool.
-    registry: Weak<ToolRegistry>,
+    pub registry: Weak<ToolRegistry>,
     /// Weak reference prevents a retain-cycle with SessionToolContext that indirectly
     /// owns this tool via the tool pool.
-    session_ctx: Weak<SessionToolContext>,
-    task_memory: Arc<AgentTaskMemory>,
-    conversation: Arc<ConversationManager>,
+    pub session_ctx: Weak<SessionToolContext>,
+    pub task_memory: Arc<AgentTaskMemory>,
+    pub conversation: Arc<ConversationManager>,
     /// Home directory (~/.rushdino) used to create per-agent workspace dirs.
-    home_dir: PathBuf,
-}
-
-impl DelegateToAgentTool {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        agent_manager: Arc<AgentManager>,
-        provider: Arc<Provider>,
-        config: AgentConfig,
-        registry: Weak<ToolRegistry>,
-        session_ctx: Weak<SessionToolContext>,
-        task_memory: Arc<AgentTaskMemory>,
-        conversation: Arc<ConversationManager>,
-        home_dir: PathBuf,
-    ) -> Self {
-        Self {
-            agent_manager,
-            provider,
-            config,
-            registry,
-            session_ctx,
-            task_memory,
-            conversation,
-            home_dir,
-        }
-    }
+    pub home_dir: PathBuf,
 }
 
 #[async_trait]

@@ -113,6 +113,18 @@ impl CronRunStatus {
     }
 }
 
+/// Parameters for completing a cron job run.
+pub struct CompleteRunParams<'a> {
+    pub job_id: &'a str,
+    pub run_id: &'a str,
+    pub status: CronRunStatus,
+    pub summary: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub session_id: Option<&'a str>,
+    pub workflow_run_id: Option<&'a str>,
+    pub now: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CronRunRecord {
@@ -369,25 +381,14 @@ impl CronManager {
         Ok(run_id)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub async fn complete_run(
-        &self,
-        job_id: &str,
-        run_id: &str,
-        status: CronRunStatus,
-        summary: Option<&str>,
-        error: Option<&str>,
-        session_id: Option<&str>,
-        workflow_run_id: Option<&str>,
-        now: DateTime<Utc>,
-    ) -> Result<CronJobRecord> {
-        let job = self.get_job(job_id).await?;
+    pub async fn complete_run(&self, p: CompleteRunParams<'_>) -> Result<CronJobRecord> {
+        let job = self.get_job(p.job_id).await?;
         let next_run_at = if job.enabled {
-            compute_next_run_after(&job.schedule, job.timezone.as_deref(), now)?
+            compute_next_run_after(&job.schedule, job.timezone.as_deref(), p.now)?
         } else {
             None
         };
-        let job_state = match status {
+        let job_state = match p.status {
             CronRunStatus::Ok => {
                 if job.enabled {
                     CronJobState::Active
@@ -406,13 +407,13 @@ impl CronManager {
             WHERE id = ?7
             "#,
         )
-        .bind(status.as_str())
-        .bind(summary)
-        .bind(error)
-        .bind(session_id)
-        .bind(workflow_run_id)
-        .bind(now.to_rfc3339())
-        .bind(run_id)
+        .bind(p.status.as_str())
+        .bind(p.summary)
+        .bind(p.error)
+        .bind(p.session_id)
+        .bind(p.workflow_run_id)
+        .bind(p.now.to_rfc3339())
+        .bind(p.run_id)
         .execute(&mut *tx)
         .await?;
 
@@ -424,16 +425,16 @@ impl CronManager {
             "#,
         )
         .bind(job_state.as_str())
-        .bind(now.to_rfc3339())
+        .bind(p.now.to_rfc3339())
         .bind(next_run_at.as_ref().map(DateTime::<Utc>::to_rfc3339))
-        .bind(error)
-        .bind(now.to_rfc3339())
-        .bind(job_id)
+        .bind(p.error)
+        .bind(p.now.to_rfc3339())
+        .bind(p.job_id)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
 
-        self.get_job(job_id).await
+        self.get_job(p.job_id).await
     }
 
     pub async fn list_runs(&self, job_id: &str, limit: i64) -> Result<Vec<CronRunRecord>> {

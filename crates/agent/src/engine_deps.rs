@@ -22,7 +22,7 @@ use crate::{
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
         agent_inbox::AgentInboxTool,
-        cron_tools::{cron_list_tool, cron_manage_tool},
+        cron_tools::{cron_list_tool, cron_manage_tool, AgentTurnCtx},
         delegate_to_agent::DelegateToAgentTool,
         kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
         team_status::TeamStatusTool,
@@ -49,6 +49,22 @@ use crate::{
     workflow_manager::WorkflowManager,
     workflow_runner::WorkflowRunner,
 };
+
+/// All inputs required to build a set of agent engine dependencies.
+pub struct EngineBuildInput {
+    pub provider: Arc<Provider>,
+    pub pool: Arc<SqlitePool>,
+    pub home_dir: PathBuf,
+    pub brave_api_key: Option<String>,
+    pub gemini_api_key: Option<String>,
+    pub config: AgentConfig,
+    pub runtime: Arc<AgentRuntime>,
+    pub system_broker: SharedSystemBroker,
+    pub knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
+    // TODO(Task 10): wire guardrail pipeline to web tools for network policy enforcement.
+    pub guardrail_pipeline: Option<Arc<GuardrailPipeline>>,
+    pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+}
 
 pub const CORE_TOOLS: &[&str] = &[
     // File & shell
@@ -110,22 +126,21 @@ pub struct EngineDeps {
     pub task_notify: Arc<tokio::sync::Notify>,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn build_engine_deps(
-    provider: Arc<Provider>,
-    pool: Arc<SqlitePool>,
-    home_dir: PathBuf,
-    brave_api_key: Option<String>,
-    gemini_api_key: Option<String>,
-    config: &AgentConfig,
-    runtime: Arc<AgentRuntime>,
-    system_broker: SharedSystemBroker,
-    knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-    // TODO(Task 10): wire guardrail pipeline to web tools for network policy enforcement.
-    // The egress proxy was removed; web tool network checking will be added here.
-    _guardrail_pipeline: Option<Arc<GuardrailPipeline>>,
-    broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
-) -> Result<EngineDeps> {
+pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
+    let EngineBuildInput {
+        provider,
+        pool,
+        home_dir,
+        brave_api_key,
+        gemini_api_key,
+        config,
+        runtime,
+        system_broker,
+        knowledge_graph,
+        guardrail_pipeline: _guardrail_pipeline,
+        broadcast_tx,
+    } = input;
+
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
     let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
@@ -225,17 +240,17 @@ pub fn build_engine_deps(
     let workflow_runner_once_c = workflow_runner_once.clone();
     let session_ctx = Arc::new_cyclic(|weak: &Weak<SessionToolContext>| {
         // WorkflowRunner and cron_manage need session_ctx; build WorkflowRunner here.
-        let workflow_runner = Arc::new(WorkflowRunner::new(
-            provider.clone(),
-            registry.clone(),
-            weak.clone(),
-            conversation.clone(),
-            memory.clone(),
-            agent_manager.clone(),
-            workflow_manager.clone(),
-            runtime.clone(),
-            config.clone(),
-        ));
+        let workflow_runner = Arc::new(WorkflowRunner {
+            provider: provider.clone(),
+            tool_registry: registry.clone(),
+            session_ctx: weak.clone(),
+            conversation: conversation.clone(),
+            memory: memory.clone(),
+            agent_manager: agent_manager.clone(),
+            manager: workflow_manager.clone(),
+            runtime: runtime.clone(),
+            config: config.clone(),
+        });
         let _ = workflow_runner_once_c.set(workflow_runner.clone());
         registry.register(RunWorkflowTool::new(
             workflow_manager_c3,
@@ -254,25 +269,27 @@ pub fn build_engine_deps(
         // Registered here (inside session_ctx's Arc::new_cyclic) so that `weak` is the
         // live back-reference rather than the permanently-dead Weak::new() sentinel that
         // was previously used when the tool was registered in the registry closure.
-        registry.register(DelegateToAgentTool::new(
-            agent_manager.clone(),
-            provider.clone(),
-            config.clone(),
-            Arc::downgrade(&registry),
-            weak.clone(),
-            task_memory.clone(),
-            conversation.clone(),
-            home_dir.clone(),
-        ));
+        registry.register(DelegateToAgentTool {
+            agent_manager: agent_manager.clone(),
+            provider: provider.clone(),
+            config: config.clone(),
+            registry: Arc::downgrade(&registry),
+            session_ctx: weak.clone(),
+            task_memory: task_memory.clone(),
+            conversation: conversation.clone(),
+            home_dir: home_dir.clone(),
+        });
         registry.register(cron_manage_tool(
             cron_manager.clone(),
-            conversation.clone(),
-            provider.clone(),
-            Arc::downgrade(&registry),
-            weak.clone(),
-            memory.clone(),
-            skills.clone(),
-            config.clone(),
+            AgentTurnCtx {
+                conversation: conversation.clone(),
+                provider: provider.clone(),
+                registry: Arc::downgrade(&registry),
+                session_ctx: weak.clone(),
+                memory: memory.clone(),
+                skill_manager: skills.clone(),
+                config: config.clone(),
+            },
             workflow_manager.clone(),
             workflow_runner.clone(),
             runtime.clone(),

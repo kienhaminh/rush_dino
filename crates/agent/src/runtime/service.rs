@@ -16,6 +16,17 @@ use crate::runtime::{
     RunDetail, RunKind, RunListFilter, RunOriginMetadata, RunPolicySnapshot, RunSnapshot, RunState,
 };
 
+/// Parameters for submitting an assistant run with full origin metadata.
+pub struct AssistantRunParams<'a> {
+    pub session_id: &'a str,
+    pub conversation_id: &'a str,
+    pub title: &'a str,
+    pub input_text: &'a str,
+    pub provider: &'a str,
+    pub model: &'a str,
+    pub origin: RunOriginMetadata,
+}
+
 #[derive(Debug, Clone)]
 pub struct RunCounts {
     pub total: usize,
@@ -74,28 +85,21 @@ impl AgentRuntime {
         provider: &str,
         model: &str,
     ) -> Result<(RunSnapshot, bool)> {
-        self.submit_assistant_run_with_origin(
+        self.submit_assistant_run_with_origin(AssistantRunParams {
             session_id,
             conversation_id,
             title,
             input_text,
             provider,
             model,
-            RunOriginMetadata::default(),
-        )
+            origin: RunOriginMetadata::default(),
+        })
         .await
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn submit_assistant_run_with_origin(
         &self,
-        session_id: &str,
-        conversation_id: &str,
-        title: &str,
-        input_text: &str,
-        provider: &str,
-        model: &str,
-        origin: RunOriginMetadata,
+        p: AssistantRunParams<'_>,
     ) -> Result<(RunSnapshot, bool)> {
         let run_id = Uuid::new_v4().to_string();
         let _snapshot = self
@@ -104,21 +108,21 @@ impl AgentRuntime {
                 id: run_id.clone(),
                 kind: RunKind::Assistant,
                 state: RunState::Queued,
-                origin,
-                session_id: Some(session_id.to_owned()),
-                conversation_id: Some(conversation_id.to_owned()),
+                origin: p.origin,
+                session_id: Some(p.session_id.to_owned()),
+                conversation_id: Some(p.conversation_id.to_owned()),
                 workflow_id: None,
-                title: title.to_owned(),
-                input_text: Some(input_text.to_owned()),
-                provider: provider.to_owned(),
-                model: model.to_owned(),
+                title: p.title.to_owned(),
+                input_text: Some(p.input_text.to_owned()),
+                provider: p.provider.to_owned(),
+                model: p.model.to_owned(),
                 fallback_profile_id: None,
                 queue_position: None,
                 policy: RunPolicySnapshot::default(),
             })
             .await?;
 
-        let (start_now, queue_position) = self.enqueue_run(session_id, &run_id).await;
+        let (start_now, queue_position) = self.enqueue_run(p.session_id, &run_id).await;
         let next = if start_now {
             self.mark_running(&run_id, "Run entered active execution.")
                 .await?

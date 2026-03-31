@@ -19,7 +19,7 @@ use crate::{
     engine::{AgentConfig, AssistantRunJob, GatewayRunHandle, WsStreamEvent},
     engine_bootstrap::{resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message},
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
-    runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
+    runtime::{AgentRuntime, AssistantRunParams, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
     tools::bash::{with_tool_execution_context, ToolExecutionContext},
 };
 
@@ -88,22 +88,22 @@ impl crate::engine::AgentEngine {
     ) -> Result<GatewayRunHandle> {
         let (snapshot, start_now) = self
             .runtime
-            .submit_assistant_run_with_origin(
-                gateway_session_id,
+            .submit_assistant_run_with_origin(AssistantRunParams {
+                session_id: gateway_session_id,
                 conversation_id,
-                session_title_from_id(conversation_id)
+                title: session_title_from_id(conversation_id)
                     .as_deref()
                     .unwrap_or_else(|| title_from(user_input)),
-                user_input,
-                &self.provider_name,
-                self.provider.model(),
-                RunOriginMetadata {
+                input_text: user_input,
+                provider: &self.provider_name,
+                model: self.provider.model(),
+                origin: RunOriginMetadata {
                     source: Some("gateway".to_owned()),
                     channel_id: Some(channel_id.to_owned()),
                     sender_id: Some(sender_id.to_owned()),
                     gateway_session_id: Some(gateway_session_id.to_owned()),
                 },
-            )
+            })
             .await?;
 
         let (result_tx, result_rx) = oneshot::channel();

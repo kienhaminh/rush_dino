@@ -127,18 +127,18 @@ mod tests {
         let agent_manager = Arc::new(AgentManager::new(std::env::temp_dir()));
         let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
         let runtime = Arc::new(AgentRuntime::new(pool));
-        Arc::new(WorkflowRunner::new(
+        Arc::new(WorkflowRunner {
             provider,
             tool_registry,
             // Dead weak reference — tests do not reach run_react_loop.
-            std::sync::Weak::new(),
+            session_ctx: std::sync::Weak::new(),
             conversation,
             memory,
             agent_manager,
-            workflow_manager,
+            manager: workflow_manager,
             runtime,
-            AgentConfig::default(),
-        ))
+            config: AgentConfig::default(),
+        })
     }
 
     #[tokio::test]

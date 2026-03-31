@@ -81,41 +81,6 @@ pub struct KanbanDispatcher {
 }
 
 impl KanbanDispatcher {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        store: Arc<KanbanStore>,
-        agent_manager: Arc<AgentManager>,
-        provider: Arc<Provider>,
-        config: AgentConfig,
-        registry: Weak<ToolRegistry>,
-        session_ctx: Weak<SessionToolContext>,
-        memory: Arc<MemoryManager>,
-        skill_manager: Arc<SkillManager>,
-        conversation: Arc<ConversationManager>,
-        task_memory: Arc<AgentTaskMemory>,
-        health_store: Arc<AgentHealthStore>,
-        home_dir: PathBuf,
-        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
-        task_notify: Arc<tokio::sync::Notify>,
-    ) -> Self {
-        Self {
-            store,
-            agent_manager,
-            provider,
-            config,
-            registry,
-            session_ctx,
-            memory,
-            skill_manager,
-            conversation,
-            task_memory,
-            health_store,
-            home_dir,
-            broadcast_tx,
-            task_notify,
-        }
-    }
-
     /// Spawns the background dispatch loop. The loop wakes immediately when
     /// `task_notify` fires (a task was created or sent back for revision) and
     /// also runs a heartbeat poll every [`HEARTBEAT_INTERVAL_SECS`] as a

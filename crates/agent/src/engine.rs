@@ -1,10 +1,8 @@
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
-use sqlx::SqlitePool;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
 use rushdino_common::{config::AuthMethod, models::Message, models::Role, Result, RichContent};
@@ -21,7 +19,6 @@ use crate::{
     memory::MemoryManager,
     react_loop::StreamingEvent,
     runtime::{AgentRuntime, RunSnapshot},
-    system_broker::SharedSystemBroker,
     tool_registry::{SessionToolContext, ToolRegistry},
     usage_metrics_store::UsageMetricsStore,
     workflow_manager::WorkflowManager,
@@ -196,57 +193,37 @@ mod config_tests {
 }
 
 impl AgentEngine {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        provider: Arc<Provider>,
-        pool: Arc<SqlitePool>,
-        home_dir: PathBuf,
-        brave_api_key: Option<String>,
-        gemini_api_key: Option<String>,
+        input: crate::engine_deps::EngineBuildInput,
         provider_name: String,
         auth_method: AuthMethod,
-        config: AgentConfig,
-        runtime: Arc<AgentRuntime>,
-        system_broker: SharedSystemBroker,
-        knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-        // Optional guardrail pipeline — pass Some for sandboxed agents.
-        guardrail_pipeline: Option<Arc<rushdino_security::guardrail::pipeline::GuardrailPipeline>>,
-        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Result<Self> {
-        let deps = build_engine_deps(
-            provider.clone(),
-            pool,
-            home_dir,
-            brave_api_key,
-            gemini_api_key,
-            &config,
-            runtime.clone(),
-            system_broker,
-            knowledge_graph.clone(),
-            guardrail_pipeline,
-            broadcast_tx,
-        )?;
+        let provider = input.provider.clone();
+        let knowledge_graph = input.knowledge_graph.clone();
+        let config = input.config.clone();
+        let runtime = input.runtime.clone();
+        let deps = build_engine_deps(input)?;
 
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
 
         // Start the kanban dispatcher background loop. It polls the backlog and
         // auto-executes matched tasks using isolated react loops.
-        let dispatcher = Arc::new(crate::kanban_dispatcher::KanbanDispatcher::new(
-            deps.kanban_store.clone(),
-            deps.agent_manager.clone(),
-            provider.clone(),
-            config.clone(),
-            Arc::downgrade(&deps.tool_registry),
-            Arc::downgrade(&deps.session_ctx),
-            deps.memory.clone(),
-            deps.skill_manager.clone(),
-            deps.conversation.clone(),
-            deps.task_memory.clone(),
-            deps.health_store.clone(),
-            deps.home_dir.clone(),
-            deps.broadcast_tx.clone(),
-            deps.task_notify.clone(),
-        ));
+        let dispatcher = Arc::new(crate::kanban_dispatcher::KanbanDispatcher {
+            store: deps.kanban_store.clone(),
+            agent_manager: deps.agent_manager.clone(),
+            provider: provider.clone(),
+            config: config.clone(),
+            registry: Arc::downgrade(&deps.tool_registry),
+            session_ctx: Arc::downgrade(&deps.session_ctx),
+            memory: deps.memory.clone(),
+            skill_manager: deps.skill_manager.clone(),
+            conversation: deps.conversation.clone(),
+            task_memory: deps.task_memory.clone(),
+            health_store: deps.health_store.clone(),
+            home_dir: deps.home_dir.clone(),
+            broadcast_tx: deps.broadcast_tx.clone(),
+            task_notify: deps.task_notify.clone(),
+        });
         dispatcher.start();
 
         Ok(Self {

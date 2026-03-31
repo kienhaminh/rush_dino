@@ -437,16 +437,16 @@ mod tests {
             ),
         ));
 
-        let tool = DelegateToAgentTool::new(
-            manager,
+        let tool = DelegateToAgentTool {
+            agent_manager: manager,
             provider,
-            crate::engine::AgentConfig::default(),
-            Arc::downgrade(&registry),
-            Arc::downgrade(&session_ctx),
-            Arc::new(AgentTaskMemory::new(dir.clone())),
-            conversation.clone(),
-            dir.clone(),
-        );
+            config: crate::engine::AgentConfig::default(),
+            registry: Arc::downgrade(&registry),
+            session_ctx: Arc::downgrade(&session_ctx),
+            task_memory: Arc::new(AgentTaskMemory::new(dir.clone())),
+            conversation: conversation.clone(),
+            home_dir: dir.clone(),
+        };
 
         // Execute — will return an error from the network layer, but the agent
         // conversation must have been committed before that point.

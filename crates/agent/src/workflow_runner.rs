@@ -41,43 +41,28 @@ enum StepDisposition {
 
 #[derive(Clone)]
 pub struct WorkflowRunner {
-    provider: Arc<Provider>,
-    tool_registry: Arc<ToolRegistry>,
-    session_ctx: Weak<SessionToolContext>,
-    conversation: Arc<ConversationManager>,
-    memory: Arc<MemoryManager>,
-    agent_manager: Arc<AgentManager>,
-    manager: Arc<WorkflowManager>,
-    runtime: Arc<AgentRuntime>,
-    config: AgentConfig,
+    pub provider: Arc<Provider>,
+    pub tool_registry: Arc<ToolRegistry>,
+    pub session_ctx: Weak<SessionToolContext>,
+    pub conversation: Arc<ConversationManager>,
+    pub memory: Arc<MemoryManager>,
+    pub agent_manager: Arc<AgentManager>,
+    pub manager: Arc<WorkflowManager>,
+    pub runtime: Arc<AgentRuntime>,
+    pub config: AgentConfig,
+}
+
+/// Arguments for a single workflow step execution.
+struct StepExec {
+    run_id: String,
+    agent_id: String,
+    step_input: String,
+    conversation_id: String,
+    position: i64,
+    step_name: String,
 }
 
 impl WorkflowRunner {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        provider: Arc<Provider>,
-        tool_registry: Arc<ToolRegistry>,
-        session_ctx: Weak<SessionToolContext>,
-        conversation: Arc<ConversationManager>,
-        memory: Arc<MemoryManager>,
-        agent_manager: Arc<AgentManager>,
-        manager: Arc<WorkflowManager>,
-        runtime: Arc<AgentRuntime>,
-        config: AgentConfig,
-    ) -> Self {
-        Self {
-            provider,
-            tool_registry,
-            session_ctx,
-            conversation,
-            memory,
-            agent_manager,
-            manager,
-            runtime,
-            config,
-        }
-    }
-
     pub fn spawn_run(&self, run_id: String) {
         let this = self.clone();
         tokio::spawn(async move {
@@ -317,12 +302,14 @@ impl WorkflowRunner {
                         StepType::Agent => {
                             runner
                                 .execute_step_with_timeout(
-                                    &run_id_owned,
-                                    &step_clone.agent_id,
-                                    &step_input_clone,
-                                    &conversation_id_clone,
-                                    step_clone.position,
-                                    &step_clone.step_name,
+                                    StepExec {
+                                        run_id: run_id_owned,
+                                        agent_id: step_clone.agent_id.clone(),
+                                        step_input: step_input_clone.clone(),
+                                        conversation_id: conversation_id_clone.clone(),
+                                        position: step_clone.position,
+                                        step_name: step_clone.step_name.clone(),
+                                    },
                                     step_clone.timeout_secs,
                                 )
                                 .await
@@ -499,53 +486,30 @@ impl WorkflowRunner {
     }
 
     /// Wraps `execute_step` with an optional wall-clock timeout.
-    #[allow(clippy::too_many_arguments)]
     async fn execute_step_with_timeout(
         &self,
-        run_id: &str,
-        agent_id: &str,
-        step_input: &str,
-        conversation_id: &str,
-        position: i64,
-        step_name: &str,
+        step: StepExec,
         timeout_secs: Option<u64>,
     ) -> Result<String> {
         if let Some(secs) = timeout_secs {
             time::timeout(
                 Duration::from_secs(secs),
-                self.execute_step(
-                    run_id,
-                    agent_id,
-                    step_input,
-                    conversation_id,
-                    position,
-                    step_name,
-                ),
+                self.execute_step(step),
             )
             .await
             .unwrap_or_else(|_| Err(AppError::Validation("step timed out".to_owned())))
         } else {
-            self.execute_step(
-                run_id,
-                agent_id,
-                step_input,
-                conversation_id,
-                position,
-                step_name,
-            )
-            .await
+            self.execute_step(step).await
         }
     }
 
-    async fn execute_step(
-        &self,
-        run_id: &str,
-        agent_id: &str,
-        step_input: &str,
-        conversation_id: &str,
-        position: i64,
-        step_name: &str,
-    ) -> Result<String> {
+    async fn execute_step(&self, step: StepExec) -> Result<String> {
+        let run_id = &step.run_id;
+        let agent_id = &step.agent_id;
+        let step_input = &step.step_input;
+        let conversation_id = &step.conversation_id;
+        let position = step.position;
+        let step_name = &step.step_name;
         let template = self
             .agent_manager
             .get(agent_id)
