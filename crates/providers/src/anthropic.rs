@@ -29,7 +29,7 @@ impl AnthropicProvider {
 
         tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic chat request");
 
-        let payload: Value = self
+        let response = self
             .client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &self.api_key)
@@ -38,9 +38,17 @@ impl AnthropicProvider {
             .timeout(std::time::Duration::from_secs(60))
             .send()
             .await
-            .map_err(|e| AppError::Provider(format!("anthropic request failed: {e}")))?
-            .error_for_status()
-            .map_err(|e| AppError::Provider(format!("anthropic status error: {e}")))?
+            .map_err(|e| AppError::Provider(format!("anthropic request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(AppError::Provider(format!(
+                "anthropic status error: HTTP {status}: {err_body}"
+            )));
+        }
+
+        let payload: Value = response
             .json()
             .await
             .map_err(|e| AppError::Provider(format!("anthropic parse error: {e}")))?;
@@ -99,9 +107,15 @@ impl AnthropicProvider {
             .timeout(std::time::Duration::from_secs(60))
             .send()
             .await
-            .map_err(|e| AppError::Provider(format!("anthropic stream request failed: {e}")))?
-            .error_for_status()
-            .map_err(|e| AppError::Provider(format!("anthropic stream status error: {e}")))?;
+            .map_err(|e| AppError::Provider(format!("anthropic stream request failed: {e}")))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_body = response.text().await.unwrap_or_default();
+            return Err(AppError::Provider(format!(
+                "anthropic stream error: HTTP {status}: {err_body}"
+            )));
+        }
 
         tokio::spawn(async move {
             let mut stream = response.bytes_stream();
