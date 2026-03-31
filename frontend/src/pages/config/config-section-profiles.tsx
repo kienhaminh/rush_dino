@@ -547,11 +547,12 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
   const catalogModels = getCatalogModels(resolvedKind, resolvedAuth);
 
   const handleProviderChange = (v: string) => {
+    const defaultAuthChoice = 'apikey' as const;
     setUIProvider(v as UIProvider);
-    setOpenAIAuthChoice('apikey');
-    setAnthropicAuthChoice('apikey');
+    setOpenAIAuthChoice(defaultAuthChoice);
+    setAnthropicAuthChoice(defaultAuthChoice);
     // Reset model to the new provider's default
-    const { provider_kind, auth_method } = resolveProviderKindAndAuth(v as UIProvider, 'apikey');
+    const { provider_kind, auth_method } = resolveProviderKindAndAuth(v as UIProvider, defaultAuthChoice);
     setModel(getDefaultModelId(provider_kind, auth_method));
   };
 
@@ -605,7 +606,20 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
     !(uiProvider === 'anthropic' && anthropicAuthChoice === 'anthropic_oauth');
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        setOpen(isOpen);
+        if (!isOpen) {
+          setName('');
+          setUIProvider('');
+          setOpenAIAuthChoice('apikey');
+          setAnthropicAuthChoice('apikey');
+          setModel('');
+          setApiKey('');
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" className="gap-1.5">
           <Plus className="w-3.5 h-3.5" /> Add Profile
