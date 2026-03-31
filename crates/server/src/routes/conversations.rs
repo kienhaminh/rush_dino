@@ -2,7 +2,7 @@ use axum::{extract::Path, extract::State, Json};
 use serde::Serialize;
 use tracing::debug;
 
-use rushdino_agent::InputRequest;
+use rushdino_agent::{InputRequest, RunSnapshot, RunState};
 use rushdino_common::Result;
 use rushdino_providers::catalog::context_window_for_model;
 
@@ -31,6 +31,7 @@ pub struct ConversationDetail {
     pub messages: Vec<rushdino_common::models::Message>,
     pub pending_input_requests: Vec<InputRequest>,
     pub latest_metrics: Option<ConversationMetrics>,
+    pub active_run: Option<RunSnapshot>,
 }
 
 pub async fn list_conversations(State(state): State<AppState>) -> Result<Json<serde_json::Value>> {
@@ -47,11 +48,22 @@ pub async fn get_conversation(
     let messages = engine.get_conversation_messages(&id).await?;
     let pending_input_requests = state.input_gate.list_pending_for_conversation(&id).await;
     let latest_metrics = build_latest_metrics(&engine, &id).await.ok().flatten();
+    let active_run = engine
+        .list_session_runs(&id, 10)
+        .await?
+        .into_iter()
+        .find(|run| {
+            matches!(
+                run.state,
+                RunState::Running | RunState::AwaitingApproval | RunState::AwaitingInput
+            )
+        });
     Ok(Json(ConversationDetail {
         id,
         messages,
         pending_input_requests,
         latest_metrics,
+        active_run,
     }))
 }
 

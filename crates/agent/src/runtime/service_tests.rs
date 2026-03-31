@@ -158,3 +158,23 @@ async fn input_request_transitions_resume_running_and_abort_cleanly() {
         .expect("resolution after abort should preserve aborted state");
     assert_eq!(resolved_after_abort.state, RunState::Aborted);
 }
+
+#[tokio::test]
+async fn stream_output_persists_partial_text_before_completion() {
+    let runtime = create_runtime().await;
+    let (run, _) = runtime
+        .submit_assistant_run("session-5", "conv-5", "Streaming", "body", "openai", "gpt-5")
+        .await
+        .expect("submit run");
+
+    let updated = runtime
+        .record_output_text(&run.id, "partial streamed answer")
+        .await
+        .expect("persist partial streamed output");
+
+    assert_eq!(updated.state, RunState::Running);
+    assert_eq!(updated.output_text.as_deref(), Some("partial streamed answer"));
+
+    let reloaded = runtime.get_run(&run.id).await.expect("reload run");
+    assert_eq!(reloaded.output_text.as_deref(), Some("partial streamed answer"));
+}

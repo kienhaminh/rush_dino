@@ -542,12 +542,17 @@ async fn forward_runtime_events(
     ws_event_tx: Option<mpsc::Sender<WsStreamEvent>>,
     gateway_event_tx: Option<mpsc::Sender<StreamingEvent>>,
 ) {
+    let mut streamed_output = String::new();
     while let Some(event) = internal_rx.recv().await {
         if let Some(gateway_event_tx) = gateway_event_tx.as_ref() {
             let _ = gateway_event_tx.send(event.clone()).await;
         }
         match event {
             StreamingEvent::ChatChunk(chunk) => {
+                if !chunk.delta.is_empty() {
+                    streamed_output.push_str(&chunk.delta);
+                    let _ = runtime.record_output_text(&run_id, &streamed_output).await;
+                }
                 if let Some(ws_event_tx) = ws_event_tx.as_ref() {
                     let _ = ws_event_tx
                         .send(WsStreamEvent::ChatChunk {

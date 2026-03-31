@@ -14,7 +14,13 @@ import { toast } from 'sonner';
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
 import { fetchConversation } from '@/lib/api';
 import { messagesToItems } from '@/lib/message-converter';
-import type { ConversationItem, InputRequestStatus, RichContent, WsEvent } from '@/lib/types';
+import type {
+  ConversationDetail,
+  ConversationItem,
+  InputRequestStatus,
+  RichContent,
+  WsEvent,
+} from '@/lib/types';
 
 const MAIN_SESSION_ID = 'main';
 
@@ -60,6 +66,7 @@ interface ChatWsValue {
   ) => void;
   clearItems: () => void;
   resetWithItems: (items: ConversationItem[]) => void;
+  resetFromConversationDetail: (detail: ConversationDetail) => void;
   historyLoaded: boolean;
   setHistoryLoaded: (v: boolean) => void;
 }
@@ -100,6 +107,15 @@ const INITIAL_CHAT_STATE: ChatState = {
   isStreaming: false,
   historyLoaded: false,
 };
+
+function isConversationStreaming(detail: ConversationDetail): boolean {
+  const state = detail.activeRun?.state;
+  return (
+    state === 'running' ||
+    state === 'awaiting_approval' ||
+    state === 'awaiting_input'
+  );
+}
 
 // ---------------------------------------------------------------------------
 // WebSocket message handler (extracted to keep ChatWsProvider body concise)
@@ -446,6 +462,18 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const resetFromConversationDetail = useCallback((detail: ConversationDetail) => {
+    dispatchChat({
+      type: 'setItems',
+      items: messagesToItems(
+        detail.messages,
+        detail.pendingInputRequests ?? [],
+        detail.activeRun ?? null,
+      ),
+    });
+    dispatchChat({ type: 'setStreaming', streaming: isConversationStreaming(detail) });
+  }, []);
+
   // -------------------------------------------------------------------------
   // WebSocket connection + message handling
   // -------------------------------------------------------------------------
@@ -463,7 +491,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         rehydratingRef.current = true;
         void fetchConversation(MAIN_SESSION_ID)
           .then((detail) => {
-            dispatchChat({ type: 'setItems', items: messagesToItems(detail.messages, detail.pendingInputRequests ?? []) });
+            resetFromConversationDetail(detail);
           })
           .catch(() => {
             // Keep the current client state if the refresh fails.
@@ -499,7 +527,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         replaceAssistantItem,
       });
     };
-  }, [historyLoaded, replaceAssistantItem]);
+  }, [historyLoaded, replaceAssistantItem, resetFromConversationDetail]);
 
   // -------------------------------------------------------------------------
   // Lifecycle
@@ -587,6 +615,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       markInputRequestResolved,
       clearItems,
       resetWithItems,
+      resetFromConversationDetail,
       historyLoaded,
       setHistoryLoaded,
     }),
@@ -598,6 +627,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       markInputRequestResolved,
       clearItems,
       resetWithItems,
+      resetFromConversationDetail,
       historyLoaded,
       setHistoryLoaded,
     ],

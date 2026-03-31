@@ -439,6 +439,21 @@ impl AgentRuntime {
         Ok(snapshot)
     }
 
+    pub async fn record_output_text(&self, run_id: &str, output_text: &str) -> Result<RunSnapshot> {
+        let snapshot = self
+            .store
+            .patch_run(
+                run_id,
+                RunPatch {
+                    output_text: FieldUpdate::Set(output_text.to_owned()),
+                    ..RunPatch::default()
+                },
+            )
+            .await?;
+        self.notify_run(run_id).await;
+        Ok(snapshot)
+    }
+
     pub async fn mark_failed(&self, run_id: &str, error: &str) -> Result<RunSnapshot> {
         let current = self.store.get_run(run_id).await?;
         let snapshot = self

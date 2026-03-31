@@ -1,4 +1,4 @@
-import type { ConversationItem, Message, PendingInputRequest } from './types';
+import type { ConversationItem, Message, PendingInputRequest, RunSnapshot } from './types';
 
 /**
  * Converts REST API Message[] (from GET /api/conversations/:id) into ConversationItem[]
@@ -11,6 +11,7 @@ import type { ConversationItem, Message, PendingInputRequest } from './types';
 export function messagesToItems(
   messages: Message[],
   pendingInputRequests: PendingInputRequest[] = [],
+  activeRun?: RunSnapshot | null,
 ): ConversationItem[] {
   const items: ConversationItem[] = [];
   // Indices of tool_use items that are still awaiting their result message
@@ -90,7 +91,7 @@ export function messagesToItems(
   }
 
   if (!requestByToolItemId.size) {
-    return items;
+    return appendActiveRun(items, activeRun);
   }
 
   const hydrated: ConversationItem[] = [];
@@ -112,7 +113,50 @@ export function messagesToItems(
     });
   }
 
-  return hydrated;
+  return appendActiveRun(hydrated, activeRun);
+}
+
+function appendActiveRun(
+  items: ConversationItem[],
+  activeRun?: RunSnapshot | null,
+): ConversationItem[] {
+  if (!activeRun?.outputText) return items;
+  if (
+    activeRun.state !== 'running' &&
+    activeRun.state !== 'awaiting_approval' &&
+    activeRun.state !== 'awaiting_input'
+  ) {
+    return items;
+  }
+
+  const runId = activeRun.id;
+  const existingAssistantIndex = items.findIndex(
+    (item) => item.kind === 'assistant' && item.runId === runId,
+  );
+  if (existingAssistantIndex !== -1) {
+    const existing = items[existingAssistantIndex];
+    if (existing.kind === 'assistant') {
+      const next = [...items];
+      next[existingAssistantIndex] = {
+        ...existing,
+        content: activeRun.outputText,
+        richContent: null,
+        runId,
+      };
+      return next;
+    }
+  }
+
+  return [
+    ...items,
+    {
+      kind: 'assistant',
+      id: runId,
+      content: activeRun.outputText,
+      richContent: null,
+      runId,
+    },
+  ];
 }
 
 /** Format a date string as a relative or absolute label for conversation list items */

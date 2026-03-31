@@ -8,6 +8,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 REPORT="${RESULTS_DIR}/COMPARISON.md"
 
+# shellcheck source=./lib.sh
+source "${SCRIPT_DIR}/lib.sh"
+
 RUSHDINO_BINARY="${REPO_ROOT}/target/release/rushdino"
 OPENCLAW_DIR="${REPO_ROOT}/openclaw"
 
@@ -34,56 +37,6 @@ RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 info()  { echo -e "${GREEN}[bench]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[warn] ${NC} $*"; }
 error() { echo -e "${RED}[error]${NC} $*" >&2; }
-
-cleanup_bench_sessions() {
-  local sessions_url="$1"
-  python3 - "$sessions_url" <<'PY'
-import json
-import sys
-import urllib.error
-import urllib.parse
-import urllib.request
-
-sessions_url = sys.argv[1]
-
-try:
-    with urllib.request.urlopen(sessions_url, timeout=5) as response:
-        data = json.load(response)
-except Exception as exc:
-    print(f"[warn] benchmark cleanup skipped: could not list sessions ({exc})", file=sys.stderr)
-    raise SystemExit(0)
-
-victims = [
-    item["id"]
-    for item in data.get("items", [])
-    if isinstance(item, dict)
-    and isinstance(item.get("title"), str)
-    and item["title"].startswith("bench ")
-]
-
-deleted = 0
-for session_id in victims:
-    request = urllib.request.Request(
-        f"{sessions_url}/{urllib.parse.quote(session_id, safe='')}",
-        method="DELETE",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=5):
-            deleted += 1
-    except urllib.error.HTTPError as exc:
-        print(
-            f"[warn] benchmark cleanup skipped session {session_id}: HTTP {exc.code}",
-            file=sys.stderr,
-        )
-    except Exception as exc:
-        print(
-            f"[warn] benchmark cleanup skipped session {session_id}: {exc}",
-            file=sys.stderr,
-        )
-
-print(f"[bench] cleaned up {deleted} benchmark session(s)", file=sys.stderr)
-PY
-}
 
 start_ms() {
   if date +%s%N | grep -v N > /dev/null 2>&1; then
@@ -504,7 +457,7 @@ if curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
 
   # ── I-b: concurrent POST /api/runs ────────────────────────────────────────
   info "Probing POST /api/runs accessibility..."
-  _probe_body='{"message":"bench probe","session_id":"bench-probe-00"}'
+  _probe_body='{"message":"bench probe","session_id":"bench-probe-00","conversation_id":"bench-probe-00"}'
   _probe_status=$(python3 -c "
 import urllib.request, urllib.error
 try:
@@ -523,7 +476,7 @@ except Exception: print(0)
     info "POST /api/runs accessible (HTTP ${_probe_status}) — running parallel run-submission benchmark..."
     for c in 1 2 4 8 16 32; do
       n=$(( c * 5 ))
-      _body="{\"message\":\"bench ping\",\"session_id\":\"bench-c${c}-$$\"}"
+      _body="{\"message\":\"bench ping\",\"session_id\":\"bench-c${c}-$$\",\"conversation_id\":\"bench-c${c}-$$\"}"
       read -r tp avg ok total _status \
         <<< "$(bench_concurrency "${RUSHDINO_API_RUNS}" "POST" "${_body}" "${c}" "${n}")"
       if [[ -z "${RUNS_1X_TP}" ]]; then

@@ -8,7 +8,6 @@ import { ResizeHandle } from '@/components/workspace/resize-handle';
 import { useChatWs } from '@/hooks/use-chat-ws';
 import { useSubAgentSessions } from '@/hooks/use-sub-agent-sessions';
 import { fetchConversation } from '@/lib/api';
-import { messagesToItems } from '@/lib/message-converter';
 import type { ConversationMetrics } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,6 +23,7 @@ export function ChatPage() {
     sendMessage,
     markInputRequestResolved,
     resetWithItems,
+    resetFromConversationDetail,
     isConnected,
     isStreaming,
     historyLoaded,
@@ -54,7 +54,7 @@ export function ChatPage() {
       try {
         const detail = await fetchConversation(MAIN_SESSION_ID);
         if (!cancelled) {
-          resetWithItems(messagesToItems(detail.messages, detail.pendingInputRequests ?? []));
+          resetFromConversationDetail(detail);
           setLatestMetrics(detail.latestMetrics ?? null);
         }
       } catch {
@@ -70,7 +70,7 @@ export function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [historyLoaded, resetWithItems, setHistoryLoaded]);
+  }, [historyLoaded, resetFromConversationDetail, resetWithItems, setHistoryLoaded]);
 
   // Re-fetch metrics when streaming ends (true → false transition).
   useEffect(() => {

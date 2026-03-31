@@ -738,6 +738,7 @@ export interface ConversationDetail {
   messages: Message[];
   pendingInputRequests: PendingInputRequest[];
   latestMetrics?: ConversationMetrics | null;
+  activeRun?: RunSnapshot | null;
 }
 
 export type WsEventType =
