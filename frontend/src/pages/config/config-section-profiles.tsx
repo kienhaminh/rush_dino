@@ -23,9 +23,11 @@ import type {
 } from '@/lib/types';
 import {
   formatAuthLabel,
+  isAnthropicOAuthProfile,
   isCodexOAuthProfile,
   normalizeOAuthRedirectInput,
   resolveProviderKindAndAuth,
+  type AnthropicAuthChoice,
   type OpenAIAuthChoice,
   type UIProvider,
 } from './config-profile-utils';
@@ -221,8 +223,8 @@ function ProfileCard({
 
   const handleConnectStart = async () => {
     setConnecting(true);
-    const id = toast.loading('Generating OpenAI OAuth link...', {
-      description: 'Open the link on your local machine, then paste the redirect URL here.',
+    const id = toast.loading('Generating OAuth link...', {
+      description: 'Open the link in your browser, then paste the code here.',
     });
     try {
       const started = await startOAuthConnect(profile.id);
@@ -240,8 +242,8 @@ function ProfileCard({
   const handleConnectComplete = async () => {
     if (!oauthSessionId || !normalizedOAuthRedirectUrl) return;
     setConnecting(true);
-    const id = toast.loading('Completing OpenAI OAuth...', {
-      description: 'Validating the pasted redirect URL and exchanging the code.',
+    const id = toast.loading('Completing OAuth...', {
+      description: 'Validating the pasted code and exchanging for tokens.',
     });
     try {
       await completeOAuthConnect(profile.id, {
@@ -399,16 +401,24 @@ function ProfileCard({
                   </div>
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-foreground">
-                      2. Paste the full redirect URL after login
+                      {isAnthropicOAuthProfile(profile)
+                        ? '2. Paste the authorization code'
+                        : '2. Paste the full redirect URL after login'}
                     </p>
                     <Input
                       value={oauthRedirectUrl}
                       onChange={(e) => setOauthRedirectUrl(e.target.value)}
-                      placeholder="http://localhost:1455/auth/callback?code=..."
+                      placeholder={
+                        isAnthropicOAuthProfile(profile)
+                          ? 'code#state (e.g. abc123#verifier)'
+                          : 'http://localhost:1455/auth/callback?code=...'
+                      }
                       className="font-mono text-xs border-border/40 bg-background"
                     />
                     <p className="text-[11px] text-muted-foreground">
-                      If the local browser shows a localhost callback URL, copy that entire URL and paste it here.
+                      {isAnthropicOAuthProfile(profile)
+                        ? 'Copy the authorization code shown after granting access (format: code#state).'
+                        : 'If the local browser shows a localhost callback URL, copy that entire URL and paste it here.'}
                     </p>
                   </div>
                   <Button
@@ -522,40 +532,49 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
   const [name, setName] = useState('');
   const [uiProvider, setUIProvider] = useState<UIProvider | ''>('');
   const [openAIAuthChoice, setOpenAIAuthChoice] = useState<OpenAIAuthChoice>('apikey');
+  const [anthropicAuthChoice, setAnthropicAuthChoice] = useState<AnthropicAuthChoice>('apikey');
   const [model, setModel] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
 
   // Derive catalog models and default for the current provider/auth selection
+  const activeAuthChoice =
+    uiProvider === 'anthropic' ? anthropicAuthChoice : openAIAuthChoice;
   const { provider_kind: resolvedKind, auth_method: resolvedAuth } =
     uiProvider !== ''
-      ? resolveProviderKindAndAuth(uiProvider as UIProvider, openAIAuthChoice)
+      ? resolveProviderKindAndAuth(uiProvider as UIProvider, activeAuthChoice)
       : { provider_kind: '', auth_method: '' };
   const catalogModels = getCatalogModels(resolvedKind, resolvedAuth);
 
   const handleProviderChange = (v: string) => {
     setUIProvider(v as UIProvider);
     setOpenAIAuthChoice('apikey');
+    setAnthropicAuthChoice('apikey');
     // Reset model to the new provider's default
     const { provider_kind, auth_method } = resolveProviderKindAndAuth(v as UIProvider, 'apikey');
     setModel(getDefaultModelId(provider_kind, auth_method));
   };
 
-  const handleAuthChange = (v: OpenAIAuthChoice) => {
+  const handleOpenAIAuthChange = (v: OpenAIAuthChoice) => {
     setOpenAIAuthChoice(v);
-    if (uiProvider === 'openai') {
-      const { provider_kind, auth_method } = resolveProviderKindAndAuth('openai', v);
-      setModel(getDefaultModelId(provider_kind, auth_method));
-    }
+    const { provider_kind, auth_method } = resolveProviderKindAndAuth('openai', v);
+    setModel(getDefaultModelId(provider_kind, auth_method));
+  };
+
+  const handleAnthropicAuthChange = (v: AnthropicAuthChoice) => {
+    setAnthropicAuthChoice(v);
+    const { provider_kind, auth_method } = resolveProviderKindAndAuth('anthropic', v);
+    setModel(getDefaultModelId(provider_kind, auth_method));
   };
 
   const handleAdd = async () => {
     if (!name || !uiProvider) return;
     setSaving(true);
     try {
+      const authChoice = uiProvider === 'anthropic' ? anthropicAuthChoice : openAIAuthChoice;
       const { provider_kind, auth_method } = resolveProviderKindAndAuth(
         uiProvider as UIProvider,
-        openAIAuthChoice,
+        authChoice,
       );
       const default_model = model || getDefaultModelId(provider_kind, auth_method);
       const payload: any = { name, provider_kind, auth_method, default_model };
@@ -568,6 +587,7 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
       setName('');
       setUIProvider('');
       setOpenAIAuthChoice('apikey');
+      setAnthropicAuthChoice('apikey');
       setModel('');
       setApiKey('');
       onRefresh();
@@ -581,7 +601,8 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
   const showApiKeyInput =
     uiProvider !== '' &&
     uiProvider !== 'ollama' &&
-    !(uiProvider === 'openai' && openAIAuthChoice === 'codex_oauth');
+    !(uiProvider === 'openai' && openAIAuthChoice === 'codex_oauth') &&
+    !(uiProvider === 'anthropic' && anthropicAuthChoice === 'anthropic_oauth');
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -625,7 +646,7 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
               <label className="text-xs font-medium">Authentication</label>
               <Select
                 value={openAIAuthChoice}
-                onValueChange={(v) => handleAuthChange(v as OpenAIAuthChoice)}
+                onValueChange={(v) => handleOpenAIAuthChange(v as OpenAIAuthChoice)}
               >
                 <SelectTrigger className="border-border/40 focus:border-primary/40">
                   <SelectValue />
@@ -633,6 +654,23 @@ function AddProfileDialog({ onRefresh }: { onRefresh: () => void }) {
                 <SelectContent className="border-border/40 bg-popover/95 backdrop-blur-xl shadow-2xl">
                   <SelectItem value="apikey">API Key</SelectItem>
                   <SelectItem value="codex_oauth">Codex (OAuth)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {uiProvider === 'anthropic' && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Authentication</label>
+              <Select
+                value={anthropicAuthChoice}
+                onValueChange={(v) => handleAnthropicAuthChange(v as AnthropicAuthChoice)}
+              >
+                <SelectTrigger className="border-border/40 focus:border-primary/40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="border-border/40 bg-popover/95 backdrop-blur-xl shadow-2xl">
+                  <SelectItem value="apikey">API Key</SelectItem>
+                  <SelectItem value="anthropic_oauth">Anthropic OAuth</SelectItem>
                 </SelectContent>
               </Select>
             </div>
