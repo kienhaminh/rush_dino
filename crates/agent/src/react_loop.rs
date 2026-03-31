@@ -371,9 +371,13 @@ fn build_chat_request(
     session_ctx: &SessionToolContext,
     config: &AgentConfig,
 ) -> ChatRequest {
+    let tools = {
+        let defs = session_ctx.active_definitions();
+        if defs.is_empty() { None } else { Some(defs) }
+    };
     ChatRequest {
         messages,
-        tools: Some(session_ctx.active_definitions()),
+        tools,
         temperature: Some(0.2),
         max_tokens: Some(8192),
         model: config.model_override.clone(),

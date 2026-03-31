@@ -301,6 +301,18 @@ impl AnthropicProvider {
 const CLAUDE_CODE_IDENTITY: &str =
     "You are Claude Code, Anthropic's official CLI for Claude.";
 
+/// Strip unpaired Unicode surrogates that would cause Anthropic API errors.
+fn sanitize_surrogates(s: &str) -> String {
+    s.chars()
+        .filter(|c| {
+            let code = *c as u32;
+            // Filter out surrogate range (shouldn't appear in valid UTF-8 Rust strings,
+            // but guard against edge cases from external data).
+            !(0xD800..=0xDFFF).contains(&code)
+        })
+        .collect()
+}
+
 fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth: bool) -> Value {
     let user_system = request
         .messages
@@ -310,30 +322,42 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth
         .collect::<Vec<_>>()
         .join("\n\n");
 
-    // OAuth tokens require the Claude Code identity prepended to the system prompt.
-    let system = if is_oauth {
-        if user_system.is_empty() {
-            CLAUDE_CODE_IDENTITY.to_owned()
-        } else {
-            format!("{CLAUDE_CODE_IDENTITY}\n\n{user_system}")
+    // Build the system prompt as an array of content blocks (required by claude-code beta).
+    // OAuth tokens require the Claude Code identity as the first block.
+    let system_blocks: Vec<Value> = if is_oauth {
+        let mut blocks = vec![json!({"type": "text", "text": CLAUDE_CODE_IDENTITY})];
+        if !user_system.is_empty() {
+            blocks.push(json!({"type": "text", "text": sanitize_surrogates(&user_system)}));
         }
+        blocks
+    } else if !user_system.is_empty() {
+        vec![json!({"type": "text", "text": sanitize_surrogates(&user_system)})]
     } else {
-        user_system
+        vec![]
     };
 
-    let messages = request
-        .messages
-        .into_iter()
-        .filter(|m| !matches!(m.role, rushdino_common::models::Role::System))
-        .map(|m| {
+    // Anthropic requires strictly alternating user/assistant turns.
+    // Merge consecutive same-role messages into a single message.
+    let messages = {
+        let mut merged: Vec<Value> = Vec::new();
+        for m in request.messages.into_iter().filter(|m| !matches!(m.role, rushdino_common::models::Role::System)) {
             let role = if matches!(m.role, rushdino_common::models::Role::Assistant) {
                 "assistant"
             } else {
                 "user"
             };
-            json!({ "role": role, "content": m.content })
-        })
-        .collect::<Vec<_>>();
+            if let Some(last) = merged.last_mut() {
+                if last.get("role").and_then(Value::as_str) == Some(role) {
+                    // Merge into previous message with the same role.
+                    let prev = last["content"].as_str().unwrap_or_default().to_owned();
+                    last["content"] = json!(format!("{prev}\n\n{}", m.content));
+                    continue;
+                }
+            }
+            merged.push(json!({ "role": role, "content": m.content }));
+        }
+        merged
+    };
 
     let tools = request.tools.map(|defs| {
         defs.into_iter()
@@ -375,12 +399,14 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth
         "stream": stream,
     });
 
-    if !system.is_empty() {
-        body["system"] = json!(system);
+    if !system_blocks.is_empty() {
+        body["system"] = json!(system_blocks);
     }
 
     if let Some(tools_vec) = tools {
-        body["tools"] = json!(tools_vec);
+        if !tools_vec.is_empty() {
+            body["tools"] = json!(tools_vec);
+        }
     }
 
     let thinking_enabled = thinking_level.is_some_and(|l| *l != ThinkingLevel::Off);

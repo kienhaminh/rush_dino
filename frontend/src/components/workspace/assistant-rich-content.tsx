@@ -21,7 +21,7 @@ function blockKey(block: RichContent['blocks'][number]): string {
 }
 
 export function AssistantRichContent({ content, richContent, showCursor }: AssistantRichContentProps) {
-  if (!richContent || richContent.blocks.length === 0) {
+  if (!richContent || !richContent.blocks || richContent.blocks.length === 0) {
     return (
       <div>
         <MarkdownBlock content={content} />
