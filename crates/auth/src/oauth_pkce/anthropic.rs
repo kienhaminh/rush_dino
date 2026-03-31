@@ -24,6 +24,7 @@ struct TokenResponse {
 fn build_auth_url(challenge: &str, verifier: &str) -> String {
     let mut url = url::Url::parse(AUTHORIZE_URL).expect("static URL is valid");
     url.query_pairs_mut()
+        // "code=true" is an Anthropic-specific required parameter for the authorization flow
         .append_pair("code", "true")
         .append_pair("client_id", CLIENT_ID)
         .append_pair("response_type", "code")
@@ -61,22 +62,10 @@ pub fn extract_anthropic_code(input: &str, verifier: &str) -> Result<String> {
     Ok(trimmed.to_owned())
 }
 
-pub async fn complete_anthropic_login(
-    client: &Client,
-    code: &str,
-    verifier: &str,
-) -> Result<OAuthTokens> {
-    let body = serde_json::json!({
-        "grant_type": "authorization_code",
-        "client_id": CLIENT_ID,
-        "code": code,
-        "state": verifier,
-        "redirect_uri": REDIRECT_URI,
-        "code_verifier": verifier,
-    });
-
+async fn post_token_request(client: &Client, body: serde_json::Value) -> Result<OAuthTokens> {
     let res = client
         .post(TOKEN_URL)
+        // Anthropic token endpoint requires JSON body, not form-encoded (unlike standard OAuth 2.0)
         .json(&body)
         .send()
         .await
@@ -89,7 +78,7 @@ pub async fn complete_anthropic_login(
             .await
             .unwrap_or_else(|e| format!("<failed to read body: {e}>"));
         return Err(AppError::Provider(format!(
-            "Anthropic token exchange failed ({status}): {text}"
+            "Anthropic token request failed ({status}): {text}"
         )));
     }
 
@@ -110,6 +99,22 @@ pub async fn complete_anthropic_login(
     })
 }
 
+pub async fn complete_anthropic_login(
+    client: &Client,
+    code: &str,
+    verifier: &str,
+) -> Result<OAuthTokens> {
+    let body = serde_json::json!({
+        "grant_type": "authorization_code",
+        "client_id": CLIENT_ID,
+        "code": code,
+        "state": verifier,
+        "redirect_uri": REDIRECT_URI,
+        "code_verifier": verifier,
+    });
+    post_token_request(client, body).await
+}
+
 pub async fn refresh_anthropic_token(
     client: &Client,
     refresh_token: &str,
@@ -119,40 +124,7 @@ pub async fn refresh_anthropic_token(
         "client_id": CLIENT_ID,
         "refresh_token": refresh_token,
     });
-
-    let res = client
-        .post(TOKEN_URL)
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| AppError::Provider(format!("Anthropic token refresh failed: {e}")))?;
-
-    if !res.status().is_success() {
-        let status = res.status();
-        let text = res
-            .text()
-            .await
-            .unwrap_or_else(|e| format!("<failed to read body: {e}>"));
-        return Err(AppError::Provider(format!(
-            "Anthropic token refresh failed ({status}): {text}"
-        )));
-    }
-
-    let token: TokenResponse = res
-        .json()
-        .await
-        .map_err(|e| AppError::Provider(format!("Anthropic token refresh parse error: {e}")))?;
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-
-    Ok(OAuthTokens {
-        access_token: token.access_token,
-        refresh_token: token.refresh_token,
-        expires_at: now + token.expires_in as i64,
-    })
+    post_token_request(client, body).await
 }
 
 #[cfg(test)]

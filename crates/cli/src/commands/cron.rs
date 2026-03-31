@@ -78,13 +78,18 @@ pub async fn run(args: CronArgs) -> Result<()> {
                 } else {
                     for item in &items {
                         let id = item["id"].as_str().unwrap_or("-");
-                        let schedule = item["schedule"].as_str().unwrap_or("-");
-                        let status = item["status"].as_str().unwrap_or("-");
+                        let name = item["name"].as_str().unwrap_or("-");
+                        let expr = item["schedule"]["expr"]
+                            .as_str()
+                            .or_else(|| item["schedule"]["run_at"].as_str())
+                            .unwrap_or("-");
+                        let state = item["state"].as_str().unwrap_or("-");
                         println!(
-                            "  {} {} {}",
+                            "  {} {} {} {}",
                             id.dimmed(),
-                            schedule.bold(),
-                            format!("[{status}]").yellow()
+                            name.bold(),
+                            expr.dimmed(),
+                            format!("[{state}]").yellow()
                         );
                     }
                     println!("\n{} {} jobs", "✔".green(), items.len());
@@ -97,14 +102,17 @@ pub async fn run(args: CronArgs) -> Result<()> {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());
             } else {
                 let job = &data["job"];
-                let schedule = job["schedule"].as_str().unwrap_or("-");
-                let status = job["status"].as_str().unwrap_or("-");
-                let prompt = job["prompt"].as_str().unwrap_or("-");
+                let expr = job["schedule"]["expr"]
+                    .as_str()
+                    .or_else(|| job["schedule"]["run_at"].as_str())
+                    .unwrap_or("-");
+                let state = job["state"].as_str().unwrap_or("-");
+                let message = job["target"]["message"].as_str().unwrap_or("-");
                 println!("{} {}", "⏰".bold(), "Cron Job".blue().bold());
                 println!("{}", "========================================".dimmed());
-                println!("  Schedule: {}", schedule.bold());
-                println!("  Status:   {}", format!("[{status}]").yellow());
-                println!("  Prompt:   {}", prompt.dimmed());
+                println!("  Schedule: {}", expr.bold());
+                println!("  State:    {}", format!("[{state}]").yellow());
+                println!("  Message:  {}", message.dimmed());
                 let runs = data["runs"].as_array().cloned().unwrap_or_default();
                 if !runs.is_empty() {
                     println!("\n  Recent runs:");
@@ -117,10 +125,19 @@ pub async fn run(args: CronArgs) -> Result<()> {
             }
         }
         CronAction::Create { schedule, prompt, agent, json } => {
-            let mut body = json!({ "schedule": schedule, "prompt": prompt });
+            let name = prompt.chars().take(60).collect::<String>();
+            let mut target = serde_json::json!({
+                "kind": "agent_turn",
+                "message": prompt,
+            });
             if let Some(agent_id) = agent {
-                body["agentId"] = serde_json::Value::String(agent_id);
+                target["agent_id"] = serde_json::Value::String(agent_id);
             }
+            let body = serde_json::json!({
+                "name": name,
+                "schedule": { "kind": "cron", "expr": schedule },
+                "target": target,
+            });
             let data = client.post("/api/cron", body).await?;
             if json {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());
