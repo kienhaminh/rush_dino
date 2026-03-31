@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { LogsHeader } from './logs-header';
 import { LogsStream } from './logs-stream';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollText, ShieldAlert, History } from 'lucide-react';
 import type { LogEntry, LogLevel, LogsFilters } from './logs-types';
-import { fetchLogs } from '@/lib/api';
+import { useLogsQuery } from '@/lib/queries';
 
 const LEVELS: LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
@@ -44,10 +44,6 @@ function mapRecord(record: {
 }
 
 export function LogsPage() {
-  const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
   const [filters, setFilters] = useState<LogsFilters>({
     query: '',
     levels: {
@@ -68,30 +64,20 @@ export function LogsPage() {
     [filters.levels],
   );
 
-  const loadLogs = async () => {
-    setLoading(true);
-    try {
-      const response = await fetchLogs({
+  const logsQuery = useLogsQuery(
+    useMemo(
+      () => ({
         level: levelFilter,
         q: filters.query || undefined,
         limit: 300,
-      });
-      setLogs(response.items.map(mapRecord));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load logs.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadLogs();
-    const timer = setInterval(() => {
-      void loadLogs();
-    }, 2000);
-    return () => clearInterval(timer);
-  }, [filters.query, levelFilter.join(',')]);
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [filters.query, filters.levels],
+    ),
+  );
+  const loading = logsQuery.isPending;
+  const error = logsQuery.error?.message ?? null;
+  const logs = (logsQuery.data?.items ?? []).map(mapRecord);
 
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -119,7 +105,7 @@ export function LogsPage() {
     <div className="flex-1 flex flex-col min-w-0 h-full bg-background overflow-hidden">
       <LogsHeader
         loading={loading}
-        onRefresh={() => void loadLogs()}
+        onRefresh={() => void logsQuery.refetch()}
         onExport={handleExport}
         filters={filters}
         onFilterChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
