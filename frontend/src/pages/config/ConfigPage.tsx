@@ -62,7 +62,9 @@ export function ConfigPage() {
   const loading = configQuery.isPending || credentialsQuery.isPending;
   const error = configQuery.error?.message ?? credentialsQuery.error?.message ?? null;
 
-  // Local form state — initialized from server data, kept in sync on refetch
+  // Local copies for form editing. Synced from server data on initial load and explicit reload.
+  // refetchOnWindowFocus is disabled globally (query-client.ts) so background refetches
+  // cannot silently overwrite user edits.
   const [config, setConfig] = useState<AppConfigView | undefined>(configQuery.data);
   const [credentials, setCredentials] = useState<CredentialsView | undefined>(credentialsQuery.data);
 
@@ -227,7 +229,7 @@ export function ConfigPage() {
                   >
                     Reload
                   </Button>
-                  <Button size="sm" onClick={handleSave} disabled={status.kind === 'saving'}>
+                  <Button size="sm" onClick={handleSave} disabled={status.kind === 'saving' || patchConfigMutation.isPending || patchCredentialsMutation.isPending}>
                     Save
                   </Button>
                 </div>
