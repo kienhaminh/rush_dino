@@ -3,18 +3,17 @@
 // so the user always lands on a focused orbital view.
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchAgents } from '@/lib/api';
+import { useAgentsQuery } from '@/lib/queries';
 
 export function AgentsPage() {
   const navigate = useNavigate();
+  const { data: agents } = useAgentsQuery();
 
   useEffect(() => {
-    fetchAgents().then((agents) => {
-      if (agents.length === 0) return;
-      const target = agents.find((a) => a.isDefault) ?? agents[0];
-      navigate(`/agents/${target.id}`, { replace: true });
-    });
-  }, [navigate]);
+    if (!agents || agents.length === 0) return;
+    const target = agents.find((a) => a.isDefault) ?? agents[0];
+    navigate(`/agents/${target.id}`, { replace: true });
+  }, [agents, navigate]);
 
   return (
     <div className="flex items-center justify-center h-full">

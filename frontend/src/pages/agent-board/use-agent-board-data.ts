@@ -1,18 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { AgentRecord } from '@/pages/agents/agent-types';
 import type { KanbanBoardStats } from '@/pages/kanban/kanban-types';
+import { useAgentsQuery } from '@/lib/queries';
 
 export function useAgentRecords() {
-  const [agentRecords, setAgentRecords] = useState<AgentRecord[]>([]);
-
-  useEffect(() => {
-    fetch('/api/agents')
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load agents')))
-      .then((data: { items: AgentRecord[] }) => setAgentRecords(data.items ?? []))
-      .catch(() => { /* silent — agents list is optional enrichment */ });
-  }, []);
-
-  return agentRecords;
+  return useAgentsQuery();
 }
 
 export function useKanbanStats() {

@@ -58,7 +58,7 @@ export function AgentBoardPage() {
   const { board, loading, refreshing, error, refresh } = useAgentProgressBoard(true);
 
   // Fetch agent records for claimTags and tools
-  const agentRecords = useAgentRecords();
+  const { data: agentRecords = [] } = useAgentRecords();
 
   // Fetch kanban stats for team activity bar
   const kanbanStats = useKanbanStats();
