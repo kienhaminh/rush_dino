@@ -1,18 +1,6 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import {
-  fetchChannelPairing,
-  fetchConfig,
-  fetchCredentials,
-  fetchMobileGatewayKeys,
-  issueMobileGatewayKey,
-  patchConfig,
-  patchCredentials,
-  revokeMobileGatewayKey,
-  resolveChannelPairingRequest,
-  revokeChannelPairedUser,
-} from '@/lib/api';
 import type {
   AppConfigView,
   ChannelPairingState,
@@ -20,6 +8,18 @@ import type {
   IssuedMobileGatewayKey,
   MobileGatewayKeyRecord,
 } from '@/lib/types';
+import {
+  useConfigQuery,
+  useCredentialsQuery,
+  usePatchConfigMutation,
+  usePatchCredentialsMutation,
+  useChannelPairingQuery,
+  useMobileGatewayKeysQuery,
+  useIssueMobileKeyMutation,
+  useRevokeMobileKeyMutation,
+  useResolveChannelPairingMutation,
+  useRevokeChannelPairedUserMutation,
+} from '@/lib/queries';
 import {
   ChannelsPage,
   type ChannelConfigAction,
@@ -36,7 +36,6 @@ const CHANNEL_ENABLED_OVERRIDES_KEY = 'rushdino.channels.enabled-overrides.v1';
 type ChannelSettingsState = Partial<Record<ChannelKey, ChannelUiSettings>>;
 type ChannelEnabledOverrides = Partial<Record<ChannelKey, boolean>>;
 type PairingChannel = Extract<ChannelKey, 'telegram' | 'discord'>;
-type ChannelPairingStateMap = Partial<Record<PairingChannel, ChannelPairingState>>;
 
 // Grouped localStorage-persisted channel config.
 type LocalChannelState = {
@@ -68,7 +67,8 @@ function buildSnapshot(
   config: AppConfigView | null,
   credentials: CredentialsView | null,
   overrides: ChannelEnabledOverrides,
-  pairing: ChannelPairingStateMap,
+  telegramPairing: ChannelPairingState | undefined,
+  discordPairing: ChannelPairingState | undefined,
 ): ChannelsStatusSnapshot | null {
   if (!config || !credentials) return null;
 
@@ -100,13 +100,13 @@ function buildSnapshot(
       telegram: {
         ...status(gateway.telegram.enabled, telegramConfigured),
         mode: 'polling',
-        pairedCount: pairing.telegram?.paired.length ?? 0,
-        pendingPairingCount: pairing.telegram?.pending.length ?? 0,
+        pairedCount: telegramPairing?.paired.length ?? 0,
+        pendingPairingCount: telegramPairing?.pending.length ?? 0,
       },
       discord: {
         ...status(gateway.discord.enabled, discordConfigured),
-        pairedCount: pairing.discord?.paired.length ?? 0,
-        pendingPairingCount: pairing.discord?.pending.length ?? 0,
+        pairedCount: discordPairing?.paired.length ?? 0,
+        pendingPairingCount: discordPairing?.pending.length ?? 0,
       },
       mobile: status(gateway.mobile.enabled, mobileConfigured),
       slack: status(gateway.slack.enabled, slackConfigured),
@@ -148,82 +148,83 @@ function isChannelKey(value: string | undefined): value is ChannelKey {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Fetch/server state reducer
-// ---------------------------------------------------------------------------
-
-type FetchState = {
-  config: AppConfigView | null;
-  credentials: CredentialsView | null;
-  loading: boolean;
-  lastError: string | null;
-  lastSuccessAt: number | null;
-};
-
-type FetchAction =
-  | { type: 'loading' }
-  | { type: 'loaded'; config: AppConfigView; credentials: CredentialsView }
-  | { type: 'error'; message: string }
-  | { type: 'configUpdated'; config: AppConfigView }
-  | { type: 'credentialsUpdated'; credentials: CredentialsView }
-  | { type: 'success' };
-
-function fetchReducer(state: FetchState, action: FetchAction): FetchState {
-  switch (action.type) {
-    case 'loading':
-      return { ...state, loading: true };
-    case 'loaded':
-      return { loading: false, config: action.config, credentials: action.credentials, lastError: null, lastSuccessAt: Date.now() };
-    case 'error':
-      return { ...state, loading: false, lastError: action.message };
-    case 'configUpdated':
-      return { ...state, config: action.config, lastError: null, lastSuccessAt: Date.now() };
-    case 'credentialsUpdated':
-      return { ...state, credentials: action.credentials, lastError: null, lastSuccessAt: Date.now() };
-    case 'success':
-      return { ...state, lastError: null, lastSuccessAt: Date.now() };
-  }
-}
-
-const INITIAL_FETCH_STATE: FetchState = {
-  config: null,
-  credentials: null,
-  loading: true,
-  lastError: null,
-  lastSuccessAt: null,
-};
-
-// ---------------------------------------------------------------------------
-// useChannelHandlers — extracts all callback handlers out of ChannelsRoute
-// ---------------------------------------------------------------------------
-
 type MobileGatewayState = {
   keys: MobileGatewayKeyRecord[];
   lastIssuedKey: IssuedMobileGatewayKey | null;
 };
 
-function useChannelHandlers({
-  fetchState,
-  dispatch,
-  localConfig,
-  setLocalConfig,
-  channelPairing,
-  setChannelPairing,
-  setMobileGateway,
-  setChannelConfigSaving,
-  navigate,
-}: {
-  fetchState: FetchState;
-  dispatch: React.Dispatch<FetchAction>;
-  localConfig: LocalChannelState;
-  setLocalConfig: React.Dispatch<React.SetStateAction<LocalChannelState>>;
-  channelPairing: ChannelPairingStateMap;
-  setChannelPairing: React.Dispatch<React.SetStateAction<ChannelPairingStateMap>>;
-  setMobileGateway: React.Dispatch<React.SetStateAction<MobileGatewayState>>;
-  setChannelConfigSaving: React.Dispatch<React.SetStateAction<boolean>>;
-  navigate: ReturnType<typeof useNavigate>;
-}) {
-  const { config, credentials } = fetchState;
+// ---------------------------------------------------------------------------
+// ChannelsRoute component
+// ---------------------------------------------------------------------------
+
+export function ChannelsRoute() {
+  const navigate = useNavigate();
+  const params = useParams<{ channel?: string }>();
+  const routeChannel = params.channel;
+
+  // Server state via React Query
+  const configQuery = useConfigQuery();
+  const credentialsQuery = useCredentialsQuery();
+  const telegramQuery = useChannelPairingQuery('telegram');
+  const discordQuery = useChannelPairingQuery('discord');
+  const mobileKeysQuery = useMobileGatewayKeysQuery();
+
+  const patchConfigMutation = usePatchConfigMutation();
+  const patchCredsMutation = usePatchCredentialsMutation();
+  const issueMutation = useIssueMobileKeyMutation();
+  const revokeMutation = useRevokeMobileKeyMutation();
+  const resolvePairingMutation = useResolveChannelPairingMutation();
+  const revokeUserMutation = useRevokeChannelPairedUserMutation();
+
+  const config = configQuery.data ?? null;
+  const credentials = credentialsQuery.data ?? null;
+  const loading = configQuery.isLoading || credentialsQuery.isLoading;
+  const lastError =
+    (configQuery.error instanceof Error ? configQuery.error.message : null) ??
+    (credentialsQuery.error instanceof Error ? credentialsQuery.error.message : null);
+  const lastSuccessAt = configQuery.dataUpdatedAt || null;
+
+  // lastIssuedKey is local UI state — not in the query cache
+  const [lastIssuedKey, setLastIssuedKey] = useState<IssuedMobileGatewayKey | null>(null);
+
+  // channelConfigSaving tracks in-flight mutations for UI busy state
+  const channelConfigSaving =
+    patchConfigMutation.isPending ||
+    patchCredsMutation.isPending ||
+    issueMutation.isPending ||
+    revokeMutation.isPending ||
+    resolvePairingMutation.isPending ||
+    revokeUserMutation.isPending;
+
+  const [localConfig, setLocalConfig] = useState<LocalChannelState>(() => ({
+    uiSettings: loadJsonRecord<ChannelSettingsState>(CHANNEL_UI_SETTINGS_KEY),
+    enabledOverrides: loadJsonRecord<ChannelEnabledOverrides>(CHANNEL_ENABLED_OVERRIDES_KEY),
+  }));
+  const { uiSettings: channelUiSettings, enabledOverrides: channelEnabledOverrides } = localConfig;
+
+  // Persist both localStorage keys whenever localConfig changes.
+  useEffect(() => {
+    saveJsonRecord(CHANNEL_UI_SETTINGS_KEY, localConfig.uiSettings);
+    saveJsonRecord(CHANNEL_ENABLED_OVERRIDES_KEY, localConfig.enabledOverrides);
+  }, [localConfig]);
+
+  const snapshot = useMemo(
+    () =>
+      buildSnapshot(
+        config,
+        credentials,
+        channelEnabledOverrides,
+        telegramQuery.data,
+        discordQuery.data,
+      ),
+    [config, credentials, channelEnabledOverrides, telegramQuery.data, discordQuery.data],
+  );
+
+  // Derive mobile gateway keys from query cache; keep lastIssuedKey as local state
+  const mobileGateway: MobileGatewayState = {
+    keys: mobileKeysQuery.data ?? [],
+    lastIssuedKey,
+  };
 
   const handleChannelToggle = useCallback(
     async (channel: ChannelKey, enabled: boolean) => {
@@ -239,8 +240,7 @@ function useChannelHandlers({
       }
 
       try {
-        setChannelConfigSaving(true);
-        const nextConfig = await patchConfig({
+        await patchConfigMutation.mutateAsync({
           gateway: {
             ...config.gateway,
             [channel]: {
@@ -249,15 +249,12 @@ function useChannelHandlers({
             },
           },
         });
-        dispatch({ type: 'configUpdated', config: nextConfig });
         toast.success(`${enabled ? 'Enabled' : 'Disabled'} ${channel} channel.`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : `Failed to toggle ${channel} channel.`);
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [config, dispatch, setChannelConfigSaving, setLocalConfig],
+    [config, patchConfigMutation],
   );
 
   const handleChannelConfigAction = useCallback(
@@ -323,7 +320,6 @@ function useChannelHandlers({
             enabledOverrides: { ...prev.enabledOverrides, [channel]: requestedEnabled },
           }));
         }
-        dispatch({ type: 'success' });
         toast.success(`Saved ${channel} detail configuration.`);
         return;
       }
@@ -392,7 +388,6 @@ function useChannelHandlers({
       const hasUiPatch = Boolean(patch.uiSettings);
 
       if (!hasConfigPatch && !hasCredentialsPatch) {
-        dispatch({ type: 'success' });
         if (hasUiPatch) {
           toast.success(`Saved ${channel} UI configuration.`);
         } else {
@@ -402,13 +397,10 @@ function useChannelHandlers({
       }
 
       try {
-        setChannelConfigSaving(true);
-        const [nextConfig, nextCredentials] = await Promise.all([
-          hasConfigPatch ? patchConfig(configPatch) : Promise.resolve(config),
-          hasCredentialsPatch ? patchCredentials(credentialsPatch) : Promise.resolve(credentials),
+        await Promise.all([
+          hasConfigPatch ? patchConfigMutation.mutateAsync(configPatch) : Promise.resolve(),
+          hasCredentialsPatch ? patchCredsMutation.mutateAsync(credentialsPatch) : Promise.resolve(),
         ]);
-        if (nextConfig) dispatch({ type: 'configUpdated', config: nextConfig });
-        if (nextCredentials) dispatch({ type: 'credentialsUpdated', credentials: nextCredentials });
         if (action === 'connect') {
           toast.success(`${channel} configuration saved and channel connected.`);
         } else {
@@ -418,45 +410,30 @@ function useChannelHandlers({
         toast.error(
           err instanceof Error ? err.message : `Failed to ${action} ${channel} configuration.`,
         );
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [config, credentials, dispatch, setChannelConfigSaving, setLocalConfig],
+    [config, credentials, patchConfigMutation, patchCredsMutation],
   );
 
   const handleIssueMobileGatewayKey = useCallback(async (label?: string) => {
     try {
-      setChannelConfigSaving(true);
-      const issued = await issueMobileGatewayKey({ label });
-      const refreshedKeys = await fetchMobileGatewayKeys();
-      setMobileGateway({ keys: refreshedKeys, lastIssuedKey: issued });
-      dispatch({ type: 'success' });
+      const issued = await issueMutation.mutateAsync({ label });
+      setLastIssuedKey(issued);
       toast.success('Issued mobile gateway key.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to issue mobile gateway key.');
-    } finally {
-      setChannelConfigSaving(false);
     }
-  }, [dispatch, setChannelConfigSaving, setMobileGateway]);
+  }, [issueMutation]);
 
   const handleRevokeMobileGatewayKey = useCallback(async (id: string) => {
     try {
-      setChannelConfigSaving(true);
-      await revokeMobileGatewayKey(id);
-      const refreshedKeys = await fetchMobileGatewayKeys();
-      setMobileGateway((prev) => ({
-        keys: refreshedKeys,
-        lastIssuedKey: prev.lastIssuedKey?.id === id ? null : prev.lastIssuedKey,
-      }));
-      dispatch({ type: 'success' });
+      await revokeMutation.mutateAsync(id);
+      setLastIssuedKey((prev) => (prev?.id === id ? null : prev));
       toast.success('Revoked mobile gateway key.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to revoke mobile gateway key.');
-    } finally {
-      setChannelConfigSaving(false);
     }
-  }, [dispatch, setChannelConfigSaving, setMobileGateway]);
+  }, [revokeMutation]);
 
   const openChannelConfig = useCallback(
     (channel: ChannelKey) => {
@@ -469,142 +446,45 @@ function useChannelHandlers({
     navigate('/gateway');
   }, [navigate]);
 
-  const refreshPairingChannel = useCallback(async (channel: PairingChannel) => {
-    const next = await fetchChannelPairing(channel);
-    setChannelPairing((prev) => ({ ...prev, [channel]: next }));
-  }, [setChannelPairing]);
-
   const handlePairingDecision = useCallback(
     async (channel: PairingChannel, requestId: string, approved: boolean) => {
       try {
-        setChannelConfigSaving(true);
-        await resolveChannelPairingRequest(channel, requestId, approved);
-        await refreshPairingChannel(channel);
+        await resolvePairingMutation.mutateAsync({ channel, requestId, approved });
         toast.success(approved ? 'Pairing approved.' : 'Pairing denied.');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to resolve pairing request.');
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [refreshPairingChannel, setChannelConfigSaving],
+    [resolvePairingMutation],
   );
 
   const handlePairingRevoke = useCallback(
     async (channel: PairingChannel, senderId: string) => {
       try {
-        setChannelConfigSaving(true);
-        await revokeChannelPairedUser(channel, senderId);
-        await refreshPairingChannel(channel);
+        await revokeUserMutation.mutateAsync({ channel, senderId });
         toast.success('Paired user revoked.');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to revoke paired user.');
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [refreshPairingChannel, setChannelConfigSaving],
+    [revokeUserMutation],
   );
 
-  return {
-    handleChannelToggle,
-    handleChannelConfigAction,
-    handleIssueMobileGatewayKey,
-    handleRevokeMobileGatewayKey,
-    openChannelConfig,
-    closeChannelConfig,
-    refreshPairingChannel,
-    handlePairingDecision,
-    handlePairingRevoke,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// ChannelsRoute component
-// ---------------------------------------------------------------------------
-
-export function ChannelsRoute() {
-  const navigate = useNavigate();
-  const params = useParams<{ channel?: string }>();
-  const routeChannel = params.channel;
-
-  const [fetchState, dispatch] = useReducer(fetchReducer, INITIAL_FETCH_STATE);
-  const { config, credentials, loading, lastError, lastSuccessAt } = fetchState;
-
-  const [channelConfigSaving, setChannelConfigSaving] = useState(false);
-  const [localConfig, setLocalConfig] = useState<LocalChannelState>(() => ({
-    uiSettings: loadJsonRecord<ChannelSettingsState>(CHANNEL_UI_SETTINGS_KEY),
-    enabledOverrides: loadJsonRecord<ChannelEnabledOverrides>(CHANNEL_ENABLED_OVERRIDES_KEY),
-  }));
-  const { uiSettings: channelUiSettings, enabledOverrides: channelEnabledOverrides } = localConfig;
-
-  const [channelPairing, setChannelPairing] = useState<ChannelPairingStateMap>({});
-  const [mobileGateway, setMobileGateway] = useState<MobileGatewayState>({
-    keys: [],
-    lastIssuedKey: null,
-  });
-  const hasLoadedInitialDataRef = useRef(false);
-
-  const snapshot = useMemo(
-    () => buildSnapshot(config, credentials, channelEnabledOverrides, channelPairing),
-    [config, credentials, channelEnabledOverrides, channelPairing],
+  const refreshPairingChannel = useCallback(
+    (_channel: PairingChannel) => {
+      // Pairing data is managed by React Query; no manual refresh needed.
+      // This prop is kept for child-component compatibility.
+    },
+    [],
   );
 
-  // Persist both localStorage keys whenever localConfig changes.
-  useEffect(() => {
-    saveJsonRecord(CHANNEL_UI_SETTINGS_KEY, localConfig.uiSettings);
-    saveJsonRecord(CHANNEL_ENABLED_OVERRIDES_KEY, localConfig.enabledOverrides);
-  }, [localConfig]);
-
-  const refresh = useCallback(async () => {
-    try {
-      dispatch({ type: 'loading' });
-      const [nextConfig, nextCredentials, telegramPairing, discordPairing, nextMobileKeys] =
-        await Promise.all([
-          fetchConfig(),
-          fetchCredentials(),
-          fetchChannelPairing('telegram'),
-          fetchChannelPairing('discord'),
-          fetchMobileGatewayKeys(),
-        ]);
-      setChannelPairing({
-        telegram: telegramPairing,
-        discord: discordPairing,
-      });
-      setMobileGateway((prev) => ({ ...prev, keys: nextMobileKeys }));
-      dispatch({ type: 'loaded', config: nextConfig, credentials: nextCredentials });
-    } catch (err) {
-      dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Failed to load channels state.' });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasLoadedInitialDataRef.current) return;
-    hasLoadedInitialDataRef.current = true;
-    void refresh();
-  }, [refresh]);
-
-  const {
-    handleChannelToggle,
-    handleChannelConfigAction,
-    handleIssueMobileGatewayKey,
-    handleRevokeMobileGatewayKey,
-    openChannelConfig,
-    closeChannelConfig,
-    refreshPairingChannel,
-    handlePairingDecision,
-    handlePairingRevoke,
-  } = useChannelHandlers({
-    fetchState,
-    dispatch,
-    localConfig,
-    setLocalConfig,
-    channelPairing,
-    setChannelPairing,
-    setMobileGateway,
-    setChannelConfigSaving,
-    navigate,
-  });
+  const handleRefresh = useCallback(() => {
+    void configQuery.refetch();
+    void credentialsQuery.refetch();
+    void telegramQuery.refetch();
+    void discordQuery.refetch();
+    void mobileKeysQuery.refetch();
+  }, [configQuery, credentialsQuery, telegramQuery, discordQuery, mobileKeysQuery]);
 
   if (routeChannel && !isChannelKey(routeChannel)) {
     return <Navigate to="/gateway" replace />;
@@ -612,6 +492,9 @@ export function ChannelsRoute() {
 
   if (routeChannel && isChannelKey(routeChannel)) {
     const status = snapshot?.channels?.[routeChannel] ?? {};
+    const pairingData = supportsPairing(routeChannel)
+      ? (routeChannel === 'telegram' ? telegramQuery.data : discordQuery.data) ?? null
+      : null;
     return (
       <ChannelSettingsPage
         key={routeChannel}
@@ -623,7 +506,7 @@ export function ChannelsRoute() {
         saving={channelConfigSaving}
         loading={loading}
         lastError={lastError}
-        pairing={supportsPairing(routeChannel) ? channelPairing[routeChannel] ?? null : null}
+        pairing={pairingData}
         mobileGateway={
           routeChannel === 'mobile'
             ? {
@@ -631,7 +514,7 @@ export function ChannelsRoute() {
                 lastIssuedKey: mobileGateway.lastIssuedKey,
                 onIssueKey: handleIssueMobileGatewayKey,
                 onRevokeKey: handleRevokeMobileGatewayKey,
-                onDismissIssuedKey: () => setMobileGateway((prev) => ({ ...prev, lastIssuedKey: null })),
+                onDismissIssuedKey: () => setLastIssuedKey(null),
               }
             : null
         }
@@ -657,7 +540,7 @@ export function ChannelsRoute() {
       channelUiSettings={channelUiSettings}
       nostrProfileFormState={null}
       nostrProfileAccountId={null}
-      onRefresh={refresh}
+      onRefresh={handleRefresh}
       onChannelToggle={handleChannelToggle}
       onChannelConfigAction={handleChannelConfigAction}
       onOpenChannelConfig={openChannelConfig}
