@@ -7,6 +7,7 @@ import {
   resolveChannelPairingRequest,
   revokeChannelPairedUser,
 } from '../api'
+import type { MobileGatewayKeyRecord } from '../types'
 
 export const channelKeys = {
   all:        () => ['channels'] as const,
@@ -44,10 +45,10 @@ export function useRevokeMobileKeyMutation() {
     mutationFn: revokeMobileGatewayKey,
     onMutate: async (keyId: string) => {
       await queryClient.cancelQueries({ queryKey: channelKeys.mobileKeys() })
-      const previous = queryClient.getQueryData(channelKeys.mobileKeys())
-      queryClient.setQueryData(
+      const previous = queryClient.getQueryData<MobileGatewayKeyRecord[]>(channelKeys.mobileKeys())
+      queryClient.setQueryData<MobileGatewayKeyRecord[]>(
         channelKeys.mobileKeys(),
-        (old: { id: string }[] | undefined) => old?.filter((k) => k.id !== keyId),
+        (old) => old?.filter((k) => k.id !== keyId),
       )
       return { previous }
     },

@@ -178,7 +178,7 @@ export function ChannelsRoute() {
 
   const config = configQuery.data ?? null;
   const credentials = credentialsQuery.data ?? null;
-  const loading = configQuery.isLoading || credentialsQuery.isLoading;
+  const loading = configQuery.isPending || credentialsQuery.isPending;
   const lastError =
     (configQuery.error instanceof Error ? configQuery.error.message : null) ??
     (credentialsQuery.error instanceof Error ? credentialsQuery.error.message : null);
@@ -471,11 +471,11 @@ export function ChannelsRoute() {
   );
 
   const refreshPairingChannel = useCallback(
-    (_channel: PairingChannel) => {
-      // Pairing data is managed by React Query; no manual refresh needed.
-      // This prop is kept for child-component compatibility.
+    (channel: PairingChannel) => {
+      if (channel === 'telegram') void telegramQuery.refetch();
+      else if (channel === 'discord') void discordQuery.refetch();
     },
-    [],
+    [telegramQuery, discordQuery],
   );
 
   const handleRefresh = useCallback(() => {
