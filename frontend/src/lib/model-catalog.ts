@@ -139,7 +139,7 @@ const ANTHROPIC_MODELS: CatalogModel[] = [
   {
     id: 'claude-3-7-sonnet-20250219',
     name: 'Claude 3.7 Sonnet',
-    description: "Anthropic's newest and most intelligent reasoning model",
+    description: 'Extended thinking model with hybrid reasoning (Legacy)',
     contextWindow: 200_000,
     isReasoning: true,
   },
@@ -181,7 +181,7 @@ export function getCatalogModels(
  * Returns the recommended default model ID for a given provider kind and auth method.
  */
 export function getDefaultModelId(providerKind: string, authMethod: string): string {
-  if (providerKind === 'anthropic') return 'claude-3-7-sonnet-20250219';
+  if (providerKind === 'anthropic') return 'claude-sonnet-4-6';
   if (providerKind === 'openai_codex' || authMethod === 'oauth') return 'gpt-5.3-codex';
   if (providerKind === 'openai') return 'gpt-4.1-mini';
   return 'llama3.2:latest';

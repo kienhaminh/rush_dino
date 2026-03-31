@@ -153,7 +153,7 @@ fn anthropic_models() -> Vec<ModelInfo> {
         ModelInfo {
             id: "claude-3-7-sonnet-20250219".into(),
             name: Some("Claude 3.7 Sonnet".into()),
-            description: Some("Anthropic's newest and most intelligent reasoning model".into()),
+            description: Some("Extended thinking model with hybrid reasoning (Legacy)".into()),
             context_window: Some(200_000),
             is_reasoning: Some(true),
         },
