@@ -37,16 +37,21 @@ export function useWorkflowPageState() {
     setSelectedRunId(null);
   }, []);
 
-  // handleRun matches the original signature: no args, uses current workflow
-  const handleRun = useCallback(async () => {
-    if (!selectedWorkflowId) return;
-    const result = await startMutation.mutateAsync({
-      workflowId: selectedWorkflowId,
-      payload: { triggeredBy: 'user' },
-    });
-    // WorkflowRunStartResponse always carries runId
-    setSelectedRunId(result.runId);
-  }, [selectedWorkflowId, startMutation]);
+  const handleRun = useCallback(
+    async (payload?: { input?: string; triggeredBy?: string }) => {
+      if (!selectedWorkflowId) return;
+      try {
+        const result = await startMutation.mutateAsync({
+          workflowId: selectedWorkflowId,
+          payload,
+        });
+        setSelectedRunId(result.runId);
+      } catch {
+        // Error is surfaced via startMutation.error — no additional handling needed
+      }
+    },
+    [selectedWorkflowId, startMutation],
+  );
 
   const handleCancel = useCallback(async (runId: string) => {
     await cancelMutation.mutateAsync(runId);

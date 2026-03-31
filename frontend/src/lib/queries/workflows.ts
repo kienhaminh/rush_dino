@@ -7,7 +7,6 @@ import {
   startWorkflowRun,
   cancelWorkflowRun,
 } from '../api'
-import type { WorkflowRunListItem } from '@/pages/workflows/workflow-types'
 
 export const workflowKeys = {
   all:    () => ['workflows'] as const,
@@ -36,7 +35,7 @@ export function useWorkflowRunsQuery(workflowId: string) {
     queryFn: () => fetchWorkflowRuns(workflowId),
     enabled: !!workflowId,
     refetchInterval: (query) => {
-      const hasActive = (query.state.data as WorkflowRunListItem[] | undefined)?.some(
+      const hasActive = query.state.data?.some(
         (r) => r.status === 'running' || r.status === 'queued',
       )
       return hasActive ? 2_000 : false
@@ -51,7 +50,7 @@ export function useWorkflowRunQuery(runId: string) {
     enabled: !!runId,
     // Also poll the selected run detail when active
     refetchInterval: (query) => {
-      const status = (query.state.data as { status: string } | undefined)?.status
+      const status = query.state.data?.status
       return status === 'running' || status === 'queued' ? 2_000 : false
     },
   })
