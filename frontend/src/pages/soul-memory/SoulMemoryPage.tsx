@@ -9,6 +9,15 @@ import type { SoulMemoryFile, SoulMemoryStateResponse } from '@/lib/types';
 
 const EMPTY_STATE: SoulMemoryStateResponse = {
   dataDir: '',
+  bootstrap: {
+    name: 'BOOTSTRAP.md',
+    path: '',
+    exists: false,
+    updatedAt: null,
+    sizeBytes: 0,
+    lineCount: 0,
+    content: '',
+  },
   soul: {
     name: 'SOUL.md',
     path: '',
@@ -29,6 +38,8 @@ const EMPTY_STATE: SoulMemoryStateResponse = {
   },
   identityFiles: [],
   dailyFiles: [],
+  injectedContext: [],
+  truncationWarnings: [],
 };
 
 function formatTimestamp(value?: string | null) {
