@@ -269,7 +269,7 @@ export function AgentFocusPage() {
   // Fetch messages for the badge count — only enabled when panel is messages
   const currentAgent = fetchState.agents.find((a) => a.id === agentId);
   const agentName = currentAgent?.name ?? agentId;
-  const { data: badgeMessages = [] } = useMessagesQuery(activePanel === 'messages', agentName);
+  const { data: badgeMessages = [] } = useMessagesQuery(activePanel === 'messages' && !!currentAgent, agentName);
   const unreadCount = badgeMessages.filter((m) => !m.read).length;
 
   if (fetchState.status === 'loading' && !fetchState.runtime) {
