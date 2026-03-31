@@ -32,6 +32,31 @@ pub enum WorkflowAction {
         #[arg(long)]
         json: bool,
     },
+    /// Create a new workflow definition
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        steps: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Delete a workflow
+    Delete { id: String },
+    /// List runs for a workflow
+    Runs {
+        id: String,
+        #[arg(long, default_value = "20")]
+        limit: u32,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Get status of a specific workflow run
+    RunStatus {
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 pub async fn run(args: WorkflowArgs) -> Result<()> {
@@ -98,6 +123,69 @@ pub async fn run(args: WorkflowArgs) -> Result<()> {
             } else {
                 let run_id = data["id"].as_str().unwrap_or("-");
                 println!("{} Workflow run started: {}", "✔".green(), run_id.bold());
+            }
+        }
+        WorkflowAction::Create { name, steps, json } => {
+            let steps_value: serde_json::Value = serde_json::from_str(&steps)
+                .map_err(|e| rushdino_common::AppError::Validation(format!("invalid steps JSON: {e}")))?;
+            let data = client
+                .post("/api/workflows", serde_json::json!({ "name": name, "steps": steps_value }))
+                .await?;
+            if json {
+                println!("{}", serde_json::to_string(&data).unwrap_or_default());
+            } else {
+                let id = data["id"].as_str().unwrap_or("-");
+                println!("{} Workflow created: {}", "✔".green(), id.bold());
+            }
+        }
+        WorkflowAction::Delete { id } => {
+            client.delete(&format!("/api/workflows/{id}")).await?;
+            println!("{} Workflow {} deleted.", "✔".green(), id.bold());
+        }
+        WorkflowAction::Runs { id, limit, json } => {
+            let data = client
+                .get(&format!("/api/workflows/{id}/runs?limit={limit}"))
+                .await?;
+            if json {
+                println!("{}", serde_json::to_string(&data).unwrap_or_default());
+            } else {
+                let items = data["items"].as_array().cloned().unwrap_or_default();
+                println!("{} {}", "⚙️".bold(), "Workflow Runs".blue().bold());
+                println!("{}", "========================================".dimmed());
+                if items.is_empty() {
+                    println!("{} No runs found.", "i".yellow());
+                } else {
+                    for item in &items {
+                        let run_id = item["id"].as_str().unwrap_or("-");
+                        let status = item["status"].as_str().unwrap_or("-");
+                        let created = item["createdAt"].as_str().unwrap_or("-");
+                        println!(
+                            "  {} {} {}",
+                            run_id.dimmed(),
+                            format!("[{status}]").yellow(),
+                            created.dimmed()
+                        );
+                    }
+                    println!("\n{} {} runs", "✔".green(), items.len());
+                }
+            }
+        }
+        WorkflowAction::RunStatus { id, json } => {
+            let data = client.get(&format!("/api/workflow-runs/{id}")).await?;
+            if json {
+                println!("{}", serde_json::to_string(&data).unwrap_or_default());
+            } else {
+                let status = data["status"].as_str().unwrap_or("-");
+                let workflow_id = data["workflowId"].as_str().unwrap_or("-");
+                let created = data["createdAt"].as_str().unwrap_or("-");
+                println!(
+                    "{} Run {} — {} — workflow: {} — started: {}",
+                    "⚙️".bold(),
+                    id.bold(),
+                    format!("[{status}]").yellow(),
+                    workflow_id.dimmed(),
+                    created.dimmed()
+                );
             }
         }
     }

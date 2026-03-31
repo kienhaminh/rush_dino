@@ -483,3 +483,92 @@ fn cron_runs_json_flag_parses() {
         .expect("cron runs --json should parse");
     assert!(matches!(cli.command, Command::Cron(_)));
 }
+
+#[test]
+fn workflow_create_requires_name_and_steps() {
+    Cli::try_parse_from(["rushdino", "workflow", "create", "--name", "my-wf"])
+        .expect_err("workflow create without --steps should fail");
+}
+
+#[test]
+fn workflow_create_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "workflow", "create",
+        "--name", "my-wf",
+        "--steps", r#"[{"type":"prompt","prompt":"hello"}]"#,
+    ])
+    .expect("workflow create with args should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_create_json_flag_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino", "workflow", "create",
+        "--name", "my-wf",
+        "--steps", r#"[]"#,
+        "--json",
+    ])
+    .expect("workflow create --json should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_delete_requires_id() {
+    Cli::try_parse_from(["rushdino", "workflow", "delete"])
+        .expect_err("workflow delete without id should fail");
+}
+
+#[test]
+fn workflow_delete_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "delete", "wf-abc"])
+        .expect("workflow delete <id> should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_runs_requires_id() {
+    Cli::try_parse_from(["rushdino", "workflow", "runs"])
+        .expect_err("workflow runs without id should fail");
+}
+
+#[test]
+fn workflow_runs_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "runs", "wf-abc"])
+        .expect("workflow runs <id> should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_runs_limit_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "runs", "wf-abc", "--limit", "5"])
+        .expect("workflow runs --limit should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_runs_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "runs", "wf-abc", "--json"])
+        .expect("workflow runs --json should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_run_status_requires_id() {
+    Cli::try_parse_from(["rushdino", "workflow", "run-status"])
+        .expect_err("workflow run-status without id should fail");
+}
+
+#[test]
+fn workflow_run_status_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "run-status", "run-abc"])
+        .expect("workflow run-status <id> should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
+
+#[test]
+fn workflow_run_status_json_flag_parses() {
+    let cli = Cli::try_parse_from(["rushdino", "workflow", "run-status", "run-abc", "--json"])
+        .expect("workflow run-status --json should parse");
+    assert!(matches!(cli.command, Command::Workflow(_)));
+}
