@@ -11,20 +11,26 @@ export function useSubAgentSessions(items: ConversationItem[]) {
   const { data: sessions = [], refetch } = useAgentSessionsQuery();
   const prevDelegateCountRef = useRef(0);
 
-  // Re-fetch whenever a delegate tool_use transitions from running → done/error.
-  // This ensures newly-completed sub-agent conversations appear immediately.
-  useEffect(() => {
-    const delegateItems = items.filter(
-      (it) => it.kind === 'tool_use' && it.tool_name === 'delegate',
-    );
-    const runningCount = delegateItems.filter((it) => it.kind === 'tool_use' && it.status === 'running').length;
+  // Derive the running delegate count outside the effect so the effect depends
+  // on the computed number rather than the raw items array. This avoids
+  // re-running on every message received.
+  const runningCount = useMemo(
+    () =>
+      items.filter(
+        (it) => it.kind === 'tool_use' && it.tool_name === 'delegate' && it.status === 'running',
+      ).length,
+    [items],
+  );
 
-    // A delegate just finished (running count dropped)
-    if (runningCount < prevDelegateCountRef.current) {
-      refetch();
+  // Re-fetch only when ALL delegates finish (running count drops to zero from
+  // a positive value). This ensures newly-completed sub-agent conversations
+  // appear immediately without triggering redundant fetches on 3→2 or 2→1.
+  useEffect(() => {
+    if (runningCount === 0 && prevDelegateCountRef.current > 0) {
+      void refetch();
     }
     prevDelegateCountRef.current = runningCount;
-  }, [items, refetch]);
+  }, [runningCount, refetch]);
 
   /** Extract live (currently running) delegate calls from the conversation items. */
   const liveRuns = useMemo(() =>
@@ -53,5 +59,5 @@ export function useSubAgentSessions(items: ConversationItem[]) {
 
   const hasActivity = liveRuns.length > 0 || sessions.length > 0;
 
-  return { sessions, liveRuns, hasActivity, refresh: refetch };
+  return { sessions, liveRuns, hasActivity, refresh: () => { void refetch(); } };
 }
