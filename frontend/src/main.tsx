@@ -28,7 +28,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           </ChatWsProvider>
         </DashboardAuthProvider>
       </BrowserRouter>
-      {import.meta.env.DEV && <LazyReactQueryDevtools initialIsOpen={false} />}
+      {import.meta.env.DEV && (
+        <React.Suspense fallback={null}>
+          <LazyReactQueryDevtools initialIsOpen={false} />
+        </React.Suspense>
+      )}
     </QueryClientProvider>
   </React.StrictMode>,
 );

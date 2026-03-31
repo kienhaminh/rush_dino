@@ -4,8 +4,8 @@ import { RefreshCwIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { AgentRecord } from '@/pages/agents/agent-types';
-import { useAgentProgressBoard } from '@/pages/agents/use-agent-progress-board';
 import type { KanbanBoardStats } from '@/pages/kanban/kanban-types';
+import { useAgentProgressBoardQuery, useAgentHealthQuery, useResetAgentHealthMutation } from '@/lib/queries';
 
 import {
   buildOverviewBoardColumns,
@@ -13,7 +13,6 @@ import {
   type OverviewAgentStatus,
 } from './agent-board-status';
 import { AgentHealthIndicator } from './agent-health-indicator';
-import { useAgentHealth } from './use-agent-health';
 import { useAgentRecords, useKanbanStats } from './use-agent-board-data';
 
 // ------------------------------------------------------------------
@@ -55,7 +54,8 @@ function TeamActivityBar({ stats }: { stats: KanbanBoardStats | null }) {
 // ------------------------------------------------------------------
 
 export function AgentBoardPage() {
-  const { board, loading, refreshing, error, refresh } = useAgentProgressBoard(true);
+  const { data: board, isPending: loading, isError, error, refetch, isFetching: refreshing } =
+    useAgentProgressBoardQuery();
 
   // Fetch agent records for claimTags and tools
   const { data: agentRecords = [] } = useAgentRecords();
@@ -77,15 +77,6 @@ export function AgentBoardPage() {
     return map;
   }, [agentRecords]);
 
-  // Collect agent names for health polling
-  const allCards = useMemo(
-    () => [...columns.active, ...columns.recent, ...columns.idle, ...columns.blocked],
-    [columns],
-  );
-  const agentNames = useMemo(() => allCards.map((c) => c.name), [allCards]);
-
-  const { healthMap, reset: resetHealth } = useAgentHealth(agentNames, true);
-
   const totalAgents =
     columns.active.length + columns.recent.length + columns.idle.length + columns.blocked.length;
 
@@ -104,7 +95,7 @@ export function AgentBoardPage() {
               </Badge>
             ) : null}
           </div>
-          <Button variant="outline" size="sm" onClick={() => void refresh()} disabled={refreshing}>
+          <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={refreshing}>
             <RefreshCwIcon className={`w-3.5 h-3.5 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -114,9 +105,9 @@ export function AgentBoardPage() {
         <TeamActivityBar stats={kanbanStats} />
 
         {/* Error / loading states */}
-        {error ? (
+        {isError && error ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
+            {error instanceof Error ? error.message : String(error)}
           </div>
         ) : null}
 
@@ -140,8 +131,6 @@ export function AgentBoardPage() {
                 key={card.agentId}
                 card={card}
                 agentRecord={agentRecordByName[card.name]}
-                health={healthMap[card.name]}
-                onResetHealth={() => void resetHealth(card.name)}
               />
             ))}
           </div>
@@ -158,14 +147,13 @@ export function AgentBoardPage() {
 function AgentStatusCard({
   card,
   agentRecord,
-  health,
-  onResetHealth,
 }: {
   card: OverviewAgentCard;
   agentRecord: AgentRecord | undefined;
-  health: import('@/pages/agents/agent-types').AgentHealth | undefined;
-  onResetHealth: () => void;
 }) {
+  const { data: health } = useAgentHealthQuery(card.name);
+  const resetHealthMutation = useResetAgentHealthMutation();
+
   const claimTags = agentRecord?.claimTags ?? [];
   const toolsRaw = agentRecord?.tools ?? '';
   const toolNames = parseToolNames(toolsRaw);
@@ -190,7 +178,10 @@ function AgentStatusCard({
       </div>
 
       {/* Health indicator */}
-      <AgentHealthIndicator health={health} onReset={onResetHealth} />
+      <AgentHealthIndicator
+        health={health}
+        onReset={() => resetHealthMutation.mutate(card.name)}
+      />
 
       {/* Routes to: claim tag pills */}
       {claimTags.length > 0 ? (
