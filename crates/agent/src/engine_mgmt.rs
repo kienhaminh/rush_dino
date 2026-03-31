@@ -122,6 +122,15 @@ impl crate::engine::AgentEngine {
         self.runtime.delete_session_runs(id).await
     }
 
+    /// Reset all user sessions (clears messages and runs for every conversation).
+    pub async fn reset_all_sessions(&self) -> Result<()> {
+        let conversations = self.conversation.list_conversations().await?;
+        for conv in &conversations {
+            let _ = self.reset_session(&conv.id).await;
+        }
+        Ok(())
+    }
+
     pub fn config(&self) -> &crate::engine::AgentConfig {
         &self.config
     }

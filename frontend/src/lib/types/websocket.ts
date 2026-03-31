@@ -121,10 +121,9 @@ export interface WsTaskReviewReadyEvent {
   notification: string;
 }
 
-/** Emitted when the active profile changes and the main session is cleared. */
+/** Emitted when the active profile changes and all sessions are cleared. */
 export interface WsSessionResetEvent {
   type: 'session_reset';
-  conversation_id: string;
 }
 
 /** Emitted when a new Telegram/Discord pairing request is created. */

@@ -45,13 +45,12 @@ pub async fn patch_config(
     if execution_runtime_reload_required_from_config(&current, &updated) {
         crate::refresh_engine_provider(&state).await?;
 
-        // Reset the main session to avoid replaying stale context to the new provider.
+        // Reset all sessions to avoid replaying stale context to the new provider.
         if let Some(engine) = state.engine_opt() {
-            let _ = engine.reset_session("main").await;
+            let _ = engine.reset_all_sessions().await;
         }
         let _ = state.runtime.broadcast_tx().send(serde_json::json!({
             "type": "session_reset",
-            "conversation_id": "main",
         }));
     }
     if gateway_runtime_reload_required_from_config(&current, &updated) {
