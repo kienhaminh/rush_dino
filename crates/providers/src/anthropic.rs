@@ -27,11 +27,14 @@ impl AnthropicProvider {
         }
     }
 
-    /// Applies the correct authentication header based on auth method.
+    /// Applies the correct authentication headers based on auth method.
+    /// OAuth requires both a Bearer token and the `anthropic-beta: oauth-2025-04-20` header.
     fn authenticate(&self, req: RequestBuilder) -> RequestBuilder {
         match &self.auth {
             AnthropicAuth::ApiKey { api_key } => req.header("x-api-key", api_key),
-            AnthropicAuth::OAuth { access_token } => req.bearer_auth(access_token),
+            AnthropicAuth::OAuth { access_token } => req
+                .bearer_auth(access_token)
+                .header("anthropic-beta", "oauth-2025-04-20"),
         }
     }
 
