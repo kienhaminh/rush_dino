@@ -138,6 +138,7 @@ next_beta_tag() {
 
     break
   done
+  return 0
 
   printf '%s\n' "$tag"
 }
@@ -194,6 +195,7 @@ ensure_tag_absent() {
   git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && rc=0 || rc=$?
   [[ $rc -eq 0 ]] && die "Tag already exists on origin: $tag"
   [[ $rc -ne 2 ]] && die "Could not verify remote tag '$tag' (git ls-remote exit code: $rc)"
+  return 0
 }
 
 run_release() {
