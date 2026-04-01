@@ -132,7 +132,7 @@ next_beta_tag() {
 
     # Check remote; exit code 2 means "not found" (--exit-code), anything
     # else is an unexpected error.
-    git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; rc=$?
+    git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && rc=0 || rc=$?
     [[ $rc -eq 0 ]] && { n=$((n + 1)); continue; }
     [[ $rc -ne 2 ]] && die "Could not verify remote tag '$tag' (git ls-remote exit code: $rc)"
 
@@ -191,7 +191,7 @@ ensure_tag_absent() {
 
   # --exit-code: exits 0 if ref found, 2 if not found, 128+ on error.
   # Treat anything other than 0 (exists) or 2 (absent) as a network failure.
-  git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; rc=$?
+  git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && rc=0 || rc=$?
   [[ $rc -eq 0 ]] && die "Tag already exists on origin: $tag"
   [[ $rc -ne 2 ]] && die "Could not verify remote tag '$tag' (git ls-remote exit code: $rc)"
 }
