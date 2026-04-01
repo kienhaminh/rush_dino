@@ -1,14 +1,14 @@
 use std::{path::Path, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
 
-use rushdino_agent::{AgentConfig, AgentEngine, KnowledgeGraphAccess};
+use rushdino_agent::{engine_deps::EngineBuildInput, AgentConfig, AgentEngine, KnowledgeGraphAccess};
 use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
-use rushdino_auth::refresh_access_token;
+use rushdino_auth::{refresh_access_token, refresh_anthropic_token};
 use rushdino_knowledge_graph::KgGateway;
 use rushdino_providers::{
-    types::{OpenAIAuth, ProviderConfig},
+    types::{AnthropicAuth, OpenAIAuth, ProviderConfig},
     ProviderService,
 };
 
@@ -83,7 +83,16 @@ pub fn validate_default_profile_execution(
     }
 }
 
-pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Option<&McpManager>) -> Result<()> {
+/// Reload configuration and rebuild the agent engine.
+///
+/// `init_optional_services`: when `true` (config-update path), connect
+/// KgGateway if enabled. Pass `false` on startup so optional integrations
+/// are only activated when the user explicitly enables them.
+pub async fn refresh_runtime_from_disk(
+    runtime: &RuntimeState,
+    mcp_manager: Option<&McpManager>,
+    init_optional_services: bool,
+) -> Result<()> {
     let config = Arc::new(AppConfig::load_from_path(runtime.config_path())?);
     let mut credentials = CredentialsConfig::load_from_path(runtime.credentials_path())?;
     let mut status = runtime_status_from_config(config.as_ref());
@@ -99,19 +108,29 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Opti
             let pool = runtime.pool();
             let provider = Arc::new(ProviderService::from_config(&resolved.provider_config)?);
 
-            let knowledge_graph_service = if config.knowledge_graph.enabled {
-                match KgGateway::from_config(
+            // KgGateway is only connected when the caller explicitly requests it
+            // (i.e. after the user enables it via config, not on every startup).
+            let knowledge_graph_service = if config.knowledge_graph.enabled && init_optional_services {
+                let kg_fut = KgGateway::from_config(
                     &config.knowledge_graph,
                     &credentials.knowledge_graph,
                     provider.clone(),
                     pool.clone(),
                     config.data_dir.clone(),
+                );
+                match tokio::time::timeout(
+                    std::time::Duration::from_millis(500),
+                    kg_fut,
                 )
                 .await
                 {
-                    Ok(gw) => Some(Arc::new(gw)),
-                    Err(err) => {
+                    Ok(Ok(gw)) => Some(Arc::new(gw)),
+                    Ok(Err(err)) => {
                         tracing::warn!("knowledge graph gateway init failed: {err}");
+                        None
+                    }
+                    Err(_) => {
+                        tracing::warn!("knowledge graph gateway init timed out");
                         None
                     }
                 }
@@ -135,47 +154,54 @@ pub async fn refresh_runtime_from_disk(runtime: &RuntimeState, mcp_manager: Opti
                         AuthMethod::ApiKey
                     }
                 }
-                ProviderConfig::Anthropic { .. } => AuthMethod::ApiKey,
+                ProviderConfig::Anthropic { auth, .. } => match auth {
+                    AnthropicAuth::ApiKey { .. } => AuthMethod::ApiKey,
+                    AnthropicAuth::OAuth { .. } => AuthMethod::OAuth,
+                },
+            };
+            let agent_config = {
+                use rushdino_agent::memory_bootstrap::{
+                    DEFAULT_BOOTSTRAP_MAX_CHARS, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
+                };
+                AgentConfig {
+                    bootstrap_max_chars: config
+                        .bootstrap
+                        .max_chars_per_file
+                        .unwrap_or(DEFAULT_BOOTSTRAP_MAX_CHARS),
+                    bootstrap_total_max_chars: config
+                        .bootstrap
+                        .max_total_chars
+                        .unwrap_or(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS),
+                    max_context_tokens: config.agent.max_context_tokens.unwrap_or(200_000),
+                    max_iterations: config
+                        .agent
+                        .max_iterations
+                        .unwrap_or(AgentConfig::default().max_iterations),
+                    ..AgentConfig::default()
+                }
             };
             let mut engine_inner = AgentEngine::new(
-                provider,
-                pool,
-                config.data_dir.clone(),
-                credentials.brave_api_key.clone(),
-                credentials.gemini_api_key.clone(),
+                EngineBuildInput {
+                    provider,
+                    pool,
+                    home_dir: config.data_dir.clone(),
+                    brave_api_key: credentials.brave_api_key.clone(),
+                    gemini_api_key: credentials.gemini_api_key.clone(),
+                    config: agent_config,
+                    runtime: runtime.agent_runtime(),
+                    system_broker: runtime.system_broker(),
+                    knowledge_graph: knowledge_graph_bridge,
+                    // No per-agent sandbox policy at global engine build time.
+                    guardrail_pipeline: None,
+                    broadcast_tx: runtime.broadcast_tx(),
+                },
                 provider_kind_label(&resolved.provider_kind).to_owned(),
                 auth_method,
-                {
-                    use rushdino_agent::memory_bootstrap::{
-                        DEFAULT_BOOTSTRAP_MAX_CHARS, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
-                    };
-                    AgentConfig {
-                        bootstrap_max_chars: config
-                            .bootstrap
-                            .max_chars_per_file
-                            .unwrap_or(DEFAULT_BOOTSTRAP_MAX_CHARS),
-                        bootstrap_total_max_chars: config
-                            .bootstrap
-                            .max_total_chars
-                            .unwrap_or(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS),
-                        max_context_tokens: config
-                            .agent
-                            .max_context_tokens
-                            .unwrap_or(200_000),
-                        ..AgentConfig::default()
-                    }
-                },
-                runtime.agent_runtime(),
-                runtime.system_broker(),
-                knowledge_graph_bridge,
-                // No per-agent sandbox policy at global engine build time.
-                // Sandboxed agents attach their egress proxy at session creation.
-                None,
-                runtime.broadcast_tx(),
             )?;
             engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
-            if let Some(sg) = runtime.skill_graph() {
-                engine_inner.set_skill_graph(sg);
+            // Re-register MCP tools into the fresh engine's tool registry.
+            if let Some(mgr) = mcp_manager {
+                mgr.register_into(&engine_inner.tool_registry);
             }
             // Re-register MCP tools into the fresh engine's tool registry.
             if let Some(mgr) = mcp_manager {
@@ -271,9 +297,17 @@ async fn provider_config_from_profile(
             }
         }
         Provider::Anthropic => {
-            let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+            let auth = if profile.auth_method == AuthMethod::OAuth {
+                let access_token =
+                    resolve_anthropic_oauth_api_key(credentials, credentials_path, profile).await?;
+                AnthropicAuth::OAuth { access_token }
+            } else {
+                let api_key =
+                    require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+                AnthropicAuth::ApiKey { api_key }
+            };
             Ok(ProviderConfig::Anthropic {
-                api_key,
+                auth,
                 model: profile.default_model.clone(),
             })
         }
@@ -359,6 +393,68 @@ async fn resolve_openai_oauth_api_key(
 
     Err(AppError::Provider(format!(
         "default profile '{}' is connected with OAuth but no valid credentials were found — please log in again",
+        profile.id
+    )))
+}
+
+async fn resolve_anthropic_oauth_api_key(
+    credentials: &mut CredentialsConfig,
+    credentials_path: &Path,
+    profile: &ProviderProfile,
+) -> Result<String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let secrets = credentials.profiles.get(&profile.id);
+
+    let access_token = secrets
+        .and_then(|s| s.access_token.as_deref())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_owned);
+    let expires_at = secrets.and_then(|s| s.token_expires_at);
+    let is_expired = expires_at.is_some_and(|exp| exp <= now);
+
+    if let Some(token) = access_token {
+        if !is_expired {
+            return Ok(token);
+        }
+
+        let refresh_token = secrets
+            .and_then(|s| s.refresh_token.as_deref())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned);
+
+        if let Some(ref_token) = refresh_token {
+            let client = reqwest::Client::new();
+            match refresh_anthropic_token(&client, &ref_token).await {
+                Ok(new_tokens) => {
+                    let entry = credentials
+                        .profiles
+                        .entry(profile.id.clone())
+                        .or_default();
+                    entry.access_token = Some(new_tokens.access_token.clone());
+                    entry.refresh_token = Some(new_tokens.refresh_token);
+                    entry.token_expires_at = Some(new_tokens.expires_at);
+                    credentials.save_to_path(credentials_path)?;
+                    return Ok(new_tokens.access_token);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Anthropic OAuth token refresh failed for profile '{}': {err}; falling back to cached access token",
+                        profile.id
+                    );
+                    return Ok(token);
+                }
+            }
+        }
+    }
+
+    Err(AppError::Provider(format!(
+        "default profile '{}' is connected with Anthropic OAuth but no valid credentials were found — please log in again",
         profile.id
     )))
 }

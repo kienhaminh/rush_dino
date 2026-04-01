@@ -358,6 +358,13 @@ fn build_channel_statuses(
             true,
             None,
         ),
+        (
+            "mobile",
+            "Mobile Gateway",
+            config.gateway.mobile.enabled,
+            !config.gateway.mobile.publish_host.trim().is_empty(),
+            Some("Mobile gateway publish host missing".to_owned()),
+        ),
     ]
     .into_iter()
     .map(

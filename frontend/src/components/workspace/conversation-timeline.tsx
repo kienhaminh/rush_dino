@@ -5,18 +5,34 @@ import { DelegateBlock } from './delegate-block';
 import { ThinkingBlock } from './thinking-block';
 import { ToolUseBlock } from './tool-use-block';
 import { ToolUseGroup } from './tool-use-group';
-import type { ConversationItem } from '@/lib/types';
+import { ConversationMetricsBar } from './conversation-metrics-bar';
+import type { ConversationItem, ConversationMetrics } from '@/lib/types';
+
+const TYPING_DOTS = [
+  { key: 'a', delay: '0s' },
+  { key: 'b', delay: '0.15s' },
+  { key: 'c', delay: '0.3s' },
+] as const;
 
 interface ConversationTimelineProps {
   items: ConversationItem[];
   isStreaming?: boolean;
+  latestMetrics?: ConversationMetrics | null;
+  onResolveInputRequest?: (
+    requestId: string,
+    status: 'submitted' | 'cancelled',
+    values?: Record<string, unknown> | null,
+  ) => void;
 }
 
 // ── Grouping ─────────────────────────────────────────────────────────────────
 // Consecutive tool_use items are bundled into a single collapsible group so
 // the timeline stays clean even when the agent calls many tools in a turn.
+// Thinking items that immediately precede a tool group are bundled into that
+// same group so they appear inside the collapsible alongside the tool calls.
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool_use' }>;
+type ThinkingItem = Extract<ConversationItem, { kind: 'thinking' }>;
 
 const DELEGATE_TOOLS = new Set(['delegate', 'delegate_to_agent', 'spawn_agents']);
 
@@ -26,14 +42,47 @@ function isDelegate(item: ConversationItem): item is ToolItem {
 
 type DisplayGroup =
   | { type: 'item'; item: ConversationItem }
-  | { type: 'tool_group'; tools: ToolItem[]; id: string }
+  | { type: 'tool_group'; thinking: ThinkingItem[]; tools: ToolItem[]; id: string }
   | { type: 'delegate_group'; delegates: ToolItem[]; id: string };
 
 function groupItems(items: ConversationItem[]): DisplayGroup[] {
   const result: DisplayGroup[] = [];
   let i = 0;
   while (i < items.length) {
-    if (items[i].kind === 'tool_use') {
+    // Collect a run of thinking items, then decide whether to attach them to
+    // the following tool group or emit them as standalone items.
+    if (items[i].kind === 'thinking') {
+      const thinking: ThinkingItem[] = [];
+      while (i < items.length && items[i].kind === 'thinking') {
+        thinking.push(items[i] as ThinkingItem);
+        i++;
+      }
+      // Peek: are the next items tool_use? If so, bundle thinking with them.
+      if (i < items.length && items[i].kind === 'tool_use') {
+        const tools: ToolItem[] = [];
+        const delegates: ToolItem[] = [];
+        while (i < items.length && items[i].kind === 'tool_use') {
+          if (isDelegate(items[i])) {
+            delegates.push(items[i] as ToolItem);
+          } else {
+            tools.push(items[i] as ToolItem);
+          }
+          i++;
+        }
+        if (tools.length > 0) {
+          result.push({ type: 'tool_group', thinking, tools, id: thinking[0]?.id ?? tools[0].id });
+        } else {
+          // Only delegates — emit thinking standalone, then delegates.
+          for (const t of thinking) result.push({ type: 'item', item: t });
+        }
+        if (delegates.length > 0) {
+          result.push({ type: 'delegate_group', delegates, id: delegates[0].id });
+        }
+      } else {
+        // Not followed by tools — keep thinking as standalone items.
+        for (const t of thinking) result.push({ type: 'item', item: t });
+      }
+    } else if (items[i].kind === 'tool_use') {
       const tools: ToolItem[] = [];
       const delegates: ToolItem[] = [];
       while (i < items.length && items[i].kind === 'tool_use') {
@@ -45,7 +94,7 @@ function groupItems(items: ConversationItem[]): DisplayGroup[] {
         i++;
       }
       if (tools.length > 0) {
-        result.push({ type: 'tool_group', tools, id: tools[0].id });
+        result.push({ type: 'tool_group', thinking: [], tools, id: tools[0].id });
       }
       if (delegates.length > 0) {
         result.push({ type: 'delegate_group', delegates, id: delegates[0].id });
@@ -65,7 +114,10 @@ interface TimelineItemProps {
   showCursor?: boolean;
 }
 
-const TimelineItem = memo(function TimelineItem({ item, showCursor }: TimelineItemProps) {
+const TimelineItem = memo(function TimelineItem({
+  item,
+  showCursor,
+}: TimelineItemProps) {
   if (item.kind === 'user') {
     return (
       <div className="flex justify-end py-1 mt-6">
@@ -137,6 +189,8 @@ const TimelineItem = memo(function TimelineItem({ item, showCursor }: TimelineIt
 export const ConversationTimeline = memo(function ConversationTimeline({
   items,
   isStreaming,
+  latestMetrics,
+  onResolveInputRequest,
 }: ConversationTimelineProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -146,7 +200,14 @@ export const ConversationTimeline = memo(function ConversationTimeline({
     el.scrollTop = el.scrollHeight;
   }, [items, isStreaming]);
 
-  const displayGroups = useMemo(() => groupItems(items), [items]);
+  // input_request items are never rendered in the timeline (they live in the
+  // bottom panel while pending and are dismissed after resolution). Exclude them
+  // before grouping so they don't break the thinking↔tool bundling logic.
+  const timelineItems = useMemo(
+    () => items.filter((item) => item.kind !== 'input_request'),
+    [items],
+  );
+  const displayGroups = useMemo(() => groupItems(timelineItems), [timelineItems]);
 
   if (items.length === 0) {
     return (
@@ -163,7 +224,10 @@ export const ConversationTimeline = memo(function ConversationTimeline({
   }
 
   const hasLiveThinking = items.some((item) => item.kind === 'thinking' && !item.done);
-  const showTypingBubble = isStreaming && !hasLiveThinking;
+  const hasPendingInputRequest = items.some(
+    (item) => item.kind === 'input_request' && item.status === 'pending',
+  );
+  const showTypingBubble = isStreaming && !hasLiveThinking && !hasPendingInputRequest;
 
   return (
     <div ref={containerRef} className="flex-1 overflow-y-auto scrollbar-thin px-4 py-8 md:px-8">
@@ -172,7 +236,7 @@ export const ConversationTimeline = memo(function ConversationTimeline({
           const isLast = index === displayGroups.length - 1;
 
           if (group.type === 'tool_group') {
-            return <ToolUseGroup key={group.id} tools={group.tools} />;
+            return <ToolUseGroup key={group.id} thinking={group.thinking} tools={group.tools} />;
           }
 
           if (group.type === 'delegate_group') {
@@ -181,23 +245,28 @@ export const ConversationTimeline = memo(function ConversationTimeline({
 
           const { item } = group;
           const showCursor = isStreaming === true && isLast && item.kind === 'assistant';
+          const showMetrics =
+            !isStreaming && latestMetrics != null && isLast && item.kind === 'assistant';
+
           return (
-            <TimelineItem
-              key={item.id}
-              item={item}
-              showCursor={showCursor}
-            />
+            <div key={item.id}>
+              <TimelineItem
+                item={item}
+                showCursor={showCursor}
+              />
+              {showMetrics && <ConversationMetricsBar metrics={latestMetrics} />}
+            </div>
           );
         })}
 
         {showTypingBubble && (
           <div className="flex justify-start py-1 animate-in fade-in duration-200">
             <div className="flex items-center gap-1.5 py-2">
-              {[0, 1, 2].map((i) => (
+              {TYPING_DOTS.map(({ key, delay }) => (
                 <span
-                  key={i}
+                  key={key}
                   className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30 animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
+                  style={{ animationDelay: delay }}
                 />
               ))}
             </div>

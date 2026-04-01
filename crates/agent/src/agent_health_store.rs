@@ -108,6 +108,31 @@ impl AgentHealthStore {
         let rate = self.get_success_rate(agent_name).await?;
         Ok(rate < (1.0 - CIRCUIT_OPEN_THRESHOLD))
     }
+
+    /// Total number of recorded task outcomes for an agent across all time.
+    pub async fn get_total_tasks(&self, agent_name: &str) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM agent_match_outcomes WHERE agent_name = ?1",
+        )
+        .bind(agent_name)
+        .fetch_one(self.pool.as_ref())
+        .await?;
+        Ok(row.0)
+    }
+
+    /// Delete all recorded outcomes and health events for an agent, resetting
+    /// its health metrics to the initial "healthy" state.
+    pub async fn reset(&self, agent_name: &str) -> Result<()> {
+        sqlx::query("DELETE FROM agent_match_outcomes WHERE agent_name = ?1")
+            .bind(agent_name)
+            .execute(self.pool.as_ref())
+            .await?;
+        sqlx::query("DELETE FROM agent_health_events WHERE agent_name = ?1")
+            .bind(agent_name)
+            .execute(self.pool.as_ref())
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

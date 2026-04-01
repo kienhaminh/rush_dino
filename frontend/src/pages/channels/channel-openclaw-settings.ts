@@ -412,6 +412,17 @@ const SLACK_FIELDS: ChannelSettingField[] = [
   },
 ];
 
+const MOBILE_FIELDS: ChannelSettingField[] = [
+  {
+    key: 'publishHost',
+    label: 'Publish Host',
+    section: 'Connection',
+    type: 'text',
+    placeholder: 'https://rushdino.tailnet.ts.net',
+    description: 'Full base origin the Expo app will use to reach RushDino over Tailscale.',
+  },
+];
+
 const WHATSAPP_FIELDS: ChannelSettingField[] = [
   { key: 'selfChatMode', label: 'Same Phone (Self Chat) Mode', section: 'Connection', type: 'boolean' },
   { key: 'authDir', label: 'Auth Directory', section: 'Connection', type: 'text' },
@@ -608,6 +619,7 @@ const NOSTR_FIELDS: ChannelSettingField[] = [
 const CHANNEL_SETTINGS_FIELDS: Record<ChannelKey, ChannelSettingField[]> = {
   telegram: TELEGRAM_FIELDS,
   discord: DISCORD_FIELDS,
+  mobile: MOBILE_FIELDS,
   slack: SLACK_FIELDS,
   whatsapp: WHATSAPP_FIELDS,
   googlechat: GOOGLE_CHAT_FIELDS,
@@ -617,7 +629,9 @@ const CHANNEL_SETTINGS_FIELDS: Record<ChannelKey, ChannelSettingField[]> = {
 };
 
 export function channelTitle(channel: ChannelKey): string {
-  return channel === 'googlechat' ? 'Google Chat' : channel.charAt(0).toUpperCase() + channel.slice(1);
+  if (channel === 'googlechat') return 'Google Chat';
+  if (channel === 'mobile') return 'Mobile Gateway';
+  return channel.charAt(0).toUpperCase() + channel.slice(1);
 }
 
 export function getOpenClawChannelFields(channel: ChannelKey): ChannelSettingField[] {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
+import { ChevronDownIcon, ChevronUpIcon, SquareIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { WorkflowRunDetail, WorkflowRunListItem } from './workflow-types';
 
@@ -9,7 +9,9 @@ interface WorkflowRunHistoryProps {
   selectedRun: WorkflowRunDetail | null;
   loading: boolean;
   loadingDetail: boolean;
+  cancelling: string | null;
   onSelect: (runId: string) => void;
+  onCancel: (runId: string) => void;
 }
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -32,7 +34,9 @@ export function WorkflowRunHistory({
   selectedRun,
   loading,
   loadingDetail,
+  cancelling,
   onSelect,
+  onCancel,
 }: WorkflowRunHistoryProps) {
   const [open, setOpen] = useState(false);
 
@@ -73,18 +77,31 @@ export function WorkflowRunHistory({
                 const isSelected = run.id === selectedRunId;
                 const statusClass = STATUS_CLASSES[run.status] ?? 'text-muted-foreground bg-muted/10 border-border';
                 const dotClass = STATUS_DOT[run.status] ?? 'bg-muted-foreground';
+                const isActive = run.status === 'running' || run.status === 'queued';
+                const isCancelling = cancelling === run.id;
                 return (
-                  <button
-                    key={run.id}
-                    onClick={() => onSelect(run.id)}
-                    className={`
-                      flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all
-                      ${isSelected ? `${statusClass} ring-1 ring-current/30` : 'border-border bg-background hover:bg-muted/30 text-muted-foreground'}
-                    `}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
-                    {run.id.slice(0, 7)}
-                  </button>
+                  <div key={run.id} className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => onSelect(run.id)}
+                      className={`
+                        flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all
+                        ${isSelected ? `${statusClass} ring-1 ring-current/30` : 'border-border bg-background hover:bg-muted/30 text-muted-foreground'}
+                      `}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
+                      {run.id.slice(0, 7)}
+                    </button>
+                    {isActive && (
+                      <button
+                        onClick={() => onCancel(run.id)}
+                        disabled={isCancelling}
+                        title="Stop run"
+                        className="w-5 h-5 rounded-full border border-destructive/30 text-destructive/70 hover:text-destructive hover:bg-destructive/10 flex items-center justify-center disabled:opacity-40 transition-colors"
+                      >
+                        <SquareIcon className="w-2.5 h-2.5" />
+                      </button>
+                    )}
+                  </div>
                 );
               })
             )}

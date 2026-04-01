@@ -45,6 +45,41 @@ impl crate::engine::AgentEngine {
             .await
     }
 
+    /// Returns the response duration in milliseconds for the most recent completed
+    /// run associated with this conversation. Returns `None` if no completed run exists
+    /// or if timing data is unavailable.
+    pub async fn latest_run_timing_for_conversation(
+        &self,
+        conversation_id: &str,
+    ) -> Result<Option<i64>> {
+        let runs = self
+            .runtime
+            .list_runs(crate::runtime::RunListFilter {
+                conversation_id: Some(conversation_id.to_owned()),
+                state: Some(crate::runtime::RunState::Completed),
+                limit: 1,
+                ..Default::default()
+            })
+            .await?;
+
+        let Some(run) = runs.into_iter().next() else {
+            return Ok(None);
+        };
+
+        let (Some(started), Some(completed)) = (run.started_at, run.completed_at) else {
+            return Ok(None);
+        };
+
+        let Ok(start) = chrono::DateTime::parse_from_rfc3339(&started) else {
+            return Ok(None);
+        };
+        let Ok(end) = chrono::DateTime::parse_from_rfc3339(&completed) else {
+            return Ok(None);
+        };
+
+        Ok(Some((end - start).num_milliseconds()))
+    }
+
     pub async fn get_conversation_messages(&self, id: &str) -> Result<Vec<Message>> {
         self.conversation.get_messages(id).await
     }
@@ -87,6 +122,15 @@ impl crate::engine::AgentEngine {
         self.runtime.delete_session_runs(id).await
     }
 
+    /// Reset all user sessions (clears messages and runs for every conversation).
+    pub async fn reset_all_sessions(&self) -> Result<()> {
+        let conversations = self.conversation.list_conversations().await?;
+        for conv in &conversations {
+            let _ = self.reset_session(&conv.id).await;
+        }
+        Ok(())
+    }
+
     pub fn config(&self) -> &crate::engine::AgentConfig {
         &self.config
     }
@@ -121,6 +165,14 @@ impl crate::engine::AgentEngine {
 
     pub fn kanban_store(&self) -> &crate::kanban_store::KanbanStore {
         &self.kanban_store
+    }
+
+    pub fn health_store(&self) -> &crate::agent_health_store::AgentHealthStore {
+        &self.health_store
+    }
+
+    pub fn message_store(&self) -> &crate::agent_message_store::AgentMessageStore {
+        &self.message_store
     }
 
     pub fn skill_manager(&self) -> &crate::skill_manager::SkillManager {

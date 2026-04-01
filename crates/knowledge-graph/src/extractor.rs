@@ -1,4 +1,3 @@
-use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -29,22 +28,8 @@ pub async fn extract_triples(
 
     let request = ChatRequest {
         messages: vec![
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::System,
-                content: "Extract factual triples from user text. Return strict JSON only with shape {\"triples\":[{\"subject\":string,\"predicate\":string,\"object\":string,\"subject_type\":string|null,\"object_type\":string|null,\"confidence\":number|null,\"evidence_snippet\":string|null}]}. Use lowercase snake_case predicates. Omit uncertain claims.".to_owned(),
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
-            Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::User,
-                content: clipped_owned,
-                tool_calls: None,
-                rich_content: None,
-                created_at: Utc::now(),
-            },
+            Message::new(Uuid::new_v4().to_string(), Role::System, "Extract factual triples from user text. Return strict JSON only with shape {\"triples\":[{\"subject\":string,\"predicate\":string,\"object\":string,\"subject_type\":string|null,\"object_type\":string|null,\"confidence\":number|null,\"evidence_snippet\":string|null}]}. Use lowercase snake_case predicates. Omit uncertain claims."),
+            Message::new(Uuid::new_v4().to_string(), Role::User, clipped_owned),
         ],
         tools: None,
         temperature: Some(0.0),

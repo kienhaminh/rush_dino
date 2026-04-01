@@ -1,16 +1,9 @@
+import { PlayIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { WorkflowSidebar } from './WorkflowSidebar';
 import { WorkflowPipelineCanvas } from './WorkflowPipelineCanvas';
 import { WorkflowRunHistory } from './WorkflowRunHistory';
 import { useWorkflowPageState } from './use-workflow-page-state';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { PlayIcon, Trash2Icon, SaveIcon } from 'lucide-react';
-import type { WorkflowDraft } from './WorkflowEditorPanel';
 
 export function WorkflowsPage() {
   const {
@@ -18,126 +11,88 @@ export function WorkflowsPage() {
     agents,
     selectedWorkflowId,
     setSelectedWorkflowId,
-    draft,
-    setDraft,
+    workflow,
     runs,
     selectedRunId,
     setSelectedRunId,
     selectedRun,
     loadingWorkflows,
-    loadingDetail,
     loadingRuns,
     loadingRunDetail,
-    saving,
-    deleting,
     running,
+    cancelling,
     error,
-    handleCreate,
-    handleSave,
-    handleDelete,
     handleRun,
+    handleCancel,
   } = useWorkflowPageState();
 
   return (
     <div className="flex h-full w-full overflow-hidden flex-col bg-background">
-        {/* Header bar: workflow picker + name + description + status + controls */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-border/50 bg-card/20 flex-shrink-0">
-          <WorkflowSidebar
-            workflows={workflowSummaries}
-            selectedId={selectedWorkflowId}
-            loading={loadingWorkflows}
-            onSelect={setSelectedWorkflowId}
-            onCreate={handleCreate}
-          />
-          {draft ? (
-            <>
-              <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-                <input
-                  value={draft.name}
-                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                  placeholder="Workflow name"
-                  className="bg-transparent text-sm font-semibold placeholder:text-muted-foreground/50 outline-none leading-tight"
-                />
-                <input
-                  value={draft.description}
-                  onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-                  placeholder="Add a description…"
-                  className="bg-transparent text-xs text-muted-foreground placeholder:text-muted-foreground/40 outline-none leading-tight"
-                />
-              </div>
-              <Select
-                value={draft.status}
-                onValueChange={(val) => setDraft({ ...draft, status: val as WorkflowDraft['status'] })}
-              >
-                <SelectTrigger className="h-7 w-24 text-xs border-border/60">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">draft</SelectItem>
-                  <SelectItem value="active">active</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleRun}
-                  disabled={running || draft.status !== 'active' || draft.steps.length === 0}
-                  className="h-7 px-2.5 rounded-md border border-border bg-background/70 hover:bg-muted/40 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
-                >
-                  <PlayIcon className="w-3 h-3" />
-                  {running ? 'Running…' : 'Run'}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting || !draft.id}
-                  className="h-7 px-2.5 rounded-md border border-destructive/30 text-destructive/70 hover:text-destructive hover:bg-destructive/10 text-xs font-medium disabled:opacity-40 flex items-center gap-1.5 transition-colors"
-                >
-                  <Trash2Icon className="w-3 h-3" />
-                  {deleting ? 'Deleting…' : 'Delete'}
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || loadingDetail}
-                  className="h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <SaveIcon className="w-3 h-3" />
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">Select a workflow or create a new one.</p>
-          )}
-        </div>
-
-        {/* Error banner */}
-        {error ? (
-          <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex-shrink-0">
-            {error}
-          </div>
-        ) : null}
-
-        {/* Pipeline canvas — fills remaining space */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {draft ? (
-            <WorkflowPipelineCanvas key={draft.id ?? 'new'} draft={draft} agents={agents} onChange={setDraft} />
-          ) : (
-            <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-              Select a workflow or create a new one.
+      {/* Header bar: workflow picker + name + description + status + controls */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border/50 bg-card/20 flex-shrink-0">
+        <WorkflowSidebar
+          workflows={workflowSummaries}
+          selectedId={selectedWorkflowId}
+          loading={loadingWorkflows}
+          onSelect={setSelectedWorkflowId}
+        />
+        {workflow ? (
+          <>
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+              <span className="text-sm font-semibold truncate">{workflow.name}</span>
+              <span className="text-xs text-muted-foreground truncate">{workflow.description}</span>
             </div>
-          )}
-        </div>
-
-        {/* Run history — collapsible bottom panel */}
-        {draft?.id && (
-          <WorkflowRunHistory
-            runs={runs}
-            selectedRunId={selectedRunId}
-            selectedRun={selectedRun}
-            loading={loadingRuns}
-            loadingDetail={loadingRunDetail}
-            onSelect={setSelectedRunId}
-          />
+            <Badge
+              variant={workflow.status === 'active' ? 'secondary' : 'outline'}
+              className="text-[10px] shrink-0"
+            >
+              {workflow.status}
+            </Badge>
+            <button
+              onClick={() => handleRun()}
+              disabled={running || workflow.status !== 'active' || workflow.steps.length === 0}
+              className="h-7 px-2.5 rounded-md border border-border bg-background/70 hover:bg-muted/40 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
+            >
+              <PlayIcon className="w-3 h-3" />
+              {running ? 'Running…' : 'Run'}
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-muted-foreground">Select a workflow.</p>
         )}
+      </div>
+
+      {/* Error banner */}
+      {error ? (
+        <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex-shrink-0">
+          {error}
+        </div>
+      ) : null}
+
+      {/* Pipeline canvas — fills remaining space */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {workflow ? (
+          <WorkflowPipelineCanvas key={workflow.id} workflow={workflow} agents={agents} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            Select a workflow.
+          </div>
+        )}
+      </div>
+
+      {/* Run history — collapsible bottom panel */}
+      {workflow && (
+        <WorkflowRunHistory
+          runs={runs}
+          selectedRunId={selectedRunId}
+          selectedRun={selectedRun}
+          loading={loadingRuns}
+          loadingDetail={loadingRunDetail}
+          cancelling={cancelling}
+          onSelect={setSelectedRunId}
+          onCancel={handleCancel}
+        />
+      )}
     </div>
   );
 }

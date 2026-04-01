@@ -120,7 +120,6 @@ impl UsageMetricsStore {
             "SELECT provider, model, prompt_tokens, completion_tokens, total_tokens, created_at \
              FROM usage_metrics \
              WHERE conversation_id = ?1 \
-               AND (auth_method IS NULL OR auth_method != 'oauth') \
              ORDER BY created_at DESC \
              LIMIT 1",
         )

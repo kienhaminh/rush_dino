@@ -1,4 +1,3 @@
-use chrono::Utc;
 use uuid::Uuid;
 
 use rushdino_common::models::{Message, Role};
@@ -12,36 +11,12 @@ use crate::{
     tool_registry::SessionToolContext,
 };
 
-/// Resolve skills for the system prompt: graph-scored top-K if available, flat list fallback.
+/// Resolve skills for the system prompt: flat list of all registered skills.
 pub async fn resolve_skills_for_prompt(
     skill_manager: &SkillManager,
-    skill_graph: Option<&rushdino_skill_graph::SkillGraphService>,
-    user_input: &str,
+    _user_input: &str,
 ) -> Vec<SkillEntry> {
-    // Try graph-based routing first
-    if let Some(graph) = skill_graph {
-        match graph.query_top_skills(user_input, 5).await {
-            Ok(scored) if scored.len() >= 2 => {
-                return scored
-                    .into_iter()
-                    .map(|s| SkillEntry {
-                        name: s.name,
-                        description: s.description,
-                    })
-                    .collect();
-            }
-            Ok(_) => {
-                tracing::debug!(
-                    "skill graph returned fewer than 2 results, falling back to flat list"
-                );
-            }
-            Err(err) => {
-                tracing::warn!("skill graph query failed, falling back to flat list: {err}");
-            }
-        }
-    }
-
-    // Fallback: flat list of all skills
+    // Flat list of all skills
     skill_manager
         .list()
         .unwrap_or_default()
@@ -58,6 +33,48 @@ pub fn title_from(input: &str) -> &str {
         return input;
     }
     &input[..clamp_to_char_boundary(input, 60)]
+}
+
+/// Derive a human-readable title from a structured session ID.
+/// Returns `None` for opaque UUIDs (fall back to first-message title).
+///
+/// Examples:
+///   "main"                    → "Main"
+///   "main::telegram"          → "Telegram"
+///   "main::mobile::842UGSWI"  → "Mobile · 842UGSWI"
+///   "writer"                  → "Writer"
+///   "code-reviewer"           → "Code Reviewer"
+pub fn session_title_from_id(id: &str) -> Option<String> {
+    // UUID: 36 chars, exactly 4 hyphens at fixed positions — use first-message title.
+    if id.len() == 36 && id.chars().filter(|c| *c == '-').count() == 4 {
+        return None;
+    }
+    if id == "main" {
+        return Some("Main".to_owned());
+    }
+    if let Some(rest) = id.strip_prefix("main::") {
+        let parts: Vec<&str> = rest.split("::").collect();
+        let channel = capitalize_word(parts[0]);
+        if parts.len() > 1 {
+            return Some(format!("{} · {}", channel, parts[1..].join(" · ")));
+        }
+        return Some(channel);
+    }
+    // Agent name: "code-reviewer" → "Code Reviewer"
+    Some(
+        id.split('-')
+            .map(capitalize_word)
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
+}
+
+fn capitalize_word(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
 }
 
 pub fn system_message(
@@ -98,25 +115,11 @@ pub fn system_message(
         workspace_dir: Some(memory.root().display().to_string()),
     });
 
-    Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::System,
-        content,
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    }
+    Message::new(Uuid::new_v4().to_string(), Role::System, content)
 }
 
 pub fn user_message(input: &str) -> Message {
-    Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::User,
-        content: input.to_owned(),
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    }
+    Message::new(Uuid::new_v4().to_string(), Role::User, input.to_owned())
 }
 
 #[cfg(test)]
@@ -129,13 +132,14 @@ mod tests {
         let config = AgentConfig::default();
         let temp = tempfile::tempdir().unwrap();
         let memory = MemoryManager::new(temp.path().to_owned());
-        let session_ctx = SessionToolContext::new(vec![], &[]);
+        let session_ctx = SessionToolContext::new(vec![]);
         let agents = vec![AgentTemplate {
             name: "researcher".to_owned(),
             description: "Research specialist".to_owned(),
             system_prompt: String::new(),
             icon: Some("📚".to_owned()),
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,

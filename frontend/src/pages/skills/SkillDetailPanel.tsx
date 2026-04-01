@@ -1,13 +1,13 @@
 import { XIcon, UserPlusIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { SkillNode } from './skill-graph-types';
+import type { SkillRecord } from '@/lib/types';
 import type { AgentRecord } from '@/pages/agents/agent-types';
 
-/** Derive an emoji from skill name or tags (best-effort heuristic) */
-function deriveSkillEmoji(skill: SkillNode): string {
+/** Derive an emoji from skill name or tools (best-effort heuristic) */
+function deriveSkillEmoji(skill: SkillRecord): string {
   const name = skill.name.toLowerCase();
-  const tags = skill.tags.map((t) => t.toLowerCase());
-  const combined = [name, ...tags].join(' ');
+  const tools = skill.tools.map((t) => t.toLowerCase());
+  const combined = [name, ...tools].join(' ');
 
   if (combined.includes('code') || combined.includes('dev') || combined.includes('program')) return '💻';
   if (combined.includes('write') || combined.includes('content') || combined.includes('text')) return '✍️';
@@ -25,7 +25,7 @@ function deriveSkillEmoji(skill: SkillNode): string {
 }
 
 export interface SkillDetailPanelProps {
-  skill: SkillNode | null;
+  skill: SkillRecord | null;
   agents: AgentRecord[];
   assignedAgentIds: string[];
   onClose: () => void;
@@ -42,7 +42,7 @@ export function SkillDetailPanel({
   onUnassign,
 }: SkillDetailPanelProps) {
   const isOpen = skill !== null;
-  const isCustom = skill ? skill.tags.includes('workspace') : false;
+  const isCustom = skill ? !skill.isBuiltIn : false;
 
   // Agents already assigned to this skill
   const assignedAgents = agents.filter((a) => assignedAgentIds.includes(a.id));
@@ -54,6 +54,8 @@ export function SkillDetailPanel({
       {/* Backdrop */}
       <div
         onClick={onClose}
+        onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+        role="presentation"
         style={{
           position: 'absolute',
           inset: 0,
@@ -68,6 +70,7 @@ export function SkillDetailPanel({
       {/* Panel — slides in from right */}
       <div
         onClick={(e) => e.stopPropagation()}
+        role="presentation"
         style={{
           position: 'absolute',
           top: 0,
@@ -109,18 +112,16 @@ export function SkillDetailPanel({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-bold text-white truncate">{skill.name}</span>
-                  {isCustom && (
-                    <span
-                      className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded"
-                      style={{
-                        background: 'rgba(99,102,241,0.15)',
-                        color: '#818cf8',
-                        border: '1px dashed rgba(99,102,241,0.4)',
-                      }}
-                    >
-                      workspace
-                    </span>
-                  )}
+                  <span
+                    className="text-[9px] font-bold tracking-wider uppercase px-1.5 py-0.5 rounded"
+                    style={{
+                      background: isCustom ? 'rgba(139,92,246,0.15)' : 'rgba(99,102,241,0.15)',
+                      color: isCustom ? '#a78bfa' : '#818cf8',
+                      border: isCustom ? '1px dashed rgba(139,92,246,0.4)' : '1px solid rgba(99,102,241,0.3)',
+                    }}
+                  >
+                    {isCustom ? 'custom' : 'built-in'}
+                  </span>
                 </div>
                 {skill.description && (
                   <p className="text-xs mt-1 leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>
@@ -142,12 +143,12 @@ export function SkillDetailPanel({
               </button>
             </div>
 
-            {/* Tags */}
-            {skill.tags.length > 0 && (
+            {/* Tools */}
+            {skill.tools.length > 0 && (
               <div className="px-4 pt-3 pb-1 flex flex-wrap gap-1.5 flex-shrink-0">
-                {skill.tags.map((tag) => (
+                {skill.tools.map((tool) => (
                   <span
-                    key={tag}
+                    key={tool}
                     className="text-[10px] font-medium px-2 py-0.5 rounded-full"
                     style={{
                       background: 'rgba(255,255,255,0.06)',
@@ -155,7 +156,7 @@ export function SkillDetailPanel({
                       border: '1px solid rgba(255,255,255,0.1)',
                     }}
                   >
-                    {tag}
+                    {tool}
                   </span>
                 ))}
               </div>
@@ -164,7 +165,7 @@ export function SkillDetailPanel({
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto min-h-0 px-4 py-3 flex flex-col gap-5">
 
-              {/* Workspace note */}
+              {/* Custom note */}
               {isCustom && (
                 <div
                   className="rounded-lg px-3 py-2 text-xs"

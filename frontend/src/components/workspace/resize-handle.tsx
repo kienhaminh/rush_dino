@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+
+const GRIP_KEYS = ['top', 'mid', 'bot'] as const;
 
 interface ResizeHandleProps {
   /** Current width of the panel being resized */
@@ -26,6 +28,8 @@ export function ResizeHandle({ panelWidth, onResize, min = 200, max = 500, side 
       startWidthRef.current = panelWidth;
       setDragging(true);
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
     },
     [panelWidth],
   );
@@ -43,19 +47,9 @@ export function ResizeHandle({ panelWidth, onResize, min = 200, max = 500, side 
 
   const onPointerUp = useCallback(() => {
     setDragging(false);
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
   }, []);
-
-  // Prevent text selection while dragging
-  useEffect(() => {
-    if (dragging) {
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = 'col-resize';
-      return () => {
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-    }
-  }, [dragging]);
 
   return (
     <div
@@ -81,8 +75,8 @@ export function ResizeHandle({ panelWidth, onResize, min = 200, max = 500, side 
         'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1 transition-opacity duration-150',
         dragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
       )}>
-        {[0, 1, 2].map((i) => (
-          <span key={i} className="block w-[3px] h-[3px] rounded-full bg-[hsl(var(--brand-cyan)/0.5)]" />
+        {GRIP_KEYS.map((k) => (
+          <span key={k} className="block w-[3px] h-[3px] rounded-full bg-[hsl(var(--brand-cyan)/0.5)]" />
         ))}
       </div>
     </div>

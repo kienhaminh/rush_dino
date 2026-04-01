@@ -1,6 +1,17 @@
 use colored::Colorize;
 use rushdino_common::{asset_sync, init, Result};
 
+fn install_agent_cli_skill(data_dir: &std::path::Path) -> rushdino_common::Result<()> {
+    let skill_dir = data_dir.join("skills").join("agent-cli");
+    std::fs::create_dir_all(&skill_dir)?;
+    let dest = skill_dir.join("SKILL.md");
+    if !dest.exists() {
+        let content = include_str!("../../../agent/src/skills/agent-cli/SKILL.md");
+        std::fs::write(&dest, content)?;
+    }
+    Ok(())
+}
+
 pub async fn run() -> Result<()> {
     println!(
         "\n{} {}",
@@ -13,9 +24,12 @@ pub async fn run() -> Result<()> {
     let home = init::ensure_rushdino_dir()?;
     println!("{} Created directories at {}", "✔".green(), home.display());
 
-    // Download bundled agent templates and skill files from GitHub.
+    install_agent_cli_skill(&home)?;
+
+    // Sync bundled agent templates and skill files from GitHub.
+    // Uses version + hash manifest to detect updates and preserve user modifications.
     println!("{}", "Syncing bundled assets...".blue().bold());
-    match asset_sync::seed_bundled_assets(&home).await {
+    match asset_sync::sync_bundled_assets(&home).await {
         Ok(()) => println!("{} Bundled agents and skills synced", "✔".green()),
         Err(e) => println!(
             "{} Asset sync failed (you can retry by running `rushdino init` again): {e}",

@@ -69,6 +69,16 @@ impl ConversationManager {
         Ok(conversation)
     }
 
+    /// Ensure a conversation exists for `id`, creating it with `title` if it has no messages yet.
+    /// Returns the existing messages (empty vec if newly created).
+    pub async fn ensure_conversation(&self, id: &str, title: &str) -> Result<Vec<rushdino_common::models::Message>> {
+        let messages = self.get_messages(id).await.unwrap_or_default();
+        if messages.is_empty() {
+            let _ = self.create_conversation_with_id(id, title).await?;
+        }
+        Ok(messages)
+    }
+
     /// Create an isolated conversation for a sub-agent delegation. These are marked
     /// `kind = 'agent'` so they are excluded from the main session list.
     pub async fn create_agent_conversation(&self, id: &str, title: &str) -> Result<Conversation> {
@@ -106,7 +116,7 @@ impl ConversationManager {
     pub async fn list_agent_conversations(&self) -> Result<Vec<Conversation>> {
         let rows = sqlx::query(
             "SELECT id, title, created_at, updated_at FROM conversations \
-             WHERE kind = 'agent' AND archived_at IS NULL \
+             WHERE kind = 'agent' \
              ORDER BY updated_at DESC LIMIT 50",
         )
         .fetch_all(self.pool.as_ref())
@@ -239,7 +249,7 @@ impl ConversationManager {
             .map_err(|e| AppError::Validation(format!("invalid rich_content JSON: {e}")))?;
 
         sqlx::query(
-            "INSERT INTO messages (id, conversation_id, role, content, tool_calls, rich_content, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO messages (id, conversation_id, role, content, tool_calls, rich_content, thinking, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(&message.id)
         .bind(conversation_id)
@@ -247,6 +257,7 @@ impl ConversationManager {
         .bind(&message.content)
         .bind(tool_calls)
         .bind(rich_content)
+        .bind(&message.thinking)
         .bind(message.created_at.to_rfc3339())
         .execute(self.pool.as_ref())
         .await?;
@@ -262,7 +273,7 @@ impl ConversationManager {
 
     pub async fn get_messages(&self, conversation_id: &str) -> Result<Vec<Message>> {
         let rows = sqlx::query(
-            "SELECT id, role, content, tool_calls, rich_content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, role, content, tool_calls, rich_content, thinking, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )
         .bind(conversation_id)
         .fetch_all(self.pool.as_ref())
@@ -305,16 +316,9 @@ mod tests {
 
     async fn setup_manager() -> ConversationManager {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
-            }
-            sqlx::query(sql)
-                .execute(&pool)
-                .await
-                .expect("run init migration");
-        }
+        rushdino_common::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
         ConversationManager::new(Arc::new(pool))
     }
 
@@ -334,6 +338,7 @@ mod tests {
                     content: "hello".to_owned(),
                     tool_calls: None,
                     rich_content: None,
+                    thinking: None,
                     created_at: Utc::now(),
                 },
             )

@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::{Arc, Weak}};
 use sqlx::SqlitePool;
 use rushdino_common::Result;
 use rushdino_providers::Provider;
-use rushdino_security::egress_proxy::EgressProxy;
+use rushdino_security::guardrail::pipeline::GuardrailPipeline;
 
 use crate::{
     agent_health_store::AgentHealthStore,
@@ -22,7 +22,7 @@ use crate::{
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
         agent_inbox::AgentInboxTool,
-        cron_tools::{cron_list_tool, cron_manage_tool},
+        cron_tools::{cron_list_tool, cron_manage_tool, AgentTurnCtx},
         delegate_to_agent::DelegateToAgentTool,
         kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
         team_status::TeamStatusTool,
@@ -36,11 +36,11 @@ use crate::{
         memory_search::MemorySearchTool,
         memory_write::MemoryWriteTool,
         present_message::PresentMessageTool,
+        request_user_input::RequestUserInputTool,
         run_workflow::RunWorkflowTool,
         session_tools::{SessionManageTool, SessionSendTool},
         bash::ShellExecTool,
         spawn_agent::SpawnAgentTool,
-        tool_search::ToolSearchTool,
         web_fetch::WebFetchTool,
         web_search::WebSearchTool,
         workflow_manage::WorkflowManageTool,
@@ -49,44 +49,21 @@ use crate::{
     workflow_runner::WorkflowRunner,
 };
 
-pub const CORE_TOOLS: &[&str] = &[
-    // File & shell
-    "bash",
-    "edit",
-    "glob",
-    "grep",
-    "read",
-    "write",
-    // Memory
-    "memory_search",
-    "memory_write",
-    // Communication
-    "message",
-    // Web
-    "web_fetch",
-    "web_search",
-    // Agent coordination
-    "delegate",
-    "session_manage",
-    "session_send",
-    "spawn_agent",
-    // Workflows
-    "run_workflow",
-    "workflow_manage",
-    // Scheduling
-    "cron_list",
-    "cron_manage",
-    // Kanban / inter-agent task board
-    "claim_task",
-    "post_task",
-    "review_task",
-    "update_task",
-    "team_status",
-    // Inter-agent messaging
-    "agent_inbox",
-    // Tool discovery
-    "tool_search",
-];
+/// All inputs required to build a set of agent engine dependencies.
+pub struct EngineBuildInput {
+    pub provider: Arc<Provider>,
+    pub pool: Arc<SqlitePool>,
+    pub home_dir: PathBuf,
+    pub brave_api_key: Option<String>,
+    pub gemini_api_key: Option<String>,
+    pub config: AgentConfig,
+    pub runtime: Arc<AgentRuntime>,
+    pub system_broker: SharedSystemBroker,
+    pub knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
+    // TODO(Task 10): wire guardrail pipeline to web tools for network policy enforcement.
+    pub guardrail_pipeline: Option<Arc<GuardrailPipeline>>,
+    pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
+}
 
 pub struct EngineDeps {
     pub pool: Arc<SqlitePool>,
@@ -108,21 +85,20 @@ pub struct EngineDeps {
     pub task_notify: Arc<tokio::sync::Notify>,
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn build_engine_deps(
-    provider: Arc<Provider>,
-    pool: Arc<SqlitePool>,
-    home_dir: PathBuf,
-    brave_api_key: Option<String>,
-    gemini_api_key: Option<String>,
-    config: &AgentConfig,
-    runtime: Arc<AgentRuntime>,
-    system_broker: SharedSystemBroker,
-    knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-    // Optional sandbox egress proxy — pass Some to enforce network policy in web tools.
-    egress_proxy: Option<Arc<EgressProxy>>,
-    broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
-) -> Result<EngineDeps> {
+pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
+    let EngineBuildInput {
+        provider,
+        pool,
+        home_dir,
+        brave_api_key,
+        gemini_api_key,
+        config,
+        runtime,
+        system_broker,
+        knowledge_graph,
+        guardrail_pipeline: _guardrail_pipeline,
+        broadcast_tx,
+    } = input;
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
     let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
@@ -149,7 +125,6 @@ pub fn build_engine_deps(
     let home_c = home_dir.clone();
     let brave_c = brave_api_key.clone();
     let system_broker_c = system_broker.clone();
-    let egress_proxy_c = egress_proxy.clone();
     let graph_c = knowledge_graph.clone();
     let tool_timeout = config.tool_timeout_secs;
 
@@ -158,29 +133,27 @@ pub fn build_engine_deps(
     // is only available in the second Arc::new_cyclic below. It is registered
     // there alongside SessionSendTool.
     let registry = Arc::new_cyclic(|_weak_registry| {
-        let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c);
+        let shell_exec = ShellExecTool::new(tool_timeout, system_broker_c.clone());
 
         let r = ToolRegistry::new();
-        // Build WebSearchTool, optionally attaching the sandbox egress proxy.
-        let mut web_search = WebSearchTool::new(
+        // Build WebSearchTool.
+        let web_search = WebSearchTool::new(
             "https://api.search.brave.com/res/v1/web/search".to_owned(),
             brave_c,
         );
-        if let Some(proxy) = &egress_proxy_c {
-            web_search = web_search.with_egress_proxy(proxy.clone());
-        }
         r.register(web_search);
         r.register(ImageTool::new(
             gemini_api_key,
             home_c.join("documents/images"),
         ));
         r.register(FileReadTool::new(home_c.clone()));
-        r.register(FileWriteTool::new(home_c.clone()));
-        r.register(FileEditTool::new(home_c.clone()));
+        r.register(FileWriteTool::new(home_c.clone()).with_broker(system_broker_c.clone()));
+        r.register(FileEditTool::new(home_c.clone()).with_broker(system_broker_c.clone()));
         r.register(GlobSearchTool::new(home_c.clone()));
         r.register(GrepSearchTool::new(home_c.clone()));
         r.register(shell_exec);
         r.register(PresentMessageTool::new());
+        r.register(RequestUserInputTool::new(system_broker_c.clone()));
         r.register(MemorySearchTool::new(memory_c.clone()));
         r.register(MemoryWriteTool::new(memory_c, graph_c.clone()));
         r.register(WorkflowManageTool::new(
@@ -194,11 +167,8 @@ pub fn build_engine_deps(
         r
     });
 
-    // Build WebFetchTool, optionally attaching the sandbox egress proxy and provider.
-    let mut web_fetch = WebFetchTool::new().with_provider(provider.clone());
-    if let Some(proxy) = &egress_proxy {
-        web_fetch = web_fetch.with_egress_proxy(proxy.clone());
-    }
+    // Build WebFetchTool, attaching the provider.
+    let web_fetch = WebFetchTool::new().with_provider(provider.clone());
     registry.register(web_fetch);
     registry.register(SessionManageTool::new(conversation.clone()));
     registry.register(cron_list_tool(cron_manager.clone()));
@@ -228,17 +198,17 @@ pub fn build_engine_deps(
     let workflow_runner_once_c = workflow_runner_once.clone();
     let session_ctx = Arc::new_cyclic(|weak: &Weak<SessionToolContext>| {
         // WorkflowRunner and cron_manage need session_ctx; build WorkflowRunner here.
-        let workflow_runner = Arc::new(WorkflowRunner::new(
-            provider.clone(),
-            registry.clone(),
-            weak.clone(),
-            conversation.clone(),
-            memory.clone(),
-            agent_manager.clone(),
-            workflow_manager.clone(),
-            runtime.clone(),
-            config.clone(),
-        ));
+        let workflow_runner = Arc::new(WorkflowRunner {
+            provider: provider.clone(),
+            tool_registry: registry.clone(),
+            session_ctx: weak.clone(),
+            conversation: conversation.clone(),
+            memory: memory.clone(),
+            agent_manager: agent_manager.clone(),
+            manager: workflow_manager.clone(),
+            runtime: runtime.clone(),
+            config: config.clone(),
+        });
         let _ = workflow_runner_once_c.set(workflow_runner.clone());
         registry.register(RunWorkflowTool::new(
             workflow_manager_c3,
@@ -257,34 +227,34 @@ pub fn build_engine_deps(
         // Registered here (inside session_ctx's Arc::new_cyclic) so that `weak` is the
         // live back-reference rather than the permanently-dead Weak::new() sentinel that
         // was previously used when the tool was registered in the registry closure.
-        registry.register(DelegateToAgentTool::new(
-            agent_manager.clone(),
-            provider.clone(),
-            config.clone(),
-            Arc::downgrade(&registry),
-            weak.clone(),
-            task_memory.clone(),
-            conversation.clone(),
-            home_dir.clone(),
-        ));
+        registry.register(DelegateToAgentTool {
+            agent_manager: agent_manager.clone(),
+            provider: provider.clone(),
+            config: config.clone(),
+            registry: Arc::downgrade(&registry),
+            session_ctx: weak.clone(),
+            task_memory: task_memory.clone(),
+            conversation: conversation.clone(),
+            home_dir: home_dir.clone(),
+        });
         registry.register(cron_manage_tool(
             cron_manager.clone(),
-            conversation.clone(),
-            provider.clone(),
-            Arc::downgrade(&registry),
-            weak.clone(),
-            memory.clone(),
-            skills.clone(),
-            config.clone(),
+            AgentTurnCtx {
+                conversation: conversation.clone(),
+                provider: provider.clone(),
+                registry: Arc::downgrade(&registry),
+                session_ctx: weak.clone(),
+                memory: memory.clone(),
+                skill_manager: skills.clone(),
+                config: config.clone(),
+            },
             workflow_manager.clone(),
             workflow_runner.clone(),
             runtime.clone(),
             provider.model().to_owned(),
         ));
-        let tool_search = ToolSearchTool::new(weak.clone());
-        registry.register(tool_search);
         let pool = registry.all_tools();
-        SessionToolContext::new(pool, CORE_TOOLS)
+        SessionToolContext::new(pool)
     });
 
     // SAFETY: session_ctx's Arc::new_cyclic closure always sets workflow_runner_once.

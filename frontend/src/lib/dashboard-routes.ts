@@ -16,7 +16,7 @@ export type PrimaryNavId =
   | 'config'
   | 'system';
 
-export type OperationsViewId = 'summary' | 'approvals' | 'diagnostics' | 'analytics';
+export type OperationsViewId = 'summary' | 'diagnostics' | 'analytics';
 export type ConfigSectionId = 'profiles' | 'credentials' | 'server' | 'identity';
 
 export type AdvancedViewId =
@@ -29,8 +29,7 @@ export type AdvancedViewId =
   | 'logs'
   | 'cron'
   | 'nodes'
-  | 'debug'
-  | 'sandbox';
+  | 'debug';
 
 export type PrimaryNavItem = {
   id: PrimaryNavId;
@@ -79,14 +78,14 @@ export const PRIMARY_NAV_ITEMS: PrimaryNavItem[] = [
   {
     id: 'operations',
     label: 'Operations',
-    description: 'Health, approvals, diagnostics, and analytics',
+    description: 'Health, diagnostics, and analytics',
     href: '/operations',
     icon: LayoutDashboard,
   },
   {
     id: 'channels',
-    label: 'Channels',
-    description: 'Channel runtime, configuration, and infrastructure',
+    label: 'Gateway',
+    description: 'Read-only channel status and Workspace handoff',
     href: '/gateway',
     icon: Waypoints,
   },
@@ -119,12 +118,6 @@ export const OPERATIONS_VIEWS: OperationsView[] = [
     label: 'Summary',
     description: 'Current system posture and activity',
     href: '/operations/summary',
-  },
-  {
-    id: 'approvals',
-    label: 'Approvals',
-    description: 'Pending decisions and recent approvals',
-    href: '/approvals',
   },
   {
     id: 'diagnostics',
@@ -178,7 +171,6 @@ export const ADVANCED_VIEWS: AdvancedView[] = [
   { id: 'cron',          label: 'Cron',           description: 'Scheduled task management',                  href: '/cron' },
   { id: 'nodes',         label: 'Nodes',          description: 'Infrastructure and approval nodes',          href: '/system/nodes' },
   { id: 'debug',         label: 'Debug',          description: 'Low-level debugging surfaces',               href: '/system/debug' },
-  { id: 'sandbox',       label: 'Sandbox',        description: 'Full sandbox posture, policies, and live session audit', href: '/sandbox' },
 ];
 
 function normalizePath(pathname: string) {
@@ -198,13 +190,12 @@ export function resolvePageHeader(pathname: string): PageHeader {
     return { id: 'operations', title: 'Metrics', subtitle: 'Usage, cost, and activity analytics' };
   }
 
-  if (normalized === '/approvals') {
-    const view = OPERATIONS_VIEWS.find((v) => v.id === 'approvals');
-    return {
-      id: 'operations',
-      title: view?.label ?? 'Approvals',
-      subtitle: view?.description ?? 'Pending decisions and recent approvals',
-    };
+  if (normalized.startsWith('/approvals')) {
+    return { id: 'operations', title: 'Approvals', subtitle: 'Pending access requests' };
+  }
+
+  if (normalized.startsWith('/messages')) {
+    return { id: 'system', title: 'Messages', subtitle: 'Inter-agent message inbox' };
   }
 
   if (normalized.startsWith('/operations')) {
@@ -214,7 +205,7 @@ export function resolvePageHeader(pathname: string): PageHeader {
   }
 
   if (normalized.startsWith('/gateway')) {
-    return { id: 'channels', title: 'Channels', subtitle: 'Channel runtime, settings, and infrastructure' };
+    return { id: 'channels', title: 'Gateway', subtitle: 'Read-only channel status and Workspace handoff' };
   }
 
   if (normalized.startsWith('/sessions')) {
@@ -238,6 +229,10 @@ export function resolvePageHeader(pathname: string): PageHeader {
 
   if (normalized === '/kanban') {
     return { id: 'system', title: 'Task Board', subtitle: 'Kanban board for inter-agent collaboration' };
+  }
+
+  if (normalized === '/agent-board') {
+    return { id: 'system', title: 'Team Status', subtitle: 'Agent health, routing tags, tools, and activity' };
   }
 
   // Flat operation routes (agents, board, workflows, skills, etc.)

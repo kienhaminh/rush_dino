@@ -10,6 +10,7 @@ function runStateBadge(state: string) {
     aborted: 'bg-warning/10 text-warning',
     blocked: 'bg-destructive/10 text-destructive',
     awaiting_approval: 'bg-warning/10 text-warning',
+    awaiting_input: 'bg-warning/10 text-warning',
   };
   return styles[state] ?? 'bg-gray-100 text-gray-700';
 }
@@ -23,9 +24,9 @@ export function ToolCallSummaryPanel({ toolCalls }: { toolCalls: { msgIndex: num
       {toolCalls.length === 0 ? (
         <div className="text-xs text-muted-foreground">No tool calls yet</div>
       ) : (
-        toolCalls.map(({ msgIndex, call }, idx) => (
+        toolCalls.map(({ msgIndex, call }) => (
           <div
-            key={`${call.id}-${idx}`}
+            key={call.id}
             className="border border-border rounded px-2 py-1.5 text-xs space-y-0.5 bg-card"
           >
             <div className="flex items-center justify-between">
@@ -213,7 +214,7 @@ export function BootstrapFilesPanel({ soulMemory }: { soulMemory: SoulMemoryStat
       {truncationWarnings.length > 0 && (
         <div className="border border-warning/40 rounded px-2 py-1.5 text-[10px] text-warning space-y-0.5 bg-warning/5">
           <div className="font-semibold">⚠ Truncation</div>
-          {truncationWarnings.map((w, i) => <div key={i}>{w}</div>)}
+          {truncationWarnings.map((w) => <div key={w}>{w}</div>)}
         </div>
       )}
 

@@ -17,9 +17,9 @@ use rushdino_providers::types::ChatResponse;
 
 use crate::{
     engine::{AgentConfig, AssistantRunJob, GatewayRunHandle, WsStreamEvent},
-    engine_bootstrap::{resolve_skills_for_prompt, system_message, title_from, user_message},
+    engine_bootstrap::{resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message},
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
-    runtime::{AgentRuntime, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
+    runtime::{AgentRuntime, AssistantRunParams, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
     tools::bash::{with_tool_execution_context, ToolExecutionContext},
 };
 
@@ -88,20 +88,22 @@ impl crate::engine::AgentEngine {
     ) -> Result<GatewayRunHandle> {
         let (snapshot, start_now) = self
             .runtime
-            .submit_assistant_run_with_origin(
-                gateway_session_id,
+            .submit_assistant_run_with_origin(AssistantRunParams {
+                session_id: gateway_session_id,
                 conversation_id,
-                title_from(user_input),
-                user_input,
-                &self.provider_name,
-                self.provider.model(),
-                RunOriginMetadata {
+                title: session_title_from_id(conversation_id)
+                    .as_deref()
+                    .unwrap_or_else(|| title_from(user_input)),
+                input_text: user_input,
+                provider: &self.provider_name,
+                model: self.provider.model(),
+                origin: RunOriginMetadata {
                     source: Some("gateway".to_owned()),
                     channel_id: Some(channel_id.to_owned()),
                     sender_id: Some(sender_id.to_owned()),
                     gateway_session_id: Some(gateway_session_id.to_owned()),
                 },
-            )
+            })
             .await?;
 
         let (result_tx, result_rx) = oneshot::channel();
@@ -471,21 +473,12 @@ impl crate::engine::AgentEngine {
         conversation_id: &str,
         user_input: &str,
     ) -> Result<(Vec<Message>, usize)> {
-        let mut messages = self
-            .conversation
-            .get_messages(conversation_id)
-            .await
-            .unwrap_or_default();
-        if messages.is_empty() {
-            let _ = self
-                .conversation
-                .create_conversation_with_id(conversation_id, title_from(user_input))
-                .await?;
-        }
+        let title = session_title_from_id(conversation_id)
+            .unwrap_or_else(|| title_from(user_input).to_owned());
+        let mut messages = self.conversation.ensure_conversation(conversation_id, &title).await?;
 
         let skills = resolve_skills_for_prompt(
             self.skill_manager.as_ref(),
-            self.skill_graph.as_ref().map(|sg| sg.as_ref()),
             user_input,
         )
         .await;
@@ -548,12 +541,17 @@ async fn forward_runtime_events(
     ws_event_tx: Option<mpsc::Sender<WsStreamEvent>>,
     gateway_event_tx: Option<mpsc::Sender<StreamingEvent>>,
 ) {
+    let mut streamed_output = String::new();
     while let Some(event) = internal_rx.recv().await {
         if let Some(gateway_event_tx) = gateway_event_tx.as_ref() {
             let _ = gateway_event_tx.send(event.clone()).await;
         }
         match event {
             StreamingEvent::ChatChunk(chunk) => {
+                if !chunk.delta.is_empty() {
+                    streamed_output.push_str(&chunk.delta);
+                    let _ = runtime.record_output_text(&run_id, &streamed_output).await;
+                }
                 if let Some(ws_event_tx) = ws_event_tx.as_ref() {
                     let _ = ws_event_tx
                         .send(WsStreamEvent::ChatChunk {

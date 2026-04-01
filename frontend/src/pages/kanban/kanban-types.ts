@@ -32,6 +32,8 @@ export type KanbanTask = {
   updatedAt: string;
   claimedAt: string | null;
   completedAt: string | null;
+  revisionCount: number;
+  notifyConversationId: string | null;
 };
 
 /** Board statistics. */

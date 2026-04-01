@@ -4,6 +4,7 @@ use axum::{
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
+use serde_json::json;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -24,6 +25,7 @@ pub async fn ws_chat(ws: WebSocketUpgrade, State(state): State<AppState>) -> imp
 async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
     let session_id = Uuid::new_v4().to_string();
     let mut approval_rx = state.gate.register_session(&session_id).await;
+    let mut input_request_rx = state.input_gate.register_session(&session_id).await;
     let mut broadcast_rx = state.chat_broadcast.subscribe();
     let (mut ws_sink, mut ws_recv) = socket.split();
 
@@ -40,13 +42,27 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                 }
                 approval = approval_rx.recv() => {
                     let Some(request) = approval else { break };
-                    let payload = serde_json::json!({
+                    let payload = json!({
                         "type": "approval_request",
                         "request_id": request.request_id,
                         "run_id": request.run_id,
                         "conversation_id": request.conversation_id,
                         "tool": request.tool,
                         "args": request.args,
+                    });
+                    if ws_sink.send(Message::Text(payload.to_string())).await.is_err() {
+                        break;
+                    }
+                }
+                input_request = input_request_rx.recv() => {
+                    let Some(request) = input_request else { break };
+                    let payload = json!({
+                        "type": "input_request",
+                        "request_id": request.request_id,
+                        "run_id": request.run_id,
+                        "conversation_id": request.conversation_id,
+                        "payload": request.payload,
+                        "created_at": request.created_at,
                     });
                     if ws_sink.send(Message::Text(payload.to_string())).await.is_err() {
                         break;
@@ -276,6 +292,7 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
     }
 
     state.gate.unregister_session(&session_id).await;
+    state.input_gate.unregister_session(&session_id).await;
 }
 
 fn parse_approval_response(text: &str) -> Option<(String, bool)> {

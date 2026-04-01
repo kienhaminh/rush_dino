@@ -4,7 +4,6 @@ use std::{
 };
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -39,7 +38,13 @@ pub const MAX_DELEGATION_DEPTH: u8 = 3;
 /// `ToolRegistry → DelegateToAgentTool → ToolRegistry`.
 /// Tools that are always available to every delegated agent, regardless of
 /// the agent template's `tools` field.
-const AGENT_BASE_TOOLS: &[&str] = &["delegate", "message", "tool_search", "post_task", "claim_task", "update_task"];
+const AGENT_BASE_TOOLS: &[&str] = &[
+    "delegate",
+    "message",
+    "post_task",
+    "claim_task",
+    "update_task",
+];
 
 /// Parses the agent template's `tools` field (comma-separated) into a list of
 /// tool names, merging in the always-available base tools.
@@ -64,43 +69,18 @@ pub(crate) fn parse_tool_list(tools: &Option<String>) -> Vec<String> {
 }
 
 pub struct DelegateToAgentTool {
-    agent_manager: Arc<AgentManager>,
-    provider: Arc<Provider>,
-    config: AgentConfig,
+    pub agent_manager: Arc<AgentManager>,
+    pub provider: Arc<Provider>,
+    pub config: AgentConfig,
     /// Weak reference prevents a retain-cycle with the registry that owns this tool.
-    registry: Weak<ToolRegistry>,
+    pub registry: Weak<ToolRegistry>,
     /// Weak reference prevents a retain-cycle with SessionToolContext that indirectly
     /// owns this tool via the tool pool.
-    session_ctx: Weak<SessionToolContext>,
-    task_memory: Arc<AgentTaskMemory>,
-    conversation: Arc<ConversationManager>,
+    pub session_ctx: Weak<SessionToolContext>,
+    pub task_memory: Arc<AgentTaskMemory>,
+    pub conversation: Arc<ConversationManager>,
     /// Home directory (~/.rushdino) used to create per-agent workspace dirs.
-    home_dir: PathBuf,
-}
-
-impl DelegateToAgentTool {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        agent_manager: Arc<AgentManager>,
-        provider: Arc<Provider>,
-        config: AgentConfig,
-        registry: Weak<ToolRegistry>,
-        session_ctx: Weak<SessionToolContext>,
-        task_memory: Arc<AgentTaskMemory>,
-        conversation: Arc<ConversationManager>,
-        home_dir: PathBuf,
-    ) -> Self {
-        Self {
-            agent_manager,
-            provider,
-            config,
-            registry,
-            session_ctx,
-            task_memory,
-            conversation,
-            home_dir,
-        }
-    }
+    pub home_dir: PathBuf,
 }
 
 #[async_trait]
@@ -198,10 +178,13 @@ impl Tool for DelegateToAgentTool {
         };
 
         // --- Per-agent workspace isolation ---
-        let agent_workspace = self.home_dir.join("agents").join(agent_name).join("workspace");
-        std::fs::create_dir_all(&agent_workspace).map_err(|e| {
-            AppError::Agent(format!("failed to create agent workspace: {e}"))
-        })?;
+        let agent_workspace = self
+            .home_dir
+            .join("agents")
+            .join(agent_name)
+            .join("workspace");
+        std::fs::create_dir_all(&agent_workspace)
+            .map_err(|e| AppError::Agent(format!("failed to create agent workspace: {e}")))?;
 
         // Build the full system content: agent prompt + workspace/tool context + task history.
         let mut system_content = template.system_prompt.clone();
@@ -233,8 +216,8 @@ impl Tool for DelegateToAgentTool {
         }
 
         // Inject parent context summary so the child agent knows what the delegating agent was doing.
-        if let Some(parent_ctx_str) = current_tool_execution_context()
-            .and_then(|ctx| ctx.parent_context.clone())
+        if let Some(parent_ctx_str) =
+            current_tool_execution_context().and_then(|ctx| ctx.parent_context.clone())
         {
             system_content.push_str(&format!("\n\n## Parent Context\n\n{parent_ctx_str}"));
         }
@@ -247,30 +230,16 @@ impl Tool for DelegateToAgentTool {
 
         // Create an isolated conversation for this delegation so the sub-agent's
         // message history is persisted and traceable independently.
-        let conv_id = Uuid::new_v4();
-        let conv_id_str = conv_id.to_string();
+        // Use agent name as the stable session ID so each team agent gets one persistent session.
+        let conv_id_str = agent_name.to_lowercase().replace(' ', "-");
         let conv_title = format!("{agent_name}: {}", title_from(task));
         self.conversation
             .create_agent_conversation(&conv_id_str, &conv_title)
             .await?;
 
         // Build the initial message list: target system prompt followed by the task.
-        let sys_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::System,
-            content: system_content,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
-        let user_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::User,
-            content: task.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
+        let sys_msg = Message::new(Uuid::new_v4().to_string(), Role::System, system_content);
+        let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, task.to_owned());
 
         // Persist the opening messages before the loop so they are visible
         // even if the react loop errors out.
@@ -427,6 +396,7 @@ mod tests {
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: true,

@@ -131,13 +131,20 @@ pub async fn list_gateway_sessions(
             .count();
         let active_run_count = runs
             .iter()
-            .filter(|run| matches!(run.state, RunState::Running | RunState::AwaitingApproval))
+            .filter(|run| {
+                matches!(
+                    run.state,
+                    RunState::Running | RunState::AwaitingApproval | RunState::AwaitingInput
+                )
+            })
             .count();
         let queued_run_count = runs
             .iter()
             .filter(|run| run.state == RunState::Queued)
             .count();
-        let status = if pending_approval_count > 0 {
+        let status = if runs.iter().any(|run| run.state == RunState::AwaitingInput) {
+            "awaiting_input"
+        } else if pending_approval_count > 0 {
             "awaiting_approval"
         } else if runs.iter().any(|run| run.state == RunState::Blocked) {
             "blocked"
@@ -238,7 +245,10 @@ pub async fn get_gateway_summary(
                 blocked_run_count: 0,
             });
         entry.recent_run_count += 1;
-        if matches!(run.state, RunState::Running | RunState::AwaitingApproval) {
+        if matches!(
+            run.state,
+            RunState::Running | RunState::AwaitingApproval | RunState::AwaitingInput
+        ) {
             entry.active_run_count += 1;
         }
         if run.state == RunState::Blocked {
@@ -317,7 +327,12 @@ pub async fn get_gateway_summary(
             total_count: runs.len(),
             active_count: runs
                 .iter()
-                .filter(|run| matches!(run.state, RunState::Running | RunState::AwaitingApproval))
+                .filter(|run| {
+                    matches!(
+                        run.state,
+                        RunState::Running | RunState::AwaitingApproval | RunState::AwaitingInput
+                    )
+                })
                 .count(),
             blocked_count: runs
                 .iter()

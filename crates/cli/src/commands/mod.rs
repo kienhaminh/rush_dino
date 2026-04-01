@@ -1,3 +1,7 @@
+pub mod approval;
+pub mod cron;
+pub mod kanban;
+pub mod workflow;
 pub mod agent;
 pub mod agents;
 pub mod browser;
@@ -28,6 +32,21 @@ pub fn rewrite_value(mut doc: String, key: &str, value: &str) -> String {
         }
     }
     doc
+}
+
+/// Like `rewrite_value` but appends the key=value line if the key is not already present.
+pub fn upsert_value(doc: String, key: &str, value: &str) -> String {
+    let quoted = format!("{key} = \"{value}\"");
+    for line in doc.lines() {
+        if line.trim_start().starts_with(&format!("{key} =")) {
+            return doc.replace(line, &quoted);
+        }
+    }
+    if doc.is_empty() {
+        format!("{quoted}\n")
+    } else {
+        format!("{}\n{quoted}\n", doc.trim_end_matches('\n'))
+    }
 }
 
 pub fn rewrite_active_provider(doc: String, provider: &str) -> String {

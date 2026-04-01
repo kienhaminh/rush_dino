@@ -31,9 +31,6 @@ impl Tool for AgentInboxTool {
          Use action 'check' to see unread messages in your inbox."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["message", "inbox", "agent", "send", "communicate"]
-    }
 
     fn parameters(&self) -> Value {
         json!({

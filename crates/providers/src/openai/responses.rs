@@ -144,10 +144,14 @@ impl ResponsesProvider {
         let mut rx = self.stream_chat(request, stream_opts).await?;
         let mut content = String::new();
         let mut tool_calls = Vec::new();
+        let mut usage = None;
 
         while let Some(chunk) = rx.recv().await {
             content.push_str(&chunk.delta);
             tool_calls.extend(chunk.tool_calls);
+            if chunk.usage.is_some() {
+                usage = chunk.usage;
+            }
             if chunk.done {
                 break;
             }
@@ -157,7 +161,7 @@ impl ResponsesProvider {
             content,
             tool_calls,
             rich_content: None,
-            usage: None,
+            usage,
             finish_reason: "stop".to_owned(),
         })
     }
@@ -365,25 +369,11 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn user_message(text: &str) -> Message {
-        Message {
-            id: "user-1".to_owned(),
-            role: Role::User,
-            content: text.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: chrono::Utc::now(),
-        }
+        Message::new("user-1", Role::User, text)
     }
 
     fn system_message(text: &str) -> Message {
-        Message {
-            id: "system-1".to_owned(),
-            role: Role::System,
-            content: text.to_owned(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: chrono::Utc::now(),
-        }
+        Message::new("system-1", Role::System, text)
     }
 
     // -----------------------------------------------------------------------

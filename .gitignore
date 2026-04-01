@@ -68,6 +68,7 @@ docs/research/*
 logs.txt
 test-ck
 __pycache__
+__tests__
 
 # CK meta commands
 .claude

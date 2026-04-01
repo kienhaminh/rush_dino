@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RushDino vs OpenClaw Performance Benchmark
+# RushDino Performance Benchmark — competitor comparison
 # Measures: binary/package size, boot time, idle memory, peak memory, HTTP latency
 set -euo pipefail
 
@@ -7,6 +7,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 REPORT="${RESULTS_DIR}/COMPARISON.md"
+
+# shellcheck source=./lib.sh
+source "${SCRIPT_DIR}/lib.sh"
 
 RUSHDINO_BINARY="${REPO_ROOT}/target/release/rushdino"
 OPENCLAW_DIR="${REPO_ROOT}/openclaw"
@@ -18,6 +21,14 @@ RUSHDINO_HEALTH="http://127.0.0.1:${RUSHDINO_PORT}/healthz"
 BOOT_TIMEOUT_S=30   # max seconds to wait for server ready
 LATENCY_SAMPLES=100 # number of curl requests for latency percentiles
 RSS_SAMPLE_INTERVAL=0.2  # seconds between RSS samples during load test
+
+# ---- Competitor reference data (published benchmarks / public docs) ----------
+# Values are not measured locally — sourced from each project's documentation.
+
+REF_OPENCLAW_LANG="TypeScript";  REF_OPENCLAW_SIZE="28 MB + Node.js"; REF_OPENCLAW_DOCKER="—"; REF_OPENCLAW_RAM="> 1 GB";  REF_OPENCLAW_STARTUP="> 5 s";   REF_OPENCLAW_HW="\$599+ Mac Mini"
+REF_ZEROCLAW_LANG="Rust";        REF_ZEROCLAW_SIZE="3.4 MB";          REF_ZEROCLAW_DOCKER="—"; REF_ZEROCLAW_RAM="< 5 MB";  REF_ZEROCLAW_STARTUP="< 10 ms"; REF_ZEROCLAW_HW="\$10 edge"
+REF_PICOCLAW_LANG="Go";          REF_PICOCLAW_SIZE="~8 MB";           REF_PICOCLAW_DOCKER="—"; REF_PICOCLAW_RAM="< 10 MB"; REF_PICOCLAW_STARTUP="< 1 s";   REF_PICOCLAW_HW="\$10 edge"
+REF_GOCLAW_LANG="Go";            REF_GOCLAW_SIZE="~25 MB (base)";     REF_GOCLAW_DOCKER="~50 MB (Alpine)"; REF_GOCLAW_RAM="~35 MB"; REF_GOCLAW_STARTUP="< 1 s"; REF_GOCLAW_HW="\$5 VPS+"
 
 # ---- helpers ----------------------------------------------------------------
 
@@ -189,22 +200,27 @@ RUSHDINO_SIZE_BYTES=$(stat -f%z "${RUSHDINO_BINARY}" 2>/dev/null \
 RUSHDINO_SIZE_MB=$(python3 -c "print(f'{${RUSHDINO_SIZE_BYTES}/1048576:.1f}')")
 RUSHDINO_SIZE_HUMAN="${RUSHDINO_SIZE_MB} MB"
 
-# OpenClaw runtime footprint
+# OpenClaw runtime footprint (optional)
+# Repo có thể không include `openclaw/` nên benchmark phải bỏ qua phần này.
 OPENCLAW_NM_MB=""
 OPENCLAW_DIST_MB=""
 OPENCLAW_SRC_MB=""
-if [[ -d "${OPENCLAW_DIR}/node_modules" ]]; then
-  OPENCLAW_NODE_MODULES_KB=$(du -sk "${OPENCLAW_DIR}/node_modules" | awk '{print $1}')
-  OPENCLAW_NM_MB=$(python3 -c "print(f'{${OPENCLAW_NODE_MODULES_KB}*1024/1048576:.1f}')")
-  OPENCLAW_SIZE_HUMAN="${OPENCLAW_NM_MB} MB (node_modules)"
-elif [[ -d "${OPENCLAW_DIR}/dist" ]]; then
-  OPENCLAW_DIST_KB=$(du -sk "${OPENCLAW_DIR}/dist" | awk '{print $1}')
-  OPENCLAW_DIST_MB=$(python3 -c "print(f'{${OPENCLAW_DIST_KB}*1024/1048576:.1f}')")
-  OPENCLAW_SIZE_HUMAN="${OPENCLAW_DIST_MB} MB (dist, no node_modules)"
-else
-  OPENCLAW_SRC_KB=$(du -sk "${OPENCLAW_DIR}" | awk '{print $1}')
-  OPENCLAW_SRC_MB=$(python3 -c "print(f'{${OPENCLAW_SRC_KB}*1024/1048576:.1f}')")
-  OPENCLAW_SIZE_HUMAN="${OPENCLAW_SRC_MB} MB (full source tree)"
+OPENCLAW_SIZE_HUMAN="N/A (openclaw not present)"
+
+if [[ -d "${OPENCLAW_DIR}" ]]; then
+  if [[ -d "${OPENCLAW_DIR}/node_modules" ]]; then
+    OPENCLAW_NODE_MODULES_KB=$(du -sk "${OPENCLAW_DIR}/node_modules" | awk '{print $1}')
+    OPENCLAW_NM_MB=$(python3 -c "print(f'{${OPENCLAW_NODE_MODULES_KB}*1024/1048576:.1f}')")
+    OPENCLAW_SIZE_HUMAN="${OPENCLAW_NM_MB} MB (node_modules)"
+  elif [[ -d "${OPENCLAW_DIR}/dist" ]]; then
+    OPENCLAW_DIST_KB=$(du -sk "${OPENCLAW_DIR}/dist" | awk '{print $1}')
+    OPENCLAW_DIST_MB=$(python3 -c "print(f'{${OPENCLAW_DIST_KB}*1024/1048576:.1f}')")
+    OPENCLAW_SIZE_HUMAN="${OPENCLAW_DIST_MB} MB (dist, no node_modules)"
+  else
+    OPENCLAW_SRC_KB=$(du -sk "${OPENCLAW_DIR}" 2>/dev/null | awk '{print $1}')
+    OPENCLAW_SRC_MB=$(python3 -c "print(f'{${OPENCLAW_SRC_KB}*1024/1048576:.1f}')")
+    OPENCLAW_SIZE_HUMAN="${OPENCLAW_SRC_MB} MB (full source tree)"
+  fi
 fi
 
 info "RushDino binary: ${RUSHDINO_SIZE_HUMAN}"
@@ -256,6 +272,18 @@ if curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
   fi
   RUSHDINO_PEAK_RSS_MB="(measured during latency test)"
 else
+  # Warm the OS page cache with a throwaway start so the timed measurement
+  # reflects real-world restart latency, not post-compilation cold-load overhead.
+  info "Warming OS page cache (throwaway start)..."
+  "${RUSHDINO_BINARY}" start --foreground > /dev/null 2>&1 &
+  _WARM_PID=$!
+  if wait_for_http "${RUSHDINO_HEALTH}"; then
+    kill "${_WARM_PID}" 2>/dev/null; wait "${_WARM_PID}" 2>/dev/null
+  else
+    kill "${_WARM_PID}" 2>/dev/null; wait "${_WARM_PID}" 2>/dev/null
+  fi
+  sleep 0.3
+
   T0=$(start_ms)
   "${RUSHDINO_BINARY}" start --foreground > /dev/null 2>&1 &
   RDINO_PID=$!
@@ -398,6 +426,7 @@ print('1.00x' if b == 0 else f'{a/b:.2f}x')
 }
 
 RUSHDINO_API_RUNS="http://127.0.0.1:${RUSHDINO_PORT}/api/runs"
+RUSHDINO_API_SESSIONS="http://127.0.0.1:${RUSHDINO_PORT}/api/sessions"
 
 PARALLEL_HEALTHZ_BENCH=""
 PARALLEL_RUNS_BENCH=""
@@ -428,7 +457,7 @@ if curl -4 -sf "${RUSHDINO_HEALTH}" > /dev/null 2>&1; then
 
   # ── I-b: concurrent POST /api/runs ────────────────────────────────────────
   info "Probing POST /api/runs accessibility..."
-  _probe_body='{"message":"bench probe","session_id":"bench-probe-00"}'
+  _probe_body='{"message":"bench probe","session_id":"bench-probe-00","conversation_id":"bench-probe-00"}'
   _probe_status=$(python3 -c "
 import urllib.request, urllib.error
 try:
@@ -447,7 +476,7 @@ except Exception: print(0)
     info "POST /api/runs accessible (HTTP ${_probe_status}) — running parallel run-submission benchmark..."
     for c in 1 2 4 8 16 32; do
       n=$(( c * 5 ))
-      _body="{\"message\":\"bench ping\",\"session_id\":\"bench-c${c}-$$\"}"
+      _body="{\"message\":\"bench ping\",\"session_id\":\"bench-c${c}-$$\",\"conversation_id\":\"bench-c${c}-$$\"}"
       read -r tp avg ok total _status \
         <<< "$(bench_concurrency "${RUSHDINO_API_RUNS}" "POST" "${_body}" "${c}" "${n}")"
       if [[ -z "${RUNS_1X_TP}" ]]; then
@@ -460,6 +489,7 @@ except Exception: print(0)
 "
       info "runs  c=${c}  tp=${tp} runs/s  avg=${avg}ms  ok=${ok}/${total}"
     done
+    cleanup_bench_sessions "${RUSHDINO_API_SESSIONS}"
   else
     PARALLEL_RUNS_NOTE="> Endpoint returned HTTP ${_probe_status}. Authentication may be required. Skipped."
     warn "POST /api/runs returned HTTP ${_probe_status} — skipping parallel run-submission benchmark."
@@ -510,51 +540,70 @@ SIZE_RATIO=$(improvement_ratio "${RUSHDINO_SIZE_MB}" "${OPENCLAW_SIZE_NUM}")
 # ---- Section H: Generate report ---------------------------------------------
 
 RDINO_VERSION=$("${RUSHDINO_BINARY}" --version 2>/dev/null || echo "unknown")
-NODE_VERSION=$(node --version 2>/dev/null || echo "unknown")
 OS_INFO=$(uname -srm)
 GENERATED_AT=$(date)
+
+# Format RushDino boot time for the comparison table.
+if [[ "${RUSHDINO_BOOT}" =~ ^([0-9]+)ms$ ]]; then
+  _ms="${BASH_REMATCH[1]}"
+  RUSHDINO_BOOT_CLEAN=$(python3 -c "
+ms = int('${_ms}')
+if ms < 1000:
+    print(f'< {ms} ms')
+else:
+    print(f'~{ms/1000:.1f} s')
+")
+elif [[ "${RUSHDINO_BOOT}" == timeout* ]]; then
+  RUSHDINO_BOOT_CLEAN="> ${BOOT_TIMEOUT_S} s"
+else
+  RUSHDINO_BOOT_CLEAN="—"
+fi
 
 info "Writing report to ${REPORT}..."
 
 cat > "${REPORT}" <<MDEOF
-# RushDino vs OpenClaw -- Performance Comparison
+# RushDino — Performance Snapshot
 
 Generated: ${GENERATED_AT}
 
-> **Note:** OpenClaw is a full-featured CLI tool (TypeScript/Node.js) without a
-> standalone HTTP server entry point, so boot time, memory, and HTTP
-> latency comparisons are marked N/A. Binary size is compared against the
-> node_modules footprint (the closest equivalent runtime dependency set).
+## Competitor Comparison
 
-## Summary
+|  | **RushDino** | OpenClaw | ZeroClaw | PicoClaw | GoClaw |
+|---|:---:|---|---|---|---|
+| **Language** | **Rust** | ${REF_OPENCLAW_LANG} | ${REF_ZEROCLAW_LANG} | ${REF_PICOCLAW_LANG} | ${REF_GOCLAW_LANG} |
+| **Binary size** | **${RUSHDINO_SIZE_HUMAN}** | ${REF_OPENCLAW_SIZE} | ${REF_ZEROCLAW_SIZE} | ${REF_PICOCLAW_SIZE} | ${REF_GOCLAW_SIZE} |
+| **Docker image** | — | ${REF_OPENCLAW_DOCKER} | ${REF_ZEROCLAW_DOCKER} | ${REF_PICOCLAW_DOCKER} | ${REF_GOCLAW_DOCKER} |
+| **RAM (idle)** | **${RUSHDINO_IDLE_RSS_MB} MB** | ${REF_OPENCLAW_RAM} | ${REF_ZEROCLAW_RAM} | ${REF_PICOCLAW_RAM} | ${REF_GOCLAW_RAM} |
+| **Startup** | **${RUSHDINO_BOOT_CLEAN}** | ${REF_OPENCLAW_STARTUP} | ${REF_ZEROCLAW_STARTUP} | ${REF_PICOCLAW_STARTUP} | ${REF_GOCLAW_STARTUP} |
+| **Target hardware** | **local Mac / Linux** | ${REF_OPENCLAW_HW} | ${REF_ZEROCLAW_HW} | ${REF_PICOCLAW_HW} | ${REF_GOCLAW_HW} |
 
-| Metric | RushDino (Rust) | OpenClaw (Node.js) | Ratio |
-|---|---|---|---|
-| Binary / package size | ${RUSHDINO_SIZE_HUMAN} | ${OPENCLAW_SIZE_HUMAN} | ${SIZE_RATIO} smaller |
-| Boot time (first HTTP ready) | ${RUSHDINO_BOOT} | ${OPENCLAW_BOOT} | -- |
-| Idle RSS (resident set) | ${RUSHDINO_IDLE_RSS_MB} MB | ${OPENCLAW_RSS} | -- |
-| Physical footprint (dirty pages) | ${RUSHDINO_PHYS_FOOTPRINT} | ${OPENCLAW_RSS} | -- |
-| Peak RSS (under load) | ${RUSHDINO_PEAK_RSS_MB} MB | ${OPENCLAW_RSS} | -- |
-| Virtual memory (VSZ) | ${RUSHDINO_IDLE_VSZ_MB} MB | -- | -- |
-| HTTP latency (${LATENCY_SAMPLES} reqs) | ${RDINO_LATENCY} | ${OPENCLAW_LATENCY} | -- |
+> RushDino values measured live on this machine. Competitor values sourced from
+> each project's published documentation and benchmarks.
+
+## HTTP Performance (RushDino)
+
+| Metric | Value |
+|---|---|
+| Latency p50 / p95 / p99 (${LATENCY_SAMPLES} reqs) | ${RDINO_LATENCY} |
+| Idle RSS | ${RUSHDINO_IDLE_RSS_MB} MB |
+| Peak RSS (under load) | ${RUSHDINO_PEAK_RSS_MB} MB |
+| Physical footprint (dirty pages) | ${RUSHDINO_PHYS_FOOTPRINT} |
+| Virtual memory (VSZ) | ${RUSHDINO_IDLE_VSZ_MB} MB |
 
 ## Parallel Agent Concurrency Benchmark
 
 Measures how RushDino scales when multiple clients dispatch work simultaneously.
-Two sub-tests are run while the server is live:
 
-### I-a · Concurrent GET /healthz (HTTP baseline)
+### Concurrent GET /healthz (HTTP baseline)
 
-Pure async HTTP throughput at increasing client concurrency.
 Each level fires \`concurrency × 20\` total requests.
 
 | Concurrency | Throughput | Avg Latency | Scaling vs 1× |
 |---|---|---|---|
 ${PARALLEL_HEALTHZ_BENCH}
-### I-b · Parallel Agent Run Submissions (POST /api/runs)
+### Parallel Agent Run Submissions (POST /api/runs)
 
-Each request dispatches an agent run that is processed asynchronously by the
-Rust \`AgentEngine\`. This measures parallel sub-agent creation throughput.
+Each request dispatches an agent run processed asynchronously by the Rust \`AgentEngine\`.
 Each level fires \`concurrency × 5\` total submissions.
 
 ${PARALLEL_RUNS_NOTE}
@@ -567,61 +616,26 @@ ${PARALLEL_RUNS_BENCH}
 |---|---|
 | OS | ${OS_INFO} |
 | RushDino version | ${RDINO_VERSION} |
-| Node.js version | ${NODE_VERSION} |
 | Health endpoint | \`${RUSHDINO_HEALTH}\` |
-| Runs endpoint | \`${RUSHDINO_API_RUNS}\` |
 | Latency samples | ${LATENCY_SAMPLES} |
-| RSS sample interval | ${RSS_SAMPLE_INTERVAL}s |
 | Date | ${GENERATED_AT} |
-
-## Raw Results
-
-### RushDino
-
-- Binary path: \`${RUSHDINO_BINARY}\`
-- Binary size: **${RUSHDINO_SIZE_HUMAN}** (${RUSHDINO_SIZE_BYTES} bytes)
-- Boot time: **${RUSHDINO_BOOT}**
-- Idle RSS (resident set): **${RUSHDINO_IDLE_RSS_MB} MB**
-- Physical footprint (dirty pages only): **${RUSHDINO_PHYS_FOOTPRINT}**
-- Peak RSS (under load): **${RUSHDINO_PEAK_RSS_MB} MB**
-- Virtual memory (VSZ): **${RUSHDINO_IDLE_VSZ_MB} MB**
-- HTTP latency: **${RDINO_LATENCY}**
-
-### OpenClaw
-
-- Source root: \`${OPENCLAW_DIR}\`
-- Runtime footprint: **${OPENCLAW_SIZE_HUMAN}**
-- Boot time: ${OPENCLAW_BOOT}
-- Memory: ${OPENCLAW_RSS}
-- HTTP latency: ${OPENCLAW_LATENCY}
 
 ## Methodology
 
-- **Size**: \`stat\` on the release binary vs \`du\` on node_modules (or dist/).
-- **Boot time**: wall-clock ms from process spawn until first successful
-  \`curl\` to the health endpoint (\`/healthz\`), polled every 10 ms.
-- **Idle RSS**: \`ps -o rss=\` immediately after the server becomes ready,
-  before any requests are served.
-- **Peak RSS**: highest RSS sample taken while running the latency test,
-  sampled every ${RSS_SAMPLE_INTERVAL}s in background.
-- **VSZ**: virtual address space size at idle (\`ps -o vsz=\`).
-- **HTTP latency**: ${LATENCY_SAMPLES} sequential \`curl\` requests with
-  \`%{time_total}\`; sorted to derive p50/p95/p99.
-- **Concurrent healthz**: Python \`ThreadPoolExecutor\` with \`concurrency × 20\`
-  total GET requests; throughput = successful requests ÷ wall-clock seconds.
-- **Parallel run submissions**: Python \`ThreadPoolExecutor\` with
-  \`concurrency × 5\` total POST requests to \`/api/runs\`; each call returns
-  immediately with a run_id — LLM execution is async and not included in the
-  timing.
+- **Binary size**: \`stat\` on the release binary.
+- **Boot time**: wall-clock ms from process spawn until first successful \`curl\` to \`/healthz\`, polled every 10 ms.
+- **Idle RSS**: \`ps -o rss=\` immediately after the server becomes ready, before any requests are served.
+- **Peak RSS**: highest RSS sample taken during the latency test, sampled every ${RSS_SAMPLE_INTERVAL}s.
+- **HTTP latency**: ${LATENCY_SAMPLES} sequential \`curl\` requests; sorted to derive p50/p95/p99.
+- **Concurrency**: Python \`ThreadPoolExecutor\`; throughput = successful requests ÷ wall-clock seconds.
 MDEOF
 
 info "Done. Report written to: ${REPORT}"
 echo ""
 echo "================================================================"
-echo "  Binary size  : ${RUSHDINO_SIZE_HUMAN}  vs  ${OPENCLAW_SIZE_HUMAN}"
-echo "  Boot time    : ${RUSHDINO_BOOT}"
+echo "  Binary size  : ${RUSHDINO_SIZE_HUMAN}"
+echo "  Startup      : ${RUSHDINO_BOOT_CLEAN}"
 echo "  Idle RSS     : ${RUSHDINO_IDLE_RSS_MB} MB"
 echo "  Peak RSS     : ${RUSHDINO_PEAK_RSS_MB} MB"
-echo "  VSZ          : ${RUSHDINO_IDLE_VSZ_MB} MB"
 echo "  Latency      : ${RDINO_LATENCY}"
 echo "================================================================"

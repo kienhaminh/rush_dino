@@ -33,12 +33,15 @@ pub fn map_message(row: sqlx::sqlite::SqliteRow) -> Result<Message> {
         .transpose()
         .map_err(|e| AppError::Validation(format!("invalid stored rich_content: {e}")))?;
 
+    let thinking: Option<String> = row.try_get("thinking").unwrap_or(None);
+
     Ok(Message {
         id: row.try_get("id")?,
         role: parse_role(&role),
         content: row.try_get("content")?,
         tool_calls,
         rich_content,
+        thinking,
         created_at: parse_ts(&row.try_get::<String, _>("created_at")?)?,
     })
 }

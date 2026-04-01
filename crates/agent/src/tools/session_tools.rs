@@ -1,7 +1,6 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -59,7 +58,8 @@ async fn run_session_turn(
             .create_conversation_with_id(conversation_id, input)
             .await?;
     }
-    let skills = deps.skill_manager
+    let skills = deps
+        .skill_manager
         .list()
         .unwrap_or_default()
         .into_iter()
@@ -80,14 +80,7 @@ async fn run_session_turn(
     );
 
     let old_len = messages.len();
-    let user_msg = Message {
-        id: Uuid::new_v4().to_string(),
-        role: Role::User,
-        content: input.to_owned(),
-        tool_calls: None,
-        rich_content: None,
-        created_at: Utc::now(),
-    };
+    let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, input.to_owned());
     deps.conversation
         .save_message(conversation_id, &user_msg)
         .await?;
@@ -146,9 +139,6 @@ impl Tool for SessionManageTool {
         "Manage sessions: create, get, or delete. Use `action` to specify the operation."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["session", "conversation", "history"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -180,19 +170,20 @@ impl Tool for SessionManageTool {
 
         match action {
             "create" => {
-                let title = args
-                    .get("title")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| AppError::Validation("title is required for 'create'".to_owned()))?;
+                let title = args.get("title").and_then(Value::as_str).ok_or_else(|| {
+                    AppError::Validation("title is required for 'create'".to_owned())
+                })?;
                 let session = self.conversation.create_conversation(title.trim()).await?;
                 serde_json::to_string_pretty(&json!(session))
                     .map_err(|e| AppError::Agent(e.to_string()))
             }
             "get" => {
-                let session_id = args
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| AppError::Validation("sessionId is required for 'get'".to_owned()))?;
+                let session_id =
+                    args.get("sessionId")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            AppError::Validation("sessionId is required for 'get'".to_owned())
+                        })?;
                 let session = self
                     .conversation
                     .get_conversation_record(session_id)
@@ -211,10 +202,12 @@ impl Tool for SessionManageTool {
                 .map_err(|e| AppError::Agent(e.to_string()))
             }
             "delete" => {
-                let session_id = args
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| AppError::Validation("sessionId is required for 'delete'".to_owned()))?;
+                let session_id =
+                    args.get("sessionId")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            AppError::Validation("sessionId is required for 'delete'".to_owned())
+                        })?;
                 if session_id == "main" {
                     return Err(AppError::Validation(
                         "Cannot delete the main session".to_owned(),
@@ -268,9 +261,6 @@ impl Tool for SessionSendTool {
         "Send a message into an existing session and wait for the agent reply."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["session", "conversation", "history"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -349,8 +339,14 @@ mod tests {
         let conversation = Arc::new(ConversationManager::new(pool.clone()));
         let tool = SessionManageTool::new(conversation.clone());
 
-        let r1 = tool.execute(serde_json::json!({"action": "create", "title": "Task A"})).await.unwrap();
-        let r2 = tool.execute(serde_json::json!({"action": "create", "title": "Task B"})).await.unwrap();
+        let r1 = tool
+            .execute(serde_json::json!({"action": "create", "title": "Task A"}))
+            .await
+            .unwrap();
+        let r2 = tool
+            .execute(serde_json::json!({"action": "create", "title": "Task B"}))
+            .await
+            .unwrap();
 
         let v1: serde_json::Value = serde_json::from_str(&r1).unwrap();
         let v2: serde_json::Value = serde_json::from_str(&r2).unwrap();
@@ -395,8 +391,7 @@ mod tests {
         use crate::tools::delegate_to_agent::DelegateToAgentTool;
         use rushdino_providers::CompletionsProvider;
 
-        let dir =
-            std::env::temp_dir().join(format!("test-sess-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("test-sess-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
 
         // Shared DB with full schema so conversation inserts succeed.
@@ -412,6 +407,7 @@ mod tests {
                 system_prompt: "You are a researcher.".to_owned(),
                 icon: None,
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: false,
@@ -422,7 +418,7 @@ mod tests {
 
         // Alive Arc references so the Weak upgrades succeed inside execute().
         let registry = Arc::new(ToolRegistry::new());
-        let session_ctx = Arc::new(SessionToolContext::new(vec![], &[]));
+        let session_ctx = Arc::new(SessionToolContext::new(vec![]));
 
         // Dummy provider that cannot connect — react loop will fail after the
         // conversation row is already committed to the DB.
@@ -435,16 +431,16 @@ mod tests {
             ),
         ));
 
-        let tool = DelegateToAgentTool::new(
-            manager,
+        let tool = DelegateToAgentTool {
+            agent_manager: manager,
             provider,
-            crate::engine::AgentConfig::default(),
-            Arc::downgrade(&registry),
-            Arc::downgrade(&session_ctx),
-            Arc::new(AgentTaskMemory::new(dir.clone())),
-            conversation.clone(),
-            dir.clone(),
-        );
+            config: crate::engine::AgentConfig::default(),
+            registry: Arc::downgrade(&registry),
+            session_ctx: Arc::downgrade(&session_ctx),
+            task_memory: Arc::new(AgentTaskMemory::new(dir.clone())),
+            conversation: conversation.clone(),
+            home_dir: dir.clone(),
+        };
 
         // Execute — will return an error from the network layer, but the agent
         // conversation must have been committed before that point.
@@ -455,13 +451,13 @@ mod tests {
             }))
             .await;
 
-        // After delegation completes, the agent session is auto-archived
-        // so it no longer appears in the active agent-session list.
+        // After delegation completes the agent session is archived but still
+        // returned by list_agent_conversations (panel shows all agent sessions).
         let active_agent_sessions = conversation.list_agent_conversations().await.unwrap();
         assert_eq!(
             active_agent_sessions.len(),
-            0,
-            "agent session should be archived after delegation completes"
+            1,
+            "completed agent session should still appear in the agent-session list"
         );
 
         // It must NOT appear in the regular user session list.

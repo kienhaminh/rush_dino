@@ -81,41 +81,6 @@ pub struct KanbanDispatcher {
 }
 
 impl KanbanDispatcher {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        store: Arc<KanbanStore>,
-        agent_manager: Arc<AgentManager>,
-        provider: Arc<Provider>,
-        config: AgentConfig,
-        registry: Weak<ToolRegistry>,
-        session_ctx: Weak<SessionToolContext>,
-        memory: Arc<MemoryManager>,
-        skill_manager: Arc<SkillManager>,
-        conversation: Arc<ConversationManager>,
-        task_memory: Arc<AgentTaskMemory>,
-        health_store: Arc<AgentHealthStore>,
-        home_dir: PathBuf,
-        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
-        task_notify: Arc<tokio::sync::Notify>,
-    ) -> Self {
-        Self {
-            store,
-            agent_manager,
-            provider,
-            config,
-            registry,
-            session_ctx,
-            memory,
-            skill_manager,
-            conversation,
-            task_memory,
-            health_store,
-            home_dir,
-            broadcast_tx,
-            task_notify,
-        }
-    }
-
     /// Spawns the background dispatch loop. The loop wakes immediately when
     /// `task_notify` fires (a task was created or sent back for revision) and
     /// also runs a heartbeat poll every [`HEARTBEAT_INTERVAL_SECS`] as a
@@ -200,7 +165,8 @@ impl KanbanDispatcher {
         self.store.claim_task(&task.id, agent_name).await?;
 
         // 4. Create an isolated conversation for this task run.
-        let conv_id = Uuid::new_v4().to_string();
+        // Use agent name as the stable session ID so each team agent gets one persistent session.
+        let conv_id = agent_name.to_lowercase().replace(' ', "-");
         let conv_title = format!("{agent_name}: {}", title_from(&task.title));
         self.conversation
             .create_agent_conversation(&conv_id, &conv_title)
@@ -286,22 +252,8 @@ impl KanbanDispatcher {
             task.title, task.description, task.id
         );
 
-        let sys_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::System,
-            content: system_content,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
-        let user_msg = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::User,
-            content: task_description.clone(),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        };
+        let sys_msg = Message::new(Uuid::new_v4().to_string(), Role::System, system_content);
+        let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, task_description.clone());
 
         // Persist opening messages immediately so they are visible on error.
         self.conversation.save_message(&conv_id, &sys_msg).await?;

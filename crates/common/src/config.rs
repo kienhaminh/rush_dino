@@ -149,6 +149,13 @@ pub struct TelegramChannelConfig {
     pub native_streaming: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MobileGatewayConfig {
+    pub enabled: bool,
+    #[serde(default)]
+    pub publish_host: String,
+}
+
 /// Gateway configuration: controls which channels are active.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayConfig {
@@ -156,6 +163,7 @@ pub struct GatewayConfig {
     pub discord: ChannelConfig,
     pub slack: ChannelConfig,
     pub webchat: ChannelConfig,
+    pub mobile: MobileGatewayConfig,
 }
 
 impl Default for GatewayConfig {
@@ -183,6 +191,10 @@ impl Default for GatewayConfig {
             webchat: ChannelConfig {
                 enabled: true,
                 access: ChannelAccessConfig::default(),
+            },
+            mobile: MobileGatewayConfig {
+                enabled: false,
+                publish_host: String::new(),
             },
         }
     }
@@ -216,6 +228,9 @@ pub struct ExecutionConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AgentSection {
     pub max_context_tokens: Option<usize>,
+    /// Maximum number of react-loop iterations per run. Defaults to 10.
+    /// Increase this for long-running tasks that require many tool calls.
+    pub max_iterations: Option<usize>,
 }
 
 /// Configuration for a single external MCP server (HTTP/SSE transport).

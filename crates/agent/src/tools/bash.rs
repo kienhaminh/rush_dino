@@ -64,9 +64,6 @@ impl Tool for ShellExecTool {
          Use for shell operations, running tests, git commands, build tools, and system tasks."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["shell", "exec", "command", "terminal", "run"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -92,6 +89,15 @@ impl Tool for ShellExecTool {
             .or_else(|| args.get("cmd"))
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("command is required".to_owned()))?;
+
+        if references_sensitive_file(command) {
+            return Err(AppError::Validation(
+                "Access denied: bash commands may not reference credential files. \
+                 Use the `secret_get` tool to obtain a secure token instead."
+                    .to_owned(),
+            ));
+        }
+
         let cwd = args.get("cwd").and_then(Value::as_str).map(PathBuf::from);
         let context = current_tool_execution_context();
 
@@ -115,6 +121,15 @@ impl Tool for ShellExecTool {
             result.stderr
         ))
     }
+}
+
+/// Returns `true` if the command appears to reference a credential file.
+/// This is best-effort — it blocks naive attempts but is not exhaustive.
+/// Agents should use `secret_get` to obtain tokens for credentials.
+pub fn references_sensitive_file(command: &str) -> bool {
+    let cmd = command.to_lowercase();
+    let sensitive = ["credentials.toml", ".env"];
+    sensitive.iter().any(|name| cmd.contains(name))
 }
 
 pub fn is_dangerous_command(command: &str) -> bool {
@@ -162,7 +177,9 @@ mod tests {
 
     use super::{is_dangerous_command, ToolExecutionContext};
     use crate::{
-        system_broker::{ShellExecRequest, ShellExecResult, SystemBroker},
+        system_broker::{
+            InputRequest, InputRequestResult, ShellExecRequest, ShellExecResult, SystemBroker,
+        },
         tool_registry::Tool,
     };
 
@@ -183,7 +200,16 @@ mod tests {
                 stdout: "ok".to_owned(),
                 stderr: String::new(),
                 cwd: PathBuf::from("/tmp/host"),
+                source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
             })
+        }
+
+        async fn request_user_input(&self, _request: InputRequest) -> Result<InputRequestResult> {
+            Ok(InputRequestResult::cancelled())
+        }
+
+        async fn resolve_secrets(&self, input: String) -> String {
+            input
         }
     }
 

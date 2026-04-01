@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { completeCodexConnect, startCodexConnect } from './api';
+import { completeOAuthConnect, startOAuthConnect } from './api';
 
 describe('OAuth connect API', () => {
   afterEach(() => {
@@ -17,7 +17,7 @@ describe('OAuth connect API', () => {
     );
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
-    const response = await startCodexConnect('profile-1');
+    const response = await startOAuthConnect('profile-1');
 
     expect(fetchMock).toHaveBeenCalledWith('/api/providers/profile-1/connect-oauth/start', {
       method: 'POST',
@@ -37,7 +37,7 @@ describe('OAuth connect API', () => {
     );
     vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
-    const response = await completeCodexConnect('profile-1', {
+    const response = await completeOAuthConnect('profile-1', {
       session_id: 'session-1',
       redirect_url: 'http://localhost:1455/auth/callback?code=abc123&state=expected',
     });

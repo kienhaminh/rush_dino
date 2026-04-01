@@ -63,6 +63,10 @@ const CANVAS_CENTER_Y = 340;
 const ELLIPSE_RX = 340;
 const ELLIPSE_RY = 240;
 
+// Empty constants for default props to prevent array-reference instability
+const EMPTY_SKILLS: AgentSkillRecord[] = [];
+const EMPTY_TOOLS: AgentToolRecord[] = [];
+
 // ── Build nodes from runtime data ─────────────────────────────────────────────
 
 interface BuildNodesOptions {
@@ -186,7 +190,7 @@ interface InnerCanvasProps {
   extraTools?: AgentToolRecord[];
 }
 
-function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette, extraSkills = [], extraTools = [] }: InnerCanvasProps) {
+function AgentOrbitalCanvasInner({ agent, runtimeData, onOpenPalette, extraSkills = EMPTY_SKILLS, extraTools = EMPTY_TOOLS }: InnerCanvasProps) {
   // Flatten enabled skills and all tools from sections, then merge locally-added extras
   const enabledSkills = useMemo(
     () => {

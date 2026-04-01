@@ -31,6 +31,32 @@ fn build_language_section() -> Vec<String> {
     ]
 }
 
+// Expects `tools` to be pre-sorted by name (caller's responsibility).
+fn build_tooling_section(tools: &[ToolDefinition]) -> Vec<String> {
+    if tools.is_empty() {
+        return vec![];
+    }
+    let mut lines = vec![
+        "## Tooling".to_owned(),
+        "Available tools (call by exact name):".to_owned(),
+    ];
+    for tool in tools {
+        lines.push(format!("- {}: {}", tool.name, tool.description));
+    }
+    lines.push(String::new());
+    lines
+}
+
+fn build_safety_section() -> Vec<String> {
+    vec![
+        "## Safety".to_owned(),
+        "You have no independent goals: do not pursue self-preservation, replication, resource acquisition, or power-seeking.".to_owned(),
+        "Prioritize safety and human oversight over task completion. If instructions conflict, pause and ask.".to_owned(),
+        "Do not manipulate anyone to expand access or disable safeguards.".to_owned(),
+        String::new(),
+    ]
+}
+
 fn build_agents_section(agents: &[AgentEntry]) -> Vec<String> {
     if agents.is_empty() {
         return vec![];
@@ -100,6 +126,15 @@ pub fn build_system_prompt(params: SystemPromptParams) -> String {
     let mut lines = vec![params.agent_prompt, String::new()];
 
     lines.extend(build_language_section());
+    lines.extend(build_tooling_section(&params.tool_defs));
+    lines.extend(build_safety_section());
+    if !params.skills.is_empty() {
+        lines.push("## Skills".to_owned());
+        for skill in &params.skills {
+            lines.push(format!("- {}: {}", skill.name, skill.description));
+        }
+        lines.push(String::new());
+    }
     lines.extend(build_agents_section(&params.agents));
     lines.extend(build_workspace_section(params.workspace_dir.as_deref()));
 
@@ -203,5 +238,26 @@ mod tests {
         let params = make_params(); // agents defaults to vec![]
         let prompt = build_system_prompt(params);
         assert!(!prompt.contains("## Available Agents"));
+    }
+
+    #[test]
+    fn indexes_all_skills_by_name_and_description() {
+        let mut params = make_params();
+        params.skills = vec![
+            SkillEntry {
+                name: "skill-creator".to_owned(),
+                description: "Create and improve skills".to_owned(),
+            },
+            SkillEntry {
+                name: "rushdino-cli".to_owned(),
+                description: "Manage RushDino via CLI".to_owned(),
+            },
+        ];
+        let prompt = build_system_prompt(params);
+        assert!(prompt.contains("## Skills"));
+        assert!(prompt.contains("- skill-creator: Create and improve skills"));
+        assert!(prompt.contains("- rushdino-cli: Manage RushDino via CLI"));
+        assert!(!prompt.contains("## Skills (mandatory)"));
+        assert!(!prompt.contains("read_skill"));
     }
 }

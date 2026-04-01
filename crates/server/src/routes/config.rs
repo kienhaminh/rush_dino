@@ -44,6 +44,14 @@ pub async fn patch_config(
     let credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
     if execution_runtime_reload_required_from_config(&current, &updated) {
         crate::refresh_engine_provider(&state).await?;
+
+        // Reset all sessions to avoid replaying stale context to the new provider.
+        if let Some(engine) = state.engine_opt() {
+            let _ = engine.reset_all_sessions().await;
+        }
+        let _ = state.runtime.broadcast_tx().send(serde_json::json!({
+            "type": "session_reset",
+        }));
     }
     if gateway_runtime_reload_required_from_config(&current, &updated) {
         reconcile_gateway_adapters(&state, &updated, &credentials).await?;
@@ -88,8 +96,10 @@ pub async fn patch_credentials(
     let mut current_value = serde_json::to_value(&current)
         .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
 
-    // Strip "***" sentinel values from patch so they don't overwrite existing secrets.
+    // Strip "***" sentinel values, then resolve any secret://uuid vault tokens
+    // so the real credential value is written to disk, not the opaque reference.
     let patch = strip_redacted(patch);
+    let patch = resolve_secrets_in_value(patch, &state.secret_vault).await;
     json_merge(&mut current_value, patch);
 
     let updated: CredentialsConfig = serde_json::from_value(current_value)
@@ -142,6 +152,34 @@ fn strip_redacted(value: Value) -> Value {
     }
 }
 
+/// Recursively walk a JSON value and replace any `secret://uuid` tokens in
+/// string fields with their real values from the vault.
+fn resolve_secrets_in_value<'a>(
+    value: Value,
+    vault: &'a crate::secret_vault::SecretVault,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value> + Send + 'a>> {
+    Box::pin(async move {
+        match value {
+            Value::String(s) => Value::String(vault.resolve_in_string(&s).await),
+            Value::Object(map) => {
+                let mut resolved = serde_json::Map::new();
+                for (k, v) in map {
+                    resolved.insert(k, resolve_secrets_in_value(v, vault).await);
+                }
+                Value::Object(resolved)
+            }
+            Value::Array(arr) => {
+                let mut resolved = Vec::with_capacity(arr.len());
+                for v in arr {
+                    resolved.push(resolve_secrets_in_value(v, vault).await);
+                }
+                Value::Array(resolved)
+            }
+            other => other,
+        }
+    })
+}
+
 /// Shallow/deep merge: `patch` values overwrite `base` values at the same path.
 /// Objects are merged recursively; all other types are replaced.
 fn json_merge(base: &mut Value, patch: Value) {
@@ -177,6 +215,8 @@ fn gateway_runtime_reload_required_from_config(current: &AppConfig, updated: &Ap
         || current.gateway.discord.enabled != updated.gateway.discord.enabled
         || current.gateway.discord.access != updated.gateway.discord.access
         || current.gateway.slack.enabled != updated.gateway.slack.enabled
+        || current.gateway.mobile.enabled != updated.gateway.mobile.enabled
+        || current.gateway.mobile.publish_host != updated.gateway.mobile.publish_host
 }
 
 fn gateway_runtime_reload_required_from_credentials(
@@ -214,6 +254,7 @@ async fn reconcile_gateway_adapters(
     reconcile_telegram_adapter(state, config, credentials).await?;
     reconcile_discord_adapter(state, config, credentials).await?;
     reconcile_slack_adapter(state, config, credentials).await?;
+    reconcile_mobile_gateway_adapter(state, config).await?;
     Ok(())
 }
 
@@ -318,5 +359,18 @@ async fn reconcile_slack_adapter(
         .upsert_adapter(
             Arc::new(rushdino_slack::SlackAdapter::new(bot, app)) as Arc<dyn ChannelAdapter>
         )
+        .await
+}
+
+async fn reconcile_mobile_gateway_adapter(state: &AppState, config: &AppConfig) -> Result<()> {
+    if !config.gateway.mobile.enabled {
+        state.gateway_control.remove_adapter("mobile").await?;
+        state.gateway_state.reporter("mobile").disabled().await;
+        return Ok(());
+    }
+
+    state
+        .gateway_control
+        .upsert_adapter(state.mobile_gateway_adapter.clone() as Arc<dyn ChannelAdapter>)
         .await
 }

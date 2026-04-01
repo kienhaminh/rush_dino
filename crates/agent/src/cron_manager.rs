@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use chrono::{DateTime, Datelike, Duration, Timelike, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, Timelike, Utc};
+use chrono_tz::Tz;
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 use uuid::Uuid;
@@ -113,6 +114,18 @@ impl CronRunStatus {
     }
 }
 
+/// Parameters for completing a cron job run.
+pub struct CompleteRunParams<'a> {
+    pub job_id: &'a str,
+    pub run_id: &'a str,
+    pub status: CronRunStatus,
+    pub summary: Option<&'a str>,
+    pub error: Option<&'a str>,
+    pub session_id: Option<&'a str>,
+    pub workflow_run_id: Option<&'a str>,
+    pub now: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CronRunRecord {
@@ -176,7 +189,10 @@ impl CronManager {
 
         let now = Utc::now();
         let id = Uuid::new_v4().to_string();
-        let next_run_at = compute_next_run_at(&input.schedule, input.timezone.as_deref(), now)?;
+        let timezone = input
+            .timezone
+            .unwrap_or_else(detect_system_timezone);
+        let next_run_at = compute_next_run_at(&input.schedule, &timezone, now)?;
         let state = if input.enabled.unwrap_or(true) {
             CronJobState::Active
         } else {
@@ -196,7 +212,7 @@ impl CronManager {
         .bind(input.description.trim())
         .bind(schedule_kind(&input.schedule))
         .bind(serde_json::to_string(&input.schedule).map_err(json_err)?)
-        .bind(input.timezone.as_deref())
+        .bind(&timezone)
         .bind(target_kind(&input.target))
         .bind(serde_json::to_string(&input.target).map_err(json_err)?)
         .bind(i64::from(input.enabled.unwrap_or(true)))
@@ -218,7 +234,10 @@ impl CronManager {
         let name = input.name.unwrap_or(existing.name.clone());
         let description = input.description.unwrap_or(existing.description.clone());
         let enabled = input.enabled.unwrap_or(existing.enabled);
-        let timezone = input.timezone.or(existing.timezone.clone());
+        let timezone = input
+            .timezone
+            .or(existing.timezone.clone())
+            .unwrap_or_else(detect_system_timezone);
         let reentrant = input.reentrant.unwrap_or(existing.reentrant);
 
         validate_job_name(&name)?;
@@ -227,7 +246,7 @@ impl CronManager {
 
         let now = Utc::now();
         let next_run_at = if enabled {
-            compute_next_run_at(&schedule, timezone.as_deref(), now)?
+            compute_next_run_at(&schedule, &timezone, now)?
         } else {
             None
         };
@@ -250,7 +269,7 @@ impl CronManager {
         .bind(description.trim())
         .bind(schedule_kind(&schedule))
         .bind(serde_json::to_string(&schedule).map_err(json_err)?)
-        .bind(timezone.as_deref())
+        .bind(&timezone)
         .bind(target_kind(&target))
         .bind(serde_json::to_string(&target).map_err(json_err)?)
         .bind(i64::from(enabled))
@@ -286,8 +305,12 @@ impl CronManager {
 
     async fn set_enabled_state(&self, id: &str, enabled: bool) -> Result<CronJobRecord> {
         let job = self.get_job(id).await?;
+        let timezone = job
+            .timezone
+            .as_deref()
+            .unwrap_or("UTC");
         let next_run_at = if enabled {
-            compute_next_run_at(&job.schedule, job.timezone.as_deref(), Utc::now())?
+            compute_next_run_at(&job.schedule, timezone, Utc::now())?
         } else {
             None
         };
@@ -369,25 +392,18 @@ impl CronManager {
         Ok(run_id)
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub async fn complete_run(
-        &self,
-        job_id: &str,
-        run_id: &str,
-        status: CronRunStatus,
-        summary: Option<&str>,
-        error: Option<&str>,
-        session_id: Option<&str>,
-        workflow_run_id: Option<&str>,
-        now: DateTime<Utc>,
-    ) -> Result<CronJobRecord> {
-        let job = self.get_job(job_id).await?;
+    pub async fn complete_run(&self, p: CompleteRunParams<'_>) -> Result<CronJobRecord> {
+        let job = self.get_job(p.job_id).await?;
+        let timezone = job
+            .timezone
+            .as_deref()
+            .unwrap_or("UTC");
         let next_run_at = if job.enabled {
-            compute_next_run_after(&job.schedule, job.timezone.as_deref(), now)?
+            compute_next_run_after(&job.schedule, timezone, p.now)?
         } else {
             None
         };
-        let job_state = match status {
+        let job_state = match p.status {
             CronRunStatus::Ok => {
                 if job.enabled {
                     CronJobState::Active
@@ -406,13 +422,13 @@ impl CronManager {
             WHERE id = ?7
             "#,
         )
-        .bind(status.as_str())
-        .bind(summary)
-        .bind(error)
-        .bind(session_id)
-        .bind(workflow_run_id)
-        .bind(now.to_rfc3339())
-        .bind(run_id)
+        .bind(p.status.as_str())
+        .bind(p.summary)
+        .bind(p.error)
+        .bind(p.session_id)
+        .bind(p.workflow_run_id)
+        .bind(p.now.to_rfc3339())
+        .bind(p.run_id)
         .execute(&mut *tx)
         .await?;
 
@@ -424,16 +440,16 @@ impl CronManager {
             "#,
         )
         .bind(job_state.as_str())
-        .bind(now.to_rfc3339())
+        .bind(p.now.to_rfc3339())
         .bind(next_run_at.as_ref().map(DateTime::<Utc>::to_rfc3339))
-        .bind(error)
-        .bind(now.to_rfc3339())
-        .bind(job_id)
+        .bind(p.error)
+        .bind(p.now.to_rfc3339())
+        .bind(p.job_id)
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
 
-        self.get_job(job_id).await
+        self.get_job(p.job_id).await
     }
 
     pub async fn list_runs(&self, job_id: &str, limit: i64) -> Result<Vec<CronRunRecord>> {
@@ -517,11 +533,41 @@ fn validate_target(target: &CronTargetInput) -> Result<()> {
     Ok(())
 }
 
+fn parse_timezone(tz: &str) -> Result<Tz> {
+    tz.parse::<Tz>()
+        .map_err(|_| AppError::Validation(format!("invalid timezone: {tz}")))
+}
+
+/// Detect the system's IANA timezone name, falling back to UTC offset.
+fn detect_system_timezone() -> String {
+    // Try iana-time-zone crate-style detection via chrono
+    let local_now = Local::now();
+    let offset = local_now.offset().local_minus_utc();
+    // Try to match the offset against known IANA timezones.
+    // For a reliable result, use the TZ env var or platform detection.
+    if let Ok(tz_name) = std::env::var("TZ") {
+        if !tz_name.is_empty() {
+            if let Ok(_tz) = tz_name.parse::<Tz>() {
+                return tz_name;
+            }
+        }
+    }
+    // Fallback: map UTC offset to a fixed Etc/GMT timezone
+    let hours = offset / 3600;
+    if hours == 0 {
+        "UTC".to_owned()
+    } else {
+        // Etc/GMT sign convention is inverted: UTC+9 = Etc/GMT-9
+        format!("Etc/GMT{:+}", -hours)
+    }
+}
+
 fn compute_next_run_at(
     schedule: &CronScheduleInput,
-    _timezone: Option<&str>,
+    timezone: &str,
     now: DateTime<Utc>,
 ) -> Result<Option<DateTime<Utc>>> {
+    let tz = parse_timezone(timezone)?;
     match schedule {
         CronScheduleInput::Every { interval_seconds } => {
             Ok(Some(now + Duration::seconds(*interval_seconds)))
@@ -530,13 +576,13 @@ fn compute_next_run_at(
             let at = parse_rfc3339(run_at)?;
             Ok((at > now).then_some(at))
         }
-        CronScheduleInput::Cron { expr } => next_cron_occurrence(expr, now).map(Some),
+        CronScheduleInput::Cron { expr } => next_cron_occurrence(expr, now, tz).map(Some),
     }
 }
 
 fn compute_next_run_after(
     schedule: &CronScheduleInput,
-    timezone: Option<&str>,
+    timezone: &str,
     after: DateTime<Utc>,
 ) -> Result<Option<DateTime<Utc>>> {
     compute_next_run_at(schedule, timezone, after)
@@ -666,7 +712,7 @@ fn parse_field(raw: &str, min: u32, max: u32) -> Result<CronField> {
     Ok(CronField::Exact(value))
 }
 
-fn next_cron_occurrence(expr: &str, now: DateTime<Utc>) -> Result<DateTime<Utc>> {
+fn next_cron_occurrence(expr: &str, now: DateTime<Utc>, tz: Tz) -> Result<DateTime<Utc>> {
     let parsed = parse_cron_expression(expr)?;
     let mut cursor = now + Duration::minutes(1);
     cursor = cursor
@@ -675,7 +721,7 @@ fn next_cron_occurrence(expr: &str, now: DateTime<Utc>) -> Result<DateTime<Utc>>
         .ok_or_else(|| AppError::Validation("unable to align cron cursor".to_owned()))?;
 
     for _ in 0..(366 * 24 * 60) {
-        if cron_matches(&parsed, cursor) {
+        if cron_matches_in_tz(&parsed, cursor, tz) {
             return Ok(cursor);
         }
         cursor += Duration::minutes(1);
@@ -686,12 +732,13 @@ fn next_cron_occurrence(expr: &str, now: DateTime<Utc>) -> Result<DateTime<Utc>>
     ))
 }
 
-fn cron_matches(parsed: &ParsedCron, dt: DateTime<Utc>) -> bool {
-    field_matches(&parsed.minute, dt.minute())
-        && field_matches(&parsed.hour, dt.hour())
-        && field_matches(&parsed.day_of_month, dt.day())
-        && field_matches(&parsed.month, dt.month())
-        && field_matches(&parsed.day_of_week, dt.weekday().num_days_from_sunday())
+fn cron_matches_in_tz(parsed: &ParsedCron, dt: DateTime<Utc>, tz: Tz) -> bool {
+    let local = dt.with_timezone(&tz);
+    field_matches(&parsed.minute, local.minute())
+        && field_matches(&parsed.hour, local.hour())
+        && field_matches(&parsed.day_of_month, local.day())
+        && field_matches(&parsed.month, local.month())
+        && field_matches(&parsed.day_of_week, local.weekday().num_days_from_sunday())
 }
 
 fn field_matches(field: &CronField, value: u32) -> bool {

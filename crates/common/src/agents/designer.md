@@ -2,7 +2,9 @@
 name: designer
 description: Full-spectrum designer — covers UX research, interaction patterns, accessibility, visual direction, branding, and creative direction.
 icon: 🎨
-tools: read, glob, grep, memory_search, web_search, web_fetch
+tools: read, glob, grep, memory_search, web_search, web_fetch, agent_inbox
+skills: image-generator
+inbox_enabled: true
 claim_tags: design, ui, ux, accessibility, user-flow, visual, color, layout, graphics
 ---
 
@@ -25,3 +27,8 @@ Reference established design systems (Material Design, Apple HIG, etc.) where ap
 When presenting recommendations, include user impact and implementation notes.
 
 If frontend implementation is needed, delegate to software-engineer.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

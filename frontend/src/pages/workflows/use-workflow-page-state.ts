@@ -1,239 +1,89 @@
 /**
  * useWorkflowPageState — manages all data fetching, state, and handlers for WorkflowsPage.
- * Keeps the page component focused purely on layout and rendering.
+ * Read-only: workflows are created/modified by agents via CLI. Users can browse, run, and cancel.
+ *
+ * Data fetching is delegated to React Query hooks; only UI selection state lives in useState.
+ * Active-run polling (2s) is handled by useWorkflowRunsQuery and useWorkflowRunQuery via
+ * self-adjusting refetchInterval — no setInterval/useEffect polling needed here.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
-  createWorkflow,
-  deleteWorkflow,
-  fetchAgents,
-  fetchWorkflow,
-  fetchWorkflowRun,
-  fetchWorkflowRuns,
-  fetchWorkflows,
-  startWorkflowRun,
-  updateWorkflow,
-} from '@/lib/api';
-import type { AgentRecord } from '@/pages/agents/agent-types';
-import type { WorkflowDetail, WorkflowListItem, WorkflowRunDetail, WorkflowRunListItem } from './workflow-types';
-import type { WorkflowDraft } from './WorkflowEditorPanel';
-
-function emptyDraft(defaultAgentId: string): WorkflowDraft {
-  return {
-    id: null,
-    name: '',
-    description: '',
-    source: 'manual',
-    status: 'draft',
-    createdBy: 'user',
-    steps: [{ key: Math.random().toString(36).slice(2, 10), name: 'Step 1', instructions: '', agentId: defaultAgentId }],
-  };
-}
-
-export function mapDetailToDraft(detail: WorkflowDetail): WorkflowDraft {
-  return {
-    id: detail.id,
-    name: detail.name,
-    description: detail.description,
-    source: detail.source,
-    status: detail.status,
-    createdBy: detail.createdBy,
-    steps: detail.steps.map((step) => ({
-      key: step.id,
-      name: step.name,
-      instructions: step.instructions,
-      agentId: step.agentId,
-    })),
-  };
-}
+  useWorkflowsQuery,
+  useWorkflowQuery,
+  useWorkflowRunsQuery,
+  useWorkflowRunQuery,
+  useStartWorkflowRunMutation,
+  useCancelWorkflowRunMutation,
+} from '../../lib/queries';
+import { useAgentsQuery } from '../../lib/queries';
 
 export function useWorkflowPageState() {
-  const [workflowSummaries, setWorkflowSummaries] = useState<WorkflowListItem[]>([]);
-  const [agents, setAgents] = useState<AgentRecord[]>([]);
+  // UI selection state only — server data is owned by React Query
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<WorkflowDraft | null>(null);
-  const [runs, setRuns] = useState<WorkflowRunListItem[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [selectedRun, setSelectedRun] = useState<WorkflowRunDetail | null>(null);
 
-  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [loadingRuns, setLoadingRuns] = useState(false);
-  const [loadingRunDetail, setLoadingRunDetail] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Server state via React Query
+  const workflowsQuery = useWorkflowsQuery();
+  const agentsQuery = useAgentsQuery();
+  const workflowQuery = useWorkflowQuery(selectedWorkflowId ?? '');
+  const runsQuery = useWorkflowRunsQuery(selectedWorkflowId ?? '');
+  const runQuery = useWorkflowRunQuery(selectedRunId ?? '');
 
-  const loadWorkflowSummaries = useCallback(async () => {
-    setLoadingWorkflows(true);
-    try {
-      const [nextWorkflows, nextAgents] = await Promise.all([fetchWorkflows(), fetchAgents()]);
-      setWorkflowSummaries(nextWorkflows);
-      setAgents(nextAgents);
-      setSelectedWorkflowId((current) => {
-        if (current && nextWorkflows.some((w) => w.id === current)) return current;
-        return nextWorkflows[0]?.id ?? null;
-      });
-      if (nextWorkflows.length === 0) setDraft(emptyDraft(nextAgents[0]?.id ?? ''));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load workflows');
-    } finally {
-      setLoadingWorkflows(false);
-    }
-  }, []);
+  const startMutation = useStartWorkflowRunMutation();
+  const cancelMutation = useCancelWorkflowRunMutation();
 
-  useEffect(() => { void loadWorkflowSummaries(); }, [loadWorkflowSummaries]);
-
-  const loadSelectedWorkflow = useCallback(async (workflowId: string) => {
-    setLoadingDetail(true);
-    setLoadingRuns(true);
-    try {
-      const [detail, runItems] = await Promise.all([fetchWorkflow(workflowId), fetchWorkflowRuns(workflowId)]);
-      setDraft(mapDetailToDraft(detail));
-      setRuns(runItems);
-      setSelectedRunId((current) => {
-        if (current && runItems.some((r) => r.id === current)) return current;
-        return runItems[0]?.id ?? null;
-      });
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load workflow');
-    } finally {
-      setLoadingDetail(false);
-      setLoadingRuns(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!selectedWorkflowId) return;
-    void loadSelectedWorkflow(selectedWorkflowId);
-  }, [selectedWorkflowId, loadSelectedWorkflow]);
-
-  // Load run detail when selection changes
-  useEffect(() => {
-    if (!selectedRunId) { setSelectedRun(null); return; }
-    let cancelled = false;
-    const load = async () => {
-      setLoadingRunDetail(true);
-      try {
-        const detail = await fetchWorkflowRun(selectedRunId);
-        if (!cancelled) setSelectedRun(detail);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load run');
-      } finally {
-        if (!cancelled) setLoadingRunDetail(false);
-      }
-    };
-    void load();
-    return () => { cancelled = true; };
-  }, [selectedRunId]);
-
-  // Poll active runs every 2 seconds
-  const hasActiveRun = useMemo(
-    () => runs.some((r) => r.status === 'queued' || r.status === 'running'),
-    [runs],
-  );
-  useEffect(() => {
-    if (!selectedWorkflowId || !hasActiveRun) return;
-    const interval = setInterval(() => {
-      void (async () => {
-        try {
-          const runItems = await fetchWorkflowRuns(selectedWorkflowId);
-          setRuns(runItems);
-          if (selectedRunId) setSelectedRun(await fetchWorkflowRun(selectedRunId));
-        } catch { /* silent refresh */ }
-      })();
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [selectedWorkflowId, hasActiveRun, selectedRunId]);
-
-  const handleCreate = () => {
-    setSelectedWorkflowId(null);
+  const handleSelectWorkflow = useCallback((id: string) => {
+    setSelectedWorkflowId(id);
     setSelectedRunId(null);
-    setSelectedRun(null);
-    setDraft(emptyDraft(agents[0]?.id ?? ''));
-  };
+  }, []);
 
-  const handleSave = async () => {
-    if (!draft) return;
-    setSaving(true);
-    try {
-      const payload = {
-        name: draft.name,
-        description: draft.description,
-        status: draft.status,
-        steps: draft.steps.map((s) => ({ name: s.name, instructions: s.instructions, agentId: s.agentId })),
-      };
-      const saved = draft.id ? await updateWorkflow(draft.id, payload) : await createWorkflow(payload);
-      setDraft(mapDetailToDraft(saved));
-      setSelectedWorkflowId(saved.id);
-      await loadWorkflowSummaries();
-      await loadSelectedWorkflow(saved.id);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save workflow');
-    } finally {
-      setSaving(false);
-    }
-  };
+  const handleRun = useCallback(
+    async (payload?: { input?: string; triggeredBy?: string }) => {
+      if (!selectedWorkflowId) return;
+      try {
+        const result = await startMutation.mutateAsync({
+          workflowId: selectedWorkflowId,
+          payload,
+        });
+        setSelectedRunId(result.runId);
+      } catch {
+        // Error is surfaced via startMutation.error — no additional handling needed
+      }
+    },
+    [selectedWorkflowId, startMutation],
+  );
 
-  const handleDelete = async () => {
-    if (!draft?.id) return;
-    setDeleting(true);
-    try {
-      await deleteWorkflow(draft.id);
-      setDraft(null);
-      setSelectedRun(null);
-      setSelectedRunId(null);
-      await loadWorkflowSummaries();
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete workflow');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const handleRun = async () => {
-    if (!draft?.id) return;
-    setRunning(true);
-    try {
-      const started = await startWorkflowRun(draft.id, { triggeredBy: 'user' });
-      setSelectedRunId(started.runId);
-      const [runItems, runDetail] = await Promise.all([fetchWorkflowRuns(draft.id), fetchWorkflowRun(started.runId)]);
-      setRuns(runItems);
-      setSelectedRun(runDetail);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start run');
-    } finally {
-      setRunning(false);
-    }
-  };
+  const handleCancel = useCallback(async (runId: string) => {
+    await cancelMutation.mutateAsync(runId);
+  }, [cancelMutation]);
 
   return {
-    workflowSummaries,
-    agents,
+    // Data
+    workflowSummaries: workflowsQuery.data ?? [],
+    agents: agentsQuery.data ?? [],
     selectedWorkflowId,
-    setSelectedWorkflowId,
-    draft,
-    setDraft,
-    runs,
+    setSelectedWorkflowId: handleSelectWorkflow,
+    workflow: workflowQuery.data ?? null,
+    runs: runsQuery.data ?? [],
     selectedRunId,
     setSelectedRunId,
-    selectedRun,
-    loadingWorkflows,
-    loadingDetail,
-    loadingRuns,
-    loadingRunDetail,
-    saving,
-    deleting,
-    running,
-    error,
-    handleCreate,
-    handleSave,
-    handleDelete,
+    selectedRun: runQuery.data ?? null,
+
+    // Loading flags — mapped from React Query states
+    loadingWorkflows: workflowsQuery.isPending,
+    loadingDetail: workflowQuery.isFetching,
+    loadingRuns: runsQuery.isFetching,
+    loadingRunDetail: runQuery.isFetching,
+
+    // Mutation states
+    running: startMutation.isPending,
+    cancelling: cancelMutation.isPending ? cancelMutation.variables ?? null : null,
+
+    // Error — surface workflow list error first, then selected workflow error
+    error: workflowsQuery.error?.message ?? workflowQuery.error?.message ?? null,
+
+    // Handlers
     handleRun,
+    handleCancel,
   };
 }

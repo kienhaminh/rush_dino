@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
-use rushdino_agent::{RunKind, RunListFilter, RunSnapshot, RunState};
+use rushdino_agent::{InputRequestResult, RunKind, RunListFilter, RunSnapshot, RunState};
 use rushdino_common::Result;
 
 use crate::state::AppState;
@@ -94,6 +94,13 @@ pub async fn abort_run(
         let _ = state
             .gate
             .resolve(&approval.session_id, &approval.request_id, false)
+            .await;
+    }
+
+    if let Some(request) = state.input_gate.find_pending_for_run(&run_id).await {
+        let _ = state
+            .input_gate
+            .resolve(&request.request_id, InputRequestResult::cancelled())
             .await;
     }
 

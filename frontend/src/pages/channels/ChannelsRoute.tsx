@@ -1,16 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import type {
+  AppConfigView,
+  ChannelPairingState,
+  CredentialsView,
+  IssuedMobileGatewayKey,
+  MobileGatewayKeyRecord,
+} from '@/lib/types';
 import {
-  fetchChannelPairing,
-  fetchConfig,
-  fetchCredentials,
-  patchConfig,
-  patchCredentials,
-  resolveChannelPairingRequest,
-  revokeChannelPairedUser,
-} from '@/lib/api';
-import type { AppConfigView, ChannelPairingState, CredentialsView } from '@/lib/types';
+  useConfigQuery,
+  useCredentialsQuery,
+  usePatchConfigMutation,
+  usePatchCredentialsMutation,
+  useChannelPairingQuery,
+  useMobileGatewayKeysQuery,
+  useIssueMobileKeyMutation,
+  useRevokeMobileKeyMutation,
+  useResolveChannelPairingMutation,
+  useRevokeChannelPairedUserMutation,
+} from '@/lib/queries';
 import {
   ChannelsPage,
   type ChannelConfigAction,
@@ -22,12 +31,14 @@ import {
 import { ChannelSettingsPage } from './ChannelSettingsPage';
 
 const CHANNEL_UI_SETTINGS_KEY = 'rushdino.channels.ui-settings.v1';
-const CHANNEL_ENABLED_OVERRIDES_KEY = 'rushdino.channels.enabled-overrides.v1';
 
 type ChannelSettingsState = Partial<Record<ChannelKey, ChannelUiSettings>>;
-type ChannelEnabledOverrides = Partial<Record<ChannelKey, boolean>>;
 type PairingChannel = Extract<ChannelKey, 'telegram' | 'discord'>;
-type ChannelPairingStateMap = Partial<Record<PairingChannel, ChannelPairingState>>;
+
+// Grouped localStorage-persisted channel config.
+type LocalChannelState = {
+  uiSettings: ChannelSettingsState;
+};
 
 function hasCredential(value: string | undefined): boolean {
   return Boolean(value && value.trim().length > 0);
@@ -52,8 +63,8 @@ function saveJsonRecord(key: string, value: object) {
 function buildSnapshot(
   config: AppConfigView | null,
   credentials: CredentialsView | null,
-  overrides: ChannelEnabledOverrides,
-  pairing: ChannelPairingStateMap,
+  telegramPairing: ChannelPairingState | undefined,
+  discordPairing: ChannelPairingState | undefined,
 ): ChannelsStatusSnapshot | null {
   if (!config || !credentials) return null;
 
@@ -66,16 +77,10 @@ function buildSnapshot(
     lastProbeAt: timestamp,
   });
 
-  const virtualStatus = (channel: ChannelKey) => {
-    const enabled = Boolean(overrides[channel]);
-    return status(enabled, enabled);
-  };
-
   const gateway = config.gateway;
   const telegramConfigured = hasCredential(credentials.telegram_bot_token);
   const discordConfigured = hasCredential(credentials.discord_bot_token);
-  const slackConfigured =
-    hasCredential(credentials.slack_bot_token) && hasCredential(credentials.slack_app_token);
+  const mobileConfigured = hasCredential(gateway.mobile.publish_host);
 
   return {
     channelMeta: [],
@@ -84,29 +89,20 @@ function buildSnapshot(
       telegram: {
         ...status(gateway.telegram.enabled, telegramConfigured),
         mode: 'polling',
-        pairedCount: pairing.telegram?.paired.length ?? 0,
-        pendingPairingCount: pairing.telegram?.pending.length ?? 0,
+        pairedCount: telegramPairing?.paired.length ?? 0,
+        pendingPairingCount: telegramPairing?.pending.length ?? 0,
       },
       discord: {
         ...status(gateway.discord.enabled, discordConfigured),
-        pairedCount: pairing.discord?.paired.length ?? 0,
-        pendingPairingCount: pairing.discord?.pending.length ?? 0,
+        pairedCount: discordPairing?.paired.length ?? 0,
+        pendingPairingCount: discordPairing?.pending.length ?? 0,
       },
-      slack: status(gateway.slack.enabled, slackConfigured),
-      whatsapp: virtualStatus('whatsapp'),
-      googlechat: virtualStatus('googlechat'),
-      signal: virtualStatus('signal'),
-      imessage: virtualStatus('imessage'),
-      nostr: virtualStatus('nostr'),
+      webchat: status(gateway.webchat.enabled, true),
+      mobile: status(gateway.mobile.enabled, mobileConfigured),
     },
   };
 }
 
-function isPersistedGatewayChannel(
-  channel: ChannelKey,
-): channel is 'telegram' | 'discord' | 'slack' {
-  return channel === 'telegram' || channel === 'discord' || channel === 'slack';
-}
 
 function supportsPairing(channel: ChannelKey): channel is PairingChannel {
   return channel === 'telegram' || channel === 'discord';
@@ -114,94 +110,88 @@ function supportsPairing(channel: ChannelKey): channel is PairingChannel {
 
 function isChannelKey(value: string | undefined): value is ChannelKey {
   return (
-    value === 'whatsapp' ||
     value === 'telegram' ||
     value === 'discord' ||
-    value === 'googlechat' ||
-    value === 'slack' ||
-    value === 'signal' ||
-    value === 'imessage' ||
-    value === 'nostr'
+    value === 'webchat' ||
+    value === 'mobile'
   );
 }
+
+type MobileGatewayState = {
+  keys: MobileGatewayKeyRecord[];
+  lastIssuedKey: IssuedMobileGatewayKey | null;
+};
+
+// ---------------------------------------------------------------------------
+// ChannelsRoute component
+// ---------------------------------------------------------------------------
 
 export function ChannelsRoute() {
   const navigate = useNavigate();
   const params = useParams<{ channel?: string }>();
   const routeChannel = params.channel;
 
-  const [config, setConfig] = useState<AppConfigView | null>(null);
-  const [credentials, setCredentials] = useState<CredentialsView | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [lastError, setLastError] = useState<string | null>(null);
-  const [lastSuccessAt, setLastSuccessAt] = useState<number | null>(null);
+  // Server state via React Query
+  const configQuery = useConfigQuery();
+  const credentialsQuery = useCredentialsQuery();
+  const telegramQuery = useChannelPairingQuery('telegram');
+  const discordQuery = useChannelPairingQuery('discord');
+  const mobileKeysQuery = useMobileGatewayKeysQuery();
 
-  const [channelConfigSaving, setChannelConfigSaving] = useState(false);
-  const [channelUiSettings, setChannelUiSettings] = useState<ChannelSettingsState>(() =>
-    loadJsonRecord<ChannelSettingsState>(CHANNEL_UI_SETTINGS_KEY),
-  );
-  const [channelEnabledOverrides, setChannelEnabledOverrides] = useState<ChannelEnabledOverrides>(
-    () => loadJsonRecord<ChannelEnabledOverrides>(CHANNEL_ENABLED_OVERRIDES_KEY),
-  );
-  const [channelPairing, setChannelPairing] = useState<ChannelPairingStateMap>({});
-  const hasLoadedInitialDataRef = useRef(false);
+  const patchConfigMutation = usePatchConfigMutation();
+  const patchCredsMutation = usePatchCredentialsMutation();
+  const issueMutation = useIssueMobileKeyMutation();
+  const revokeMutation = useRevokeMobileKeyMutation();
+  const resolvePairingMutation = useResolveChannelPairingMutation();
+  const revokeUserMutation = useRevokeChannelPairedUserMutation();
+
+  const config = configQuery.data ?? null;
+  const credentials = credentialsQuery.data ?? null;
+  const loading = configQuery.isPending || credentialsQuery.isPending;
+  const lastError =
+    (configQuery.error instanceof Error ? configQuery.error.message : null) ??
+    (credentialsQuery.error instanceof Error ? credentialsQuery.error.message : null);
+  const lastSuccessAt = configQuery.dataUpdatedAt || null;
+
+  // lastIssuedKey is local UI state — not in the query cache
+  const [lastIssuedKey, setLastIssuedKey] = useState<IssuedMobileGatewayKey | null>(null);
+
+  // channelConfigSaving tracks in-flight mutations for UI busy state
+  const channelConfigSaving =
+    patchConfigMutation.isPending ||
+    patchCredsMutation.isPending ||
+    issueMutation.isPending ||
+    revokeMutation.isPending ||
+    resolvePairingMutation.isPending ||
+    revokeUserMutation.isPending;
+
+  const [localConfig, setLocalConfig] = useState<LocalChannelState>(() => ({
+    uiSettings: loadJsonRecord<ChannelSettingsState>(CHANNEL_UI_SETTINGS_KEY),
+  }));
+  const { uiSettings: channelUiSettings } = localConfig;
+
+  // Persist localStorage key whenever localConfig changes.
+  useEffect(() => {
+    saveJsonRecord(CHANNEL_UI_SETTINGS_KEY, localConfig.uiSettings);
+  }, [localConfig]);
 
   const snapshot = useMemo(
-    () => buildSnapshot(config, credentials, channelEnabledOverrides, channelPairing),
-    [config, credentials, channelEnabledOverrides, channelPairing],
+    () => buildSnapshot(config, credentials, telegramQuery.data, discordQuery.data),
+    [config, credentials, telegramQuery.data, discordQuery.data],
   );
 
-  useEffect(() => {
-    saveJsonRecord(CHANNEL_UI_SETTINGS_KEY, channelUiSettings);
-  }, [channelUiSettings]);
-
-  useEffect(() => {
-    saveJsonRecord(CHANNEL_ENABLED_OVERRIDES_KEY, channelEnabledOverrides);
-  }, [channelEnabledOverrides]);
-
-  const refresh = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [nextConfig, nextCredentials, telegramPairing, discordPairing] = await Promise.all([
-        fetchConfig(),
-        fetchCredentials(),
-        fetchChannelPairing('telegram'),
-        fetchChannelPairing('discord'),
-      ]);
-      setConfig(nextConfig);
-      setCredentials(nextCredentials);
-      setChannelPairing({
-        telegram: telegramPairing,
-        discord: discordPairing,
-      });
-      setLastError(null);
-      setLastSuccessAt(Date.now());
-    } catch (err) {
-      setLastError(err instanceof Error ? err.message : 'Failed to load channels state.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (hasLoadedInitialDataRef.current) return;
-    hasLoadedInitialDataRef.current = true;
-    void refresh();
-  }, [refresh]);
+  // Derive mobile gateway keys from query cache; keep lastIssuedKey as local state
+  const mobileGateway: MobileGatewayState = {
+    keys: mobileKeysQuery.data ?? [],
+    lastIssuedKey,
+  };
 
   const handleChannelToggle = useCallback(
     async (channel: ChannelKey, enabled: boolean) => {
       if (!config) return;
 
-      if (!isPersistedGatewayChannel(channel)) {
-        setChannelEnabledOverrides((prev) => ({ ...prev, [channel]: enabled }));
-        toast.success(`${enabled ? 'Enabled' : 'Disabled'} ${channel} for this UI session.`);
-        return;
-      }
-
       try {
-        setChannelConfigSaving(true);
-        const nextConfig = await patchConfig({
+        await patchConfigMutation.mutateAsync({
           gateway: {
             ...config.gateway,
             [channel]: {
@@ -210,17 +200,12 @@ export function ChannelsRoute() {
             },
           },
         });
-        setConfig(nextConfig);
-        setLastSuccessAt(Date.now());
-        setLastError(null);
         toast.success(`${enabled ? 'Enabled' : 'Disabled'} ${channel} channel.`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : `Failed to toggle ${channel} channel.`);
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [config],
+    [config, patchConfigMutation],
   );
 
   const handleChannelConfigAction = useCallback(
@@ -231,7 +216,10 @@ export function ChannelsRoute() {
       }
 
       if (patch.uiSettings) {
-        setChannelUiSettings((prev) => ({ ...prev, [channel]: patch.uiSettings }));
+        setLocalConfig((prev) => ({
+          ...prev,
+          uiSettings: { ...prev.uiSettings, [channel]: patch.uiSettings },
+        }));
       }
 
       if (action === 'test') {
@@ -250,11 +238,14 @@ export function ChannelsRoute() {
           return;
         }
         if (
-          channel === 'slack' &&
-          (!hasCredential(patch.slackBotToken ?? credentials?.slack_bot_token) ||
-            !hasCredential(patch.slackAppToken ?? credentials?.slack_app_token))
+          channel === 'mobile' &&
+          !hasCredential(
+            typeof patch.mobilePublishHost === 'string'
+              ? patch.mobilePublishHost
+              : config.gateway.mobile.publish_host,
+          )
         ) {
-          toast.error('Slack test failed: both bot and app tokens are required.');
+          toast.error('Mobile Gateway test failed: publish host is missing.');
           return;
         }
         toast.info(
@@ -264,15 +255,6 @@ export function ChannelsRoute() {
       }
 
       const requestedEnabled = action === 'connect' ? true : patch.enabled;
-
-      if (!isPersistedGatewayChannel(channel)) {
-        if (typeof requestedEnabled === 'boolean') {
-          setChannelEnabledOverrides((prev) => ({ ...prev, [channel]: requestedEnabled }));
-        }
-        setLastSuccessAt(Date.now());
-        toast.success(`Saved ${channel} detail configuration.`);
-        return;
-      }
 
       const configPatch: Partial<AppConfigView> = {};
       const credentialsPatch: Partial<CredentialsView> = {};
@@ -306,17 +288,25 @@ export function ChannelsRoute() {
           },
         };
       }
+      if (channel === 'mobile' && typeof patch.mobilePublishHost === 'string') {
+        const baseGateway = configPatch.gateway ?? config.gateway;
+        configPatch.gateway = {
+          ...baseGateway,
+          mobile: {
+            ...baseGateway.mobile,
+            enabled:
+              typeof requestedEnabled === 'boolean'
+                ? requestedEnabled
+                : baseGateway.mobile.enabled,
+            publish_host: patch.mobilePublishHost,
+          },
+        };
+      }
       if (patch.telegramBotToken != null) {
         credentialsPatch.telegram_bot_token = patch.telegramBotToken;
       }
       if (patch.discordBotToken != null) {
         credentialsPatch.discord_bot_token = patch.discordBotToken;
-      }
-      if (patch.slackBotToken != null) {
-        credentialsPatch.slack_bot_token = patch.slackBotToken;
-      }
-      if (patch.slackAppToken != null) {
-        credentialsPatch.slack_app_token = patch.slackAppToken;
       }
 
       const hasConfigPatch = Object.keys(configPatch).length > 0;
@@ -324,7 +314,6 @@ export function ChannelsRoute() {
       const hasUiPatch = Boolean(patch.uiSettings);
 
       if (!hasConfigPatch && !hasCredentialsPatch) {
-        setLastSuccessAt(Date.now());
         if (hasUiPatch) {
           toast.success(`Saved ${channel} UI configuration.`);
         } else {
@@ -334,15 +323,10 @@ export function ChannelsRoute() {
       }
 
       try {
-        setChannelConfigSaving(true);
-        const [nextConfig, nextCredentials] = await Promise.all([
-          hasConfigPatch ? patchConfig(configPatch) : Promise.resolve(config),
-          hasCredentialsPatch ? patchCredentials(credentialsPatch) : Promise.resolve(credentials),
+        await Promise.all([
+          hasConfigPatch ? patchConfigMutation.mutateAsync(configPatch) : Promise.resolve(),
+          hasCredentialsPatch ? patchCredsMutation.mutateAsync(credentialsPatch) : Promise.resolve(),
         ]);
-        if (nextConfig) setConfig(nextConfig);
-        if (nextCredentials) setCredentials(nextCredentials);
-        setLastSuccessAt(Date.now());
-        setLastError(null);
         if (action === 'connect') {
           toast.success(`${channel} configuration saved and channel connected.`);
         } else {
@@ -352,12 +336,30 @@ export function ChannelsRoute() {
         toast.error(
           err instanceof Error ? err.message : `Failed to ${action} ${channel} configuration.`,
         );
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [config, credentials],
+    [config, credentials, patchConfigMutation, patchCredsMutation],
   );
+
+  const handleIssueMobileGatewayKey = useCallback(async (label?: string) => {
+    try {
+      const issued = await issueMutation.mutateAsync({ label });
+      setLastIssuedKey(issued);
+      toast.success('Issued mobile gateway key.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to issue mobile gateway key.');
+    }
+  }, [issueMutation]);
+
+  const handleRevokeMobileGatewayKey = useCallback(async (id: string) => {
+    try {
+      await revokeMutation.mutateAsync(id);
+      setLastIssuedKey((prev) => (prev?.id === id ? null : prev));
+      toast.success('Revoked mobile gateway key.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to revoke mobile gateway key.');
+    }
+  }, [revokeMutation]);
 
   const openChannelConfig = useCallback(
     (channel: ChannelKey) => {
@@ -370,42 +372,45 @@ export function ChannelsRoute() {
     navigate('/gateway');
   }, [navigate]);
 
-  const refreshPairingChannel = useCallback(async (channel: PairingChannel) => {
-    const next = await fetchChannelPairing(channel);
-    setChannelPairing((prev) => ({ ...prev, [channel]: next }));
-  }, []);
-
   const handlePairingDecision = useCallback(
     async (channel: PairingChannel, requestId: string, approved: boolean) => {
       try {
-        setChannelConfigSaving(true);
-        await resolveChannelPairingRequest(channel, requestId, approved);
-        await refreshPairingChannel(channel);
+        await resolvePairingMutation.mutateAsync({ channel, requestId, approved });
         toast.success(approved ? 'Pairing approved.' : 'Pairing denied.');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to resolve pairing request.');
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [refreshPairingChannel],
+    [resolvePairingMutation],
   );
 
   const handlePairingRevoke = useCallback(
     async (channel: PairingChannel, senderId: string) => {
       try {
-        setChannelConfigSaving(true);
-        await revokeChannelPairedUser(channel, senderId);
-        await refreshPairingChannel(channel);
+        await revokeUserMutation.mutateAsync({ channel, senderId });
         toast.success('Paired user revoked.');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to revoke paired user.');
-      } finally {
-        setChannelConfigSaving(false);
       }
     },
-    [refreshPairingChannel],
+    [revokeUserMutation],
   );
+
+  const refreshPairingChannel = useCallback(
+    (channel: PairingChannel) => {
+      if (channel === 'telegram') void telegramQuery.refetch();
+      else if (channel === 'discord') void discordQuery.refetch();
+    },
+    [telegramQuery, discordQuery],
+  );
+
+  const handleRefresh = useCallback(() => {
+    void configQuery.refetch();
+    void credentialsQuery.refetch();
+    void telegramQuery.refetch();
+    void discordQuery.refetch();
+    void mobileKeysQuery.refetch();
+  }, [configQuery, credentialsQuery, telegramQuery, discordQuery, mobileKeysQuery]);
 
   if (routeChannel && !isChannelKey(routeChannel)) {
     return <Navigate to="/gateway" replace />;
@@ -413,6 +418,9 @@ export function ChannelsRoute() {
 
   if (routeChannel && isChannelKey(routeChannel)) {
     const status = snapshot?.channels?.[routeChannel] ?? {};
+    const pairingData = supportsPairing(routeChannel)
+      ? (routeChannel === 'telegram' ? telegramQuery.data : discordQuery.data) ?? null
+      : null;
     return (
       <ChannelSettingsPage
         key={routeChannel}
@@ -424,7 +432,18 @@ export function ChannelsRoute() {
         saving={channelConfigSaving}
         loading={loading}
         lastError={lastError}
-        pairing={supportsPairing(routeChannel) ? channelPairing[routeChannel] ?? null : null}
+        pairing={pairingData}
+        mobileGateway={
+          routeChannel === 'mobile'
+            ? {
+                keys: mobileGateway.keys,
+                lastIssuedKey: mobileGateway.lastIssuedKey,
+                onIssueKey: handleIssueMobileGatewayKey,
+                onRevokeKey: handleRevokeMobileGatewayKey,
+                onDismissIssuedKey: () => setLastIssuedKey(null),
+              }
+            : null
+        }
         onAction={handleChannelConfigAction}
         onPairingRefresh={supportsPairing(routeChannel) ? refreshPairingChannel : undefined}
         onPairingDecision={supportsPairing(routeChannel) ? handlePairingDecision : undefined}
@@ -445,18 +464,10 @@ export function ChannelsRoute() {
       credentials={credentials}
       channelConfigSaving={channelConfigSaving}
       channelUiSettings={channelUiSettings}
-      nostrProfileFormState={null}
-      nostrProfileAccountId={null}
-      onRefresh={refresh}
+      onRefresh={handleRefresh}
       onChannelToggle={handleChannelToggle}
       onChannelConfigAction={handleChannelConfigAction}
       onOpenChannelConfig={openChannelConfig}
-      onNostrProfileEdit={() => {}}
-      onNostrProfileFieldChange={() => {}}
-      onNostrProfileSave={() => {}}
-      onNostrProfileImport={() => {}}
-      onNostrProfileCancel={() => {}}
-      onNostrProfileToggleAdvanced={() => {}}
     />
   );
 }

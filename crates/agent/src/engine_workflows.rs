@@ -5,7 +5,7 @@ use crate::{
     workflow_types::{
         CreateWorkflowInput, UpdateWorkflowInput, WorkflowDetail, WorkflowListItem,
         WorkflowRunDetail, WorkflowRunListItem, WorkflowRunStartResponse, WorkflowSource,
-        WorkflowStatus, WorkflowStepInput,
+        WorkflowStepInput,
     },
 };
 
@@ -45,60 +45,6 @@ impl crate::engine::AgentEngine {
         self.workflow_manager.delete_workflow(id).await
     }
 
-    /// Seeds bundled workflow templates as real workflows on first startup.
-    /// Skips seeding if any workflows already exist in the database.
-    pub async fn seed_initial_workflows(&self) {
-        match self.workflow_manager.list_workflows().await {
-            Ok(existing) if !existing.is_empty() => return,
-            Err(err) => {
-                tracing::warn!("seed_initial_workflows: failed to list workflows: {err}");
-                return;
-            }
-            _ => {}
-        }
-
-        for template in rushdino_common::workflow_templates::get_bundled_templates() {
-            let steps: Vec<WorkflowStepInput> = template
-                .steps
-                .into_iter()
-                .map(|step| WorkflowStepInput {
-                    name: step.name,
-                    agent_id: step.agent_id,
-                    instructions: step.instructions,
-                    ..Default::default()
-                })
-                .collect();
-
-            let input = CreateWorkflowInput {
-                name: template.name.clone(),
-                description: template.description,
-                status: WorkflowStatus::Draft,
-                steps,
-            };
-
-            match self.validate_workflow_agents(&input.steps) {
-                Ok(()) => {}
-                Err(err) => {
-                    tracing::warn!(
-                        "seed_initial_workflows: skipping '{}': {err}",
-                        template.name
-                    );
-                    continue;
-                }
-            }
-
-            if let Err(err) = self
-                .workflow_manager
-                .create_workflow(input, WorkflowSource::Manual, "system")
-                .await
-            {
-                tracing::warn!(
-                    "seed_initial_workflows: failed to create '{}': {err}",
-                    template.name
-                );
-            }
-        }
-    }
 
     pub async fn start_workflow_run(
         &self,

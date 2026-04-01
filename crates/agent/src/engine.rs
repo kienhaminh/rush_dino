@@ -1,13 +1,10 @@
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
-use sqlx::SqlitePool;
 use tokio::sync::{mpsc, oneshot, Mutex};
 
-use chrono::Utc;
 use rushdino_common::{config::AuthMethod, models::Message, models::Role, Result, RichContent};
 use rushdino_providers::{types::ChatChunk, types::ChatResponse, types::ThinkingLevel, Provider};
 use serde_json::Value;
@@ -22,7 +19,6 @@ use crate::{
     memory::MemoryManager,
     react_loop::StreamingEvent,
     runtime::{AgentRuntime, RunSnapshot},
-    system_broker::SharedSystemBroker,
     tool_registry::{SessionToolContext, ToolRegistry},
     usage_metrics_store::UsageMetricsStore,
     workflow_manager::WorkflowManager,
@@ -78,8 +74,9 @@ pub struct AgentEngine {
     pub(crate) provider_name: String,
     pub(crate) auth_method: AuthMethod,
     pub(crate) knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-    pub(crate) skill_graph: Option<Arc<rushdino_skill_graph::SkillGraphService>>,
     pub(crate) session_ctx: Arc<SessionToolContext>,
+    pub(crate) health_store: Arc<crate::agent_health_store::AgentHealthStore>,
+    pub(crate) message_store: Arc<crate::agent_message_store::AgentMessageStore>,
     pub(crate) config: AgentConfig,
     /// Shared runtime override — same Arc as RuntimeState.thinking_level_override.
     pub(crate) thinking_level_override: Arc<RwLock<Option<ThinkingLevel>>>,
@@ -195,57 +192,37 @@ mod config_tests {
 }
 
 impl AgentEngine {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        provider: Arc<Provider>,
-        pool: Arc<SqlitePool>,
-        home_dir: PathBuf,
-        brave_api_key: Option<String>,
-        gemini_api_key: Option<String>,
+        input: crate::engine_deps::EngineBuildInput,
         provider_name: String,
         auth_method: AuthMethod,
-        config: AgentConfig,
-        runtime: Arc<AgentRuntime>,
-        system_broker: SharedSystemBroker,
-        knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-        // Optional sandbox egress proxy — pass Some for sandboxed agents.
-        egress_proxy: Option<Arc<rushdino_security::egress_proxy::EgressProxy>>,
-        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Result<Self> {
-        let deps = build_engine_deps(
-            provider.clone(),
-            pool,
-            home_dir,
-            brave_api_key,
-            gemini_api_key,
-            &config,
-            runtime.clone(),
-            system_broker,
-            knowledge_graph.clone(),
-            egress_proxy,
-            broadcast_tx,
-        )?;
+        let provider = input.provider.clone();
+        let knowledge_graph = input.knowledge_graph.clone();
+        let config = input.config.clone();
+        let runtime = input.runtime.clone();
+        let deps = build_engine_deps(input)?;
 
         let usage_metrics = Arc::new(UsageMetricsStore::new(deps.pool.clone()));
 
         // Start the kanban dispatcher background loop. It polls the backlog and
         // auto-executes matched tasks using isolated react loops.
-        let dispatcher = Arc::new(crate::kanban_dispatcher::KanbanDispatcher::new(
-            deps.kanban_store.clone(),
-            deps.agent_manager.clone(),
-            provider.clone(),
-            config.clone(),
-            Arc::downgrade(&deps.tool_registry),
-            Arc::downgrade(&deps.session_ctx),
-            deps.memory.clone(),
-            deps.skill_manager.clone(),
-            deps.conversation.clone(),
-            deps.task_memory.clone(),
-            deps.health_store.clone(),
-            deps.home_dir.clone(),
-            deps.broadcast_tx.clone(),
-            deps.task_notify.clone(),
-        ));
+        let dispatcher = Arc::new(crate::kanban_dispatcher::KanbanDispatcher {
+            store: deps.kanban_store.clone(),
+            agent_manager: deps.agent_manager.clone(),
+            provider: provider.clone(),
+            config: config.clone(),
+            registry: Arc::downgrade(&deps.tool_registry),
+            session_ctx: Arc::downgrade(&deps.session_ctx),
+            memory: deps.memory.clone(),
+            skill_manager: deps.skill_manager.clone(),
+            conversation: deps.conversation.clone(),
+            task_memory: deps.task_memory.clone(),
+            health_store: deps.health_store.clone(),
+            home_dir: deps.home_dir.clone(),
+            broadcast_tx: deps.broadcast_tx.clone(),
+            task_notify: deps.task_notify.clone(),
+        });
         dispatcher.start();
 
         Ok(Self {
@@ -263,17 +240,14 @@ impl AgentEngine {
             provider_name,
             auth_method,
             knowledge_graph,
-            skill_graph: None,
             session_ctx: deps.session_ctx,
+            health_store: deps.health_store,
+            message_store: deps.message_store,
             config,
             thinking_level_override: Arc::new(RwLock::new(None)),
             runtime,
             pending_assistant_runs: Arc::new(Mutex::new(HashMap::new())),
         })
-    }
-
-    pub fn set_skill_graph(&mut self, sg: Arc<rushdino_skill_graph::SkillGraphService>) {
-        self.skill_graph = Some(sg);
     }
 
     pub(crate) async fn maybe_ingest_message(&self, source_type: &str, message: &Message) {
@@ -327,10 +301,10 @@ impl AgentEngine {
         if facts.is_empty() {
             return None;
         }
-        Some(Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::System,
-            content: format!(
+        Some(Message::new(
+            Uuid::new_v4().to_string(),
+            Role::System,
+            format!(
                 "Local knowledge graph facts (do not reveal raw internals unless asked):\n{}",
                 facts
                     .iter()
@@ -338,10 +312,7 @@ impl AgentEngine {
                     .collect::<Vec<_>>()
                     .join("\n")
             ),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        })
+        ))
     }
 
 }

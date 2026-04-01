@@ -11,17 +11,10 @@ import {
   useEdgesState,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { PlusIcon, XIcon, Trash2Icon } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { XIcon } from 'lucide-react';
 
 import type { AgentRecord } from '@/pages/agents/agent-types';
-import type { WorkflowDraft, WorkflowStepDraft } from './WorkflowEditorPanel';
+import type { WorkflowDetail, WorkflowStep } from './workflow-types';
 import { WorkflowStepNode } from './nodes/workflow-step-node';
 import { WorkflowFlowEdge } from './edges/workflow-flow-edge';
 
@@ -38,27 +31,23 @@ export const STEP_ACCENT_COLORS = [
   'rgb(236,72,153)',   // pink
 ];
 
-function uid() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
 // ── Node / edge builders ──────────────────────────────────────────────────────
 
 function buildNodes(
-  steps: WorkflowStepDraft[],
+  steps: WorkflowStep[],
   agents: AgentRecord[],
-  activeKey: string | null,
-  onSelect: (key: string) => void,
+  activeId: string | null,
+  onSelect: (id: string) => void,
 ): Node[] {
   return steps.map((step, index) => ({
-    id: step.key,
+    id: step.id,
     type: 'workflowStep',
     position: { x: index * 300, y: 80 },
     data: {
       step,
       agent: agents.find((a) => a.id === step.agentId),
       index,
-      isActive: step.key === activeKey,
+      isActive: step.id === activeId,
       accentColor: STEP_ACCENT_COLORS[index % STEP_ACCENT_COLORS.length],
       onSelect,
     },
@@ -66,11 +55,11 @@ function buildNodes(
   }));
 }
 
-function buildEdges(steps: WorkflowStepDraft[]): Edge[] {
+function buildEdges(steps: WorkflowStep[]): Edge[] {
   return steps.slice(0, -1).map((step, index) => ({
-    id: `wf-e-${step.key}→${steps[index + 1].key}`,
-    source: step.key,
-    target: steps[index + 1].key,
+    id: `wf-e-${step.id}→${steps[index + 1].id}`,
+    source: step.id,
+    target: steps[index + 1].id,
     type: 'workflowFlow',
     data: { accentColor: STEP_ACCENT_COLORS[index % STEP_ACCENT_COLORS.length] },
   }));
@@ -79,31 +68,236 @@ function buildEdges(steps: WorkflowStepDraft[]): Edge[] {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface CanvasProps {
-  draft: WorkflowDraft;
+  workflow: WorkflowDetail;
   agents: AgentRecord[];
-  onChange: (next: WorkflowDraft) => void;
+}
+
+interface WorkflowStepPanelProps {
+  activeStep: WorkflowStep | null;
+  activeIndex: number;
+  activeAccent: string;
+  agents: AgentRecord[];
+  onClose: () => void;
+}
+
+// ── Step detail side panel (read-only) ────────────────────────────────────────
+
+function WorkflowStepPanel({ activeStep, activeIndex, activeAccent, agents, onClose }: WorkflowStepPanelProps) {
+  const panelOpen = !!activeStep;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '12px',
+        right: '12px',
+        bottom: '12px',
+        width: '260px',
+        zIndex: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'hsl(var(--card) / 0.92)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        borderTopWidth: '2px',
+        borderTopStyle: 'solid',
+        borderTopColor: activeAccent,
+        borderRightWidth: '1px',
+        borderRightStyle: 'solid',
+        borderRightColor: 'hsl(var(--border))',
+        borderBottomWidth: '1px',
+        borderBottomStyle: 'solid',
+        borderBottomColor: 'hsl(var(--border))',
+        borderLeftWidth: '1px',
+        borderLeftStyle: 'solid',
+        borderLeftColor: 'hsl(var(--border))',
+        borderRadius: '12px',
+        boxShadow: `0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px ${activeAccent}20`,
+        transform: panelOpen ? 'translateX(0) scale(1)' : 'translateX(calc(100% + 20px)) scale(0.97)',
+        opacity: panelOpen ? 1 : 0,
+        transition: 'transform 0.22s cubic-bezier(0.22,1,0.36,1), opacity 0.18s ease, border-top-color 0.15s ease, box-shadow 0.15s ease',
+        pointerEvents: panelOpen ? 'auto' : 'none',
+      }}
+    >
+      {activeStep && (
+        <>
+          {/* Header */}
+          <div
+            style={{
+              padding: '10px 12px 9px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+              borderBottom: '1px solid hsl(var(--border) / 0.6)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <div
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '4px',
+                  background: activeAccent,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '7px',
+                  fontWeight: '800',
+                  color: '#fff',
+                  flexShrink: 0,
+                }}
+              >
+                {String(activeIndex + 1).padStart(2, '0')}
+              </div>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: 'hsl(var(--foreground))',
+                }}
+              >
+                {activeStep.name || 'Untitled step'}
+              </span>
+            </div>
+
+            <button
+              onClick={onClose}
+              title="Close"
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '6px',
+                border: '1px solid hsl(var(--border))',
+                background: 'transparent',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'hsl(var(--muted-foreground))',
+              }}
+            >
+              <XIcon style={{ width: '11px', height: '11px' }} />
+            </button>
+          </div>
+
+          {/* Fields (read-only) */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            {/* Step name */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <span
+                style={{
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.14em',
+                  color: 'hsl(var(--muted-foreground) / 0.7)',
+                }}
+              >
+                NAME
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'hsl(var(--foreground))',
+                  padding: '4px 0',
+                }}
+              >
+                {activeStep.name || '—'}
+              </span>
+            </div>
+
+            {/* Agent */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <span
+                style={{
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.14em',
+                  color: 'hsl(var(--muted-foreground) / 0.7)',
+                }}
+              >
+                AGENT
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'hsl(var(--foreground))',
+                  padding: '4px 0',
+                }}
+              >
+                {agents.find((a) => a.id === activeStep.agentId)
+                  ? `${agents.find((a) => a.id === activeStep.agentId)!.emoji ?? '🤖'} ${agents.find((a) => a.id === activeStep.agentId)!.name}`
+                  : activeStep.agentId || '—'}
+              </span>
+            </div>
+
+            {/* Instructions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
+              <span
+                style={{
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.14em',
+                  color: 'hsl(var(--muted-foreground) / 0.7)',
+                }}
+              >
+                INSTRUCTIONS
+              </span>
+              <p
+                style={{
+                  flex: 1,
+                  minHeight: '140px',
+                  padding: '7px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid hsl(var(--border) / 0.5)',
+                  background: 'hsl(var(--background) / 0.4)',
+                  color: 'hsl(var(--foreground))',
+                  fontSize: '11px',
+                  lineHeight: 1.6,
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {activeStep.instructions || <span style={{ opacity: 0.4 }}>No instructions</span>}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // ── Inner canvas component (ReactFlowProvider must wrap this) ─────────────────
 
-function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
-  const [activeKey, setActiveKey] = useState<string | null>(
-    draft.steps[0]?.key ?? null,
+function WorkflowCanvasInner({ workflow, agents }: CanvasProps) {
+  const [activeId, setActiveId] = useState<string | null>(
+    workflow.steps[0]?.id ?? null,
   );
 
   const handleSelect = useCallback(
-    (key: string) => setActiveKey((prev) => (prev === key ? null : key)),
+    (id: string) => setActiveId((prev) => (prev === id ? null : id)),
     [],
   );
 
   // Build initial state once
   const initialNodes = useMemo(
-    () => buildNodes(draft.steps, agents, null, handleSelect),
+    () => buildNodes(workflow.steps, agents, null, handleSelect),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
   const initialEdges = useMemo(
-    () => buildEdges(draft.steps),
+    () => buildEdges(workflow.steps),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -115,8 +309,8 @@ function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
   useEffect(() => {
     setNodes((prev) =>
       prev.map((node) => {
-        const index = draft.steps.findIndex((s) => s.key === node.id);
-        const step = draft.steps[index];
+        const index = workflow.steps.findIndex((s) => s.id === node.id);
+        const step = workflow.steps[index];
         if (!step) return node;
         return {
           ...node,
@@ -125,37 +319,37 @@ function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
             step,
             agent: agents.find((a) => a.id === step.agentId),
             index,
-            isActive: step.key === activeKey,
+            isActive: step.id === activeId,
             accentColor: STEP_ACCENT_COLORS[index % STEP_ACCENT_COLORS.length],
             onSelect: handleSelect,
           },
         };
       }),
     );
-  }, [draft.steps, agents, activeKey, handleSelect, setNodes]);
+  }, [workflow.steps, agents, activeId, handleSelect, setNodes]);
 
-  // Handle step list structural changes (additions / removals)
+  // Handle step list structural changes
   useEffect(() => {
     setNodes((prev) => {
-      const stepKeySet = new Set(draft.steps.map((s) => s.key));
-      const nodeKeySet = new Set(prev.map((n) => n.id));
+      const stepIdSet = new Set(workflow.steps.map((s) => s.id));
+      const nodeIdSet = new Set(prev.map((n) => n.id));
 
-      const kept = prev.filter((n) => stepKeySet.has(n.id));
+      const kept = prev.filter((n) => stepIdSet.has(n.id));
       const maxX = kept.reduce((m, n) => Math.max(m, n.position.x), -300);
 
-      const added = draft.steps
-        .filter((s) => !nodeKeySet.has(s.key))
+      const added = workflow.steps
+        .filter((s) => !nodeIdSet.has(s.id))
         .map((step, i) => {
-          const index = draft.steps.findIndex((s2) => s2.key === step.key);
+          const index = workflow.steps.findIndex((s2) => s2.id === step.id);
           return {
-            id: step.key,
+            id: step.id,
             type: 'workflowStep',
             position: { x: maxX + 300 + i * 300, y: 80 },
             data: {
               step,
               agent: agents.find((a) => a.id === step.agentId),
               index,
-              isActive: step.key === activeKey,
+              isActive: step.id === activeId,
               accentColor: STEP_ACCENT_COLORS[index % STEP_ACCENT_COLORS.length],
               onSelect: handleSelect,
             },
@@ -166,56 +360,17 @@ function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
       return [...kept, ...added];
     });
 
-    setEdges(buildEdges(draft.steps));
+    setEdges(buildEdges(workflow.steps));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.steps.length]);
-
-  // ── Step actions ────────────────────────────────────────────────────────────
-
-  const updateActiveStep = useCallback(
-    (patch: Partial<WorkflowStepDraft>) => {
-      if (!activeKey) return;
-      onChange({
-        ...draft,
-        steps: draft.steps.map((s) => (s.key === activeKey ? { ...s, ...patch } : s)),
-      });
-    },
-    [activeKey, draft, onChange],
-  );
-
-  const removeActiveStep = useCallback(() => {
-    if (!activeKey) return;
-    const next = draft.steps.filter((s) => s.key !== activeKey);
-    onChange({ ...draft, steps: next });
-    setActiveKey(next[0]?.key ?? null);
-  }, [activeKey, draft, onChange]);
-
-  const addStep = useCallback(() => {
-    const key = uid();
-    onChange({
-      ...draft,
-      steps: [
-        ...draft.steps,
-        {
-          key,
-          name: `Step ${draft.steps.length + 1}`,
-          instructions: '',
-          agentId: agents[0]?.id ?? '',
-        },
-      ],
-    });
-    setActiveKey(key);
-  }, [draft, agents, onChange]);
+  }, [workflow.steps.length]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
 
-  const activeStep = draft.steps.find((s) => s.key === activeKey) ?? null;
+  const activeStep = workflow.steps.find((s) => s.id === activeId) ?? null;
   const activeIndex = activeStep
-    ? draft.steps.findIndex((s) => s.key === activeKey)
+    ? workflow.steps.findIndex((s) => s.id === activeId)
     : 0;
   const activeAccent = STEP_ACCENT_COLORS[activeIndex % STEP_ACCENT_COLORS.length];
-
-  const panelOpen = !!activeStep;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -229,8 +384,8 @@ function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onPaneClick={() => setActiveKey(null)}
-        fitView={draft.steps.length > 0}
+        onPaneClick={() => setActiveId(null)}
+        fitView={workflow.steps.length > 0}
         fitViewOptions={{ padding: 0.35 }}
         minZoom={0.25}
         maxZoom={2}
@@ -259,7 +414,7 @@ function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
         />
 
         {/* Empty state overlay */}
-        {draft.steps.length === 0 && (
+        {workflow.steps.length === 0 && (
           <div
             style={{
               position: 'absolute',
@@ -284,263 +439,19 @@ function WorkflowCanvasInner({ draft, agents, onChange }: CanvasProps) {
               No steps yet
             </p>
             <p style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))', margin: 0 }}>
-              Click <strong>Add Step</strong> to build your pipeline
+              Agents configure workflow steps via CLI
             </p>
           </div>
         )}
       </ReactFlow>
 
-      {/* Floating "Add Step" pill */}
-      <button
-        onClick={addStep}
-        style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: panelOpen ? 'calc(50% - 140px)' : '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '7px',
-          padding: '9px 22px',
-          borderRadius: '999px',
-          background: 'hsl(var(--primary))',
-          color: 'hsl(var(--primary-foreground))',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: '12px',
-          fontWeight: '600',
-          letterSpacing: '0.04em',
-          fontFamily: 'inherit',
-          boxShadow: '0 4px 20px hsl(var(--primary) / 0.35)',
-          zIndex: 10,
-          transition: 'left 0.25s cubic-bezier(0.22,1,0.36,1)',
-        }}
-      >
-        <PlusIcon style={{ width: '14px', height: '14px' }} />
-        Add Step
-      </button>
-
-      {/* Step editor side panel */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '12px',
-          right: '12px',
-          bottom: '12px',
-          width: '260px',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'hsl(var(--card) / 0.92)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderTopWidth: '2px',
-          borderTopStyle: 'solid',
-          borderTopColor: activeAccent,
-          borderRightWidth: '1px',
-          borderRightStyle: 'solid',
-          borderRightColor: 'hsl(var(--border))',
-          borderBottomWidth: '1px',
-          borderBottomStyle: 'solid',
-          borderBottomColor: 'hsl(var(--border))',
-          borderLeftWidth: '1px',
-          borderLeftStyle: 'solid',
-          borderLeftColor: 'hsl(var(--border))',
-          borderRadius: '12px',
-          boxShadow: `0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px ${activeAccent}20`,
-          transform: panelOpen ? 'translateX(0) scale(1)' : 'translateX(calc(100% + 20px)) scale(0.97)',
-          opacity: panelOpen ? 1 : 0,
-          transition: 'transform 0.22s cubic-bezier(0.22,1,0.36,1), opacity 0.18s ease, border-top-color 0.15s ease, box-shadow 0.15s ease',
-          pointerEvents: panelOpen ? 'auto' : 'none',
-        }}
-      >
-        {activeStep && (
-          <>
-            {/* Header */}
-            <div
-              style={{
-                padding: '10px 12px 9px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexShrink: 0,
-                borderBottom: '1px solid hsl(var(--border) / 0.6)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                <div
-                  style={{
-                    width: '18px',
-                    height: '18px',
-                    borderRadius: '4px',
-                    background: activeAccent,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '7px',
-                    fontWeight: '800',
-                    color: '#fff',
-                    flexShrink: 0,
-                  }}
-                >
-                  {String(activeIndex + 1).padStart(2, '0')}
-                </div>
-                <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: 'hsl(var(--foreground))',
-                  }}
-                >
-                  {activeStep.name || 'Untitled step'}
-                </span>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <button
-                  onClick={removeActiveStep}
-                  title="Remove step"
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '6px',
-                    border: '1px solid hsl(var(--destructive) / 0.3)',
-                    color: 'hsl(var(--destructive) / 0.7)',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Trash2Icon style={{ width: '11px', height: '11px' }} />
-                </button>
-                <button
-                  onClick={() => setActiveKey(null)}
-                  title="Close"
-                  style={{
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '6px',
-                    border: '1px solid hsl(var(--border))',
-                    background: 'transparent',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'hsl(var(--muted-foreground))',
-                  }}
-                >
-                  <XIcon style={{ width: '11px', height: '11px' }} />
-                </button>
-              </div>
-            </div>
-
-            {/* Fields */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                padding: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '10px',
-              }}
-            >
-              {/* Step name */}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <span
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    letterSpacing: '0.14em',
-                    color: 'hsl(var(--muted-foreground) / 0.7)',
-                  }}
-                >
-                  NAME
-                </span>
-                <input
-                  value={activeStep.name}
-                  onChange={(e) => updateActiveStep({ name: e.target.value })}
-                  style={{
-                    height: '28px',
-                    padding: '0 8px',
-                    borderRadius: '6px',
-                    border: '1px solid hsl(var(--border))',
-                    background: 'hsl(var(--background) / 0.6)',
-                    color: 'hsl(var(--foreground))',
-                    fontSize: '11px',
-                    fontFamily: 'inherit',
-                    outline: 'none',
-                  }}
-                />
-              </label>
-
-              {/* Agent */}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                <span
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    letterSpacing: '0.14em',
-                    color: 'hsl(var(--muted-foreground) / 0.7)',
-                  }}
-                >
-                  AGENT
-                </span>
-                <Select
-                  value={activeStep.agentId}
-                  onValueChange={(val) => updateActiveStep({ agentId: val })}
-                >
-                  <SelectTrigger className="h-7 text-xs border-border/70 bg-background/60">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agents.map((agent) => (
-                      <SelectItem key={agent.id} value={agent.id}>
-                        {agent.emoji} {agent.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </label>
-
-              {/* Instructions */}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '3px', flex: 1 }}>
-                <span
-                  style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    letterSpacing: '0.14em',
-                    color: 'hsl(var(--muted-foreground) / 0.7)',
-                  }}
-                >
-                  INSTRUCTIONS
-                </span>
-                <textarea
-                  value={activeStep.instructions}
-                  onChange={(e) => updateActiveStep({ instructions: e.target.value })}
-                  placeholder="What should this agent do?"
-                  style={{
-                    flex: 1,
-                    minHeight: '140px',
-                    padding: '7px 8px',
-                    borderRadius: '6px',
-                    border: '1px solid hsl(var(--border))',
-                    background: 'hsl(var(--background) / 0.6)',
-                    color: 'hsl(var(--foreground))',
-                    fontSize: '11px',
-                    fontFamily: 'inherit',
-                    resize: 'none',
-                    outline: 'none',
-                    lineHeight: 1.6,
-                  }}
-                />
-              </label>
-            </div>
-          </>
-        )}
-      </div>
+      <WorkflowStepPanel
+        activeStep={activeStep}
+        activeIndex={activeIndex}
+        activeAccent={activeAccent}
+        agents={agents}
+        onClose={() => setActiveId(null)}
+      />
     </div>
   );
 }

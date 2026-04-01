@@ -1,128 +1,84 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import {
-  deleteConversation,
-  resetSession,
-  fetchConversation,
-  fetchRegisteredTools,
-  fetchSessionRuns,
-  fetchSessions,
-  fetchSoulMemoryState,
-  fetchSystemPrompt,
-  fetchSystemSummary,
-  patchThinkingLevel,
-} from '@/lib/api';
 import type {
   Message,
   RegisteredTool,
   RunSnapshot,
   SessionSummary,
   SoulMemoryStateResponse,
-  SystemSummaryResponse,
 } from '@/lib/types';
+import {
+  useSessionsQuery,
+  useSessionRunsQuery,
+  useConversationQuery,
+  useDeleteConversationMutation,
+  useResetSessionMutation,
+  sessionKeys,
+} from '@/lib/queries/sessions';
+import { useSystemPromptQuery, useRegisteredToolsQuery, usePatchThinkingLevelMutation } from '@/lib/queries/config';
+import { useSoulMemoryQuery } from '@/lib/queries/soul-memory';
+import { useOverviewQuery } from '@/lib/queries/misc';
 import { SessionsPage } from './SessionsPage';
 
-const POLL_INTERVAL_MS = 30_000;
-
 export function SessionsRoute() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const queryClient = useQueryClient();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [runs, setRuns] = useState<RunSnapshot[]>([]);
-  const [soulMemory, setSoulMemory] = useState<SoulMemoryStateResponse | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState<string | null>(null);
-  const [registeredTools, setRegisteredTools] = useState<RegisteredTool[]>([]);
-  const [agentConfig, setAgentConfig] = useState<SystemSummaryResponse['agentConfig']>(null);
   const [thinkingLevelOverride, setThinkingLevelOverride] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const pollingRef = useRef(false);
 
-  // Fetch sessions + soul memory + system prompt
-  const refreshMeta = useCallback(async (isInitial = false) => {
-    try {
-      const [s, mem, prompt, tools, summary] = await Promise.all([
-        fetchSessions(),
-        fetchSoulMemoryState(),
-        fetchSystemPrompt(),
-        fetchRegisteredTools(),
-        fetchSystemSummary(),
-      ]);
-      setSessions(s);
-      setSoulMemory(mem);
-      setSystemPrompt(prompt.content);
-      setRegisteredTools(tools);
-      setAgentConfig(summary.agentConfig ?? null);
-      if (isInitial) {
-        // Always connect to the main session by its fixed ID.
-        const main = s.find((x) => x.id === 'main') ?? s[0] ?? null;
-        if (main) setSelectedSessionId(main.id);
-      }
-    } catch (e) {
-      if (isInitial) setError(e instanceof Error ? e.message : 'Failed to load sessions');
-    }
-  }, []);
+  // --- Server state via React Query ---
+  const sessionsQuery = useSessionsQuery();
+  const soulMemoryQuery = useSoulMemoryQuery();
+  const systemPromptQuery = useSystemPromptQuery();
+  const registeredToolsQuery = useRegisteredToolsQuery();
+  const overviewQuery = useOverviewQuery();
 
-  // Mount: load meta
+  // Auto-select main session on first load
+  const sessions: SessionSummary[] = sessionsQuery.data ?? [];
   useEffect(() => {
-    refreshMeta(true);
-  }, [refreshMeta]);
-
-  // Poll every 30s to keep context window token counts live
-  useEffect(() => {
-    const id = setInterval(async () => {
-      if (pollingRef.current) return;
-      pollingRef.current = true;
-      try {
-        await refreshMeta(false);
-      } finally {
-        pollingRef.current = false;
-      }
-    }, POLL_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [refreshMeta]);
-
-  // Load conversation + runs when selected session changes
-  useEffect(() => {
-    if (!selectedSessionId) return;
-
-    async function loadSession() {
-      if (!selectedSessionId) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const sessionRuns = await fetchSessionRuns(selectedSessionId, 30);
-        setRuns(sessionRuns);
-        const conversationId = sessionRuns[0]?.conversationId;
-        if (conversationId) {
-          const conv = await fetchConversation(conversationId);
-          setMessages(conv.messages);
-        } else {
-          setMessages([]);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load session detail');
-      } finally {
-        setLoading(false);
-      }
+    if (!selectedSessionId && sessions.length > 0) {
+      const main = sessions.find((x) => x.id === 'main') ?? sessions[0];
+      setSelectedSessionId(main.id);
     }
-    loadSession();
-  }, [selectedSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessions, selectedSessionId]);
 
-  const handleRefresh = async () => {
-    setError(null);
-    try {
-      await refreshMeta(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Refresh failed');
-    }
-    setSelectedSessionId((prev) => prev);
+  // Session detail: runs and then conversation messages derived from the first run
+  const runsQuery = useSessionRunsQuery(selectedSessionId ?? '', 30);
+  const runs: RunSnapshot[] = runsQuery.data ?? [];
+  const conversationId = runs[0]?.conversationId ?? '';
+  const conversationQuery = useConversationQuery(conversationId);
+  const messages: Message[] = conversationQuery.data?.messages ?? [];
+
+  // Derived meta values
+  const soulMemory: SoulMemoryStateResponse | null = soulMemoryQuery.data ?? null;
+  const systemPrompt: string = systemPromptQuery.data?.content ?? '';
+  const registeredTools: RegisteredTool[] = registeredToolsQuery.data ?? [];
+  const agentConfig = overviewQuery.data?.agentConfig ?? null;
+
+  // Loading / error: reflect detail loading (runs + conversation)
+  const loading = runsQuery.isFetching || (!!conversationId && conversationQuery.isFetching);
+  const error =
+    runsQuery.isError
+      ? (runsQuery.error instanceof Error ? runsQuery.error.message : 'Failed to load session detail')
+      : conversationQuery.isError
+      ? (conversationQuery.error instanceof Error ? conversationQuery.error.message : 'Failed to load conversation')
+      : null;
+
+  // --- Mutations ---
+  const deleteMutation = useDeleteConversationMutation();
+  const resetMutation = useResetSessionMutation();
+  const patchThinkingMutation = usePatchThinkingLevelMutation();
+
+  // --- Handlers ---
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: sessionKeys.all() });
   };
 
   const handleThinkingLevelChange = async (level: string) => {
     setThinkingLevelOverride(level); // optimistic update
     try {
-      await patchThinkingLevel(level);
+      await patchThinkingMutation.mutateAsync(level);
+      setThinkingLevelOverride(null);
     } catch (err) {
       setThinkingLevelOverride(null); // revert on error
       toast.error(err instanceof Error ? err.message : 'Failed to update thinking level');
@@ -132,9 +88,9 @@ export function SessionsRoute() {
   const handleReset = async (sessionId: string) => {
     if (!window.confirm('Reset this session? This will clear the conversation history and cannot be undone.')) return;
     try {
-      await resetSession(sessionId);
+      await resetMutation.mutateAsync(sessionId);
       toast.success('Session reset.');
-      await refreshMeta(false);
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all() });
       setSelectedSessionId(sessionId); // re-trigger conversation reload
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reset session.');
@@ -144,10 +100,10 @@ export function SessionsRoute() {
   const handleDelete = async (sessionId: string) => {
     if (!window.confirm('Delete this conversation session? This cannot be undone.')) return;
     try {
-      await deleteConversation(sessionId);
+      await deleteMutation.mutateAsync(sessionId);
       toast.success('Session deleted.');
+      queryClient.invalidateQueries({ queryKey: sessionKeys.all() });
       if (selectedSessionId === sessionId) setSelectedSessionId(null);
-      await refreshMeta(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete session.');
     }

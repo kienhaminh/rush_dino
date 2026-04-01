@@ -71,10 +71,14 @@ impl CodexResponsesProvider {
         let mut rx = self.stream_chat(request).await?;
         let mut content = String::new();
         let mut tool_calls = Vec::new();
+        let mut usage = None;
 
         while let Some(chunk) = rx.recv().await {
             content.push_str(&chunk.delta);
             tool_calls.extend(chunk.tool_calls);
+            if chunk.usage.is_some() {
+                usage = chunk.usage;
+            }
             if chunk.done {
                 break;
             }
@@ -84,7 +88,7 @@ impl CodexResponsesProvider {
             content,
             tool_calls,
             rich_content: None,
-            usage: None,
+            usage,
             finish_reason: "stop".to_owned(),
         })
     }

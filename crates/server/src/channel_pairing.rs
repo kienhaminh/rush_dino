@@ -105,7 +105,7 @@ impl ChannelPairingService {
         sender_id: &str,
         sender_display: Option<&str>,
         reply_target: &str,
-    ) -> Result<PairingPendingRequest> {
+    ) -> Result<(PairingPendingRequest, bool)> {
         self.prune_expired(channel_id).await?;
 
         if let Some(existing) = self.find_pending_by_sender(channel_id, sender_id).await? {
@@ -129,12 +129,14 @@ impl ChannelPairingService {
             .execute(&self.pool)
             .await?;
 
-            return self
-                .find_pending_by_sender(channel_id, sender_id)
-                .await?
-                .ok_or_else(|| {
-                    AppError::Agent("pairing request disappeared after refresh".to_owned())
-                });
+            return Ok((
+                self.find_pending_by_sender(channel_id, sender_id)
+                    .await?
+                    .ok_or_else(|| {
+                        AppError::Agent("pairing request disappeared after refresh".to_owned())
+                    })?,
+                false, // not new
+            ));
         }
 
         let now = Utc::now();
@@ -159,9 +161,11 @@ impl ChannelPairingService {
         .execute(&self.pool)
         .await?;
 
-        self.find_pending_by_sender(channel_id, sender_id)
+        let request = self
+            .find_pending_by_sender(channel_id, sender_id)
             .await?
-            .ok_or_else(|| AppError::Agent("pairing request insert failed".to_owned()))
+            .ok_or_else(|| AppError::Agent("pairing request insert failed".to_owned()))?;
+        Ok((request, true)) // new
     }
 
     pub async fn decide_request(
@@ -374,6 +378,7 @@ pub struct ChannelPairingIngressPolicy {
     config_path: PathBuf,
     pairing: Arc<ChannelPairingService>,
     runtime_logs: Arc<RuntimeLogStore>,
+    broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
 impl ChannelPairingIngressPolicy {
@@ -381,11 +386,13 @@ impl ChannelPairingIngressPolicy {
         config_path: PathBuf,
         pairing: Arc<ChannelPairingService>,
         runtime_logs: Arc<RuntimeLogStore>,
+        broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     ) -> Self {
         Self {
             config_path,
             pairing,
             runtime_logs,
+            broadcast_tx,
         }
     }
 
@@ -461,7 +468,7 @@ impl GatewayIngressPolicy for ChannelPairingIngressPolicy {
                 })
             }
             DmPolicy::Pairing => {
-                let request = self
+                let (request, is_new) = self
                     .pairing
                     .create_or_refresh_request(
                         &msg.channel_id,
@@ -470,6 +477,19 @@ impl GatewayIngressPolicy for ChannelPairingIngressPolicy {
                         &msg.reply_target,
                     )
                     .await?;
+
+                if is_new {
+                    let _ = self.broadcast_tx.send(serde_json::json!({
+                        "type": "pairing_request_created",
+                        "id": request.id,
+                        "channel_id": request.channel_id,
+                        "sender_id": request.sender_id,
+                        "sender_display": request.sender_display,
+                        "code": request.code,
+                        "created_at": request.created_at,
+                    }));
+                }
+
                 self.log_pairing_event(
                     "pairing request emitted",
                     json!({

@@ -15,22 +15,9 @@ use super::*;
 /// Shared setup: in-memory SQLite + agent manager with one known agent.
 async fn setup() -> (Arc<WorkflowManager>, WorkflowManageTool) {
     let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-    let migrations: &[&str] = &[
-        include_str!("../../../common/migrations/001_init.sql"),
-        include_str!("../../../common/migrations/010_workflow_step_type.sql"),
-    ];
-    for migration in migrations {
-        for statement in migration.split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
-            }
-            sqlx::query(sql)
-                .execute(&pool)
-                .await
-                .expect("run statement");
-        }
-    }
+    rushdino_common::db::run_migrations(&pool)
+        .await
+        .expect("run migrations");
 
     let dir = std::env::temp_dir().join(format!("workflow-manage-{}", Uuid::new_v4()));
     fs::create_dir_all(&dir).expect("create temp dir");
@@ -43,6 +30,7 @@ async fn setup() -> (Arc<WorkflowManager>, WorkflowManageTool) {
             system_prompt: "You are helpful".to_owned(),
             icon: None,
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,
@@ -270,9 +258,6 @@ async fn rejects_invalid_action() {
 #[tokio::test]
 async fn rejects_missing_action() {
     let (_manager, tool) = setup().await;
-    let err = tool
-        .execute(json!({}))
-        .await
-        .expect_err("missing action");
+    let err = tool.execute(json!({})).await.expect_err("missing action");
     assert!(err.to_string().contains("action is required"));
 }

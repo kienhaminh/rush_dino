@@ -1,4 +1,5 @@
 mod commands;
+mod api_client;
 mod service;
 
 use clap::{Parser, Subcommand};
@@ -38,10 +39,7 @@ enum Command {
         #[arg(long)]
         version: String,
     },
-    Configure {
-        #[arg(long)]
-        login: Option<String>,
-    },
+    Configure(commands::configure::ConfigureArgs),
     Dashboard {
         #[command(subcommand)]
         action: Option<DashboardAction>,
@@ -49,16 +47,20 @@ enum Command {
         no_open: bool,
     },
     Health,
-    Doctor,
+    Doctor(commands::doctor::DoctorArgs),
     Reset,
     Uninstall,
     Config,
     Message,
-    Sessions,
+    Sessions(commands::sessions::SessionsArgs),
     Memory,
     Agent,
-    Agents,
+    Agents(commands::agents::AgentsArgs),
     Browser,
+    Workflow(commands::workflow::WorkflowArgs),
+    Cron(commands::cron::CronArgs),
+    Kanban(commands::kanban::KanbanArgs),
+    Approvals(commands::approval::ApprovalsArgs),
 }
 
 #[cfg(test)]
@@ -87,18 +89,22 @@ async fn run() -> Result<()> {
         Command::Status => commands::status::run().await,
         Command::Upgrade { beta, version } => commands::upgrade::run(beta, version).await,
         Command::Downgrade { version } => commands::downgrade::run(version).await,
-        Command::Configure { login } => commands::configure::run(login).await,
+        Command::Configure(args) => commands::configure::run(args).await,
         Command::Dashboard { action, no_open } => commands::dashboard::run(action, no_open).await,
         Command::Health => commands::health::run().await,
-        Command::Doctor => commands::doctor::run().await,
+        Command::Doctor(args) => commands::doctor::run(args).await,
         Command::Reset => commands::reset::run().await,
         Command::Uninstall => commands::uninstall::run().await,
         Command::Config => commands::config::run().await,
         Command::Message => commands::message::run().await,
-        Command::Sessions => commands::sessions::run().await,
+        Command::Sessions(args) => commands::sessions::run(args).await,
         Command::Memory => commands::memory::run().await,
         Command::Agent => commands::agent::run().await,
-        Command::Agents => commands::agents::run().await,
+        Command::Agents(args) => commands::agents::run(args).await,
         Command::Browser => commands::browser::run().await,
+        Command::Workflow(args) => commands::workflow::run(args).await,
+        Command::Cron(args) => commands::cron::run(args).await,
+        Command::Kanban(args) => commands::kanban::run(args).await,
+        Command::Approvals(args) => commands::approval::run(args).await,
     }
 }

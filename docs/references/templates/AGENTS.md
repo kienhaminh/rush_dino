@@ -116,6 +116,16 @@ Reactions are lightweight social signals. Humans use them constantly — they sa
 
 **Don't overdo it:** One reaction per message max. Pick the one that fits best.
 
+## Available Skills
+
+Bundled skills live in `~/.rushdino/skills/`. Each skill has a `SKILL.md` that tells you exactly when and how to use it. Check it before acting.
+
+| Skill | When to use |
+|---|---|
+| `skill-creator` | Creating a new skill from scratch, improving or benchmarking an existing skill, optimising a skill description for better triggering |
+
+Invoke a skill by reading its `SKILL.md` and following the instructions. Skills may include sub-agents, evaluation scripts, and reference schemas under their directory.
+
 ## Tools
 
 Skills provide your tools. When you need one, check its `SKILL.md`. Keep local notes (camera names, SSH details, voice preferences) in `TOOLS.md`.

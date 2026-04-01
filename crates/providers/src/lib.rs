@@ -48,8 +48,8 @@ impl ProviderService {
                     auth.clone(),
                 )))
             }
-            ProviderConfig::Anthropic { model, api_key } => Ok(Self::Anthropic(
-                AnthropicProvider::new(model.clone(), api_key.clone()),
+            ProviderConfig::Anthropic { model, auth } => Ok(Self::Anthropic(
+                AnthropicProvider::new(model.clone(), auth.clone()),
             )),
         }
     }

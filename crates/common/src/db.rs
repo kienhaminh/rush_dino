@@ -36,13 +36,13 @@ pub async fn init_pool(db_path: &Path) -> Result<SqlitePool> {
         .synchronous(SqliteSynchronous::Normal)
         .foreign_keys(true)
         .busy_timeout(Duration::from_secs(5))
-        .pragma("cache_size", "-8000") // 8 MB page cache per connection
-        .pragma("mmap_size", "134217728") // 128 MB memory-mapped I/O
+        .pragma("cache_size", "-2000") // 2 MB page cache per connection (was 8 MB)
+        .pragma("mmap_size", "33554432") // 32 MB memory-mapped I/O (was 128 MB)
         .pragma("temp_store", "memory"); // temp tables stay in RAM
 
     let pool = SqlitePoolOptions::new()
         .min_connections(1) // keep one connection warm; avoids cold-open on first query
-        .max_connections(5)
+        .max_connections(8) // 8 connections balances RAM and concurrency (was 16)
         .acquire_timeout(Duration::from_secs(5))
         .connect_with(options)
         .await?;

@@ -6,27 +6,34 @@ use serde_json::json;
 use tokio::process::Command;
 
 use rushdino_agent::{
-    tools::bash::is_dangerous_command, AgentRuntime, RunPolicySnapshot, ShellExecRequest,
-    ShellExecResult, SystemBroker,
+    tools::bash::is_dangerous_command, AgentRuntime, InputRequest, InputRequestResult,
+    RunPolicySnapshot, ShellExecRequest, ShellExecResult, SystemBroker,
 };
 use rushdino_common::{init, AppError, Result};
 
-use rushdino_security::sandbox::{
-    apply_subprocess_isolation, platform_supports_sandbox, SandboxPolicy,
-};
-
 use crate::approval_gate::ApprovalGate;
+use crate::input_request_gate::InputRequestGate;
+use crate::secret_vault::SharedSecretVault;
 
 pub struct LocalSystemBroker {
     approval_gate: Arc<ApprovalGate>,
+    input_request_gate: Arc<InputRequestGate>,
     runtime: Arc<AgentRuntime>,
+    secret_vault: SharedSecretVault,
 }
 
 impl LocalSystemBroker {
-    pub fn new(approval_gate: Arc<ApprovalGate>, runtime: Arc<AgentRuntime>) -> Self {
+    pub fn new(
+        approval_gate: Arc<ApprovalGate>,
+        input_request_gate: Arc<InputRequestGate>,
+        runtime: Arc<AgentRuntime>,
+        secret_vault: SharedSecretVault,
+    ) -> Self {
         Self {
             approval_gate,
+            input_request_gate,
             runtime,
+            secret_vault,
         }
     }
 
@@ -135,29 +142,14 @@ impl LocalSystemBroker {
 impl SystemBroker for LocalSystemBroker {
     async fn execute_shell(&self, request: ShellExecRequest) -> Result<ShellExecResult> {
         let cwd = resolve_cwd(request.host_cwd.as_deref())?;
+        // Approval check uses the original command (tokens visible, not raw secrets).
         self.ensure_approval(&request, &cwd).await?;
 
-        let mut cmd = Command::new("sh");
-        cmd.args(["-c", &request.command]).current_dir(&cwd);
+        // Resolve any secret://uuid tokens to their real values before execution.
+        let resolved_command = self.secret_vault.resolve_in_string(&request.command).await;
 
-        if platform_supports_sandbox() {
-            let workspace = init::canonical_home_dir();
-            let temp_dir = std::env::temp_dir();
-            let mut writable = vec![workspace.clone(), temp_dir.clone()];
-            if let Ok(p) = temp_dir.canonicalize() {
-                writable.push(p);
-            }
-            if let Ok(p) = workspace.canonicalize() {
-                writable.push(p);
-            }
-            let policy = SandboxPolicy::new(writable, true);
-            #[cfg(unix)]
-            unsafe {
-                cmd.pre_exec(move || {
-                    apply_subprocess_isolation(&policy).map_err(std::io::Error::other)
-                });
-            }
-        }
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", &resolved_command]).current_dir(&cwd);
 
         let output = tokio::time::timeout(
             std::time::Duration::from_secs(request.timeout_secs),
@@ -172,7 +164,40 @@ impl SystemBroker for LocalSystemBroker {
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
             cwd,
+            source_tag: rushdino_security::guardrail::types::SourceTag::LocalFile,
         })
+    }
+
+    async fn resolve_secrets(&self, input: String) -> String {
+        self.secret_vault.resolve_in_string(&input).await
+    }
+
+    async fn request_user_input(&self, request: InputRequest) -> Result<InputRequestResult> {
+        if let Some(run_id) = request.run_id.as_deref() {
+            let _ = self
+                .runtime
+                .mark_awaiting_input(run_id, "request_user_input")
+                .await;
+        }
+
+        let result = self
+            .input_request_gate
+            .request_input(
+                &request.session_id,
+                &request.conversation_id,
+                request.run_id.as_deref(),
+                request.payload,
+            )
+            .await?;
+
+        if let Some(run_id) = request.run_id.as_deref() {
+            let _ = self
+                .runtime
+                .record_input_resolution(run_id, result.status.clone())
+                .await;
+        }
+
+        Ok(result)
     }
 }
 
@@ -213,13 +238,15 @@ mod tests {
     #[tokio::test]
     async fn dangerous_commands_are_routed_through_approval_gate() {
         let gate = ApprovalGate::with_timeout(Duration::from_secs(1));
+        let input_gate = InputRequestGate::with_timeout(Duration::from_secs(1));
         let pool = Arc::new(
             SqlitePool::connect("sqlite::memory:")
                 .await
                 .expect("in-memory sqlite should connect"),
         );
         let runtime = Arc::new(AgentRuntime::new(pool));
-        let broker = LocalSystemBroker::new(gate.clone(), runtime);
+        let vault = crate::secret_vault::SecretVault::new();
+        let broker = LocalSystemBroker::new(gate.clone(), input_gate, runtime, vault);
         let mut rx = gate.register_session("session-1").await;
 
         let approval_task = tokio::spawn(async move {

@@ -69,16 +69,6 @@ pub async fn upsert_skill(
     };
     engine.save_skill(&skill)?;
 
-    // Sync skill description to the skill graph
-    let sg = state.skill_graph().clone();
-    let skill_name = skill.name.clone();
-    let skill_desc = skill.description.clone();
-    tokio::spawn(async move {
-        if let Err(err) = sg.sync_skill_description(&skill_name, &skill_desc).await {
-            tracing::warn!("failed to sync skill to graph: {err}");
-        }
-    });
-
     Ok(Json(map_skill(config.as_ref(), skill)))
 }
 
@@ -97,15 +87,6 @@ pub async fn delete_skill(
     }
     let engine = state.engine()?;
     engine.delete_skill(&name)?;
-
-    // Remove from skill graph
-    let sg = state.skill_graph().clone();
-    let skill_name = name.clone();
-    tokio::spawn(async move {
-        if let Err(err) = sg.delete_skill_node(&skill_name).await {
-            tracing::warn!("failed to remove skill from graph: {err}");
-        }
-    });
 
     Ok(Json(serde_json::json!({ "deleted": true, "name": name })))
 }

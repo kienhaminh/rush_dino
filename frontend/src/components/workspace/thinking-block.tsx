@@ -1,22 +1,29 @@
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ThinkingBlockProps {
   content?: string;
   done?: boolean;
+  nested?: boolean;
 }
 
 export function ThinkingBlock({ content, done }: ThinkingBlockProps) {
   const [expanded, setExpanded] = useState(true);
+  const prevDoneRef = useRef(done);
 
   // Collapse synchronously before paint to avoid a flash of the expanded state.
+  // Track the previous value of `done` so we only collapse on the transition
+  // from false → true, not on every render while done remains true.
   useLayoutEffect(() => {
-    if (done) setExpanded(false);
+    if (done && !prevDoneRef.current) {
+      setExpanded(false);
+    }
+    prevDoneRef.current = done;
   }, [done]);
 
   return (
-    <div className="py-0.5 animate-in fade-in duration-200 ml-9">
+    <div className="py-0.5 animate-in fade-in duration-200">
       <button
         type="button"
         onClick={() => done && setExpanded((v) => !v)}

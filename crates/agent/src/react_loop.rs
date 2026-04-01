@@ -81,12 +81,8 @@ pub async fn run_react_loop(
         if response.tool_calls.is_empty() {
             finalize_response_content(&mut response, last_presented_content.take());
             let assistant_message = Message {
-                id: Uuid::new_v4().to_string(),
-                role: Role::Assistant,
-                content: response.content.clone(),
-                tool_calls: None,
                 rich_content: response.rich_content.clone(),
-                created_at: Utc::now(),
+                ..Message::new(Uuid::new_v4().to_string(), Role::Assistant, response.content.clone())
             };
             messages.push(assistant_message);
             response.usage = total_usage.clone();
@@ -94,12 +90,8 @@ pub async fn run_react_loop(
         }
 
         let assistant_message = Message {
-            id: Uuid::new_v4().to_string(),
-            role: Role::Assistant,
-            content: response.content.clone(),
             tool_calls: Some(response.tool_calls.clone()).filter(|x| !x.is_empty()),
-            rich_content: None,
-            created_at: Utc::now(),
+            ..Message::new(Uuid::new_v4().to_string(), Role::Assistant, response.content.clone())
         };
         messages.push(assistant_message);
 
@@ -125,9 +117,32 @@ pub async fn run_react_loop(
         }
     }
 
-    let mut fallback = last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
-    fallback.usage = total_usage;
-    Ok((fallback, messages))
+    // Max iterations reached — make one final no-tools call so the model can
+    // summarise what it has done and give the user a coherent response.
+    // The persisted conversation history means the user can continue with a follow-up.
+    last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
+
+    let mut wrap_up_request = build_chat_request(messages.clone(), &session_ctx, config);
+    wrap_up_request.tools = None; // force text response, no more tool calls
+
+    let mut response = provider.chat(wrap_up_request).await?;
+    let wrap_up_usage = response.usage.clone().unwrap_or_else(|| {
+        estimate_turn_usage(&messages, &response.content, &[])
+    });
+    accumulate_usage(&mut total_usage, &wrap_up_usage);
+    response.usage = total_usage.clone();
+
+    finalize_response_content(&mut response, last_presented_content.take());
+    messages.push(Message {
+        id: Uuid::new_v4().to_string(),
+        role: Role::Assistant,
+        content: response.content.clone(),
+        tool_calls: None,
+        rich_content: response.rich_content.clone(),
+        thinking: None,
+        created_at: Utc::now(),
+    });
+    Ok((response, messages))
 }
 
 pub async fn run_react_loop_streaming(
@@ -152,6 +167,7 @@ pub async fn run_react_loop_streaming(
             .await?;
 
         let mut content = String::new();
+        let mut thinking = String::new();
         let mut tool_calls: Vec<ToolCall> = Vec::new();
         let mut emitted_text = false;
 
@@ -165,15 +181,16 @@ pub async fn run_react_loop_streaming(
                 tool_calls.extend(chunk.tool_calls);
             }
 
-            // Forward thinking delta before text delta
-            if let Some(thinking) = chunk.thinking_delta {
+            // Forward thinking delta before text delta and accumulate for persistence
+            if let Some(thinking_delta) = chunk.thinking_delta {
+                thinking.push_str(&thinking_delta);
                 let _ = event_tx
                     .send(StreamingEvent::ChatChunk(ChatChunk {
                         delta: String::new(),
                         tool_calls: Vec::new(),
                         done: false,
                         usage: None,
-                        thinking_delta: Some(thinking),
+                        thinking_delta: Some(thinking_delta),
                     }))
                     .await;
             }
@@ -215,6 +232,7 @@ pub async fn run_react_loop_streaming(
                 content: final_response.content.clone(),
                 tool_calls: None,
                 rich_content: final_response.rich_content.clone(),
+                thinking: if thinking.is_empty() { None } else { Some(thinking) },
                 created_at: Utc::now(),
             });
             let _ = event_tx
@@ -243,6 +261,7 @@ pub async fn run_react_loop_streaming(
             content: response.content.clone(),
             tool_calls: Some(tool_calls),
             rich_content: None,
+            thinking: if thinking.is_empty() { None } else { Some(thinking) },
             created_at: Utc::now(),
         });
 
@@ -266,8 +285,68 @@ pub async fn run_react_loop_streaming(
         }
     }
 
-    let mut fallback = last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
-    fallback.usage = total_usage;
+    // Max iterations reached — make one final no-tools call so the model can
+    // summarise what it has done and stream a coherent response to the user.
+    // The persisted conversation history means the user can continue with a follow-up.
+    last.ok_or_else(|| AppError::Agent("empty ReAct execution".to_owned()))?;
+
+    let mut wrap_up_request = build_chat_request(messages.clone(), &session_ctx, config);
+    wrap_up_request.tools = None; // force text response, no more tool calls
+
+    let mut stream = provider.stream_chat(wrap_up_request).await?;
+    let mut content = String::new();
+    let mut wrap_up_thinking = String::new();
+
+    while let Some(chunk) = stream.recv().await {
+        if let Some(thinking_delta) = chunk.thinking_delta {
+            wrap_up_thinking.push_str(&thinking_delta);
+            let _ = event_tx
+                .send(StreamingEvent::ChatChunk(ChatChunk {
+                    delta: String::new(),
+                    tool_calls: Vec::new(),
+                    done: false,
+                    usage: None,
+                    thinking_delta: Some(thinking_delta),
+                }))
+                .await;
+        }
+        if !chunk.delta.is_empty() {
+            content.push_str(&chunk.delta);
+            let _ = event_tx
+                .send(StreamingEvent::ChatChunk(ChatChunk {
+                    delta: chunk.delta,
+                    tool_calls: Vec::new(),
+                    done: false,
+                    usage: None,
+                    thinking_delta: None,
+                }))
+                .await;
+        }
+        if chunk.done {
+            break;
+        }
+    }
+
+    let wrap_up_usage = estimate_turn_usage(&messages, &content, &[]);
+    accumulate_usage(&mut total_usage, &wrap_up_usage);
+
+    let mut final_response = ChatResponse {
+        content,
+        tool_calls: Vec::new(),
+        rich_content: None,
+        usage: total_usage.clone(),
+        finish_reason: "stop".to_owned(),
+    };
+    finalize_response_content(&mut final_response, last_presented_content.take());
+    messages.push(Message {
+        id: Uuid::new_v4().to_string(),
+        role: Role::Assistant,
+        content: final_response.content.clone(),
+        tool_calls: None,
+        rich_content: final_response.rich_content.clone(),
+        thinking: if wrap_up_thinking.is_empty() { None } else { Some(wrap_up_thinking) },
+        created_at: Utc::now(),
+    });
     let _ = event_tx
         .send(StreamingEvent::ChatChunk(ChatChunk {
             delta: String::new(),
@@ -277,7 +356,7 @@ pub async fn run_react_loop_streaming(
             thinking_delta: None,
         }))
         .await;
-    Ok((fallback, messages))
+    Ok((final_response, messages))
 }
 
 fn finalize_response_content(response: &mut ChatResponse, presented_content: Option<RichContent>) {
@@ -292,9 +371,13 @@ fn build_chat_request(
     session_ctx: &SessionToolContext,
     config: &AgentConfig,
 ) -> ChatRequest {
+    let tools = {
+        let defs = session_ctx.active_definitions();
+        if defs.is_empty() { None } else { Some(defs) }
+    };
     ChatRequest {
         messages,
-        tools: Some(session_ctx.active_definitions()),
+        tools,
         temperature: Some(0.2),
         max_tokens: Some(8192),
         model: config.model_override.clone(),
@@ -392,6 +475,7 @@ mod tests {
                 content: "system prompt".to_owned(),
                 tool_calls: None,
                 rich_content: None,
+                thinking: None,
                 created_at: Utc::now(),
             },
             Message {
@@ -400,6 +484,7 @@ mod tests {
                 content: "user prompt".to_owned(),
                 tool_calls: None,
                 rich_content: None,
+                thinking: None,
                 created_at: Utc::now(),
             },
         ];
@@ -626,14 +711,11 @@ async fn append_tool_outputs(
                 })
                 .await;
         }
-        messages.push(Message {
-            id: call.id.clone(),
-            role: Role::Tool,
-            content: format!("[tool_error:{}] {msg}", call.name),
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        });
+        messages.push(Message::new(
+            call.id.clone(),
+            Role::Tool,
+            format!("[tool_error:{}] {msg}", call.name),
+        ));
     }
 
     // Append normally executed tool results.
@@ -648,14 +730,7 @@ async fn append_tool_outputs(
         } else {
             output
         };
-        messages.push(Message {
-            id: call.id.clone(),
-            role: Role::Tool,
-            content: payload,
-            tool_calls: None,
-            rich_content: None,
-            created_at: Utc::now(),
-        });
+        messages.push(Message::new(call.id.clone(), Role::Tool, payload));
     }
 
     presented_content

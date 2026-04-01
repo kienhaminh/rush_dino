@@ -1,68 +1,63 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
-import { fetchAgentSessions } from '@/lib/api';
-import type { ConversationItem, SessionSummary } from '@/lib/types';
+import { useAgentSessionsQuery } from '@/lib/queries';
+import type { ConversationItem } from '@/lib/types';
 
 /**
  * Combines live WebSocket delegate tool events with persisted /api/agent-sessions
  * to produce a unified, real-time list of sub-agent runs for the side panel.
  */
 export function useSubAgentSessions(items: ConversationItem[]) {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const { data: sessions = [], refetch } = useAgentSessionsQuery();
   const prevDelegateCountRef = useRef(0);
 
-  const refresh = useCallback(async () => {
-    try {
-      const data = await fetchAgentSessions();
-      setSessions(data);
-    } catch {
-      // silently ignore — panel is non-critical
-    }
-  }, []);
+  // Derive the running delegate count outside the effect so the effect depends
+  // on the computed number rather than the raw items array. This avoids
+  // re-running on every message received.
+  const runningCount = useMemo(
+    () =>
+      items.filter(
+        (it) => it.kind === 'tool_use' && it.tool_name === 'delegate' && it.status === 'running',
+      ).length,
+    [items],
+  );
 
-  // Load on mount
+  // Re-fetch only when ALL delegates finish (running count drops to zero from
+  // a positive value). This ensures newly-completed sub-agent conversations
+  // appear immediately without triggering redundant fetches on 3→2 or 2→1.
   useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  // Re-fetch whenever a delegate tool_use transitions from running → done/error.
-  // This ensures newly-completed sub-agent conversations appear immediately.
-  useEffect(() => {
-    const delegateItems = items.filter(
-      (it) => it.kind === 'tool_use' && it.tool_name === 'delegate',
-    );
-    const runningCount = delegateItems.filter((it) => it.kind === 'tool_use' && it.status === 'running').length;
-
-    // A delegate just finished (running count dropped)
-    if (runningCount < prevDelegateCountRef.current) {
-      refresh();
+    if (runningCount === 0 && prevDelegateCountRef.current > 0) {
+      void refetch();
     }
     prevDelegateCountRef.current = runningCount;
-  }, [items, refresh]);
+  }, [runningCount, refetch]);
 
   /** Extract live (currently running) delegate calls from the conversation items. */
-  const liveRuns = items
-    .filter((it) => it.kind === 'tool_use' && it.tool_name === 'delegate')
-    .map((it) => {
-      if (it.kind !== 'tool_use') return null;
-      const args = it.args as Record<string, string>;
-      return {
-        id: it.id,
-        agentName: args.agent_name ?? 'Agent',
-        task: args.task ?? '',
-        status: it.status,
-        result: it.result,
-      };
-    })
-    .filter(Boolean) as {
-    id: string;
-    agentName: string;
-    task: string;
-    status: 'running' | 'done' | 'error';
-    result?: string;
-  }[];
+  const liveRuns = useMemo(() =>
+    items
+      .filter((it) => it.kind === 'tool_use' && it.tool_name === 'delegate')
+      .map((it) => {
+        if (it.kind !== 'tool_use') return null;
+        const args = it.args as Record<string, string>;
+        return {
+          id: it.id,
+          agentName: args.agent_name ?? 'Agent',
+          task: args.task ?? '',
+          status: it.status,
+          result: it.result,
+        };
+      })
+      .filter(Boolean) as {
+      id: string;
+      agentName: string;
+      task: string;
+      status: 'running' | 'done' | 'error';
+      result?: string;
+    }[],
+    [items],
+  );
 
   const hasActivity = liveRuns.length > 0 || sessions.length > 0;
 
-  return { sessions, liveRuns, hasActivity, refresh };
+  return { sessions, liveRuns, hasActivity, refresh: () => { void refetch(); } };
 }

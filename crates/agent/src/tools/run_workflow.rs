@@ -31,9 +31,6 @@ impl Tool for RunWorkflowTool {
         "Start a new run of a workflow"
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["workflow", "run", "execute", "pipeline"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -98,19 +95,9 @@ mod tests {
 
     async fn setup_pool() -> Arc<SqlitePool> {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        let migrations: &[&str] = &[
-            include_str!("../../../common/migrations/001_init.sql"),
-            include_str!("../../../common/migrations/010_workflow_step_type.sql"),
-        ];
-        for migration in migrations {
-            for statement in migration.split(';') {
-                let sql: &str = statement.trim();
-                if sql.is_empty() {
-                    continue;
-                }
-                sqlx::query(sql).execute(&pool).await.expect("migration");
-            }
-        }
+        rushdino_common::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
         Arc::new(pool)
     }
 
@@ -127,18 +114,18 @@ mod tests {
         let agent_manager = Arc::new(AgentManager::new(std::env::temp_dir()));
         let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));
         let runtime = Arc::new(AgentRuntime::new(pool));
-        Arc::new(WorkflowRunner::new(
+        Arc::new(WorkflowRunner {
             provider,
             tool_registry,
             // Dead weak reference — tests do not reach run_react_loop.
-            std::sync::Weak::new(),
+            session_ctx: std::sync::Weak::new(),
             conversation,
             memory,
             agent_manager,
-            workflow_manager,
+            manager: workflow_manager,
             runtime,
-            AgentConfig::default(),
-        ))
+            config: AgentConfig::default(),
+        })
     }
 
     #[tokio::test]

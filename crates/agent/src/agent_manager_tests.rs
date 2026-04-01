@@ -15,6 +15,7 @@ fn sample_template(name: &str) -> AgentTemplate {
         system_prompt: "You are a helpful assistant.".to_owned(),
         icon: None,
         tools: None,
+        skills: None,
         color: None,
         model: None,
         claims_tasks: true,
@@ -132,9 +133,22 @@ fn markdown_without_model_parses_none() {
 }
 
 #[test]
+fn markdown_skills_round_trip() {
+    let content = "---\nname: planner\ndescription: Plans work\ntools: read, agent_inbox\nskills: skill-creator\n---\n\nPlan carefully.";
+    let template = parse_agent_markdown(content).expect("should parse");
+    assert_eq!(template.skills.as_deref(), Some("skill-creator"));
+
+    let dir = temp_dir();
+    let manager = AgentManager::new(dir.clone());
+    manager.save(&template).expect("save should succeed");
+    let loaded = manager.get("planner").expect("should load");
+    assert_eq!(loaded.skills.as_deref(), Some("skill-creator"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn bundled_agent_templates_do_not_pin_models() {
-    let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../common/src/agents");
+    let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../common/src/agents");
     let entries = read_dir(&common_agents_dir).expect("bundled agents dir should exist");
 
     for entry in entries.flatten() {
@@ -156,4 +170,22 @@ fn bundled_agent_templates_do_not_pin_models() {
             path.display()
         );
     }
+}
+
+#[test]
+fn bundled_agent_templates_define_expected_team_skills() {
+    let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../common/src/agents");
+    let manager = AgentManager::new(common_agents_dir);
+
+    let designer = manager.get("designer").expect("designer template should load");
+    let planner = manager.get("planner").expect("planner template should load");
+    let workflow_generator = manager
+        .get("workflow-generator")
+        .expect("workflow-generator template should load");
+    let writer = manager.get("writer").expect("writer template should load");
+
+    assert_eq!(designer.skills.as_deref(), Some("image-generator"));
+    assert_eq!(planner.skills.as_deref(), Some("skill-creator"));
+    assert_eq!(workflow_generator.skills.as_deref(), Some("skill-creator"));
+    assert!(writer.skills.is_none());
 }

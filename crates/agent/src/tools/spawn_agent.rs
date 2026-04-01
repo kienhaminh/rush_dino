@@ -32,9 +32,6 @@ impl Tool for SpawnAgentTool {
          fits the user's specialized need."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["agent", "spawn", "subagent"]
-    }
 
     fn parameters(&self) -> Value {
         json!({
@@ -96,6 +93,7 @@ impl Tool for SpawnAgentTool {
             system_prompt: system_prompt.to_owned(),
             icon,
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,

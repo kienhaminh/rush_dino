@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 
 use rushdino_common::models::ToolCall;
 
-use crate::types::{ChatChunk, ToolDefinition};
+use crate::types::{ChatChunk, ToolDefinition, Usage};
 
 /// Normalise a single tool call ID for the Responses API.
 ///
@@ -425,12 +425,26 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
 
                     // -------------------------- Completion ---------------------------------
                     "response.completed" | "response.done" => {
+                        let usage = event
+                            .pointer("/response/usage")
+                            .and_then(|u| {
+                                let input = u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+                                let output = u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+                                if input == 0 && output == 0 {
+                                    return None;
+                                }
+                                Some(Usage {
+                                    prompt_tokens: input,
+                                    completion_tokens: output,
+                                    total_tokens: input + output,
+                                })
+                            });
                         let _ = tx
                             .send(ChatChunk {
                                 delta: String::new(),
                                 tool_calls: vec![],
                                 done: true,
-                                usage: None,
+                                usage,
                                 thinking_delta: None,
                             })
                             .await;
@@ -518,6 +532,7 @@ mod tests {
             content: content.to_owned(),
             tool_calls: None,
             rich_content: None,
+            thinking: None,
             created_at: chrono::Utc::now(),
         }
     }

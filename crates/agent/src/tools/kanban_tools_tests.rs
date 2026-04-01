@@ -7,7 +7,9 @@ use sqlx::SqlitePool;
 use super::*;
 use crate::agent_manager::AgentTemplate;
 use crate::kanban_matching_engine::find_best_match;
-use crate::kanban_store::{KanbanStore, TaskStatus, MAX_CONCURRENT_TASKS_PER_AGENT, MAX_TASK_DEPTH};
+use crate::kanban_store::{
+    KanbanStore, TaskStatus, MAX_CONCURRENT_TASKS_PER_AGENT, MAX_TASK_DEPTH,
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -27,6 +29,7 @@ fn agent(name: &str, claims: bool) -> AgentTemplate {
         system_prompt: format!("You are a {name}."),
         icon: None,
         tools: None,
+        skills: None,
         color: None,
         model: None,
         claims_tasks: claims,
@@ -183,7 +186,10 @@ async fn claim_task_tool_enforces_capacity_limit() {
 async fn update_task_done_auto_transitions_to_in_review() {
     let store = make_store().await;
     let task_id = post(&store, "Fix memory leak", &["debugging"]).await;
-    store.claim_task(&task_id, "software-engineer").await.unwrap();
+    store
+        .claim_task(&task_id, "software-engineer")
+        .await
+        .unwrap();
 
     let tool = UpdateTaskTool::new(store.clone());
     let result = tool
@@ -198,7 +204,10 @@ async fn update_task_done_auto_transitions_to_in_review() {
     let task: serde_json::Value = serde_json::from_str(&result).unwrap();
     // Store converts "done" → "in_review" so the orchestrator can validate.
     assert_eq!(task["status"], "in_review");
-    assert_eq!(task["result"], "Identified and patched the leak in the connection pool.");
+    assert_eq!(
+        task["result"],
+        "Identified and patched the leak in the connection pool."
+    );
     assert!(task["completedAt"].is_string());
 }
 
@@ -221,7 +230,10 @@ async fn update_task_can_be_blocked_with_reason() {
 
     let task: serde_json::Value = serde_json::from_str(&result).unwrap();
     assert_eq!(task["status"], "blocked");
-    assert_eq!(task["blockReason"], "Waiting for VPN access credentials from IT team.");
+    assert_eq!(
+        task["blockReason"],
+        "Waiting for VPN access credentials from IT team."
+    );
 }
 
 // ── Group 4: ReviewTaskTool ───────────────────────────────────────────────
@@ -284,7 +296,10 @@ async fn review_task_needs_revision_resets_to_backlog() {
     let task: serde_json::Value = serde_json::from_str(&result).unwrap();
     // Task returns to backlog so the dispatcher can re-assign it.
     assert_eq!(task["status"], "backlog");
-    assert_eq!(task["reviewFeedback"], "Color contrast fails WCAG AA. Please revise palette.");
+    assert_eq!(
+        task["reviewFeedback"],
+        "Color contrast fails WCAG AA. Please revise palette."
+    );
     // assigned_agent is cleared so any agent can pick it up.
     assert!(task["assignedAgent"].is_null());
     // revision_count is incremented.
@@ -316,7 +331,11 @@ async fn review_task_auto_fails_after_max_revisions() {
             .unwrap();
         // Reject.
         store
-            .review_task(&task_id, crate::kanban_store::ReviewVerdict::NeedsRevision, Some("Try again"))
+            .review_task(
+                &task_id,
+                crate::kanban_store::ReviewVerdict::NeedsRevision,
+                Some("Try again"),
+            )
             .await
             .unwrap();
     }
@@ -411,7 +430,12 @@ async fn auto_routing_code_task_goes_to_software_engineer() {
         agent("designer", true),
     ];
     let store = make_store().await;
-    let task_id = post(&store, "Refactor auth service", &["code", "architecture", "api"]).await;
+    let task_id = post(
+        &store,
+        "Refactor auth service",
+        &["code", "architecture", "api"],
+    )
+    .await;
     let task = store.get_task(&task_id).await.unwrap();
 
     let m = find_best_match(&task, &agents, None).await.unwrap();
@@ -428,7 +452,12 @@ async fn auto_routing_research_task_goes_to_researcher() {
         agent("writer", true),
     ];
     let store = make_store().await;
-    let task_id = post(&store, "Market analysis", &["research", "analysis", "facts"]).await;
+    let task_id = post(
+        &store,
+        "Market analysis",
+        &["research", "analysis", "facts"],
+    )
+    .await;
     let task = store.get_task(&task_id).await.unwrap();
 
     let m = find_best_match(&task, &agents, None).await.unwrap();
@@ -452,12 +481,14 @@ async fn auto_routing_excludes_non_claiming_agents() {
 /// produces the expected assigned_agent field on the stored task.
 #[tokio::test]
 async fn auto_routing_and_claim_updates_board_correctly() {
-    let agents = vec![
-        agent("software-engineer", true),
-        agent("researcher", true),
-    ];
+    let agents = vec![agent("software-engineer", true), agent("researcher", true)];
     let store = make_store().await;
-    let task_id = post(&store, "Build REST endpoint", &["code", "api", "implementation"]).await;
+    let task_id = post(
+        &store,
+        "Build REST endpoint",
+        &["code", "api", "implementation"],
+    )
+    .await;
     let task = store.get_task(&task_id).await.unwrap();
 
     // Matching engine selects the best agent.

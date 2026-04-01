@@ -63,37 +63,49 @@ impl RunStore {
     }
 
     pub async fn reconcile_incomplete_runs(&self) -> Result<()> {
-        let stale = self
-            .list_runs(RunListFilter {
-                limit: 500,
-                ..RunListFilter::default()
-            })
-            .await?
-            .into_iter()
-            .filter(|run| !run.state.is_terminal())
-            .collect::<Vec<_>>();
+        let now = Utc::now().to_rfc3339();
 
-        for run in stale {
-            let policy = RunPolicySnapshot {
-                reason: Some("server restarted before the run reached a terminal state".to_owned()),
-                ..run.policy.clone()
-            };
-            self.patch_run(
-                &run.id,
-                RunPatch {
-                    state: Some(RunState::Failed),
-                    error: FieldUpdate::Set(
-                        "server restarted before the run reached a terminal state".to_owned(),
-                    ),
-                    policy: Some(policy),
-                    set_completed_at: true,
-                    event_type: Some("reconciled_after_restart".to_owned()),
-                    event_message: Some(
-                        "Run was marked failed after server restart to clear stale state."
-                            .to_owned(),
-                    ),
-                    ..RunPatch::default()
-                },
+        // Collect IDs of non-terminal runs before the batch update (for event insertion).
+        let stale_ids: Vec<String> = sqlx::query(
+            "SELECT id FROM runtime_runs WHERE state NOT IN ('completed', 'failed', 'aborted') LIMIT 500",
+        )
+        .fetch_all(self.pool.as_ref())
+        .await?
+        .into_iter()
+        .map(|row| row.get::<String, _>("id"))
+        .collect();
+
+        if stale_ids.is_empty() {
+            return Ok(());
+        }
+
+        // Single batch UPDATE — no per-row round-trips.
+        sqlx::query(
+            r#"
+            UPDATE runtime_runs
+            SET state        = 'failed',
+                error        = 'server restarted before the run reached a terminal state',
+                reason       = 'server restarted before the run reached a terminal state',
+                started_at   = COALESCE(started_at, ?1),
+                completed_at = ?1,
+                updated_at   = ?1
+            WHERE state NOT IN ('completed', 'failed', 'aborted')
+            "#,
+        )
+        .bind(&now)
+        .execute(self.pool.as_ref())
+        .await?;
+
+        // Insert reconciliation events (one per stale run).
+        let policy = RunPolicySnapshot::default();
+        for id in &stale_ids {
+            self.insert_event(
+                id,
+                "reconciled_after_restart",
+                Some(RunState::Failed),
+                None,
+                Some("Run was marked failed after server restart to clear stale state.".to_owned()),
+                &policy,
             )
             .await?;
         }

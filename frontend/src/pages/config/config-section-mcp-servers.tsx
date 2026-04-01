@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useReducer, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,12 +12,28 @@ interface Props {
   onConfigChange: (patch: Partial<AppConfigView>) => void;
 }
 
+// UI visibility state — expandedName and showAddForm change together often
+type UiState = { expandedName: string | null; showAddForm: boolean };
+type UiAction =
+  | { type: 'expand'; name: string }
+  | { type: 'collapse' }
+  | { type: 'showAdd' }
+  | { type: 'hideAdd' };
+
+function uiReducer(state: UiState, action: UiAction): UiState {
+  switch (action.type) {
+    case 'expand': return { expandedName: action.name, showAddForm: state.showAddForm };
+    case 'collapse': return { expandedName: null, showAddForm: state.showAddForm };
+    case 'showAdd': return { expandedName: state.expandedName, showAddForm: true };
+    case 'hideAdd': return { expandedName: state.expandedName, showAddForm: false };
+  }
+}
+
 export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
   const servers = config.mcp_servers ?? [];
 
   const [statuses, setStatuses] = useState<McpServerStatus[]>([]);
-  const [expandedName, setExpandedName] = useState<string | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [uiState, uiDispatch] = useReducer(uiReducer, { expandedName: null, showAddForm: false });
   // Track per-row edit state so changes don't clobber each other
   const [editValues, setEditValues] = useState<Record<string, McpServerConfig>>({});
   const [newServer, setNewServer] = useState({ name: '', url: '', auth_header: '' });
@@ -77,10 +93,10 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
   }
 
   function toggleExpand(name: string) {
-    if (expandedName === name) {
-      setExpandedName(null);
+    if (uiState.expandedName === name) {
+      uiDispatch({ type: 'collapse' });
     } else {
-      setExpandedName(name);
+      uiDispatch({ type: 'expand', name });
       // Seed the edit buffer with the current saved values so the user starts with real data
       const srv = servers.find((s) => s.name === name);
       if (srv) setEditValues((prev) => ({ ...prev, [name]: { ...srv } }));
@@ -96,7 +112,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
 
   function deleteServer(name: string) {
     onConfigChange({ mcp_servers: servers.filter((s) => s.name !== name) });
-    if (expandedName === name) setExpandedName(null);
+    if (uiState.expandedName === name) uiDispatch({ type: 'collapse' });
   }
 
   function addServer() {
@@ -109,7 +125,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
     };
     onConfigChange({ mcp_servers: [...servers, entry] });
     setNewServer({ name: '', url: '', auth_header: '' });
-    setShowAddForm(false);
+    uiDispatch({ type: 'hideAdd' });
   }
 
   return (
@@ -126,7 +142,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
           variant="outline"
           size="sm"
           className="text-xs shrink-0"
-          onClick={() => setShowAddForm(true)}
+          onClick={() => uiDispatch({ type: 'showAdd' })}
         >
           + Add Server
         </Button>
@@ -135,7 +151,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
       {/* Server list */}
       <div className="flex flex-col gap-1.5">
         {servers.map((srv) => {
-          const isExpanded = expandedName === srv.name;
+          const isExpanded = uiState.expandedName === srv.name;
           // Fall back to the saved values when not yet edited
           const edit = editValues[srv.name] ?? srv;
           return (
@@ -148,8 +164,9 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
               }`}
             >
               {/* Collapsed row header — click to expand */}
-              <div
-                className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer select-none"
+              <button
+                type="button"
+                className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer select-none w-full text-left"
                 onClick={() => toggleExpand(srv.name)}
               >
                 {statusDot(srv.name)}
@@ -158,7 +175,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
                 <span className="text-[10px] text-muted-foreground/50">
                   {isExpanded ? '▾' : '▸'}
                 </span>
-              </div>
+              </button>
 
               {/* Expanded edit body */}
               {isExpanded && (
@@ -233,7 +250,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
         })}
 
         {/* Inline add-server form */}
-        {showAddForm && (
+        {uiState.showAddForm && (
           <div className="rounded-md border border-dashed border-border/50 p-4 flex flex-col gap-3">
             <p className="text-xs font-semibold text-muted-foreground">New Server</p>
             <div className="grid grid-cols-3 gap-2">
@@ -284,7 +301,7 @@ export function ConfigSectionMcpServers({ config, onConfigChange }: Props) {
                 size="sm"
                 className="text-xs h-7 text-muted-foreground/50"
                 onClick={() => {
-                  setShowAddForm(false);
+                  uiDispatch({ type: 'hideAdd' });
                   setNewServer({ name: '', url: '', auth_header: '' });
                 }}
               >

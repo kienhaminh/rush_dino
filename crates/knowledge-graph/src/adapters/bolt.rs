@@ -22,12 +22,18 @@ impl BoltAdapter {
         let graph = Graph::new(uri, username, password)
             .map_err(|e| AppError::Provider(format!("Bolt connection failed: {e}")))?;
 
-        // Ensure index exists; ignore errors (index may already exist).
-        let _ = graph
-            .run(query(
-                "CREATE INDEX entity_name IF NOT EXISTS FOR (e:Entity) ON (e.normalized)",
-            ))
-            .await;
+        // Create entity index in the background — do not block startup on a
+        // network round-trip. The index is idempotent; if it already exists the
+        // query is a no-op. If the graph is temporarily unavailable the spawn
+        // silently fails, which is acceptable.
+        let graph_bg = graph.clone();
+        tokio::spawn(async move {
+            let _ = graph_bg
+                .run(query(
+                    "CREATE INDEX entity_name IF NOT EXISTS FOR (e:Entity) ON (e.normalized)",
+                ))
+                .await;
+        });
 
         Ok(Self { graph })
     }

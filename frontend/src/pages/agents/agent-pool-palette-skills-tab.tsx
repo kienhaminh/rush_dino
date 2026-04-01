@@ -1,14 +1,14 @@
 // SkillsTab — displays the skills palette inside AgentPoolPalette.
 //
-// Loads the full skill graph on mount, supports debounced semantic search,
-// and splits results into CORE / CUSTOM sections based on a tag heuristic.
+// Loads skills from the real skills API on mount, supports debounced string
+// search, and splits results into BUILT-IN / CUSTOM sections using isBuiltIn.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { PlusIcon, SearchIcon, Loader2Icon } from 'lucide-react';
 
 import type { AgentSkillRecord } from './agent-types';
-import type { SkillNode } from '../skills/skill-graph-types';
-import { fetchSkillGraph, querySkillGraph } from '../skills/skill-graph-api';
+import type { SkillRecord } from '@/lib/types';
+import { fetchSkills } from '@/lib/api';
 
 // ── Colour tokens (shared via import from shell) ───────────────────────────
 
@@ -21,57 +21,58 @@ export interface SkillsTabProps {
   assignedSkills: AgentSkillRecord[];
   /** Skills added optimistically this session (before palette close) */
   locallyAssigned: Set<string>;
-  onAssign: (skill: SkillNode) => void;
+  onAssign: (skill: SkillRecord) => void;
 }
+
+// ── Reducer ────────────────────────────────────────────────────────────────
+
+type TabState = {
+  query: string;
+  loading: boolean;
+  allSkills: SkillRecord[];
+};
+
+type TabAction =
+  | { type: 'setQuery'; query: string }
+  | { type: 'loadStart' }
+  | { type: 'loadDone'; skills: SkillRecord[] };
+
+function tabReducer(state: TabState, action: TabAction): TabState {
+  switch (action.type) {
+    case 'setQuery':
+      return { ...state, query: action.query };
+    case 'loadStart':
+      return { ...state, loading: true };
+    case 'loadDone':
+      return { ...state, loading: false, allSkills: action.skills };
+  }
+}
+
+const initialTabState: TabState = {
+  query: '',
+  loading: false,
+  allSkills: [],
+};
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsTabProps) {
-  const [query, setQuery] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [allSkills, setAllSkills] = useState<SkillNode[]>([]);
-  const [searchResults, setSearchResults] = useState<SkillNode[] | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [{ query, loading, allSkills }, dispatch] = useReducer(
+    tabReducer,
+    initialTabState,
+  );
 
-  // Load full skill graph on mount
+  // Load skills on mount
   useEffect(() => {
-    setLoading(true);
-    fetchSkillGraph()
-      .then((snapshot) => {
-        // Filter to skill nodes only (exclude category nodes)
-        setAllSkills(snapshot.nodes.filter((n) => n.nodeType === 'skill'));
+    dispatch({ type: 'loadStart' });
+    fetchSkills()
+      .then((skills) => {
+        dispatch({ type: 'loadDone', skills });
       })
       .catch(() => {
-        setAllSkills([]);
-      })
-      .finally(() => setLoading(false));
+        dispatch({ type: 'loadDone', skills: [] });
+      });
   }, []);
-
-  // Debounced search — 250 ms after typing stops
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    if (!query.trim()) {
-      setSearchResults(null);
-      return;
-    }
-
-    debounceRef.current = setTimeout(() => {
-      querySkillGraph(query.trim(), 20)
-        .then((scored) => {
-          // Map scored results back to full SkillNode objects by name.
-          // Use case-insensitive comparison so "Web Search" matches "web search".
-          const nameSet = new Set(scored.map((s) => s.name.toLowerCase()));
-          const matched = allSkills.filter((n) => nameSet.has(n.name.toLowerCase()));
-          setSearchResults(matched);
-        })
-        .catch(() => setSearchResults([]));
-    }, 250);
-
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query, allSkills]);
 
   // Build set of names already assigned (from prop + optimistic local set)
   const assignedNames = new Set([
@@ -79,16 +80,22 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
     ...locallyAssigned,
   ]);
 
-  // Skills to display — search results override full list
-  const displaySkills = searchResults ?? allSkills;
+  // Simple string matching for search
+  const displaySkills = (() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return allSkills;
+    return allSkills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q),
+    );
+  })();
 
-  // Split displayed skills into CORE (non-workspace) and CUSTOM (workspace-sourced).
-  // TODO: SkillNode has no `group` field from the API. Using tags.includes('workspace')
-  // as a heuristic. When the API exposes a `group` field on SkillNode, replace this.
-  const coreSkills = displaySkills.filter((n) => !n.tags.includes('workspace'));
-  const customSkills = displaySkills.filter((n) => n.tags.includes('workspace'));
+  // Split displayed skills into BUILT-IN and CUSTOM using isBuiltIn
+  const builtInSkills = displaySkills.filter((n) => n.isBuiltIn);
+  const customSkills = displaySkills.filter((n) => !n.isBuiltIn);
 
-  function renderSkillItem(skill: SkillNode) {
+  function renderSkillItem(skill: SkillRecord) {
     const isAssigned = assignedNames.has(skill.name);
     // Extract leading emoji from name if present (simple heuristic)
     const emojiMatch = skill.name.match(/^\p{Emoji}/u);
@@ -97,7 +104,7 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
 
     return (
       <div
-        key={skill.id}
+        key={skill.name}
         className="flex items-start gap-2 px-3 py-2 rounded transition-colors"
         style={{
           opacity: isAssigned ? 0.4 : 1,
@@ -160,7 +167,7 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
           <input
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => dispatch({ type: 'setQuery', query: e.target.value })}
             placeholder="Search skills…"
             className="flex-1 bg-transparent text-[11px] text-white placeholder-zinc-600 outline-none"
           />
@@ -173,16 +180,16 @@ export function SkillsTab({ assignedSkills, locallyAssigned, onAssign }: SkillsT
           <p className="text-[10px] text-zinc-600 text-center py-6">No skills found</p>
         ) : (
           <>
-            {/* CORE section */}
-            {coreSkills.length > 0 && (
+            {/* BUILT-IN section */}
+            {builtInSkills.length > 0 && (
               <>
                 <p
                   className="px-3 pt-3 pb-1 text-[9px] font-bold tracking-widest uppercase"
                   style={{ color: 'rgba(165,180,252,0.5)' }}
                 >
-                  Core
+                  Built-in
                 </p>
-                {coreSkills.map(renderSkillItem)}
+                {builtInSkills.map(renderSkillItem)}
               </>
             )}
 

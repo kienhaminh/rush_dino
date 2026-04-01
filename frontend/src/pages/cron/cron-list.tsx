@@ -1,6 +1,5 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -9,14 +8,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  ClockIcon,
   CalendarIcon,
   ArchiveIcon,
-  MoreVertical,
   Play,
   Pause,
   Trash2,
   Edit2,
+  AlertCircle,
+  ClockIcon,
 } from 'lucide-react';
 import type { CronJob, CronJobsEnabledFilter, CronJobsSortBy, CronSortDir } from './cron-types';
 import { cn } from '@/lib/utils';
@@ -58,6 +57,20 @@ export function CronList({
     if (h > 0) return `in ${h}h ${m % 60}m`;
     if (m > 0) return `in ${m}m ${totalSecs % 60}s`;
     return `in ${totalSecs}s`;
+  };
+
+  const formatLastRun = (ms: number | null) => {
+    if (ms == null) return 'Never';
+    const diff = Date.now() - ms;
+    const secs = Math.floor(diff / 1000);
+    const mins = Math.floor(secs / 60);
+    const hours = Math.floor(mins / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (mins > 0) return `${mins}m ago`;
+    return 'just now';
   };
 
   return (
@@ -103,66 +116,90 @@ export function CronList({
           >
             <CardContent className="p-6">
               <div className="flex justify-between items-start mb-4">
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-1.5 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-display font-bold text-base tracking-tight leading-snug truncate max-w-[160px]">
                       {job.name}
                     </h3>
                     <div
                       className={cn(
-                        'w-1.5 h-1.5 rounded-full',
-                        job.enabled
+                        'w-1.5 h-1.5 rounded-full shrink-0',
+                        job.status === 'active'
                           ? 'bg-success shadow-[0_0_8px_rgba(16,185,129,0.4)]'
-                          : 'bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.4)]',
+                          : job.status === 'error'
+                            ? 'bg-destructive shadow-[0_0_8px_rgba(239,68,68,0.4)]'
+                            : 'bg-muted-foreground/40',
                       )}
                     />
                   </div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1">
-                    <ArchiveIcon className="w-3 h-3" /> Agent: {job.agentId}
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 flex items-center gap-1 truncate">
+                    <ArchiveIcon className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{job.targetLabel}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                   <button
                     onClick={() => onRun(job)}
                     className="p-1.5 hover:bg-success/10 hover:text-success rounded-lg transition-colors"
+                    title="Run now"
                   >
                     <Play size={14} />
                   </button>
                   <button
                     onClick={() => onEdit(job)}
                     className="p-1.5 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+                    title="Edit"
                   >
                     <Edit2 size={14} />
                   </button>
                   <button
                     onClick={() => onRemove(job)}
                     className="p-1.5 hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+                    title="Delete"
                   >
                     <Trash2 size={14} />
                   </button>
                 </div>
               </div>
 
-              <div className="bg-muted/30 border border-border/30 rounded-2xl p-3 mb-4">
+              <div className="bg-muted/30 border border-border/30 rounded-2xl p-3 mb-3">
                 <div className="text-[11px] font-mono text-primary font-bold mb-1">
                   {job.schedule}
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  {job.scheduleKind === 'cron' ? 'Cron Expression' : 'Recurring Schedule'}
+                  {job.scheduleKind === 'cron'
+                    ? 'Cron Expression'
+                    : job.scheduleKind === 'every'
+                      ? 'Recurring Interval'
+                      : 'One-time Schedule'}
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">
-                    Next Execution
+              {/* Last error banner */}
+              {job.lastError && (
+                <div className="flex items-start gap-2 bg-destructive/5 border border-destructive/20 rounded-xl px-3 py-2 mb-3">
+                  <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-destructive line-clamp-2 font-medium">
+                    {job.lastError}
                   </span>
-                  <span className="text-sm font-semibold">{formatNextRun(job.nextRunAtMs)}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-1 gap-2">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                    <ClockIcon className="w-3 h-3 shrink-0" />
+                    <span>Next: <span className="font-semibold text-foreground">{formatNextRun(job.nextRunAtMs)}</span></span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
+                    <ClockIcon className="w-3 h-3 shrink-0 opacity-0" />
+                    <span>Last: <span className="font-semibold text-foreground">{formatLastRun(job.lastRunAtMs)}</span></span>
+                  </div>
                 </div>
                 <button
                   onClick={() => onToggle(job)}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all border shadow-sm active:scale-95',
+                    'flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all border shadow-sm active:scale-95 shrink-0',
                     job.enabled
                       ? 'bg-success/10 text-success border-success/20 hover:bg-success/20'
                       : 'bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20',
@@ -170,7 +207,7 @@ export function CronList({
                 >
                   {job.enabled ? (
                     <>
-                      <Pause size={12} /> Paused
+                      <Pause size={12} /> Pause
                     </>
                   ) : (
                     <>

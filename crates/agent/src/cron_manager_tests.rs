@@ -2,16 +2,9 @@ use super::*;
 
 async fn setup_manager() -> CronManager {
     let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-    for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
-        let sql = statement.trim();
-        if sql.is_empty() {
-            continue;
-        }
-        sqlx::query(sql)
-            .execute(&pool)
-            .await
-            .expect("run init migration");
-    }
+    rushdino_common::db::run_migrations(&pool)
+        .await
+        .expect("run migrations");
     CronManager::new(Arc::new(pool))
 }
 
@@ -54,10 +47,46 @@ fn rejects_invalid_cron_expression() {
 }
 
 #[test]
-fn computes_next_simple_cron_occurrence() {
+fn computes_next_cron_with_explicit_utc() {
     let now = DateTime::parse_from_rfc3339("2026-03-13T10:02:00Z")
         .expect("parse now")
         .with_timezone(&Utc);
-    let next = next_cron_occurrence("*/5 * * * *", now).expect("next cron");
+    let utc_tz: Tz = "UTC".parse().unwrap();
+    let next = next_cron_occurrence("*/5 * * * *", now, utc_tz).expect("next cron");
     assert_eq!(next.to_rfc3339(), "2026-03-13T10:05:00+00:00");
+}
+
+#[test]
+fn cron_respects_timezone() {
+    // 2026-03-13 22:30 UTC = 2026-03-14 07:30 KST (Asia/Seoul is UTC+9)
+    let now = DateTime::parse_from_rfc3339("2026-03-13T22:30:00Z")
+        .expect("parse now")
+        .with_timezone(&Utc);
+    let tz: Tz = "Asia/Seoul".parse().unwrap();
+
+    // Cron: run at 8:00 KST = 23:00 UTC
+    let next = next_cron_occurrence("0 8 * * *", now, tz).expect("next cron");
+    assert_eq!(next.to_rfc3339(), "2026-03-13T23:00:00+00:00");
+
+    // Same cron with UTC timezone — 8:00 UTC is next day
+    let utc_tz: Tz = "UTC".parse().unwrap();
+    let next_utc = next_cron_occurrence("0 8 * * *", now, utc_tz).expect("next cron utc");
+    assert_eq!(next_utc.to_rfc3339(), "2026-03-14T08:00:00+00:00");
+}
+
+#[test]
+fn invalid_timezone_returns_error() {
+    let result = parse_timezone("Invalid/Zone");
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("invalid timezone"));
+}
+
+#[test]
+fn detect_system_timezone_is_valid() {
+    let tz_name = detect_system_timezone();
+    let tz: Tz = tz_name.parse().expect("detected timezone must be valid IANA name");
+    // Verify it can be used for cron matching
+    let now = Utc::now();
+    let next = next_cron_occurrence("0 0 * * *", now, tz).expect("next cron with detected tz");
+    assert!(next > now);
 }

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useDashboardAuth } from '@/hooks/use-dashboard-auth';
+import { usePendingApprovalsCount } from '@/hooks/use-pending-approvals-count';
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -18,59 +19,76 @@ function isItemActive(item: SidebarItem, pathname: string): boolean {
   return pathname.startsWith(item.matchPrefix);
 }
 
+interface SidebarNavItemProps {
+  item: SidebarItem;
+  isActive: boolean;
+  collapsed: boolean;
+  pendingApprovalsCount: number;
+  onNavigate: (href: string) => void;
+}
+
+function SidebarNavItem({ item, isActive, collapsed, pendingApprovalsCount, onNavigate }: SidebarNavItemProps) {
+  const Icon = item.icon;
+  const badge = item.id === 'approvals' && pendingApprovalsCount > 0 ? pendingApprovalsCount : null;
+
+  if (collapsed) {
+    return (
+      <button
+        onClick={() => onNavigate(item.href)}
+        title={item.label}
+        className={cn(
+          'w-10 h-10 mx-auto flex items-center justify-center rounded-xl transition-all mb-1 relative',
+          isActive
+            ? 'bg-primary text-primary-foreground shadow-md scale-105'
+            : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+        )}
+      >
+        <Icon size={20} />
+        {badge !== null && (
+          <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => onNavigate(item.href)}
+      className={cn(
+        'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative',
+        isActive
+          ? 'border-l-2 border-primary text-primary bg-primary/[0.06]'
+          : 'text-muted-foreground hover:text-foreground hover:bg-white/5',
+      )}
+    >
+      <Icon
+        size={18}
+        className={cn(
+          'transition-colors',
+          isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
+        )}
+      />
+      <span className="truncate">{item.label}</span>
+      {badge !== null && (
+        <span className="ml-auto shrink-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-bold text-destructive-foreground">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const navigate = useNavigate();
   const location = useLocation();
   const { enabled, logout } = useDashboardAuth();
+  const { count: pendingApprovalsCount } = usePendingApprovalsCount();
 
   const toggleGroup = (label: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
-  };
-
-  const renderItem = (item: SidebarItem) => {
-    const Icon = item.icon;
-    const active = isItemActive(item, location.pathname);
-
-    if (collapsed) {
-      return (
-        <button
-          key={item.id}
-          onClick={() => navigate(item.href)}
-          title={item.label}
-          className={cn(
-            'w-10 h-10 mx-auto flex items-center justify-center rounded-xl transition-all mb-1',
-            active
-              ? 'bg-primary text-primary-foreground shadow-md scale-105'
-              : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
-          )}
-        >
-          <Icon size={20} />
-        </button>
-      );
-    }
-
-    return (
-      <button
-        key={item.id}
-        onClick={() => navigate(item.href)}
-        className={cn(
-          'flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative',
-          active
-            ? 'border-l-2 border-primary text-primary bg-primary/[0.06]'
-            : 'text-muted-foreground hover:text-foreground hover:bg-white/5',
-        )}
-      >
-        <Icon
-          size={18}
-          className={cn(
-            'transition-colors',
-            active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
-          )}
-        />
-        <span className="truncate">{item.label}</span>
-      </button>
-    );
   };
 
   return (
@@ -108,13 +126,20 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       <div className="flex-1 overflow-y-auto px-3 py-6 space-y-6 scrollbar-none">
         {/* Standalone Workspace */}
         <div className="space-y-0.5">
-          {renderItem(WORKSPACE_ITEM)}
+          <SidebarNavItem
+            item={WORKSPACE_ITEM}
+            isActive={isItemActive(WORKSPACE_ITEM, location.pathname)}
+            collapsed={collapsed ?? false}
+            pendingApprovalsCount={pendingApprovalsCount}
+            onNavigate={navigate}
+          />
         </div>
 
         {/* Groups */}
         {SIDEBAR_GROUPS.map((group) => {
           const isCollapsed = collapsedGroups[group.label] ?? false;
-          const hasActive = group.items.some((item) => isItemActive(item, location.pathname));
+          const visibleItems = group.items.filter((item) => !item.hidden);
+          const hasActive = visibleItems.some((item) => isItemActive(item, location.pathname));
           const showItems = !isCollapsed || hasActive;
 
           return (
@@ -134,7 +159,16 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               )}
               {(showItems || collapsed) && (
                 <div className="space-y-0.5">
-                  {group.items.map(renderItem)}
+                  {group.items.filter((item) => !item.hidden).map((item) => (
+                    <SidebarNavItem
+                      key={item.id}
+                      item={item}
+                      isActive={isItemActive(item, location.pathname)}
+                      collapsed={collapsed ?? false}
+                      pendingApprovalsCount={pendingApprovalsCount}
+                      onNavigate={navigate}
+                    />
+                  ))}
                 </div>
               )}
             </div>

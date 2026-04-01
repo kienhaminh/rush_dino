@@ -35,9 +35,6 @@ impl Tool for TeamStatusTool {
          Use this to coordinate with other agents and avoid duplicate effort."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["team", "status", "board", "kanban", "agents", "progress"]
-    }
 
     fn parameters(&self) -> Value {
         json!({

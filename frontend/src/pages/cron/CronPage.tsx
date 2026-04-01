@@ -1,124 +1,30 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { CronHeader } from './cron-header';
 import { CronStats } from './cron-stats';
 import { CronList } from './cron-list';
 import { CronHistory } from './cron-history';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ListIcon, HistoryIcon } from 'lucide-react';
+import {
+  pauseCronJob,
+  resumeCronJob,
+  runCronJobNow,
+  deleteCronJob,
+} from '@/lib/api';
+import { useCronQuery, useAllCronRunsQuery } from '@/lib/queries';
+import { mapCronJobRecordToCard, mapCronRunRecordToEntry, buildCronStatus } from './cron-data';
 import type {
   CronJob,
-  CronRunLogEntry,
-  CronStatus,
   CronJobsEnabledFilter,
   CronJobsSortBy,
   CronSortDir,
-  CronRunScope,
+  CronRunsStatusFilter,
 } from './cron-types';
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const MOCK_STATUS: CronStatus = {
-  enabled: true,
-  jobsNum: 4,
-  nextWakeAtMs: Date.now() + 15 * 60 * 1000, // 15 mins
-};
-
-const MOCK_JOBS: CronJob[] = [
-  {
-    id: '1',
-    name: 'Daily Backup Analysis',
-    schedule: '0 0 * * *',
-    scheduleKind: 'cron',
-    nextRunAtMs: Date.now() + 4 * 60 * 60 * 1000,
-    agentId: 'beta',
-    enabled: true,
-    status: 'active',
-    updatedAtMs: Date.now() - 86400000,
-  },
-  {
-    id: '2',
-    name: 'News Scraper',
-    schedule: '*/15 * * * *',
-    scheduleKind: 'cron',
-    nextRunAtMs: Date.now() + 12 * 60 * 1000,
-    agentId: 'alpha',
-    enabled: true,
-    status: 'active',
-    updatedAtMs: Date.now() - 3600000,
-  },
-  {
-    id: '3',
-    name: 'System Health Check',
-    schedule: 'Every 5 minutes',
-    scheduleKind: 'every',
-    nextRunAtMs: Date.now() + 3 * 60 * 1000,
-    agentId: 'monitor',
-    enabled: true,
-    status: 'active',
-    updatedAtMs: Date.now() - 300000,
-  },
-  {
-    id: '4',
-    name: 'Legacy Report Gen',
-    schedule: '0 12 * * *',
-    scheduleKind: 'cron',
-    nextRunAtMs: null,
-    agentId: 'gamma',
-    enabled: false,
-    status: 'paused',
-    updatedAtMs: Date.now() - 172800000,
-  },
-];
-
-const MOCK_RUNS: CronRunLogEntry[] = [
-  {
-    id: 'r1',
-    jobId: '2',
-    jobName: 'News Scraper',
-    status: 'ok',
-    startedAtMs: Date.now() - 13 * 60 * 1000,
-    durationMs: 1250,
-    summary: 'Fetched 12 new articles from primary sources.',
-    deliveryStatus: 'delivered',
-  },
-  {
-    id: 'r2',
-    jobId: '3',
-    jobName: 'System Health Check',
-    status: 'ok',
-    startedAtMs: Date.now() - 5 * 60 * 1000,
-    durationMs: 450,
-    summary: 'All checks passed. System healthy.',
-    deliveryStatus: 'not-requested',
-  },
-  {
-    id: 'r3',
-    jobId: '1',
-    jobName: 'Daily Backup Analysis',
-    status: 'error',
-    startedAtMs: Date.now() - 20 * 60 * 60 * 1000,
-    durationMs: 8200,
-    summary: 'Backup verification failed.',
-    error: 'Checksum mismatch in shard-3',
-    deliveryStatus: 'delivered',
-  },
-  {
-    id: 'r4',
-    jobId: '2',
-    jobName: 'News Scraper',
-    status: 'skipped',
-    startedAtMs: Date.now() - 28 * 60 * 1000,
-    durationMs: 0,
-    summary: 'Skipped due to concurrent execution lock.',
-    deliveryStatus: 'not-requested',
-  },
-];
-
-// ─── CronPage ────────────────────────────────────────────────────────────────
+import { useQueryClient } from '@tanstack/react-query';
+import { miscKeys } from '@/lib/queries';
 
 export function CronPage() {
   const [activeTab, setActiveTab] = useState('jobs');
-  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Job List Filters
@@ -130,14 +36,75 @@ export function CronPage() {
 
   // History Filters
   const [historyFilters, setHistoryFilters] = useState({
-    scope: 'all' as CronRunScope,
+    statusFilter: 'all' as CronRunsStatusFilter,
     sortDir: 'desc' as CronSortDir,
   });
 
-  const handleRefresh = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 800);
-  };
+  const queryClient = useQueryClient();
+  const cronQuery = useCronQuery();
+  const apiJobs = cronQuery.data ?? [];
+  const loading = cronQuery.isPending;
+
+  const jobIds = useMemo(() => apiJobs.map((j) => j.id), [apiJobs]);
+  const { data: allRunArrays = [] } = useAllCronRunsQuery(jobIds);
+
+  const jobs = useMemo(() => apiJobs.map(mapCronJobRecordToCard), [apiJobs]);
+
+  const runs = useMemo(() => {
+    if (allRunArrays.length === 0) return [];
+    const jobsById = new Map(apiJobs.map((j) => [j.id, j]));
+    return allRunArrays
+      .flat()
+      .map((run) => mapCronRunRecordToEntry(run, jobsById))
+      .sort((a, b) => b.startedAtMs - a.startedAtMs);
+  }, [allRunArrays, apiJobs]);
+
+  const status = useMemo(() => buildCronStatus(apiJobs), [apiJobs]);
+
+  const refreshData = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: miscKeys.cron() });
+    void queryClient.invalidateQueries({ queryKey: miscKeys.cronRuns(jobIds) });
+  }, [queryClient, jobIds]);
+
+  const handleToggle = useCallback(
+    async (job: CronJob) => {
+      try {
+        if (job.enabled) {
+          await pauseCronJob(job.id);
+        } else {
+          await resumeCronJob(job.id);
+        }
+        refreshData();
+      } catch (err) {
+        console.error('Failed to toggle cron job', err);
+      }
+    },
+    [refreshData],
+  );
+
+  const handleRun = useCallback(
+    async (job: CronJob) => {
+      try {
+        await runCronJobNow(job.id);
+        refreshData();
+      } catch (err) {
+        console.error('Failed to run cron job', err);
+      }
+    },
+    [refreshData],
+  );
+
+  const handleRemove = useCallback(
+    async (job: CronJob) => {
+      try {
+        await deleteCronJob(job.id);
+        refreshData();
+      } catch (err) {
+        console.error('Failed to delete cron job', err);
+      }
+    },
+    [refreshData],
+  );
 
   const handleNewJob = () => {
     console.log('New job clicked');
@@ -145,50 +112,57 @@ export function CronPage() {
 
   // Filter logic
   const filteredJobs = useMemo(() => {
-    return MOCK_JOBS.filter((job) => {
-      if (jobFilters.enabled === 'enabled' && !job.enabled) return false;
-      if (jobFilters.enabled === 'disabled' && job.enabled) return false;
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        return (
-          job.name.toLowerCase().includes(q) ||
-          job.agentId.toLowerCase().includes(q) ||
-          job.schedule.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    }).sort((a, b) => {
-      const dir = jobFilters.sortDir === 'asc' ? 1 : -1;
-      if (jobFilters.sortBy === 'name') return a.name.localeCompare(b.name) * dir;
-      if (jobFilters.sortBy === 'nextRunAtMs') {
-        const va = a.nextRunAtMs ?? Infinity;
-        const vb = b.nextRunAtMs ?? Infinity;
-        return (va - vb) * dir;
-      }
-      return (b.updatedAtMs - a.updatedAtMs) * dir;
-    });
-  }, [jobFilters, searchQuery]);
+    return jobs
+      .filter((job) => {
+        if (jobFilters.enabled === 'enabled' && !job.enabled) return false;
+        if (jobFilters.enabled === 'disabled' && job.enabled) return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          return (
+            job.name.toLowerCase().includes(q) ||
+            job.agentId.toLowerCase().includes(q) ||
+            job.schedule.toLowerCase().includes(q)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const dir = jobFilters.sortDir === 'asc' ? 1 : -1;
+        if (jobFilters.sortBy === 'name') return a.name.localeCompare(b.name) * dir;
+        if (jobFilters.sortBy === 'nextRunAtMs') {
+          const va = a.nextRunAtMs ?? Infinity;
+          const vb = b.nextRunAtMs ?? Infinity;
+          return (va - vb) * dir;
+        }
+        return (b.updatedAtMs - a.updatedAtMs) * dir;
+      });
+  }, [jobs, jobFilters, searchQuery]);
 
   const filteredHistory = useMemo(() => {
-    return MOCK_RUNS.filter((run) => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        return (
-          run.jobName.toLowerCase().includes(q) || (run.summary?.toLowerCase().includes(q) ?? false)
-        );
-      }
-      return true;
-    }).sort((a, b) => {
-      const dir = historyFilters.sortDir === 'asc' ? 1 : -1;
-      return (a.startedAtMs - b.startedAtMs) * dir;
-    });
-  }, [historyFilters, searchQuery]);
+    return runs
+      .filter((run) => {
+        if (historyFilters.statusFilter !== 'all' && run.status !== historyFilters.statusFilter)
+          return false;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          return (
+            run.jobName.toLowerCase().includes(q) ||
+            (run.summary?.toLowerCase().includes(q) ?? false)
+          );
+        }
+        return true;
+      })
+      .sort((a, b) => {
+        const dir = historyFilters.sortDir === 'asc' ? 1 : -1;
+        return (a.startedAtMs - b.startedAtMs) * dir;
+      });
+  }, [runs, historyFilters, searchQuery]);
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full bg-background overflow-hidden font-sans">
       <CronHeader
         loading={loading}
-        onRefresh={handleRefresh}
+        onRefresh={refreshData}
         onNewJob={handleNewJob}
         query={searchQuery}
         onQueryChange={setSearchQuery}
@@ -196,8 +170,7 @@ export function CronPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="p-4 lg:p-6 space-y-8">
-          {/* Insights / Stats */}
-          <CronStats status={MOCK_STATUS} />
+          <CronStats status={status} />
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8">
             <div className="flex items-center overflow-x-auto border-b border-border bg-card/30 px-6 flex-shrink-0 mx-[-1rem] lg:mx-[-1.5rem] mb-6">
@@ -209,6 +182,11 @@ export function CronPage() {
                   <div className="flex items-center gap-2">
                     <ListIcon size={16} />
                     Active Jobs
+                    {jobs.length > 0 && (
+                      <span className="text-[10px] font-bold bg-muted px-1.5 py-0.5 rounded-full">
+                        {jobs.length}
+                      </span>
+                    )}
                   </div>
                 </TabsTrigger>
                 <TabsTrigger
@@ -218,6 +196,11 @@ export function CronPage() {
                   <div className="flex items-center gap-2">
                     <HistoryIcon size={16} />
                     Execution History
+                    {runs.length > 0 && (
+                      <span className="text-[10px] font-bold bg-muted px-1.5 py-0.5 rounded-full">
+                        {runs.length}
+                      </span>
+                    )}
                   </div>
                 </TabsTrigger>
               </TabsList>
@@ -229,10 +212,10 @@ export function CronPage() {
                 loading={loading}
                 filters={{ ...jobFilters, query: searchQuery }}
                 onFilterChange={(patch) => setJobFilters((prev) => ({ ...prev, ...patch }))}
-                onToggle={(job) => console.log('Toggle', job)}
+                onToggle={handleToggle}
                 onEdit={(job) => console.log('Edit', job)}
-                onRemove={(job) => console.log('Remove', job)}
-                onRun={(job) => console.log('Run Now', job)}
+                onRemove={handleRemove}
+                onRun={handleRun}
               />
             </TabsContent>
 
@@ -240,16 +223,11 @@ export function CronPage() {
               <CronHistory
                 runs={filteredHistory}
                 loading={loading}
-                total={MOCK_RUNS.length}
-                hasMore={false}
-                filters={{
-                  ...historyFilters,
-                  query: searchQuery,
-                  statuses: [],
-                  deliveryStatuses: [],
-                }}
-                onFilterChange={(patch) => setHistoryFilters((prev) => ({ ...prev, ...patch }))}
-                onLoadMore={() => console.log('Load more history')}
+                total={runs.length}
+                filters={{ ...historyFilters, query: searchQuery }}
+                onFilterChange={(patch) =>
+                  setHistoryFilters((prev) => ({ ...prev, ...patch }))
+                }
               />
             </TabsContent>
           </Tabs>

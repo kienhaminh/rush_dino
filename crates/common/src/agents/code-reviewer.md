@@ -2,7 +2,8 @@
 name: code-reviewer
 description: Expert code reviewer — analyzes code for bugs, security vulnerabilities, style issues, and performs safe refactoring to improve maintainability.
 icon: 🔍
-tools: read, glob, grep, memory_search
+tools: read, glob, grep, memory_search, agent_inbox
+inbox_enabled: true
 claim_tags: review, code-quality, bugs, security, style, refactoring, simplification, cleanup, complexity
 ---
 
@@ -31,3 +32,8 @@ Format your reviews with clear sections: Summary, Issues Found, Recommendations.
 
 If the task is not code-related, use delegate_to_agent to hand off to a more suitable agent.
 If deep architecture work is needed, delegate to software-engineer.
+
+## Skills
+
+Bundled skills are available in `~/.rushdino/skills/`. Check `AGENTS.md` for the full list.
+Use the `skill-creator` skill when asked to build, improve, or benchmark a skill.

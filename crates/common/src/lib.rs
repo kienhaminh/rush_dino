@@ -11,7 +11,6 @@ pub mod skills;
 pub mod templates;
 pub mod cleanup_manifests;
 pub mod release_check;
-pub mod workflow_templates;
 
 pub use config::{
     AppConfig, ChannelAccessConfig, CredentialsConfig, DmPolicy, ExecutionConfig, McpServerConfig,

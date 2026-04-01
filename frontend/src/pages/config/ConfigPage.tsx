@@ -3,8 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Settings2Icon } from 'lucide-react';
-import { fetchConfig, fetchCredentials, patchConfig, patchCredentials } from '@/lib/api';
 import type { AppConfigView, CredentialsView } from '@/lib/types';
+import {
+  useConfigQuery,
+  useCredentialsQuery,
+  usePatchConfigMutation,
+  usePatchCredentialsMutation,
+} from '../../lib/queries';
 import { ConfigSectionProfiles } from './config-section-profiles';
 import { ConfigSectionCredentials } from './config-section-credentials';
 import { ConfigSectionServer } from './config-section-server';
@@ -47,44 +52,49 @@ type Status =
 
 export function ConfigPage() {
   const [activeSection, setActiveSection] = useState<Section>('profiles');
-
-  const [config, setConfig] = useState<AppConfigView | null>(null);
-  const [credentials, setCredentials] = useState<CredentialsView | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: 'idle' });
 
-  // Load config + credentials in parallel on mount
+  const configQuery = useConfigQuery();
+  const credentialsQuery = useCredentialsQuery();
+  const patchConfigMutation = usePatchConfigMutation();
+  const patchCredentialsMutation = usePatchCredentialsMutation();
+
+  const loading = configQuery.isPending || credentialsQuery.isPending;
+  const error = configQuery.error?.message ?? credentialsQuery.error?.message ?? null;
+
+  // Local copies for form editing. Synced from server data on initial load and explicit reload.
+  // refetchOnWindowFocus is disabled globally (query-client.ts) so background refetches
+  // cannot silently overwrite user edits.
+  const [config, setConfig] = useState<AppConfigView | undefined>(configQuery.data);
+  const [credentials, setCredentials] = useState<CredentialsView | undefined>(credentialsQuery.data);
+
+  // Sync local form state when server data loads or reloads
   useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchConfig(), fetchCredentials()])
-      .then(([cfg, creds]) => {
-        setConfig(cfg);
-        setCredentials(creds);
-        setFetchError(null);
-      })
-      .catch((err: Error) => setFetchError(err.message))
-      .finally(() => setLoading(false));
-  }, []);
+    if (configQuery.data) setConfig(configQuery.data);
+  }, [configQuery.data]);
+
+  useEffect(() => {
+    if (credentialsQuery.data) setCredentials(credentialsQuery.data);
+  }, [credentialsQuery.data]);
 
   function handleConfigChange(patch: Partial<AppConfigView>) {
-    setConfig((prev) => (prev ? { ...prev, ...patch } : prev));
+    if (!config) return;
+    setConfig({ ...config, ...patch });
   }
 
   function handleCredentialsChange(patch: Partial<CredentialsView>) {
-    setCredentials((prev) => (prev ? { ...prev, ...patch } : prev));
+    if (!credentials) return;
+    setCredentials({ ...credentials, ...patch });
   }
 
   async function handleSave() {
     if (!config || !credentials) return;
     setStatus({ kind: 'saving' });
     try {
-      const [updatedConfig, updatedCreds] = await Promise.all([
-        patchConfig(config),
-        patchCredentials(credentials),
+      await Promise.all([
+        patchConfigMutation.mutateAsync(config),
+        patchCredentialsMutation.mutateAsync(credentials),
       ]);
-      setConfig(updatedConfig);
-      setCredentials(updatedCreds);
       setStatus({ kind: 'success' });
       setTimeout(() => setStatus({ kind: 'idle' }), 3000);
     } catch (err) {
@@ -93,18 +103,8 @@ export function ConfigPage() {
   }
 
   async function handleReload() {
-    setLoading(true);
-    setFetchError(null);
-    try {
-      const [cfg, creds] = await Promise.all([fetchConfig(), fetchCredentials()]);
-      setConfig(cfg);
-      setCredentials(creds);
-      setStatus({ kind: 'idle' });
-    } catch (err) {
-      setFetchError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setLoading(false);
-    }
+    setStatus({ kind: 'idle' });
+    await Promise.all([configQuery.refetch(), credentialsQuery.refetch()]);
   }
 
   // Loading skeleton
@@ -117,10 +117,10 @@ export function ConfigPage() {
   }
 
   // Fetch error
-  if (fetchError || !config || !credentials) {
+  if (error) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <p className="text-sm text-destructive">{fetchError ?? 'Failed to load configuration.'}</p>
+        <p className="text-sm text-destructive">{error}</p>
         <Button size="sm" variant="outline" onClick={handleReload}>
           Retry
         </Button>
@@ -162,30 +162,25 @@ export function ConfigPage() {
       {/* Main content */}
       <main className="flex-1 min-w-0 p-6 md:p-8 overflow-y-auto">
         <Card className="bg-card border-border/70">
-          <CardHeader className="flex flex-row items-start justify-between">
-            <div>
-              <CardTitle className="text-lg">
-                {SECTIONS.find((s) => s.key === activeSection)?.label}
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                {SECTIONS.find((s) => s.key === activeSection)?.description}
-              </p>
-            </div>
+          <CardHeader>
+            <CardTitle className="text-lg">
+              {SECTIONS.find((s) => s.key === activeSection)?.label}
+            </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4">
             {activeSection === 'profiles' && <ConfigSectionProfiles />}
-            {activeSection === 'credentials' && (
+            {activeSection === 'credentials' && credentials && (
               <ConfigSectionCredentials
                 credentials={credentials}
                 onChange={handleCredentialsChange}
               />
             )}
-            {activeSection === 'server' && (
+            {activeSection === 'server' && config && (
               <ConfigSectionServer config={config} onChange={handleConfigChange} />
             )}
             {activeSection === 'core-files' && <ConfigSectionCoreFiles />}
-            {activeSection === 'knowledge-graph' && (
+            {activeSection === 'knowledge-graph' && config && credentials && (
               <ConfigSectionKnowledgeGraph
                 config={config}
                 credentials={credentials}
@@ -229,7 +224,7 @@ export function ConfigPage() {
                   >
                     Reload
                   </Button>
-                  <Button size="sm" onClick={handleSave} disabled={status.kind === 'saving'}>
+                  <Button size="sm" onClick={handleSave} disabled={status.kind === 'saving' || patchConfigMutation.isPending || patchCredentialsMutation.isPending}>
                     Save
                   </Button>
                 </div>

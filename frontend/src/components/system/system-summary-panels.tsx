@@ -121,7 +121,6 @@ export function OperationsSummaryStrip({
       >
         {summary?.status ?? 'loading'}
       </Badge>
-      <SummaryChip label="pending approvals" value={summary?.approvals.pendingCount ?? 0} />
       <SummaryChip label="active runs" value={summary?.runs.activeCount ?? 0} />
       <SummaryChip label="channels need attention" value={needsAttention} />
       <SummaryChip label="recent incidents" value={summary?.incidents.length ?? 0} />
@@ -135,10 +134,9 @@ export function OperationalStatusCard({
   summary: SystemSummaryResponse | null;
 }) {
   const channels = summary?.channels ?? [];
-  const pendingApprovals = summary?.approvals.pending ?? [];
   const channelAttentionCount =
     summary?.channels.filter((channel) => channel.status === 'needs_attention').length ?? 0;
-  const runtimeNeedsAttention = (summary?.runs.blockedCount ?? 0) > 0 || pendingApprovals.length > 0;
+  const runtimeNeedsAttention = (summary?.runs.blockedCount ?? 0) > 0;
 
   return (
     <Card className="border-border/60 bg-card/80">
@@ -217,32 +215,6 @@ export function OperationalStatusCard({
             </div>
           </div>
 
-          {pendingApprovals.length ? (
-            <div className="mt-3 space-y-2">
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                Pending approvals
-              </p>
-              {pendingApprovals.slice(0, 3).map((request) => (
-                <div
-                  key={request.requestId}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-background/50 px-3 py-2"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{request.tool}</p>
-                    <p className="font-mono text-[11px] text-muted-foreground">
-                      session {request.sessionId}
-                    </p>
-                  </div>
-                  <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                    <RouterLink to="/approvals">
-                      Review
-                      <ArrowRight className="ml-1 h-3 w-3" />
-                    </RouterLink>
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </DisclosureRow>
 
         <div className="rounded-2xl border border-border/50 bg-background/40 px-4 py-3 text-sm text-muted-foreground">

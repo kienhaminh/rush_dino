@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ArrowLeft, Database, RefreshCw, Search, Sparkles } from 'lucide-react';
 
@@ -177,24 +177,61 @@ function NodeDetailPanel({
 }
 
 // ---------------------------------------------------------------------------
+// Reducers
+// ---------------------------------------------------------------------------
+
+type StatsState = { stats: GraphStats | null; statsError: string | null };
+type StatsAction = { type: 'loaded'; stats: GraphStats } | { type: 'error'; message: string };
+function statsReducer(_: StatsState, action: StatsAction): StatsState {
+  if (action.type === 'loaded') return { stats: action.stats, statsError: null };
+  return { stats: null, statsError: action.message };
+}
+
+type SearchState = { searching: boolean; facts: GraphFact[]; entities: GraphEntity[] };
+type SearchAction =
+  | { type: 'start' }
+  | { type: 'facts'; facts: GraphFact[] }
+  | { type: 'entities'; entities: GraphEntity[] }
+  | { type: 'error' };
+function searchReducer(state: SearchState, action: SearchAction): SearchState {
+  switch (action.type) {
+    case 'start': return { ...state, searching: true };
+    case 'facts': return { searching: false, facts: action.facts, entities: state.entities };
+    case 'entities': return { searching: false, facts: state.facts, entities: action.entities };
+    case 'error': return { ...state, searching: false };
+  }
+}
+
+type NodeState = { selectedNode: GraphNode | null; loadingNode: boolean };
+type NodeAction = { type: 'loading' } | { type: 'loaded'; node: GraphNode } | { type: 'error' };
+function nodeReducer(_: NodeState, action: NodeAction): NodeState {
+  switch (action.type) {
+    case 'loading': return { selectedNode: null, loadingNode: true };
+    case 'loaded': return { selectedNode: action.node, loadingNode: false };
+    case 'error': return { selectedNode: null, loadingNode: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
 type Tab = 'facts' | 'entities';
 
 export function KnowledgeGraphPage() {
-  const [stats, setStats] = useState<GraphStats | null>(null);
-  const [statsError, setStatsError] = useState<string | null>(null);
+  const [statsState, statsDispatch] = useReducer(statsReducer, { stats: null, statsError: null });
+  const [searchState, searchDispatch] = useReducer(searchReducer, {
+    searching: false,
+    facts: [],
+    entities: [],
+  });
+  const [nodeState, nodeDispatch] = useReducer(nodeReducer, {
+    selectedNode: null,
+    loadingNode: false,
+  });
 
   const [tab, setTab] = useState<Tab>('facts');
   const [query, setQuery] = useState('');
-  const [facts, setFacts] = useState<GraphFact[]>([]);
-  const [entities, setEntities] = useState<GraphEntity[]>([]);
-  const [searching, setSearching] = useState(false);
-
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [loadingNode, setLoadingNode] = useState(false);
-
   const [backfilling, setBackfilling] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -202,26 +239,25 @@ export function KnowledgeGraphPage() {
   // Load stats on mount
   useEffect(() => {
     fetchKgStats()
-      .then(setStats)
-      .catch((err: Error) => setStatsError(err.message));
+      .then((s) => statsDispatch({ type: 'loaded', stats: s }))
+      .catch((err: Error) => statsDispatch({ type: 'error', message: err.message }));
   }, []);
 
   // Debounced search
   const runSearch = useCallback(
     async (q: string, activeTab: Tab) => {
-      setSearching(true);
+      searchDispatch({ type: 'start' });
       try {
         if (activeTab === 'facts') {
           const items = await fetchKgFacts(q, 50);
-          setFacts(items);
+          searchDispatch({ type: 'facts', facts: items });
         } else {
           const items = await fetchKgSearch(q, 50);
-          setEntities(items);
+          searchDispatch({ type: 'entities', entities: items });
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Search failed');
-      } finally {
-        setSearching(false);
+        searchDispatch({ type: 'error' });
       }
     },
     [],
@@ -236,15 +272,13 @@ export function KnowledgeGraphPage() {
   }, [query, tab, runSearch]);
 
   async function openNode(name: string) {
-    setLoadingNode(true);
-    setSelectedNode(null);
+    nodeDispatch({ type: 'loading' });
     try {
       const node = await fetchKgNode(name, 30);
-      setSelectedNode(node);
+      nodeDispatch({ type: 'loaded', node });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load node');
-    } finally {
-      setLoadingNode(false);
+      nodeDispatch({ type: 'error' });
     }
   }
 
@@ -256,7 +290,7 @@ export function KnowledgeGraphPage() {
         `Backfill complete — ingested ${result.ingested}, skipped ${result.skipped}, failed ${result.failed}`,
       );
       const updated = await fetchKgStats();
-      setStats(updated);
+      statsDispatch({ type: 'loaded', stats: updated });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Backfill failed');
     } finally {
@@ -285,14 +319,14 @@ export function KnowledgeGraphPage() {
       </div>
 
       {/* Stats */}
-      {statsError ? (
-        <p className="text-sm text-destructive">{statsError}</p>
-      ) : stats ? (
+      {statsState.statsError ? (
+        <p className="text-sm text-destructive">{statsState.statsError}</p>
+      ) : statsState.stats ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Entities" value={stats.entities} />
-          <StatCard label="Relations" value={stats.relations} />
-          <StatCard label="Sources" value={stats.sources} />
-          <StatCard label="Evidence" value={stats.evidence} />
+          <StatCard label="Entities" value={statsState.stats.entities} />
+          <StatCard label="Relations" value={statsState.stats.relations} />
+          <StatCard label="Sources" value={statsState.stats.sources} />
+          <StatCard label="Evidence" value={statsState.stats.evidence} />
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -338,23 +372,23 @@ export function KnowledgeGraphPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          {searching && (
+          {searchState.searching && (
             <Sparkles size={14} className="text-muted-foreground animate-pulse shrink-0" />
           )}
         </div>
 
         {/* Body — split view if node selected */}
-        <div className={cn('flex', selectedNode || loadingNode ? 'divide-x divide-border/30' : '')}>
+        <div className={cn('flex', nodeState.selectedNode || nodeState.loadingNode ? 'divide-x divide-border/30' : '')}>
           {/* List pane */}
           <div className="flex-1 min-w-0 p-4 overflow-y-auto max-h-[520px]">
             {tab === 'facts' ? (
-              facts.length === 0 ? (
+              searchState.facts.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   {query ? 'No facts found.' : 'Type a query to search for facts.'}
                 </p>
               ) : (
                 <div>
-                  {facts.map((f) => (
+                  {searchState.facts.map((f) => (
                     <FactRow
                       key={f.id}
                       fact={f}
@@ -364,13 +398,13 @@ export function KnowledgeGraphPage() {
                   ))}
                 </div>
               )
-            ) : entities.length === 0 ? (
+            ) : searchState.entities.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 {query ? 'No entities found.' : 'Type a query to search for entities.'}
               </p>
             ) : (
               <div>
-                {entities.map((e) => (
+                {searchState.entities.map((e) => (
                   <EntityRow key={e.id} entity={e} onClick={(en) => void openNode(en.canonical_name)} />
                 ))}
               </div>
@@ -378,14 +412,14 @@ export function KnowledgeGraphPage() {
           </div>
 
           {/* Node detail pane */}
-          {(selectedNode || loadingNode) && (
+          {(nodeState.selectedNode || nodeState.loadingNode) && (
             <div className="w-[400px] shrink-0 p-4 overflow-y-auto max-h-[520px]">
-              {loadingNode ? (
+              {nodeState.loadingNode ? (
                 <p className="text-sm text-muted-foreground animate-pulse">Loading node…</p>
-              ) : selectedNode ? (
+              ) : nodeState.selectedNode ? (
                 <NodeDetailPanel
-                  node={selectedNode}
-                  onBack={() => setSelectedNode(null)}
+                  node={nodeState.selectedNode}
+                  onBack={() => nodeDispatch({ type: 'error' })}
                   onEntityClick={(name) => void openNode(name)}
                 />
               ) : null}

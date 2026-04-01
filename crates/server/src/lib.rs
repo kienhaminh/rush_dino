@@ -1,7 +1,10 @@
 pub mod approval_gate;
+pub mod input_request_gate;
+pub mod guardrail_broker;
 pub mod mcp_manager;
-pub mod policy_system_broker;
 pub mod channel_pairing;
+pub mod mobile_gateway;
+pub mod secret_vault;
 mod chat_broadcast;
 mod cron_runtime;
 mod knowledge_graph_bridge;
@@ -25,7 +28,7 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
-use state::AppState;
+use state::{AppState, AppStateConfig};
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
 
@@ -40,7 +43,9 @@ use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
     mcp_manager::McpManager,
+    mobile_gateway::{MobileGatewayAdapter, MobileGatewayService},
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
+    input_request_gate::InputRequestGate,
     cron_runtime::spawn_cron_runtime,
     middleware::{
         cors_layer, dashboard_auth_middleware, hmac_auth_middleware, rate_limit_middleware,
@@ -67,9 +72,24 @@ pub async fn build_app(
         Some(chat_broadcast.clone()),
     ));
     let gate = ApprovalGate::new();
+    let input_gate = InputRequestGate::new();
+    let secret_vault = crate::secret_vault::SecretVault::new();
     let runtime = Arc::new(AgentRuntime::new(pool.clone()));
-    runtime.reconcile_incomplete_runs().await?;
-    let system_broker = Arc::new(LocalSystemBroker::new(gate.clone(), runtime.clone()))
+    // Reconcile stale runs in the background so it doesn't block server startup.
+    {
+        let runtime_bg = runtime.clone();
+        tokio::spawn(async move {
+            if let Err(e) = runtime_bg.reconcile_incomplete_runs().await {
+                tracing::warn!("background run reconciliation failed: {e}");
+            }
+        });
+    }
+    let system_broker = Arc::new(LocalSystemBroker::new(
+        gate.clone(),
+        input_gate.clone(),
+        runtime.clone(),
+        secret_vault.clone(),
+    ))
         as rushdino_agent::SharedSystemBroker;
     let runtime_state = Arc::new(RuntimeState::new(
         config.clone(),
@@ -85,6 +105,7 @@ pub async fn build_app(
 
     let gateway_state = Arc::new(GatewayStateStore::new());
     let channel_pairing = Arc::new(ChannelPairingService::new((*pool).clone()));
+    let mobile_gateway = Arc::new(MobileGatewayService::new((*pool).clone()));
     let dashboard_auth = Arc::new(rushdino_common::dashboard_auth::DashboardAuthService::new(
         (*pool).clone(),
     ));
@@ -92,6 +113,7 @@ pub async fn build_app(
         config_path.clone(),
         channel_pairing.clone(),
         runtime_logs.clone(),
+        chat_broadcast.sender(),
     ));
     gateway_state
         .seed_channel(
@@ -119,6 +141,13 @@ pub async fn build_app(
             "webchat",
             config.gateway.webchat.enabled,
             gateway_adapter_capabilities("webchat"),
+        )
+        .await;
+    gateway_state
+        .seed_channel(
+            "mobile",
+            config.gateway.mobile.enabled,
+            gateway_adapter_capabilities("mobile"),
         )
         .await;
     let gateway_sessions = Arc::new(SessionManager::new((*pool).clone()));
@@ -258,6 +287,22 @@ pub async fn build_app(
         .await;
     }
 
+    let mobile_gateway_adapter = Arc::new(MobileGatewayAdapter::new());
+    if config.gateway.mobile.enabled {
+        gateway.register_arc(
+            mobile_gateway_adapter.clone() as Arc<dyn rushdino_gateway::ChannelAdapter>
+        );
+        tracing::info!("gateway: mobile adapter registered");
+        let _ = log_runtime(
+            &runtime_logs,
+            "info",
+            "gateway.mobile",
+            "mobile adapter registered",
+            None,
+        )
+        .await;
+    }
+
     let gateway_control = gateway.start().await?;
 
     // Build optional HMAC auth state from CredentialsConfig
@@ -289,28 +334,19 @@ pub async fn build_app(
         }
     }
 
-    // Build the sandbox registry using the shared SQLite pool and agents dir.
-    let agents_dir = config.data_dir.join("agents");
-    let sandbox_registry = state::SandboxRegistry::new(pool.clone(), agents_dir);
+    // Build the guardrail registry for per-session pipeline isolation.
+    let guardrail_registry = state::GuardrailRegistry::new();
     let pending_oauth = state::PendingOAuthStore::new();
 
-    // Skill graph: keyword-based routing for skill selection
-    let skill_graph_service = Arc::new(rushdino_skill_graph::SkillGraphService::new((*pool).clone()));
-    if let Err(err) = skill_graph_service.ensure_seeded().await {
-        tracing::warn!("skill graph seeding failed: {err}");
-    }
-    runtime_state.set_skill_graph(skill_graph_service.clone());
-
-    // MCP: initialize manager. Reconcile (connect + register tools) happens after
-    // the engine is built in the startup spawn below, so MCP tools are present in
-    // the initial agent session.
+    // MCP: McpManager::new() is now instant (reqwest::Client is lazy).
+    // The HTTP client is created on first reconcile, which happens after
+    // the user configures MCP servers — not unconditionally at startup.
     let mcp_manager = McpManager::new();
     let servers_bg = config.mcp_servers.clone();
 
-    // Build the engine synchronously so the router is ready to serve accurate status
-    // immediately (e.g. /healthz). Non-critical follow-up work (MCP reconcile,
-    // workflow seeding, session bootstrap) is spawned in the background.
-    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None).await {
+    // Build the engine. Optional services (KG, MCP) are skipped on startup;
+    // they are activated when the user enables them via config update.
+    if let Err(err) = refresh_runtime_from_disk(runtime_state.as_ref(), None, false).await {
         tracing::error!("failed to perform initial runtime refresh: {err}");
     }
     if let Some(unavailable_error) = runtime_state.status().unavailable_error.clone() {
@@ -331,31 +367,33 @@ pub async fn build_app(
         if let Some(engine) = runtime_state_bg.engine_opt() {
             let registry = engine.tool_registry.clone();
             mcp_manager_bg.reconcile_and_register(&servers_bg, registry).await;
-            engine.seed_initial_workflows().await;
             engine.ensure_main_session().await.ok();
         }
     });
 
-    let state = AppState::new(
-        runtime_state.clone(),
+    let state = AppState::new(AppStateConfig {
+        runtime: runtime_state.clone(),
         config_path,
         credentials_path,
         webchat,
         gate,
+        input_gate,
         gateway_state,
         gateway_sessions,
         gateway_control,
         hmac_auth,
         rate_limiters,
-        runtime_logs.clone(),
+        runtime_logs: runtime_logs.clone(),
         chat_broadcast,
         channel_pairing,
         dashboard_auth,
-        sandbox_registry,
+        mobile_gateway,
+        mobile_gateway_adapter,
+        guardrail_registry,
         pending_oauth,
-        skill_graph_service,
-        mcp_manager.clone(),
-    );
+        mcp_manager: mcp_manager.clone(),
+        secret_vault,
+    });
     let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
         .route(
@@ -372,6 +410,23 @@ pub async fn build_app(
         )
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
+        .route(
+            "/api/channels/mobile/keys",
+            get(routes::mobile_gateway::list_mobile_gateway_keys)
+                .post(routes::mobile_gateway::issue_mobile_gateway_key),
+        )
+        .route(
+            "/api/channels/mobile/keys/:id",
+            axum::routing::delete(routes::mobile_gateway::revoke_mobile_gateway_key),
+        )
+        .route(
+            "/api/channels/mobile/connect",
+            get(routes::mobile_gateway::connect_mobile_gateway),
+        )
+        .route(
+            "/api/channels/mobile/ws",
+            get(routes::mobile_gateway::ws_mobile_gateway),
+        )
         .route(
             "/api/conversations",
             get(routes::conversations::list_conversations),
@@ -417,6 +472,10 @@ pub async fn build_app(
         .route("/api/cron/:id/runs", get(routes::cron::list_cron_runs))
         .route("/api/logs", get(routes::logs::get_logs))
         .route("/api/approvals", get(routes::approval::list_approvals))
+        .route(
+            "/api/input-requests/:request_id",
+            post(routes::input_requests::resolve_input_request),
+        )
         .route(
             "/api/channels/:channel/pairing",
             get(routes::channel_pairing::get_channel_pairing),
@@ -504,6 +563,14 @@ pub async fn build_app(
             patch(routes::agents::update_agent_file),
         )
         .route(
+            "/api/agents/:id/health",
+            get(routes::agents::get_agent_health),
+        )
+        .route(
+            "/api/agents/:id/health/reset",
+            post(routes::agents::reset_agent_health),
+        )
+        .route(
             "/api/workflows",
             get(routes::workflows::list_workflows).post(routes::workflows::create_workflow),
         )
@@ -535,6 +602,7 @@ pub async fn build_app(
         .route("/api/kanban/tasks", get(routes::kanban::list_kanban_tasks))
         .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task).delete(routes::kanban::delete_kanban_task))
         .route("/api/kanban/stats", get(routes::kanban::get_kanban_stats))
+        .route("/api/messages", get(routes::messages::list_messages))
         .route("/api/graph/search", get(routes::graph::search))
         .route("/api/graph/facts", get(routes::graph::facts))
         .route("/api/graph/node/:id", get(routes::graph::node))
@@ -568,15 +636,6 @@ pub async fn build_app(
             "/api/skills/:name",
             axum::routing::delete(routes::skills::delete_skill),
         )
-        // Skill graph routing
-        .route("/api/skill-graph", get(routes::skill_graph::get_graph))
-        .route("/api/skill-graph/query", get(routes::skill_graph::query_skills))
-        .route("/api/skill-graph/nodes", post(routes::skill_graph::upsert_node))
-        .route("/api/skill-graph/nodes/:id", axum::routing::delete(routes::skill_graph::delete_node))
-        .route("/api/skill-graph/edges", post(routes::skill_graph::upsert_edge))
-        .route("/api/skill-graph/edges/:id", axum::routing::delete(routes::skill_graph::delete_edge))
-        .route("/api/skill-graph/assign", post(routes::skill_graph::assign_category))
-        .route("/api/skill-graph/reseed", post(routes::skill_graph::reseed))
         .route("/api/mcp/status", get(routes::mcp::get_mcp_status))
         .route(
             "/api/profiles/:id",
@@ -595,26 +654,22 @@ pub async fn build_app(
             "/api/providers/:profile_id/connect-oauth/complete",
             post(routes::providers::connect_profile_oauth_complete),
         )
-        // Sandbox policy API routes
+        // Guardrail management API routes
         .route(
-            "/api/agents/:agent_id/sandbox",
-            get(routes::sandbox::get_agent_sandbox).put(routes::sandbox::put_agent_sandbox),
+            "/api/agents/:agent_id/guardrail/trust",
+            get(routes::guardrail::get_trust_levels).put(routes::guardrail::set_trust_level),
         )
         .route(
-            "/api/sessions/:session_id/sandbox/network",
-            patch(routes::sandbox::patch_session_network_policy),
+            "/api/agents/:agent_id/guardrail/policy",
+            get(routes::guardrail::get_policy_rules),
         )
         .route(
-            "/api/sessions/:session_id/audit-log",
-            get(routes::sandbox::get_session_audit_log),
+            "/api/agents/:agent_id/guardrail/policy/rule",
+            post(routes::guardrail::add_policy_rule),
         )
         .route(
-            "/api/sessions/:session_id/sandbox/approve",
-            post(routes::sandbox::approve_session_request),
-        )
-        .route(
-            "/api/sessions/:session_id/sandbox/deny",
-            post(routes::sandbox::deny_session_request),
+            "/api/sessions/:session_id/guardrail/approve",
+            post(routes::guardrail::approve_action),
         )
         // Version update API
         .route("/api/version/check", get(routes::version::check_version))
@@ -661,7 +716,7 @@ pub async fn run_server() -> Result<()> {
 
     let asset_home = init::default_home_dir();
     tokio::spawn(async move {
-        if let Err(e) = asset_sync::seed_bundled_assets(&asset_home).await {
+        if let Err(e) = asset_sync::sync_bundled_assets(&asset_home).await {
             tracing::warn!("asset_sync failed: {e}");
         }
     });
@@ -691,7 +746,7 @@ fn gateway_adapter_capabilities(channel_id: &str) -> GatewayAdapterCapabilities 
             images: GatewayRichDeliveryMode::Native,
             link_buttons: GatewayRichDeliveryMode::Native,
         },
-        "webchat" => GatewayAdapterCapabilities {
+        "webchat" | "mobile" => GatewayAdapterCapabilities {
             plain_text: true,
             markdown: true,
             code_blocks: true,
@@ -734,12 +789,15 @@ fn should_register_gateway_adapter(
                     .is_some_and(|token| !token.trim().is_empty())
         }
         "webchat" => config.gateway.webchat.enabled,
+        "mobile" => config.gateway.mobile.enabled,
         _ => false,
     }
 }
 
 pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
-    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref())).await
+    // init_optional_services=true: user explicitly triggered a config update,
+    // so KgGateway and MCP are connected/reconciled if enabled.
+    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref()), true).await
 }
 
 async fn shutdown_signal() {

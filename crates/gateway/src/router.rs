@@ -357,7 +357,9 @@ impl Router {
 }
 
 fn should_stream_preview(msg: &IncomingMessage) -> bool {
-    msg.channel_id == "telegram" && msg.is_direct_message && msg.enable_streaming_preview
+    (msg.channel_id == "telegram" || msg.channel_id == "mobile")
+        && msg.is_direct_message
+        && msg.enable_streaming_preview
 }
 
 fn spawn_preview_stream_task(

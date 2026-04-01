@@ -3,14 +3,14 @@
 // Anchored bottom-right via fixed positioning. Renders a semi-transparent overlay
 // behind the panel that closes on click. Two tabs: Skills (indigo) / Tools (cyan).
 //
-// Skills: fetched from skill graph, split into CORE and CUSTOM sections.
+// Skills: fetched from skills API, split into BUILT-IN and CUSTOM sections.
 // Tools: derived from the assignedTools prop passed by the parent (no extra fetch).
 
 import { useState } from 'react';
 import { XIcon } from 'lucide-react';
 
 import type { AgentSkillRecord, AgentToolRecord, AgentToolSection } from './agent-types';
-import type { SkillNode } from '../skills/skill-graph-types';
+import type { SkillRecord } from '@/lib/types';
 import { SkillsTab, SKILL_ACCENT, SKILL_LIGHT } from './agent-pool-palette-skills-tab';
 import { ToolsTab } from './agent-pool-palette-tools-tab';
 
@@ -21,7 +21,7 @@ export interface AgentPoolPaletteProps {
   agentName: string;
   assignedSkills: AgentSkillRecord[];
   assignedTools: AgentToolSection[];
-  onAssignSkill: (skill: SkillNode) => void;
+  onAssignSkill: (skill: SkillRecord) => void;
   onAssignTool: (tool: AgentToolRecord) => void;
   onClose: () => void;
 }
@@ -53,7 +53,7 @@ export function AgentPoolPalette({
   const [localToolsAssigned, setLocalToolsAssigned] = useState<Set<string>>(new Set());
 
   // Handle skill assignment — optimistic update then delegate to parent
-  function handleAssignSkill(skill: SkillNode) {
+  function handleAssignSkill(skill: SkillRecord) {
     setLocalSkillsAssigned((prev) => new Set([...prev, skill.name]));
     onAssignSkill(skill);
   }

@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -7,16 +6,14 @@ import {
   KeyRound,
   Link2,
   RefreshCw,
-  ShieldCheck,
   TerminalSquare,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { fetchSystemSummary } from '@/lib/api';
 import { formatProviderLabel } from '@/lib/provider-display';
-import type { SystemSummaryResponse } from '@/lib/types';
+import { useOverviewQuery } from '@/lib/queries';
 
 function formatUptime(uptimeSecs: number) {
   const hours = Math.floor(uptimeSecs / 3600);
@@ -37,26 +34,8 @@ function toneForStatus(status: string) {
 }
 
 export function OverviewPage() {
-  const [summary, setSummary] = useState<SystemSummaryResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadSummary = async () => {
-    setLoading(true);
-    try {
-      const next = await fetchSystemSummary();
-      setSummary(next);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load operations summary.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadSummary();
-  }, []);
+  const { data: summary, isPending: loading, error: queryError, refetch } = useOverviewQuery();
+  const error = queryError?.message ?? null;
 
   const channels = summary?.channels ?? [];
   const needsAttention = channels.filter((channel) => channel.status === 'needs_attention');
@@ -92,7 +71,7 @@ export function OverviewPage() {
           </div>
         </div>
 
-        <Button onClick={() => void loadSummary()} disabled={loading} variant="outline" size="sm">
+        <Button onClick={() => void refetch()} disabled={loading} variant="outline" size="sm">
           <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Refresh
         </Button>
@@ -105,20 +84,6 @@ export function OverviewPage() {
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <Card className="border-border/60 bg-card/80">
-          <CardContent className="flex items-center gap-4 p-5">
-            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                Pending approvals
-              </p>
-              <p className="mt-1 text-3xl font-semibold">{summary?.approvals.pendingCount ?? 0}</p>
-            </div>
-          </CardContent>
-        </Card>
-
         <Card className="border-border/60 bg-card/80">
           <CardContent className="flex items-center gap-4 p-5">
             <div className="rounded-2xl bg-info/10 p-3 text-info">
@@ -238,29 +203,9 @@ export function OverviewPage() {
                     </Button>
                   </div>
                 </div>
-              ) : summary?.approvals.pending.length ? (
-                summary.approvals.pending.slice(0, 4).map((request) => (
-                  <div
-                    key={request.requestId}
-                    className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium">{request.tool}</p>
-                      <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                        <RouterLink to="/approvals">
-                          Review
-                          <ArrowRight className="ml-1 h-3 w-3" />
-                        </RouterLink>
-                      </Button>
-                    </div>
-                    <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                      session {request.sessionId}
-                    </p>
-                  </div>
-                ))
               ) : (
                 <div className="rounded-2xl border border-dashed border-border/60 bg-background/40 px-4 py-8 text-sm text-muted-foreground">
-                  No runs or approvals are waiting on operator action.
+                  No runs are waiting on operator action.
                 </div>
               )}
             </CardContent>

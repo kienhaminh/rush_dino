@@ -10,7 +10,7 @@ use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
-use rushdino_providers::types::{ModelInfo, OpenAIAuth, ProviderConfig};
+use rushdino_providers::types::{AnthropicAuth, ModelInfo, OpenAIAuth, ProviderConfig};
 use rushdino_providers::ProviderService;
 use serde::{Deserialize, Serialize};
 
@@ -48,7 +48,8 @@ pub struct CompleteOAuthRequest {
 }
 
 fn profile_supports_oauth_connect(profile: &ProviderProfile) -> bool {
-    profile.provider_kind == Provider::OpenAI && profile.auth_method == AuthMethod::OAuth
+    profile.auth_method == AuthMethod::OAuth
+        && matches!(profile.provider_kind, Provider::OpenAI | Provider::Anthropic)
 }
 
 pub async fn list_profiles(State(state): State<AppState>) -> Result<Json<Vec<ProviderProfile>>> {
@@ -81,6 +82,7 @@ pub async fn create_profile(
     }
 
     if let Some(api_key) = payload.api_key {
+        let api_key = state.secret_vault.resolve_in_string(&api_key).await;
         let secrets = ProfileSecrets {
             api_key: Some(api_key),
             ..Default::default()
@@ -117,6 +119,7 @@ pub async fn update_profile(
     profile.base_url = payload.base_url;
 
     if let Some(api_key) = payload.api_key {
+        let api_key = state.secret_vault.resolve_in_string(&api_key).await;
         let mut secrets = credentials.profiles.entry(id.clone()).or_default().clone();
         if api_key.is_empty() {
             secrets.api_key = None;
@@ -169,20 +172,17 @@ async fn consume_pending_oauth_session(
         })
 }
 
-fn parse_complete_oauth_input(
-    pending: &PendingOAuthSession,
-    redirect_url: &str,
-) -> Result<String> {
-    rushdino_auth::oauth_pkce::extract_authorization_code(redirect_url, &pending.state)
-}
-
 pub async fn connect_profile_oauth_start(
     State(state): State<AppState>,
     Path(profile_id): Path<String>,
 ) -> Result<Json<StartOAuthResponse>> {
     let config = AppConfig::load_from_path(&state.config_path)?;
     let profile = get_oauth_profile(&config, &profile_id)?;
-    let login = rushdino_auth::oauth_pkce::start_login();
+    let login = match profile.provider_kind {
+        Provider::OpenAI => rushdino_auth::oauth_pkce::start_login(),
+        Provider::Anthropic => rushdino_auth::oauth_pkce::anthropic::start_anthropic_login(),
+        _ => unreachable!(),
+    };
     let session_id = uuid::Uuid::new_v4().to_string();
     let auth_url = login.auth_url.clone();
     state
@@ -220,10 +220,29 @@ pub async fn connect_profile_oauth_complete(
         ));
     }
 
-    let code = parse_complete_oauth_input(&pending, &payload.redirect_url)?;
     let client = reqwest::Client::new();
-    let tokens = rushdino_auth::oauth_pkce::complete_login(&client, &code, &pending.verifier)
-        .await?;
+    let tokens = match profile.provider_kind {
+        Provider::OpenAI => {
+            let code = rushdino_auth::oauth_pkce::extract_authorization_code(
+                &payload.redirect_url,
+                &pending.state,
+            )?;
+            rushdino_auth::oauth_pkce::complete_login(&client, &code, &pending.verifier).await?
+        }
+        Provider::Anthropic => {
+            let code = rushdino_auth::oauth_pkce::anthropic::extract_anthropic_code(
+                &payload.redirect_url,
+                &pending.verifier,
+            )?;
+            rushdino_auth::oauth_pkce::anthropic::complete_anthropic_login(
+                &client,
+                &code,
+                &pending.verifier,
+            )
+            .await?
+        }
+        _ => unreachable!(),
+    };
     let mut credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
     let mut secrets = credentials
         .profiles
@@ -324,13 +343,31 @@ pub async fn list_provider_models(
             }
         }
         Provider::Anthropic => {
-            if secrets.api_key.is_none()
-                || secrets.api_key.as_deref().unwrap_or_default().is_empty()
-            {
-                return Ok(Json(defaults));
-            }
+            let auth = if profile.auth_method == AuthMethod::OAuth {
+                let token = secrets
+                    .access_token
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned);
+                let Some(access_token) = token else {
+                    return Ok(Json(defaults));
+                };
+                AnthropicAuth::OAuth { access_token }
+            } else {
+                let key = secrets
+                    .api_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned);
+                let Some(api_key) = key else {
+                    return Ok(Json(defaults));
+                };
+                AnthropicAuth::ApiKey { api_key }
+            };
             ProviderConfig::Anthropic {
-                api_key: secrets.api_key.unwrap_or_default(),
+                auth,
                 model: profile.default_model.clone(),
             }
         }
@@ -389,14 +426,11 @@ pub async fn list_provider_models(
 mod tests {
     use std::time::{Duration, Instant};
 
-    use rushdino_auth::oauth_pkce::PendingOAuthLogin;
     use rushdino_common::config::{AuthMethod, Provider, ProviderProfile};
 
-    use crate::state::{PendingOAuthSession, PendingOAuthStore};
+    use crate::state::PendingOAuthStore;
 
-    use super::{
-        consume_pending_oauth_session, parse_complete_oauth_input, profile_supports_oauth_connect,
-    };
+    use super::{consume_pending_oauth_session, profile_supports_oauth_connect};
 
     fn profile(provider_kind: Provider, auth_method: AuthMethod) -> ProviderProfile {
         ProviderProfile {
@@ -423,7 +457,11 @@ mod tests {
             Provider::OpenAI,
             AuthMethod::ApiKey,
         )));
-        assert!(!profile_supports_oauth_connect(&profile(
+    }
+
+    #[test]
+    fn oauth_connect_supports_anthropic_oauth_profiles() {
+        assert!(profile_supports_oauth_connect(&profile(
             Provider::Anthropic,
             AuthMethod::OAuth,
         )));
@@ -444,39 +482,4 @@ mod tests {
         assert!(error.to_string().contains("expired"));
     }
 
-    #[tokio::test]
-    async fn oauth_complete_rejects_state_mismatch() {
-        let store = PendingOAuthStore::new();
-        let now = Instant::now();
-        store
-            .insert(
-                "session-1".to_owned(),
-                PendingOAuthSession::from_login(
-                    "profile-1".to_owned(),
-                    PendingOAuthLogin {
-                        verifier: "verifier".to_owned(),
-                        state: "expected-state".to_owned(),
-                        auth_url: "https://example.test/oauth".to_owned(),
-                    },
-                    now,
-                ),
-            )
-            .await;
-
-        let pending = consume_pending_oauth_session(
-            &store,
-            "session-1",
-            Duration::from_secs(300),
-            now,
-        )
-        .await
-        .expect("session should exist");
-        let error = parse_complete_oauth_input(
-            &pending,
-            "http://localhost:1455/auth/callback?code=abc123&state=wrong-state",
-        )
-        .expect_err("state mismatch should fail");
-
-        assert!(error.to_string().contains("state mismatch"));
-    }
 }

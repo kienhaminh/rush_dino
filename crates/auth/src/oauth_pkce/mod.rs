@@ -2,6 +2,8 @@ mod callback;
 mod pkce;
 mod token;
 
+pub mod anthropic;
+
 use std::collections::HashMap;
 
 use reqwest::Client;

@@ -1,185 +1,197 @@
-import { useEffect, useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
-import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
-
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { fetchApprovals, resolveApproval } from '@/lib/api';
-import type { ApprovalsResponse } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { fetchChannelPairing, resolveChannelPairingRequest, revokeChannelPairedUser } from '@/lib/api';
+import { usePairingRequestEvents } from '@/hooks/use-chat-ws';
+import type { ChannelPairingState, ChannelPairingPendingRequest, ChannelPairedUser } from '@/lib/types';
+
+type Channel = 'telegram' | 'discord';
+const CHANNELS: Channel[] = ['telegram', 'discord'];
+
+function channelLabel(channel: Channel) {
+  return channel === 'telegram' ? 'Telegram' : 'Discord';
+}
+
+function formatTs(value: string) {
+  return new Date(value).toLocaleString();
+}
 
 export function ApprovalsPage() {
-  const [data, setData] = useState<ApprovalsResponse | null>(null);
+  const [states, setStates] = useState<Record<Channel, ChannelPairingState | null>>({
+    telegram: null,
+    discord: null,
+  });
   const [loading, setLoading] = useState(true);
-  const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
 
-  const load = async () => {
-    setLoading(true);
+  const fetchAll = useCallback(async () => {
     try {
-      const next = await fetchApprovals();
-      setData(next);
-      setError(null);
+      const [telegram, discord] = await Promise.all([
+        fetchChannelPairing('telegram'),
+        fetchChannelPairing('discord'),
+      ]);
+      setStates({ telegram, discord });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load approvals.');
+      console.error('Failed to fetch pairing state', err);
+      toast.error('Failed to load approvals');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    void load();
   }, []);
 
-  const handleDecision = async (requestId: string, sessionId: string, approved: boolean) => {
-    setBusyRequestId(requestId);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const { pairingRequestCount } = usePairingRequestEvents();
+  useEffect(() => {
+    if (pairingRequestCount === 0) return;
+    fetchAll();
+  }, [pairingRequestCount, fetchAll]);
+
+  const allPending: (ChannelPairingPendingRequest & { channel: Channel })[] = CHANNELS.flatMap(
+    (ch) => (states[ch]?.pending ?? []).map((r) => ({ ...r, channel: ch })),
+  ).sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime());
+
+  const allPaired: (ChannelPairedUser & { channel: Channel })[] = CHANNELS.flatMap(
+    (ch) => (states[ch]?.paired ?? []).map((p) => ({ ...p, channel: ch })),
+  ).sort((a, b) => new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime());
+
+  const handleDecision = async (channel: Channel, requestId: string, approved: boolean) => {
+    setBusy((prev) => ({ ...prev, [requestId]: true }));
     try {
-      await resolveApproval(requestId, { approved, sessionId });
-      toast.success(approved ? 'Approval granted.' : 'Approval denied.');
-      await load();
+      await resolveChannelPairingRequest(channel, requestId, approved);
+      await fetchAll();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to resolve approval.');
+      console.error('Failed to resolve pairing request', err);
+      toast.error('Action failed — please try again');
     } finally {
-      setBusyRequestId(null);
+      setBusy((prev) => ({ ...prev, [requestId]: false }));
     }
   };
 
-  const pending = data?.pending ?? [];
-  const recent = data?.recent ?? [];
+  const handleRevoke = async (channel: Channel, senderId: string) => {
+    const key = `${channel}:${senderId}`;
+    setBusy((prev) => ({ ...prev, [key]: true }));
+    try {
+      await revokeChannelPairedUser(channel, senderId);
+      await fetchAll();
+    } catch (err) {
+      console.error('Failed to revoke paired user', err);
+      toast.error('Revoke failed — please try again');
+    } finally {
+      setBusy((prev) => ({ ...prev, [key]: false }));
+    }
+  };
 
   return (
-    <div className="flex-1 min-w-0 h-full overflow-y-auto bg-background px-6 py-6 md:px-8 md:py-8 flex flex-col gap-6 w-full">
-      <div className="flex justify-end">
-        <Button onClick={() => void load()} disabled={loading} variant="outline" size="sm">
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
+    <div className="flex flex-1 flex-col overflow-auto p-6">
+      <div className="mx-auto w-full max-w-3xl space-y-6">
 
-      {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null}
-
-      <section className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="border-border/60 bg-card/80">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Pending approvals</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {pending.length ? (
-              pending.map((request) => {
-                const isBusy = busyRequestId === request.requestId;
-                return (
-                  <div
-                    key={request.requestId}
-                    className="rounded-3xl border border-border/50 bg-background/50 p-4"
-                  >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
-                            pending
-                          </Badge>
-                          <p className="text-sm font-semibold">{request.tool}</p>
-                        </div>
-                        <p className="font-mono text-[11px] text-muted-foreground">
-                          session {request.sessionId} · conversation {request.conversationId}
-                        </p>
-                        {request.runId ? (
-                          <p className="text-xs text-muted-foreground">
-                            <RouterLink
-                              className="text-primary underline-offset-4 hover:underline"
-                              to="/runs"
-                            >
-                              View run {request.runId}
-                            </RouterLink>
-                          </p>
-                        ) : null}
-                        <pre className="overflow-x-auto rounded-2xl border border-border/40 bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                          {JSON.stringify(request.args ?? {}, null, 2)}
-                        </pre>
+        {/* Pending requests */}
+        <section>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+            Pending Requests
+            {allPending.length > 0 && (
+              <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                {allPending.length}
+              </span>
+            )}
+          </h3>
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : allPending.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No pending pairing requests.</p>
+          ) : (
+            <div className="space-y-3">
+              {allPending.map((req) => (
+                <Card key={req.id} className="border-border/60 bg-card/80">
+                  <CardContent className="flex items-center justify-between gap-4 py-4">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="shrink-0 text-[10px] uppercase">
+                          {channelLabel(req.channel)}
+                        </Badge>
+                        <span className="truncate font-medium">
+                          {req.senderDisplay ?? req.senderId}
+                        </span>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          disabled={isBusy}
-                          onClick={() =>
-                            void handleDecision(request.requestId, request.sessionId, false)
-                          }
-                        >
-                          <XCircle className="mr-2 h-4 w-4" />
-                          Deny
-                        </Button>
-                        <Button
-                          disabled={isBusy}
-                          onClick={() =>
-                            void handleDecision(request.requestId, request.sessionId, true)
-                          }
-                        >
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Approve
-                        </Button>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>
+                          Code: <span className="font-mono font-bold text-foreground">{req.code}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatTs(req.lastSeenAt)}
+                        </span>
                       </div>
                     </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="rounded-3xl border border-dashed border-border/60 bg-background/40 px-4 py-10 text-sm text-muted-foreground">
-                No approvals are currently waiting for operator action.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-red-500/30 text-red-500 hover:bg-red-500/10"
+                        disabled={!!busy[req.id]}
+                        onClick={() => handleDecision(req.channel, req.id, false)}
+                      >
+                        <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                        Deny
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={!!busy[req.id]}
+                        onClick={() => handleDecision(req.channel, req.id, true)}
+                      >
+                        <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                        Approve
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
 
-        <Card className="border-border/60 bg-card/80">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Decision trail</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {recent.length ? (
-              recent.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        entry.status === 'approved'
-                          ? 'success'
-                          : entry.status === 'denied'
-                            ? 'destructive'
-                            : 'outline'
-                      }
-                      className="text-[10px] uppercase tracking-wider"
+        {/* Paired users */}
+        {!loading && allPaired.length > 0 && (
+          <section>
+            <h3 className="mb-3 text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+              Paired Users
+            </h3>
+            <div className="space-y-2">
+              {allPaired.map((p) => (
+                <Card key={`${p.channel}:${p.senderId}`} className="border-border/40 bg-card/50">
+                  <CardContent className="flex items-center justify-between gap-4 py-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Badge variant="outline" className="shrink-0 text-[10px] uppercase">
+                        {channelLabel(p.channel)}
+                      </Badge>
+                      <span className="truncate text-sm font-medium">
+                        {p.senderDisplay ?? p.senderId}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        since {formatTs(p.approvedAt)}
+                      </span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      disabled={!!busy[`${p.channel}:${p.senderId}`]}
+                      onClick={() => handleRevoke(p.channel, p.senderId)}
                     >
-                      {entry.status}
-                    </Badge>
-                    <p className="text-sm font-medium">{entry.tool ?? 'approval record'}</p>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {entry.requestId ? `request ${entry.requestId}` : 'request id unavailable'}
-                  </p>
-                  {entry.runId ? (
-                    <p className="mt-1 text-xs text-muted-foreground">run {entry.runId}</p>
-                  ) : null}
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {new Date(entry.createdAt).toLocaleString()}
-                  </p>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-border/60 bg-background/40 px-4 py-8 text-sm text-muted-foreground">
-                No approval decisions have been recorded yet.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+                      Revoke
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        )}
+
+      </div>
     </div>
   );
 }

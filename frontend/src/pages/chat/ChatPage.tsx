@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Send, RefreshCw } from 'lucide-react';
 
 import { ConversationTimeline } from '@/components/workspace/conversation-timeline';
+import { InputRequestCard } from '@/components/workspace/input-request-card';
 import { SubAgentPanel } from '@/components/workspace/sub-agent-panel';
 import { ResizeHandle } from '@/components/workspace/resize-handle';
 import { useChatWs } from '@/hooks/use-chat-ws';
 import { useSubAgentSessions } from '@/hooks/use-sub-agent-sessions';
 import { fetchConversation } from '@/lib/api';
-import { messagesToItems } from '@/lib/message-converter';
+import type { ConversationMetrics } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -20,15 +21,30 @@ export function ChatPage() {
   const {
     items,
     sendMessage,
+    markInputRequestResolved,
     resetWithItems,
+    resetFromConversationDetail,
     isConnected,
     isStreaming,
     historyLoaded,
     setHistoryLoaded,
   } = useChatWs();
 
-  const { sessions: agentSessions, liveRuns, refresh: refreshAgentSessions } = useSubAgentSessions(items);
+  const pendingInputRequest = items.find(
+    (item) => item.kind === 'input_request' && item.status === 'pending',
+  ) as Extract<(typeof items)[number], { kind: 'input_request' }> | undefined;
+  const hasPendingForm = pendingInputRequest != null;
+
+  const [latestMetrics, setLatestMetrics] = useState<ConversationMetrics | null>(null);
+  const prevIsStreamingRef = useRef(false);
+
+  const {
+    sessions: agentSessions,
+    liveRuns,
+    refresh: refreshAgentSessions,
+  } = useSubAgentSessions(items);
   const [panelWidth, setPanelWidth] = useState(260);
+
 
   // Load history from REST API only once (on first mount).
   // On subsequent mounts (navigating back), items are already in the provider.
@@ -39,18 +55,42 @@ export function ChatPage() {
       try {
         const detail = await fetchConversation(MAIN_SESSION_ID);
         if (!cancelled) {
-          resetWithItems(messagesToItems(detail.messages));
-          setHistoryLoaded(true);
+          resetFromConversationDetail(detail);
+          setLatestMetrics(detail.latestMetrics ?? null);
         }
       } catch {
         if (!cancelled) {
           resetWithItems([]);
-          setHistoryLoaded(true);
         }
+      } finally {
+        // Always mark history as loaded so navigating away and back does not
+        // trigger a re-fetch that would overwrite optimistic / WS-streamed items.
+        setHistoryLoaded(true);
       }
     })();
-    return () => { cancelled = true; };
-  }, [historyLoaded, resetWithItems, setHistoryLoaded]);
+    return () => {
+      cancelled = true;
+    };
+  }, [historyLoaded, resetFromConversationDetail, resetWithItems, setHistoryLoaded]);
+
+  // Re-fetch metrics when streaming ends (true → false transition).
+  useEffect(() => {
+    const wasStreaming = prevIsStreamingRef.current;
+    prevIsStreamingRef.current = isStreaming;
+    if (!wasStreaming || isStreaming || !historyLoaded) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const detail = await fetchConversation(MAIN_SESSION_ID);
+        if (!cancelled) setLatestMetrics(detail.latestMetrics ?? null);
+      } catch {
+        // ignore — metrics stay stale on error
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isStreaming, historyLoaded]);
 
   const handleSendMessage = useCallback(() => {
     if (!inputValue.trim() || isStreaming) return;
@@ -80,7 +120,6 @@ export function ChatPage() {
   return (
     <div className="flex flex-1 min-w-0 h-full overflow-hidden bg-background">
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
-
         {!historyLoaded ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="flex items-center gap-2 text-muted-foreground/50 text-sm">
@@ -89,49 +128,71 @@ export function ChatPage() {
             </div>
           </div>
         ) : (
-          <ConversationTimeline items={items} isStreaming={isStreaming} />
+          <ConversationTimeline
+            items={items}
+            isStreaming={isStreaming}
+            latestMetrics={latestMetrics}
+            onResolveInputRequest={markInputRequestResolved}
+          />
         )}
 
-        {/* Chat Input */}
-        <div className="border-t border-border/10 bg-background/50 backdrop-blur-md p-4">
-          <div className="max-w-3xl mx-auto flex gap-3 relative">
-            <Textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              className="min-h-[44px] h-[44px] py-2.5 pr-12 resize-none rounded-xl bg-muted/30 border-border/20 focus-visible:ring-primary/20 overflow-hidden"
-            />
-            <Button
-              size="icon"
-              variant="default"
-              className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-lg shadow-sm"
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isStreaming || !isConnected}
-            >
-              <Send size={16} />
-            </Button>
+        {/* Pending input request form — replaces chat input bar when active */}
+        {hasPendingForm && pendingInputRequest ? (
+          <div className="border-t border-border/10 bg-background/50 backdrop-blur-md px-4 pt-2 pb-4 overflow-y-auto max-h-[60vh]">
+            <div className="max-w-3xl mx-auto">
+              <InputRequestCard
+                item={pendingInputRequest}
+                standalone
+                onResolved={markInputRequestResolved}
+              />
+            </div>
           </div>
-          <div className="max-w-3xl mx-auto flex justify-center mt-2">
-            {!isConnected ? (
-              <span className="text-[10px] text-muted-foreground/40 italic">
-                Disconnected — reconnecting…
-              </span>
-            ) : (
-              <span className="text-[10px] text-muted-foreground/30">
-                Press Enter to send, Shift+Enter for new line
-              </span>
-            )}
+        ) : (
+          /* Chat Input */
+          <div className="border-t border-border/10 bg-background/50 backdrop-blur-md p-4">
+            <div className="max-w-3xl mx-auto flex gap-3 relative">
+              <Textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Type a message..."
+                className="min-h-[44px] h-[44px] py-2.5 pr-12 resize-none rounded-xl bg-muted/30 border-border/20 focus-visible:ring-primary/20 overflow-hidden"
+              />
+              <Button
+                size="icon"
+                variant="default"
+                className="absolute right-1.5 bottom-1.5 h-8 w-8 rounded-lg shadow-sm"
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isStreaming || !isConnected}
+              >
+                <Send size={16} />
+              </Button>
+            </div>
+            <div className="max-w-3xl mx-auto flex justify-center mt-2">
+              {!isConnected ? (
+                <span className="text-[10px] text-muted-foreground/40 italic">
+                  Disconnected — reconnecting…
+                </span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground/30">
+                  Press Enter to send, Shift+Enter for new line
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Resize handle */}
+      {/* Resize handle + Sub-agent side panel — temporarily hidden
       <ResizeHandle panelWidth={panelWidth} onResize={setPanelWidth} min={200} max={500} />
-
-      {/* Sub-agent side panel — always visible, shows empty state when idle */}
-      <SubAgentPanel sessions={agentSessions} liveRuns={liveRuns} width={panelWidth} onSessionDeleted={refreshAgentSessions} />
+      <SubAgentPanel
+        sessions={agentSessions}
+        liveRuns={liveRuns}
+        width={panelWidth}
+        onSessionDeleted={refreshAgentSessions}
+      />
+      */}
     </div>
   );
 }

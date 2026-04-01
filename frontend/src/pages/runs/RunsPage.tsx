@@ -1,5 +1,5 @@
 import { Link as RouterLink } from 'react-router-dom';
-import { Clock3, RefreshCw, ShieldAlert, SquareSlash } from 'lucide-react';
+import { Clock3, RefreshCw, SquareSlash } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ function toneForState(state: string) {
     case 'queued':
       return 'border-warning/30 text-warning';
     case 'awaiting_approval':
+    case 'awaiting_input':
       return 'border-warning/30 text-warning';
     case 'blocked':
     case 'failed':
@@ -56,6 +57,7 @@ const RUN_STATE_FILTERS = [
   { value: 'running', label: 'Running' },
   { value: 'queued', label: 'Queued' },
   { value: 'awaiting_approval', label: 'Awaiting approval' },
+  { value: 'awaiting_input', label: 'Awaiting input' },
   { value: 'blocked', label: 'Blocked' },
   { value: 'failed', label: 'Failed' },
   { value: 'completed', label: 'Completed' },
@@ -292,13 +294,10 @@ export function RunsPage({
                   <div className="rounded-3xl border border-border/50 bg-background/50 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Timeline</p>
-                      {detail.snapshot.state === 'awaiting_approval' ? (
-                        <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
-                          <RouterLink to="/approvals">
-                            <ShieldAlert className="mr-1 h-3 w-3" />
-                            Open approvals
-                          </RouterLink>
-                        </Button>
+                      {detail.snapshot.state === 'awaiting_input' ? (
+                        <Badge variant="outline" className="text-[10px] uppercase tracking-wider border-warning/30 text-warning">
+                          Waiting for user input
+                        </Badge>
                       ) : null}
                     </div>
                     <div className="mt-3 space-y-3">

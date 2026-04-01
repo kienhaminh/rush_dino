@@ -36,13 +36,79 @@ pub enum MatchMethod {
 /// Default claim_tags for built-in agents (used when the template doesn't specify them).
 pub fn default_claim_tags(agent_name: &str) -> Vec<String> {
     let tags: &[&str] = match agent_name {
-        "software-engineer" => &["code", "architecture", "implementation", "debugging", "api", "frontend", "backend", "fullstack", "web", "errors", "logs", "diagnosis", "root-cause"],
-        "researcher" => &["research", "analysis", "facts", "summarization", "web-search"],
-        "code-reviewer" => &["review", "code-quality", "bugs", "security", "style", "refactoring", "simplification", "cleanup", "complexity"],
+        "software-engineer" => &[
+            "code",
+            "architecture",
+            "implementation",
+            "debugging",
+            "api",
+            "frontend",
+            "backend",
+            "fullstack",
+            "web",
+            "errors",
+            "logs",
+            "diagnosis",
+            "root-cause",
+        ],
+        "researcher" => &[
+            "research",
+            "analysis",
+            "facts",
+            "summarization",
+            "web-search",
+        ],
+        "code-reviewer" => &[
+            "review",
+            "code-quality",
+            "bugs",
+            "security",
+            "style",
+            "refactoring",
+            "simplification",
+            "cleanup",
+            "complexity",
+        ],
         "tester" => &["testing", "test-cases", "coverage", "regression", "quality"],
-        "designer" => &["design", "ui", "ux", "accessibility", "user-flow", "visual", "color", "layout", "graphics"],
-        "writer" => &["writing", "articles", "emails", "creative", "content", "blog", "seo", "marketing", "copy", "documentation", "docs", "runbooks", "architecture-notes"],
-        "planner" => &["planning", "task-breakdown", "timelines", "roadmap", "scope", "milestones", "coordination", "ideation", "options", "concepts", "exploration"],
+        "designer" => &[
+            "design",
+            "ui",
+            "ux",
+            "accessibility",
+            "user-flow",
+            "visual",
+            "color",
+            "layout",
+            "graphics",
+        ],
+        "writer" => &[
+            "writing",
+            "articles",
+            "emails",
+            "creative",
+            "content",
+            "blog",
+            "seo",
+            "marketing",
+            "copy",
+            "documentation",
+            "docs",
+            "runbooks",
+            "architecture-notes",
+        ],
+        "planner" => &[
+            "planning",
+            "task-breakdown",
+            "timelines",
+            "roadmap",
+            "scope",
+            "milestones",
+            "coordination",
+            "ideation",
+            "options",
+            "concepts",
+            "exploration",
+        ],
         "devops-engineer" => &["devops", "ci-cd", "docker", "infrastructure", "deployment"],
         "data-analyst" => &["data", "analytics", "statistics", "visualization"],
         _ => &[],
@@ -56,8 +122,7 @@ fn tag_overlap_score(task_tags: &[String], agent_tags: &[String]) -> f64 {
         return 0.0;
     }
 
-    let task_set: std::collections::HashSet<&str> =
-        task_tags.iter().map(|s| s.as_str()).collect();
+    let task_set: std::collections::HashSet<&str> = task_tags.iter().map(|s| s.as_str()).collect();
     let agent_set: std::collections::HashSet<&str> =
         agent_tags.iter().map(|s| s.as_str()).collect();
 
@@ -75,10 +140,7 @@ fn tag_overlap_score(task_tags: &[String], agent_tags: &[String]) -> f64 {
 }
 
 /// Phase 1: Tag-based matching. Returns scored candidates sorted by score descending.
-pub fn tag_match_candidates(
-    task: &KanbanTask,
-    agents: &[AgentTemplate],
-) -> Vec<(String, f64)> {
+pub fn tag_match_candidates(task: &KanbanTask, agents: &[AgentTemplate]) -> Vec<(String, f64)> {
     let mut scores: Vec<(String, f64)> = Vec::new();
 
     for agent in agents {
@@ -175,10 +237,7 @@ async fn filter_by_health(
 }
 
 /// Fallback: match task description keywords against agent descriptions.
-fn description_keyword_match(
-    task: &KanbanTask,
-    agents: &[AgentTemplate],
-) -> Option<MatchResult> {
+fn description_keyword_match(task: &KanbanTask, agents: &[AgentTemplate]) -> Option<MatchResult> {
     let task_lower = task.description.to_lowercase();
     let task_words: Vec<&str> = task_lower
         .split_whitespace()
@@ -196,10 +255,7 @@ fn description_keyword_match(
         let prompt_lower = agent.system_prompt.to_lowercase();
         let combined = format!("{} {}", desc_lower, prompt_lower);
 
-        let matches = task_words
-            .iter()
-            .filter(|w| combined.contains(**w))
-            .count();
+        let matches = task_words.iter().filter(|w| combined.contains(**w)).count();
         let score = if task_words.is_empty() {
             0.0
         } else {
@@ -276,6 +332,7 @@ mod tests {
                 system_prompt: "You are a software engineer.".into(),
                 icon: Some("💻".into()),
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: true,
@@ -288,6 +345,7 @@ mod tests {
                 system_prompt: "You are a researcher.".into(),
                 icon: Some("🔍".into()),
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: true,
@@ -300,6 +358,7 @@ mod tests {
                 system_prompt: "You are a UI/UX designer.".into(),
                 icon: Some("🎨".into()),
                 tools: None,
+                skills: None,
                 color: None,
                 model: None,
                 claims_tasks: true,
@@ -370,6 +429,7 @@ mod tests {
             system_prompt: "You optimize SQL queries.".into(),
             icon: None,
             tools: None,
+            skills: None,
             color: None,
             model: None,
             claims_tasks: true,

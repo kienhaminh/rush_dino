@@ -10,10 +10,22 @@ use uuid::Uuid;
 
 use rushdino_common::Result;
 
+use crate::system_broker::InputRequestStatus;
 use crate::runtime::{
     store::{FieldUpdate, RunPatch, RunStore},
     RunDetail, RunKind, RunListFilter, RunOriginMetadata, RunPolicySnapshot, RunSnapshot, RunState,
 };
+
+/// Parameters for submitting an assistant run with full origin metadata.
+pub struct AssistantRunParams<'a> {
+    pub session_id: &'a str,
+    pub conversation_id: &'a str,
+    pub title: &'a str,
+    pub input_text: &'a str,
+    pub provider: &'a str,
+    pub model: &'a str,
+    pub origin: RunOriginMetadata,
+}
 
 #[derive(Debug, Clone)]
 pub struct RunCounts {
@@ -73,28 +85,21 @@ impl AgentRuntime {
         provider: &str,
         model: &str,
     ) -> Result<(RunSnapshot, bool)> {
-        self.submit_assistant_run_with_origin(
+        self.submit_assistant_run_with_origin(AssistantRunParams {
             session_id,
             conversation_id,
             title,
             input_text,
             provider,
             model,
-            RunOriginMetadata::default(),
-        )
+            origin: RunOriginMetadata::default(),
+        })
         .await
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub async fn submit_assistant_run_with_origin(
         &self,
-        session_id: &str,
-        conversation_id: &str,
-        title: &str,
-        input_text: &str,
-        provider: &str,
-        model: &str,
-        origin: RunOriginMetadata,
+        p: AssistantRunParams<'_>,
     ) -> Result<(RunSnapshot, bool)> {
         let run_id = Uuid::new_v4().to_string();
         let _snapshot = self
@@ -103,21 +108,21 @@ impl AgentRuntime {
                 id: run_id.clone(),
                 kind: RunKind::Assistant,
                 state: RunState::Queued,
-                origin,
-                session_id: Some(session_id.to_owned()),
-                conversation_id: Some(conversation_id.to_owned()),
+                origin: p.origin,
+                session_id: Some(p.session_id.to_owned()),
+                conversation_id: Some(p.conversation_id.to_owned()),
                 workflow_id: None,
-                title: title.to_owned(),
-                input_text: Some(input_text.to_owned()),
-                provider: provider.to_owned(),
-                model: model.to_owned(),
+                title: p.title.to_owned(),
+                input_text: Some(p.input_text.to_owned()),
+                provider: p.provider.to_owned(),
+                model: p.model.to_owned(),
                 fallback_profile_id: None,
                 queue_position: None,
                 policy: RunPolicySnapshot::default(),
             })
             .await?;
 
-        let (start_now, queue_position) = self.enqueue_run(session_id, &run_id).await;
+        let (start_now, queue_position) = self.enqueue_run(p.session_id, &run_id).await;
         let next = if start_now {
             self.mark_running(&run_id, "Run entered active execution.")
                 .await?
@@ -325,6 +330,82 @@ impl AgentRuntime {
         Ok(snapshot)
     }
 
+    pub async fn mark_awaiting_input(
+        &self,
+        run_id: &str,
+        tool_name: &str,
+    ) -> Result<RunSnapshot> {
+        let snapshot = self
+            .store
+            .patch_run(
+                run_id,
+                RunPatch {
+                    state: Some(RunState::AwaitingInput),
+                    active_tool: FieldUpdate::Set(tool_name.to_owned()),
+                    event_type: Some("input_requested".to_owned()),
+                    event_message: Some(format!(
+                        "Run is waiting for user input before `{tool_name}` can continue."
+                    )),
+                    event_tool_name: Some(tool_name.to_owned()),
+                    ..RunPatch::default()
+                },
+            )
+            .await?;
+        self.notify_run(run_id).await;
+        Ok(snapshot)
+    }
+
+    pub async fn record_input_resolution(
+        &self,
+        run_id: &str,
+        status: InputRequestStatus,
+    ) -> Result<RunSnapshot> {
+        let current = self.store.get_run(run_id).await?;
+        let was_aborted = current.abort_requested || current.state == RunState::Aborted;
+        let snapshot = self
+            .store
+            .patch_run(
+                run_id,
+                RunPatch {
+                    state: Some(if was_aborted {
+                        RunState::Aborted
+                    } else {
+                        RunState::Running
+                    }),
+                    active_tool: if was_aborted {
+                        FieldUpdate::Clear
+                    } else {
+                        FieldUpdate::Keep
+                    },
+                    set_completed_at: was_aborted,
+                    event_type: Some(if was_aborted {
+                        "aborted".to_owned()
+                    } else {
+                        match status {
+                            InputRequestStatus::Submitted => "input_submitted".to_owned(),
+                            InputRequestStatus::Cancelled => "input_cancelled".to_owned(),
+                        }
+                    }),
+                    event_message: Some(if was_aborted {
+                        "Run aborted while input was pending.".to_owned()
+                    } else {
+                        match status {
+                            InputRequestStatus::Submitted => {
+                                "User submitted the requested input.".to_owned()
+                            }
+                            InputRequestStatus::Cancelled => {
+                                "User cancelled the requested input.".to_owned()
+                            }
+                        }
+                    }),
+                    ..RunPatch::default()
+                },
+            )
+            .await?;
+        self.notify_run(run_id).await;
+        Ok(snapshot)
+    }
+
     pub async fn mark_completed(&self, run_id: &str, output_text: &str) -> Result<RunSnapshot> {
         let current = self.store.get_run(run_id).await?;
         let snapshot = self
@@ -350,6 +431,21 @@ impl AgentRuntime {
                     } else {
                         "Run completed successfully.".to_owned()
                     }),
+                    ..RunPatch::default()
+                },
+            )
+            .await?;
+        self.notify_run(run_id).await;
+        Ok(snapshot)
+    }
+
+    pub async fn record_output_text(&self, run_id: &str, output_text: &str) -> Result<RunSnapshot> {
+        let snapshot = self
+            .store
+            .patch_run(
+                run_id,
+                RunPatch {
+                    output_text: FieldUpdate::Set(output_text.to_owned()),
                     ..RunPatch::default()
                 },
             )
@@ -498,18 +594,24 @@ impl AgentRuntime {
             });
         }
 
-        let patch = if snapshot.state == RunState::AwaitingApproval {
+        let patch = if matches!(snapshot.state, RunState::AwaitingApproval | RunState::AwaitingInput)
+        {
+            let waiting_message = if snapshot.state == RunState::AwaitingInput {
+                "Run aborted while input was pending.".to_owned()
+            } else {
+                "Run aborted while approval was pending.".to_owned()
+            };
             RunPatch {
                 state: Some(RunState::Aborted),
                 abort_requested: Some(true),
                 active_tool: FieldUpdate::Clear,
                 set_completed_at: true,
                 policy: Some(RunPolicySnapshot {
-                    reason: Some("Run aborted while approval was pending.".to_owned()),
+                    reason: Some(waiting_message.clone()),
                     ..snapshot.policy.clone()
                 }),
                 event_type: Some("aborted".to_owned()),
-                event_message: Some("Run aborted while approval was pending.".to_owned()),
+                event_message: Some(waiting_message),
                 ..RunPatch::default()
             }
         } else {
@@ -605,7 +707,12 @@ impl AgentRuntime {
             total: runs.len(),
             active: runs
                 .iter()
-                .filter(|run| matches!(run.state, RunState::Running | RunState::AwaitingApproval))
+                .filter(|run| {
+                    matches!(
+                        run.state,
+                        RunState::Running | RunState::AwaitingApproval | RunState::AwaitingInput
+                    )
+                })
                 .count(),
             queued: runs
                 .iter()

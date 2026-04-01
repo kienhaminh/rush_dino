@@ -2,8 +2,8 @@ use chrono::Utc;
 use rushdino_common::Result;
 
 use crate::cron_manager::{
-    CreateCronJobInput, CronJobRecord, CronRunRecord, CronRunStatus, CronTargetInput,
-    UpdateCronJobInput,
+    CompleteRunParams, CreateCronJobInput, CronJobRecord, CronRunRecord, CronRunStatus,
+    CronTargetInput, UpdateCronJobInput,
 };
 
 impl crate::engine::AgentEngine {
@@ -78,16 +78,16 @@ impl crate::engine::AgentEngine {
                     .await?;
                 let updated = self
                     .cron_manager
-                    .complete_run(
+                    .complete_run(CompleteRunParams {
                         job_id,
-                        &run_id,
-                        CronRunStatus::Ok,
-                        Some("workflow run started"),
-                        None,
-                        None,
-                        Some(&workflow_run.run_id),
-                        Utc::now(),
-                    )
+                        run_id: &run_id,
+                        status: CronRunStatus::Ok,
+                        summary: Some("workflow run started"),
+                        error: None,
+                        session_id: None,
+                        workflow_run_id: Some(&workflow_run.run_id),
+                        now: Utc::now(),
+                    })
                     .await?;
                 Ok((updated, None, Some(workflow_run.run_id)))
             }
@@ -107,16 +107,16 @@ impl crate::engine::AgentEngine {
                 let _ = self.chat(&conversation, message).await?;
                 let updated = self
                     .cron_manager
-                    .complete_run(
+                    .complete_run(CompleteRunParams {
                         job_id,
-                        &run_id,
-                        CronRunStatus::Ok,
-                        Some("agent turn completed"),
-                        None,
-                        Some(&conversation),
-                        None,
-                        Utc::now(),
-                    )
+                        run_id: &run_id,
+                        status: CronRunStatus::Ok,
+                        summary: Some("agent turn completed"),
+                        error: None,
+                        session_id: Some(&conversation),
+                        workflow_run_id: None,
+                        now: Utc::now(),
+                    })
                     .await?;
                 Ok((updated, Some(conversation), None))
             }
@@ -125,16 +125,16 @@ impl crate::engine::AgentEngine {
         if let Err(err) = &result {
             let _ = self
                 .cron_manager
-                .complete_run(
+                .complete_run(CompleteRunParams {
                     job_id,
-                    &run_id,
-                    CronRunStatus::Error,
-                    None,
-                    Some(&err.to_string()),
-                    None,
-                    None,
-                    Utc::now(),
-                )
+                    run_id: &run_id,
+                    status: CronRunStatus::Error,
+                    summary: None,
+                    error: Some(&err.to_string()),
+                    session_id: None,
+                    workflow_run_id: None,
+                    now: Utc::now(),
+                })
                 .await;
         }
 

@@ -36,9 +36,6 @@ impl Tool for ImageTool {
         and returns the file path."
     }
 
-    fn keywords(&self) -> Vec<&str> {
-        vec!["image", "picture", "generate", "gemini"]
-    }
 
     fn parameters(&self) -> Value {
         json!({

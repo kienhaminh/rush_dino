@@ -6,6 +6,7 @@ use tokio::time::{sleep, Duration};
 use rushdino_common::db::run_migrations;
 
 use super::*;
+use crate::InputRequestStatus;
 
 async fn create_runtime() -> AgentRuntime {
     let pool = SqlitePoolOptions::new()
@@ -122,4 +123,58 @@ async fn wait_for_run_returns_current_state_after_timeout() {
 
     assert_eq!(snapshot.state, RunState::Running);
     assert!(snapshot.completed_at.is_none());
+}
+
+#[tokio::test]
+async fn input_request_transitions_resume_running_and_abort_cleanly() {
+    let runtime = create_runtime().await;
+    let (run, _) = runtime
+        .submit_assistant_run("session-4", "conv-4", "Input", "body", "openai", "gpt-5")
+        .await
+        .expect("submit run");
+
+    let awaiting = runtime
+        .mark_awaiting_input(&run.id, "request_user_input")
+        .await
+        .expect("mark awaiting input");
+    assert_eq!(awaiting.state, RunState::AwaitingInput);
+
+    let resumed = runtime
+        .record_input_resolution(&run.id, InputRequestStatus::Submitted)
+        .await
+        .expect("resume after input");
+    assert_eq!(resumed.state, RunState::Running);
+
+    runtime
+        .mark_awaiting_input(&run.id, "request_user_input")
+        .await
+        .expect("mark awaiting input again");
+    let aborted = runtime.abort_run(&run.id).await.expect("abort waiting run");
+    assert_eq!(aborted.snapshot.state, RunState::Aborted);
+
+    let resolved_after_abort = runtime
+        .record_input_resolution(&run.id, InputRequestStatus::Cancelled)
+        .await
+        .expect("resolution after abort should preserve aborted state");
+    assert_eq!(resolved_after_abort.state, RunState::Aborted);
+}
+
+#[tokio::test]
+async fn stream_output_persists_partial_text_before_completion() {
+    let runtime = create_runtime().await;
+    let (run, _) = runtime
+        .submit_assistant_run("session-5", "conv-5", "Streaming", "body", "openai", "gpt-5")
+        .await
+        .expect("submit run");
+
+    let updated = runtime
+        .record_output_text(&run.id, "partial streamed answer")
+        .await
+        .expect("persist partial streamed output");
+
+    assert_eq!(updated.state, RunState::Running);
+    assert_eq!(updated.output_text.as_deref(), Some("partial streamed answer"));
+
+    let reloaded = runtime.get_run(&run.id).await.expect("reload run");
+    assert_eq!(reloaded.output_text.as_deref(), Some("partial streamed answer"));
 }

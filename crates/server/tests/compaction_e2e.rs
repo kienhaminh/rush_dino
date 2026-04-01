@@ -105,6 +105,7 @@ async fn create_live_app(home: &Path, provider: &LiveProvider) -> (axum::Router,
     let mut config = AppConfig::load_from_path(&config_path).expect("load default config");
     config.agent = AgentSection {
         max_context_tokens: Some(TEST_MAX_CONTEXT_TOKENS),
+        max_iterations: None,
     };
 
     let mut credentials = CredentialsConfig::default();

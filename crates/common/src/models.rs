@@ -36,7 +36,31 @@ pub struct Message {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rich_content: Option<RichContent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<String>,
     pub created_at: DateTime<Utc>,
+}
+
+impl Message {
+    /// Construct a minimal message. Optional fields (`tool_calls`, `rich_content`,
+    /// `thinking`) default to `None`; `created_at` defaults to now.
+    /// Use struct update syntax for non-default values:
+    /// ```rust,no_run
+    /// # use rushdino_common::models::{Message, Role};
+    /// # let (id, calls) = ("id".to_owned(), vec![]);
+    /// Message { tool_calls: Some(calls), ..Message::new(id, Role::Assistant, "content") };
+    /// ```
+    pub fn new(id: impl Into<String>, role: Role, content: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            role,
+            content: content.into(),
+            tool_calls: None,
+            rich_content: None,
+            thinking: None,
+            created_at: Utc::now(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -55,6 +79,7 @@ pub struct StoredMessage {
     pub content: String,
     pub tool_calls: Option<String>,
     pub rich_content: Option<String>,
+    pub thinking: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

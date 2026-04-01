@@ -245,6 +245,22 @@ function TaskCard({
         ) : null}
         <p>{formatRelativeTime(task.updatedAt)}</p>
       </div>
+
+      {/* Metadata footer — revisions, step type, parent link */}
+      {(task.revisionCount > 0 || task.parentTaskId) && (
+        <div className="flex items-center justify-between border-t border-border/40 pt-1.5 mt-1.5">
+          {task.revisionCount > 0 && (
+            <span className="text-[8px] text-purple-400 tracking-wide">
+              ↻ {task.revisionCount} revision{task.revisionCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {task.parentTaskId && (
+            <span className="text-[8px] text-muted-foreground tracking-wide truncate max-w-[120px]">
+              ↗ subtask
+            </span>
+          )}
+        </div>
+      )}
     </article>
   );
 }
