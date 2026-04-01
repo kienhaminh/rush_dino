@@ -95,18 +95,9 @@ mod tests {
 
     async fn setup_pool() -> Arc<SqlitePool> {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        let migrations: &[&str] = &[
-            include_str!("../../../common/migrations/001_init.sql"),
-        ];
-        for migration in migrations {
-            for statement in migration.split(';') {
-                let sql: &str = statement.trim();
-                if sql.is_empty() {
-                    continue;
-                }
-                sqlx::query(sql).execute(&pool).await.expect("migration");
-            }
-        }
+        rushdino_common::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
         Arc::new(pool)
     }
 

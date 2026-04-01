@@ -12,21 +12,9 @@ async fn create_manager() -> WorkflowManager {
     let pool = SqlitePool::connect(":memory:")
         .await
         .expect("memory sqlite");
-    let migrations: &[&str] = &[
-        include_str!("../../../common/migrations/001_init.sql"),
-    ];
-    for migration in migrations {
-        for statement in migration.split(';') {
-            let sql: &str = statement.trim();
-            if sql.is_empty() {
-                continue;
-            }
-            sqlx::query(sql)
-                .execute(&pool)
-                .await
-                .expect("run migration statement");
-        }
-    }
+    rushdino_common::db::run_migrations(&pool)
+        .await
+        .expect("run migrations");
     WorkflowManager::new(Arc::new(pool))
 }
 

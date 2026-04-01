@@ -2,16 +2,9 @@ use super::*;
 
 async fn setup_manager() -> CronManager {
     let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-    for statement in include_str!("../../common/migrations/001_init.sql").split(';') {
-        let sql = statement.trim();
-        if sql.is_empty() {
-            continue;
-        }
-        sqlx::query(sql)
-            .execute(&pool)
-            .await
-            .expect("run init migration");
-    }
+    rushdino_common::db::run_migrations(&pool)
+        .await
+        .expect("run migrations");
     CronManager::new(Arc::new(pool))
 }
 

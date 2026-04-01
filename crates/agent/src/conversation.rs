@@ -316,20 +316,9 @@ mod tests {
 
     async fn setup_manager() -> ConversationManager {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
-        for migration in [
-            include_str!("../../common/migrations/001_init.sql"),
-        ] {
-            for statement in migration.split(';') {
-                let sql: &str = statement.trim();
-                if sql.is_empty() {
-                    continue;
-                }
-                sqlx::query(sql)
-                    .execute(&pool)
-                    .await
-                    .expect("run migration");
-            }
-        }
+        rushdino_common::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
         ConversationManager::new(Arc::new(pool))
     }
 
