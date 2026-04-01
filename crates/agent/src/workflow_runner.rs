@@ -534,6 +534,7 @@ impl WorkflowRunner {
             delegation_depth: 0,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: None,
         };
 
         let session_ctx = self

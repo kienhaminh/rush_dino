@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bot, ChevronDown, ChevronRight, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { agentColor } from './agent-colors';
+import { CompactTimeline } from './compact-timeline';
 import { SubAgentMarkdown } from './sub-agent-markdown';
+import { fetchConversation } from '@/lib/api';
+import { messagesToItems } from '@/lib/message-converter';
+import { useChatWs } from '@/hooks/use-chat-ws';
 import type { ConversationItem } from '@/lib/types';
 
 type ToolItem = Extract<ConversationItem, { kind: 'tool_use' }>;
@@ -23,6 +27,11 @@ export function DelegateBlock({ items }: DelegateBlockProps) {
 
 function DelegateRow({ item }: { item: ToolItem }) {
   const [expanded, setExpanded] = useState(false);
+  const [fetchedItems, setFetchedItems] = useState<ConversationItem[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const { delegateItems, delegateItemsRevision } = useChatWs();
+
   const args = item.args as Record<string, string>;
   const agentName = args.agent_name ?? 'Agent';
   const task = args.task ?? '';
@@ -30,6 +39,41 @@ function DelegateRow({ item }: { item: ToolItem }) {
   const isDone = item.status === 'done';
   const isError = item.status === 'error';
   const colorClasses = agentColor(agentName);
+
+  // Derive the delegate conversation ID (matches backend logic).
+  const delegateConvId = agentName.toLowerCase().replace(/ /g, '-');
+
+  // Get live-streamed items from the WS delegate items map.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const liveItems = delegateItems.get(delegateConvId) ?? null;
+
+  // Determine which items to show: prefer live WS items, fall back to fetched.
+  const timelineItems = liveItems ?? fetchedItems;
+  const hasTimeline = timelineItems != null && timelineItems.length > 0;
+
+  // Auto-expand while the delegate is running and has live items.
+  useEffect(() => {
+    if (isRunning && liveItems && liveItems.length > 0) {
+      setExpanded(true);
+    }
+  }, [isRunning, liveItems]);
+
+  // Lazy-fetch from REST when expanded and no live items available (e.g. after page refresh).
+  useEffect(() => {
+    if (!expanded || liveItems || fetchedItems || loading) return;
+    if (!isDone && !isError) return;
+
+    setLoading(true);
+    fetchConversation(delegateConvId)
+      .then((detail) => {
+        const items = messagesToItems(detail.messages, [], null).filter(
+          (it) => it.kind !== 'user', // skip the task prompt
+        );
+        setFetchedItems(items);
+      })
+      .catch(() => setFetchedItems([]))
+      .finally(() => setLoading(false));
+  }, [expanded, liveItems, fetchedItems, loading, isDone, isError, delegateConvId]);
 
   return (
     <div className={cn(
@@ -75,12 +119,29 @@ function DelegateRow({ item }: { item: ToolItem }) {
         </span>
       </button>
 
-      {/* Expanded result */}
-      {expanded && item.result && (
-        <div className="border-t border-border/15 px-3 py-2 max-h-48 overflow-y-auto scrollbar-thin">
-          <div className="text-[11px] text-muted-foreground/70">
-            <SubAgentMarkdown content={item.result} />
-          </div>
+      {/* Expanded internal conversation */}
+      {expanded && (
+        <div className="border-t border-border/15 px-3 py-2 max-h-80 overflow-y-auto scrollbar-thin">
+          {loading ? (
+            <div className="flex items-center justify-center py-3">
+              <Loader2 size={14} className="animate-spin text-muted-foreground/40" />
+            </div>
+          ) : hasTimeline ? (
+            <CompactTimeline
+              items={timelineItems}
+              agentName={agentName}
+              isRunning={isRunning}
+            />
+          ) : isRunning ? (
+            <CompactTimeline items={[]} agentName={agentName} isRunning />
+          ) : item.result ? (
+            /* Fallback: show the plain result text if no timeline is available */
+            <div className="text-[11px] text-muted-foreground/70">
+              <SubAgentMarkdown content={item.result} />
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground/40">No details available.</p>
+          )}
         </div>
       )}
 

@@ -13,13 +13,15 @@ use rushdino_common::{
 };
 use rushdino_providers::Provider;
 
+use tokio::sync::mpsc;
+
 use crate::{
     agent_manager::AgentManager,
     agent_task_memory::AgentTaskMemory,
     conversation::ConversationManager,
-    engine::AgentConfig,
+    engine::{AgentConfig, WsStreamEvent},
     engine_bootstrap::title_from,
-    react_loop::run_react_loop,
+    react_loop::{run_react_loop, StreamingEvent},
     tool_registry::{SessionToolContext, Tool, ToolRegistry},
     tools::bash::{
         current_tool_execution_context, with_tool_execution_context, ToolExecutionContext,
@@ -130,6 +132,7 @@ impl Tool for DelegateToAgentTool {
             delegation_depth: 0,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: None,
         });
         let current_depth = parent_ctx.delegation_depth;
 
@@ -256,6 +259,8 @@ impl Tool for DelegateToAgentTool {
         // Use the sub-agent's own conv_id as its session_id so that tool calls
         // (sandbox approvals, usage metrics) are attributed to the sub-agent's
         // session rather than leaking into the main session.
+        // Propagate ws_event_tx so nested delegations also stream events.
+        let parent_ws_tx = parent_ctx.ws_event_tx.clone();
         let child_ctx = ToolExecutionContext {
             session_id: Some(conv_id_str.clone()),
             conversation_id: Some(conv_id_str.clone()),
@@ -263,6 +268,65 @@ impl Tool for DelegateToAgentTool {
             delegation_depth: current_depth + 1,
             workspace_override: Some(agent_workspace),
             parent_context: child_parent_context,
+            ws_event_tx: parent_ws_tx.clone(),
+        };
+
+        // Create a streaming channel for the delegate's react loop. If the
+        // parent has a ws_event_tx, spawn a forwarder task that wraps each
+        // child event in a DelegateEvent and sends it upstream. Otherwise
+        // pass None so the loop runs silently (same as before).
+        let child_event_tx = if let Some(ref ws_tx) = parent_ws_tx {
+            let (child_tx, mut child_rx) = mpsc::channel::<StreamingEvent>(128);
+            let ws_tx = ws_tx.clone();
+            let delegate_conv_id = conv_id_str.clone();
+            let delegate_agent_name = agent_name.to_owned();
+            let depth = current_depth + 1;
+            tokio::spawn(async move {
+                while let Some(event) = child_rx.recv().await {
+                    let inner = match event {
+                        StreamingEvent::ChatChunk(chunk) => WsStreamEvent::ChatChunk {
+                            run_id: String::new(),
+                            conversation_id: delegate_conv_id.clone(),
+                            chunk,
+                        },
+                        StreamingEvent::AssistantReset => WsStreamEvent::AssistantReset {
+                            run_id: String::new(),
+                            conversation_id: delegate_conv_id.clone(),
+                        },
+                        StreamingEvent::ToolStart { tool_name, args } => {
+                            WsStreamEvent::ToolStart {
+                                run_id: String::new(),
+                                conversation_id: delegate_conv_id.clone(),
+                                tool_name,
+                                args,
+                            }
+                        }
+                        StreamingEvent::ToolEnd {
+                            tool_name,
+                            result,
+                            is_error,
+                        } => WsStreamEvent::ToolEnd {
+                            run_id: String::new(),
+                            conversation_id: delegate_conv_id.clone(),
+                            tool_name,
+                            result,
+                            is_error,
+                        },
+                    };
+                    let delegate_event = WsStreamEvent::DelegateEvent {
+                        delegate_conversation_id: delegate_conv_id.clone(),
+                        agent_name: delegate_agent_name.clone(),
+                        delegation_depth: depth,
+                        inner: Box::new(inner),
+                    };
+                    if ws_tx.send(delegate_event).await.is_err() {
+                        break;
+                    }
+                }
+            });
+            Some(child_tx)
+        } else {
+            None
         };
 
         let (response, all_messages) = with_tool_execution_context(
@@ -273,7 +337,7 @@ impl Tool for DelegateToAgentTool {
                 scoped_ctx,
                 messages,
                 &child_config,
-                None,
+                child_event_tx,
             ),
         )
         .await?;
@@ -425,6 +489,7 @@ mod tests {
             run_id: None,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: None,
         };
 
         let result = with_tool_execution_context(

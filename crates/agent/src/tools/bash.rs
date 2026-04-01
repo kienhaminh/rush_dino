@@ -2,15 +2,17 @@ use std::{future::Future, path::PathBuf};
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use tokio::sync::mpsc;
 
 use rushdino_common::{AppError, Result};
 
 use crate::{
+    engine::WsStreamEvent,
     system_broker::{SharedSystemBroker, ShellExecRequest},
     tool_registry::Tool,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ToolExecutionContext {
     pub session_id: Option<String>,
     pub conversation_id: Option<String>,
@@ -22,6 +24,9 @@ pub struct ToolExecutionContext {
     /// Brief summary of the parent/delegating agent's context, passed down so
     /// child agents understand the broader task chain they belong to.
     pub parent_context: Option<String>,
+    /// WebSocket event sender from the parent run. When set, delegated agents
+    /// can forward their streaming events up to the frontend for live display.
+    pub ws_event_tx: Option<mpsc::Sender<WsStreamEvent>>,
 }
 
 tokio::task_local! {
@@ -226,6 +231,7 @@ mod tests {
                 delegation_depth: 0,
                 workspace_override: None,
                 parent_context: None,
+                ws_event_tx: None,
             },
             tool.execute(json!({
                 "command": "pwd",
@@ -270,6 +276,7 @@ mod tests {
             delegation_depth: 0,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: None,
         };
         assert_eq!(ctx.delegation_depth, 0);
     }

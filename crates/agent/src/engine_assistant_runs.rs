@@ -422,6 +422,7 @@ impl crate::engine::AgentEngine {
             delegation_depth: 0,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: ws_event_tx.clone(),
         };
 
         let effective_config = AgentConfig {

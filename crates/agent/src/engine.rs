@@ -119,6 +119,14 @@ pub enum WsStreamEvent {
         conversation_id: String,
         message: String,
     },
+    /// Wraps an inner event from a delegated agent, carrying metadata so the
+    /// frontend can route it to the correct nested timeline.
+    DelegateEvent {
+        delegate_conversation_id: String,
+        agent_name: String,
+        delegation_depth: u8,
+        inner: Box<WsStreamEvent>,
+    },
 }
 
 pub(crate) struct AssistantRunJob {

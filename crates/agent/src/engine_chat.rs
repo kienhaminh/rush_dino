@@ -91,6 +91,7 @@ impl crate::engine::AgentEngine {
             delegation_depth: 0,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: None,
         };
 
         let effective_config = AgentConfig {
@@ -285,6 +286,7 @@ impl crate::engine::AgentEngine {
             delegation_depth: 0,
             workspace_override: None,
             parent_context: None,
+            ws_event_tx: None,
         };
 
         let effective_config = AgentConfig {

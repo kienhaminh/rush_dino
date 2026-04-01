@@ -69,6 +69,10 @@ interface ChatWsValue {
   resetFromConversationDetail: (detail: ConversationDetail) => void;
   historyLoaded: boolean;
   setHistoryLoaded: (v: boolean) => void;
+  /** Items for each delegated agent's internal conversation, keyed by conversation id. */
+  delegateItems: Map<string, ConversationItem[]>;
+  /** Revision counter — increments when any delegate's items change. */
+  delegateItemsRevision: number;
 }
 
 const ChatWsContext = createContext<ChatWsValue | null>(null);
@@ -131,6 +135,132 @@ interface HandleWsMsgDeps {
     prev: ConversationItem[],
     assistant: { content: string; richContent?: RichContent | null; runId?: string | null },
   ) => ConversationItem[];
+  delegateItemsRef: MutableRefObject<Map<string, ConversationItem[]>>;
+  bumpDelegateRevision: () => void;
+}
+
+/** Applies an inner WsEvent from a delegate to its ConversationItem[] array,
+ *  producing the updated array. Mirrors the main timeline's event processing
+ *  logic but operates on a standalone items array. */
+function applyDelegateInnerEvent(
+  prev: ConversationItem[],
+  inner: WsEvent,
+): ConversationItem[] {
+  if (inner.type === 'chat_chunk') {
+    if (inner.done) {
+      return prev.map((item) =>
+        item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
+      );
+    }
+    if (inner.thinking_delta) {
+      const lastIdx = [...prev]
+        .map((x, i) => [x, i] as const)
+        .reverse()
+        .find(([x]) => x.kind === 'thinking')?.[1] ?? -1;
+      const lastItem = lastIdx !== -1 ? prev[lastIdx] : null;
+      if (!lastItem || lastItem.kind !== 'thinking' || lastItem.done) {
+        return [
+          ...prev,
+          { kind: 'thinking' as const, id: crypto.randomUUID(), content: inner.thinking_delta },
+        ];
+      }
+      return [
+        ...prev.slice(0, lastIdx),
+        { ...lastItem, content: (lastItem.content ?? '') + inner.thinking_delta },
+        ...prev.slice(lastIdx + 1),
+      ];
+    }
+    if (!inner.delta) return prev;
+    const last = prev[prev.length - 1];
+    if (last && last.kind === 'assistant') {
+      return [
+        ...prev.slice(0, -1),
+        { ...last, content: last.content + inner.delta, richContent: null },
+      ];
+    }
+    return [
+      ...prev,
+      { kind: 'assistant' as const, id: crypto.randomUUID(), content: inner.delta, richContent: null, runId: null },
+    ];
+  }
+
+  if (inner.type === 'assistant_reset') {
+    return [...prev, { kind: 'thinking' as const, id: crypto.randomUUID() }];
+  }
+
+  if (inner.type === 'assistant_message') {
+    // Replace the last streamed assistant item with the final content.
+    const lastAssistantIdx = [...prev].reverse().findIndex((item) => item.kind === 'assistant');
+    if (lastAssistantIdx !== -1) {
+      const realIdx = prev.length - 1 - lastAssistantIdx;
+      return [
+        ...prev.slice(0, realIdx),
+        {
+          kind: 'assistant' as const,
+          id: prev[realIdx].id,
+          content: inner.content,
+          richContent: inner.rich_content ?? null,
+          runId: inner.run_id ?? null,
+        },
+        ...prev.slice(realIdx + 1).map((item) =>
+          item.kind === 'thinking' ? { ...item, done: true } : item,
+        ),
+      ];
+    }
+    return [
+      ...prev.map((item) => (item.kind === 'thinking' ? { ...item, done: true } : item)),
+      { kind: 'assistant' as const, id: crypto.randomUUID(), content: inner.content, richContent: inner.rich_content ?? null, runId: inner.run_id ?? null },
+    ];
+  }
+
+  if (inner.type === 'tool_start') {
+    return [
+      ...prev.map((item) =>
+        item.kind === 'thinking' && !item.done ? { ...item, done: true } : item,
+      ),
+      {
+        kind: 'tool_use' as const,
+        id: `tool-${inner.tool_name}-${Date.now()}`,
+        tool_name: inner.tool_name,
+        args: inner.args,
+        status: 'running' as const,
+      },
+    ];
+  }
+
+  if (inner.type === 'tool_end') {
+    const reversedIdx = [...prev]
+      .reverse()
+      .findIndex(
+        (it) =>
+          it.kind === 'tool_use' && it.tool_name === inner.tool_name && it.status === 'running',
+      );
+    if (reversedIdx === -1) return prev;
+    const realIdx = prev.length - 1 - reversedIdx;
+    const existing = prev[realIdx];
+    if (existing.kind !== 'tool_use') return prev;
+    return [
+      ...prev.slice(0, realIdx),
+      { ...existing, result: inner.result, is_error: inner.is_error, status: inner.is_error ? ('error' as const) : ('done' as const) },
+      ...prev.slice(realIdx + 1),
+    ];
+  }
+
+  if (inner.type === 'error') {
+    return [
+      ...prev,
+      { kind: 'error' as const, id: crypto.randomUUID(), message: inner.message },
+    ];
+  }
+
+  // Nested delegate events — recursively apply to the inner delegate's items.
+  if (inner.type === 'delegate_event') {
+    // This case is handled at the top level of handleWsMessage, not here.
+    // But if it appears nested, just pass through.
+    return prev;
+  }
+
+  return prev;
 }
 
 function handleWsMessage(msg: WsEvent, deps: HandleWsMsgDeps): void {
@@ -141,7 +271,20 @@ function handleWsMessage(msg: WsEvent, deps: HandleWsMsgDeps): void {
     dispatchChat,
     setPairingRequestCount,
     replaceAssistantItem,
+    delegateItemsRef,
+    bumpDelegateRevision,
   } = deps;
+
+  // --- delegate_event (route to nested timeline) ---
+  if (msg.type === 'delegate_event') {
+    const { delegate_conversation_id: delegateId, inner } = msg;
+    const map = delegateItemsRef.current;
+    const prev = map.get(delegateId) ?? [];
+    const updated = applyDelegateInnerEvent(prev, inner);
+    map.set(delegateId, updated);
+    bumpDelegateRevision();
+    return;
+  }
 
   // --- runtime_log_error (toast, from old WsStatusProvider) ---
   if (msg.type === 'runtime_log_error') {
@@ -422,6 +565,10 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
   // Error dedup for runtime_log_error toasts
   const seenErrorLogIdsRef = useRef<Set<string>>(new Set());
 
+  // Delegate agent internal conversation items, keyed by delegate_conversation_id.
+  const delegateItemsRef = useRef<Map<string, ConversationItem[]>>(new Map());
+  const [delegateItemsRevision, setDelegateItemsRevision] = useState(0);
+
   const [pairingRequestCount, setPairingRequestCount] = useState(0);
   const rehydratingRef = useRef(false);
 
@@ -533,6 +680,8 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         dispatchChat,
         setPairingRequestCount,
         replaceAssistantItem,
+        delegateItemsRef,
+        bumpDelegateRevision: () => setDelegateItemsRevision((n) => n + 1),
       });
     };
   }, [historyLoaded, replaceAssistantItem, resetFromConversationDetail]);
@@ -626,6 +775,8 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       resetFromConversationDetail,
       historyLoaded,
       setHistoryLoaded,
+      delegateItems: delegateItemsRef.current,
+      delegateItemsRevision,
     }),
     [
       items,
@@ -638,6 +789,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
       resetFromConversationDetail,
       historyLoaded,
       setHistoryLoaded,
+      delegateItemsRevision,
     ],
   );
 

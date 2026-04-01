@@ -269,6 +269,7 @@ impl KanbanDispatcher {
             delegation_depth: 0,
             workspace_override: Some(agent_workspace),
             parent_context: None,
+            ws_event_tx: None,
         };
 
         let (response, all_messages) = with_tool_execution_context(

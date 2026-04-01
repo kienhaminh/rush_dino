@@ -142,100 +142,9 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
             let outbound_tx_clone = outbound_tx.clone();
             tokio::spawn(async move {
                 while let Some(event) = event_rx.recv().await {
-                    match event {
-                        WsStreamEvent::ChatChunk {
-                            run_id,
-                            conversation_id,
-                            chunk,
-                        } => {
-                            let _ = outbound_tx_clone
-                                .send(serde_json::json!({
-                                    "type": "chat_chunk",
-                                    "run_id": run_id,
-                                    "conversation_id": conversation_id,
-                                    "delta": chunk.delta,
-                                    "tool_calls": chunk.tool_calls,
-                                    "done": chunk.done,
-                                    "thinking_delta": chunk.thinking_delta,
-                                }))
-                                .await;
-                        }
-                        WsStreamEvent::AssistantReset {
-                            run_id,
-                            conversation_id,
-                        } => {
-                            let _ = outbound_tx_clone
-                                .send(serde_json::json!({
-                                    "type": "assistant_reset",
-                                    "run_id": run_id,
-                                    "conversation_id": conversation_id,
-                                }))
-                                .await;
-                        }
-                        WsStreamEvent::ToolStart {
-                            run_id,
-                            conversation_id,
-                            tool_name,
-                            args,
-                        } => {
-                            let _ = outbound_tx_clone
-                                .send(serde_json::json!({
-                                    "type": "tool_start",
-                                    "run_id": run_id,
-                                    "conversation_id": conversation_id,
-                                    "tool_name": tool_name,
-                                    "args": args,
-                                }))
-                                .await;
-                        }
-                        WsStreamEvent::ToolEnd {
-                            run_id,
-                            conversation_id,
-                            tool_name,
-                            result,
-                            is_error,
-                        } => {
-                            let _ = outbound_tx_clone
-                                .send(serde_json::json!({
-                                    "type": "tool_end",
-                                    "run_id": run_id,
-                                    "conversation_id": conversation_id,
-                                    "tool_name": tool_name,
-                                    "result": result,
-                                    "is_error": is_error,
-                                }))
-                                .await;
-                        }
-                        WsStreamEvent::AssistantMessage {
-                            run_id,
-                            conversation_id,
-                            content,
-                            rich_content,
-                        } => {
-                            let _ = outbound_tx_clone
-                                .send(serde_json::json!({
-                                    "type": "assistant_message",
-                                    "run_id": run_id,
-                                    "conversation_id": conversation_id,
-                                    "content": content,
-                                    "rich_content": rich_content,
-                                }))
-                                .await;
-                        }
-                        WsStreamEvent::Error {
-                            run_id,
-                            conversation_id,
-                            message,
-                        } => {
-                            let _ = outbound_tx_clone
-                                .send(serde_json::json!({
-                                    "type": "error",
-                                    "run_id": run_id,
-                                    "conversation_id": conversation_id,
-                                    "message": message,
-                                }))
-                                .await;
-                        }
+                    let payload = serialize_ws_event(event);
+                    if outbound_tx_clone.send(payload).await.is_err() {
+                        break;
                     }
                 }
             });
@@ -303,6 +212,95 @@ fn parse_approval_response(text: &str) -> Option<(String, bool)> {
     let request_id = payload.get("request_id").and_then(|v| v.as_str())?;
     let approved = payload.get("approved").and_then(|v| v.as_bool())?;
     Some((request_id.to_owned(), approved))
+}
+
+/// Converts a [`WsStreamEvent`] into a JSON payload for the WebSocket wire.
+/// Handles `DelegateEvent` recursively by serializing the inner event and
+/// wrapping it with delegate metadata.
+fn serialize_ws_event(event: WsStreamEvent) -> serde_json::Value {
+    match event {
+        WsStreamEvent::ChatChunk {
+            run_id,
+            conversation_id,
+            chunk,
+        } => serde_json::json!({
+            "type": "chat_chunk",
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "delta": chunk.delta,
+            "tool_calls": chunk.tool_calls,
+            "done": chunk.done,
+            "thinking_delta": chunk.thinking_delta,
+        }),
+        WsStreamEvent::AssistantReset {
+            run_id,
+            conversation_id,
+        } => serde_json::json!({
+            "type": "assistant_reset",
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+        }),
+        WsStreamEvent::ToolStart {
+            run_id,
+            conversation_id,
+            tool_name,
+            args,
+        } => serde_json::json!({
+            "type": "tool_start",
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "tool_name": tool_name,
+            "args": args,
+        }),
+        WsStreamEvent::ToolEnd {
+            run_id,
+            conversation_id,
+            tool_name,
+            result,
+            is_error,
+        } => serde_json::json!({
+            "type": "tool_end",
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "tool_name": tool_name,
+            "result": result,
+            "is_error": is_error,
+        }),
+        WsStreamEvent::AssistantMessage {
+            run_id,
+            conversation_id,
+            content,
+            rich_content,
+        } => serde_json::json!({
+            "type": "assistant_message",
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "content": content,
+            "rich_content": rich_content,
+        }),
+        WsStreamEvent::Error {
+            run_id,
+            conversation_id,
+            message,
+        } => serde_json::json!({
+            "type": "error",
+            "run_id": run_id,
+            "conversation_id": conversation_id,
+            "message": message,
+        }),
+        WsStreamEvent::DelegateEvent {
+            delegate_conversation_id,
+            agent_name,
+            delegation_depth,
+            inner,
+        } => serde_json::json!({
+            "type": "delegate_event",
+            "delegate_conversation_id": delegate_conversation_id,
+            "agent_name": agent_name,
+            "delegation_depth": delegation_depth,
+            "inner": serialize_ws_event(*inner),
+        }),
+    }
 }
 
 fn parse_chat_payload(

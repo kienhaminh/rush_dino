@@ -137,6 +137,16 @@ export interface WsPairingRequestCreatedEvent {
   created_at: string;
 }
 
+/** Wraps an inner event from a delegated agent with metadata so the frontend
+ *  can route it to the correct nested timeline. */
+export interface WsDelegateEvent {
+  type: 'delegate_event';
+  delegate_conversation_id: string;
+  agent_name: string;
+  delegation_depth: number;
+  inner: WsEvent;
+}
+
 export type WsEvent =
   | WsChatChunkEvent
   | WsAssistantResetEvent
@@ -151,4 +161,5 @@ export type WsEvent =
   | WsUserMessageEvent
   | WsTaskReviewReadyEvent
   | WsPairingRequestCreatedEvent
-  | WsSessionResetEvent;
+  | WsSessionResetEvent
+  | WsDelegateEvent;

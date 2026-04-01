@@ -93,6 +93,7 @@ async fn run_session_turn(
         delegation_depth: 0,
         workspace_override: None,
         parent_context: None,
+        ws_event_tx: None,
     });
     let tool_ctx = ToolExecutionContext {
         conversation_id: Some(conversation_id.to_owned()),
