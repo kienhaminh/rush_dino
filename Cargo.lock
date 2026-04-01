@@ -4939,7 +4939,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-agent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4966,7 +4966,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-auth"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -4985,7 +4985,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -5012,7 +5012,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-common"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -5039,7 +5039,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-desktop-native"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "eframe",
  "reqwest 0.12.28",
@@ -5051,7 +5051,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-discord"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5064,7 +5064,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-gateway"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -5083,7 +5083,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-knowledge-graph"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5105,7 +5105,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-providers"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -5123,7 +5123,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-security"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -5156,7 +5156,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -5199,7 +5199,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-skill-graph"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "rushdino-common",
@@ -5213,7 +5213,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-slack"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5230,7 +5230,7 @@ dependencies = [
 
 [[package]]
 name = "rushdino-telegram"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "async-trait",
  "chrono",
