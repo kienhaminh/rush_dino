@@ -203,6 +203,10 @@ pub async fn refresh_runtime_from_disk(
             if let Some(mgr) = mcp_manager {
                 mgr.register_into(&engine_inner.tool_registry);
             }
+            // Re-register MCP tools into the fresh engine's tool registry.
+            if let Some(mgr) = mcp_manager {
+                mgr.register_into(&engine_inner.tool_registry);
+            }
             let engine = Arc::new(engine_inner);
 
             status.effective_profile_id = Some(resolved.profile_id);

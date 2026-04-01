@@ -45,6 +45,7 @@ export function ChatPage() {
   } = useSubAgentSessions(items);
   const [panelWidth, setPanelWidth] = useState(260);
 
+
   // Load history from REST API only once (on first mount).
   // On subsequent mounts (navigating back), items are already in the provider.
   useEffect(() => {

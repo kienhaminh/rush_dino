@@ -65,7 +65,6 @@ pub struct EngineBuildInput {
     pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
 }
 
-
 pub struct EngineDeps {
     pub pool: Arc<SqlitePool>,
     pub conversation: Arc<ConversationManager>,
@@ -100,7 +99,6 @@ pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
         guardrail_pipeline: _guardrail_pipeline,
         broadcast_tx,
     } = input;
-
     let memory = Arc::new(MemoryManager::new(home_dir.clone()));
     let skills = Arc::new(SkillManager::new(home_dir.join("skills")));
     let workflow_manager = Arc::new(WorkflowManager::new(pool.clone()));

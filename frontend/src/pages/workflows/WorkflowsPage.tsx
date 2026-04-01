@@ -49,7 +49,7 @@ export function WorkflowsPage() {
               {workflow.status}
             </Badge>
             <button
-              onClick={handleRun}
+              onClick={() => handleRun()}
               disabled={running || workflow.status !== 'active' || workflow.steps.length === 0}
               className="h-7 px-2.5 rounded-md border border-border bg-background/70 hover:bg-muted/40 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
             >
