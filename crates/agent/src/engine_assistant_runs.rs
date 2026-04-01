@@ -479,7 +479,6 @@ impl crate::engine::AgentEngine {
 
         let skills = resolve_skills_for_prompt(
             self.skill_manager.as_ref(),
-            self.skill_graph.as_ref().map(|sg| sg.as_ref()),
             user_input,
         )
         .await;

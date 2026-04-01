@@ -74,7 +74,6 @@ pub struct AgentEngine {
     pub(crate) provider_name: String,
     pub(crate) auth_method: AuthMethod,
     pub(crate) knowledge_graph: Option<Arc<dyn KnowledgeGraphAccess>>,
-    pub(crate) skill_graph: Option<Arc<rushdino_skill_graph::SkillGraphService>>,
     pub(crate) session_ctx: Arc<SessionToolContext>,
     pub(crate) health_store: Arc<crate::agent_health_store::AgentHealthStore>,
     pub(crate) message_store: Arc<crate::agent_message_store::AgentMessageStore>,
@@ -241,7 +240,6 @@ impl AgentEngine {
             provider_name,
             auth_method,
             knowledge_graph,
-            skill_graph: None,
             session_ctx: deps.session_ctx,
             health_store: deps.health_store,
             message_store: deps.message_store,
@@ -250,10 +248,6 @@ impl AgentEngine {
             runtime,
             pending_assistant_runs: Arc::new(Mutex::new(HashMap::new())),
         })
-    }
-
-    pub fn set_skill_graph(&mut self, sg: Arc<rushdino_skill_graph::SkillGraphService>) {
-        self.skill_graph = Some(sg);
     }
 
     pub(crate) async fn maybe_ingest_message(&self, source_type: &str, message: &Message) {

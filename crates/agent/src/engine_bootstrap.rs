@@ -11,36 +11,12 @@ use crate::{
     tool_registry::SessionToolContext,
 };
 
-/// Resolve skills for the system prompt: graph-scored top-K if available, flat list fallback.
+/// Resolve skills for the system prompt: flat list of all registered skills.
 pub async fn resolve_skills_for_prompt(
     skill_manager: &SkillManager,
-    skill_graph: Option<&rushdino_skill_graph::SkillGraphService>,
-    user_input: &str,
+    _user_input: &str,
 ) -> Vec<SkillEntry> {
-    // Try graph-based routing first
-    if let Some(graph) = skill_graph {
-        match graph.query_top_skills(user_input, 5).await {
-            Ok(scored) if scored.len() >= 2 => {
-                return scored
-                    .into_iter()
-                    .map(|s| SkillEntry {
-                        name: s.name,
-                        description: s.description,
-                    })
-                    .collect();
-            }
-            Ok(_) => {
-                tracing::debug!(
-                    "skill graph returned fewer than 2 results, falling back to flat list"
-                );
-            }
-            Err(err) => {
-                tracing::warn!("skill graph query failed, falling back to flat list: {err}");
-            }
-        }
-    }
-
-    // Fallback: flat list of all skills
+    // Flat list of all skills
     skill_manager
         .list()
         .unwrap_or_default()

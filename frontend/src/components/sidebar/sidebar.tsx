@@ -138,7 +138,8 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         {/* Groups */}
         {SIDEBAR_GROUPS.map((group) => {
           const isCollapsed = collapsedGroups[group.label] ?? false;
-          const hasActive = group.items.some((item) => isItemActive(item, location.pathname));
+          const visibleItems = group.items.filter((item) => !item.hidden);
+          const hasActive = visibleItems.some((item) => isItemActive(item, location.pathname));
           const showItems = !isCollapsed || hasActive;
 
           return (
@@ -158,7 +159,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
               )}
               {(showItems || collapsed) && (
                 <div className="space-y-0.5">
-                  {group.items.map((item) => (
+                  {group.items.filter((item) => !item.hidden).map((item) => (
                     <SidebarNavItem
                       key={item.id}
                       item={item}

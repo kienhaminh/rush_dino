@@ -199,9 +199,6 @@ pub async fn refresh_runtime_from_disk(
                 auth_method,
             )?;
             engine_inner.set_thinking_level_override_arc(runtime.thinking_level_override.clone());
-            if let Some(sg) = runtime.skill_graph() {
-                engine_inner.set_skill_graph(sg);
-            }
             // Re-register MCP tools into the fresh engine's tool registry.
             if let Some(mgr) = mcp_manager {
                 mgr.register_into(&engine_inner.tool_registry);

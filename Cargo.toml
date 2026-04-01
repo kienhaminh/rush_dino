@@ -31,6 +31,7 @@ async-openai = "0.24"
 async-trait = "0.1"
 axum = { version = "0.7", features = ["ws", "macros"] }
 chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
 clap = { version = "4.5", features = ["derive"] }
 colored = "2"
 dialoguer = "0.11"

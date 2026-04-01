@@ -27,5 +27,4 @@ pub mod soul_memory;
 pub mod system;
 pub mod usage_metrics;
 pub mod workflows;
-pub mod skill_graph;
 pub mod version;

@@ -25,6 +25,7 @@ export type SidebarItem = {
   href: string;
   matchPrefix: string | null; // null = exact match only
   advancedOnly?: boolean;
+  hidden?: boolean;
 };
 
 export type SidebarGroup = {
@@ -50,19 +51,19 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'agent-board', label: 'Team Status', icon: MonitorDot, href: '/agent-board', matchPrefix: '/agent-board', advancedOnly: true },
       { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows', advancedOnly: true },
       { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills', advancedOnly: true },
-      { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph', advancedOnly: true },
-      { id: 'messages', label: 'Messages', icon: Mail, href: '/messages', matchPrefix: '/messages', advancedOnly: true },
+      { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph', advancedOnly: true, hidden: true },
+      { id: 'messages', label: 'Messages', icon: Mail, href: '/messages', matchPrefix: '/messages', advancedOnly: true, hidden: true },
     ],
   },
   {
     label: 'system',
     items: [
       { id: 'sessions', label: 'Sessions', icon: FileText, href: '/sessions', matchPrefix: '/sessions', advancedOnly: true },
-      { id: 'logs', label: 'Logs', icon: ScrollText, href: '/logs', matchPrefix: '/logs', advancedOnly: true },
+      { id: 'logs', label: 'Logs', icon: ScrollText, href: '/logs', matchPrefix: '/logs', advancedOnly: true, hidden: true },
       { id: 'metrics', label: 'Metrics', icon: BarChart, href: '/metrics', matchPrefix: '/metrics', advancedOnly: true },
       { id: 'cron', label: 'Cron', icon: Loader, href: '/cron', matchPrefix: '/cron', advancedOnly: true },
       { id: 'gateway', label: 'Gateway', icon: Waypoints, href: '/gateway', matchPrefix: '/gateway', advancedOnly: true },
-      { id: 'guardrail', label: 'Guardrail', icon: ShieldAlert, href: '/guardrail', matchPrefix: '/guardrail', advancedOnly: true },
+      { id: 'guardrail', label: 'Guardrail', icon: ShieldAlert, href: '/guardrail', matchPrefix: '/guardrail', advancedOnly: true, hidden: true },
       { id: 'config', label: 'Config', icon: Settings, href: '/config', matchPrefix: '/config' },
     ],
   },

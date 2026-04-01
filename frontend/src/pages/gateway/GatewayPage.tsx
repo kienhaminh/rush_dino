@@ -1,4 +1,4 @@
-import { ArrowRight, MessageCircle, Send, Smartphone, Waypoints } from 'lucide-react';
+import { ArrowRight, MessageCircle, Send, Smartphone, Waypoints, Globe } from 'lucide-react';
 import { Link as RouterLink } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
@@ -27,8 +27,8 @@ function channelIcon(channel: ChannelKey) {
       return Send;
     case 'discord':
       return MessageCircle;
-    case 'mobile':
-      return Smartphone;
+    case 'webchat':
+      return Globe;
     default:
       return Waypoints;
   }
@@ -127,6 +127,28 @@ export function GatewayPage({ channels, loading, error }: GatewayPageProps) {
         {channels.map((channel) => (
           <GatewayChannelCard key={channel.channel} {...channel} />
         ))}
+
+        {/* Mobile — coming soon */}
+        <Card className="border-border/60 bg-card/85 opacity-60 shadow-[0_18px_42px_-36px_rgba(15,23,42,0.45)]">
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-3">
+              <CardTitle className="flex items-center gap-3 text-base">
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border/50 bg-background/70">
+                  <Smartphone className="h-4.5 w-4.5 text-muted-foreground" />
+                </span>
+                <span>Mobile</span>
+              </CardTitle>
+              <Badge variant="secondary" className="h-5 uppercase tracking-wider">
+                Coming Soon
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground">
+              Native iOS and Android app — under development.
+            </p>
+          </CardContent>
+        </Card>
       </section>
     </div>
   );

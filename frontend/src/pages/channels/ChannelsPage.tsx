@@ -1,24 +1,15 @@
 import React, { useState } from 'react';
-import { SearchIcon, RefreshCwIcon } from 'lucide-react';
+import { SearchIcon, RefreshCwIcon, SmartphoneIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import type { AppConfigView, ChannelAccessConfig, CredentialsView } from '@/lib/types';
-import { WhatsAppCard } from './whatsapp-card';
 import { TelegramCard } from './telegram-card';
 import { DiscordCard } from './discord-card';
-import { NostrCard } from './nostr-card';
 import { GenericChannelCard } from './generic-channel-card';
 
 export type ChannelsStatusSnapshot = any;
-export type ChannelKey =
-  | 'whatsapp'
-  | 'telegram'
-  | 'discord'
-  | 'mobile'
-  | 'googlechat'
-  | 'slack'
-  | 'signal'
-  | 'imessage'
-  | 'nostr';
+export type ChannelKey = 'telegram' | 'discord' | 'webchat' | 'mobile';
 
 export type ChannelConfigAction = 'save' | 'connect' | 'test';
 
@@ -40,8 +31,6 @@ export type ChannelDetailConfigPatch = {
   telegramBotToken?: string;
   discordBotToken?: string;
   mobilePublishHost?: string;
-  slackBotToken?: string;
-  slackAppToken?: string;
   gatewayAccess?: ChannelAccessConfig;
   uiSettings?: ChannelUiSettings;
 };
@@ -56,9 +45,7 @@ export type ChannelsProps = {
   credentials: CredentialsView | null;
   channelConfigSaving: boolean;
   channelUiSettings: Partial<Record<ChannelKey, ChannelUiSettings>>;
-  nostrProfileFormState: 'loading' | 'error' | 'ready' | null;
-  nostrProfileAccountId: string | null;
-  onRefresh: (probe: boolean) => void;
+  onRefresh: () => void;
   onChannelToggle: (channel: ChannelKey, enabled: boolean) => void;
   onChannelConfigAction: (
     channel: ChannelKey,
@@ -66,12 +53,6 @@ export type ChannelsProps = {
     action: ChannelConfigAction,
   ) => void;
   onOpenChannelConfig: (channel: ChannelKey) => void;
-  onNostrProfileEdit: (accountId: string, profile: unknown) => void;
-  onNostrProfileFieldChange: (field: string, value: string) => void;
-  onNostrProfileSave: () => void;
-  onNostrProfileImport: (pubkey?: string) => void;
-  onNostrProfileCancel: () => void;
-  onNostrProfileToggleAdvanced: () => void;
 };
 
 export function ChannelsPage(props: ChannelsProps) {
@@ -81,17 +62,7 @@ export function ChannelsPage(props: ChannelsProps) {
   const channelData = props.snapshot?.channels || {};
   const channelAccounts = props.snapshot?.channelAccounts || {};
 
-  const orderedChannels: ChannelKey[] = [
-    'whatsapp',
-    'telegram',
-    'discord',
-    'mobile',
-    'googlechat',
-    'slack',
-    'signal',
-    'imessage',
-    'nostr',
-  ];
+  const orderedChannels: ChannelKey[] = ['telegram', 'discord', 'webchat'];
 
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
@@ -104,7 +75,7 @@ export function ChannelsPage(props: ChannelsProps) {
           <div className="flex items-center gap-3">
             <button
               className="flex items-center gap-2 bg-background border border-border hover:bg-secondary transition-colors h-9 px-4 rounded font-medium text-sm disabled:opacity-60"
-              onClick={() => props.onRefresh(false)}
+              onClick={() => props.onRefresh()}
               disabled={props.loading}
             >
               <RefreshCwIcon className="w-4 h-4" />
@@ -158,16 +129,6 @@ export function ChannelsPage(props: ChannelsProps) {
               const handleToggle = () => props.onChannelToggle(channel, !running);
 
               switch (channel) {
-                case 'whatsapp':
-                  return (
-                    <WhatsAppCard
-                      key={channel}
-                      whatsapp={status}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
                 case 'telegram':
                   return (
                     <TelegramCard
@@ -189,71 +150,12 @@ export function ChannelsPage(props: ChannelsProps) {
                       enabled={running}
                     />
                   );
-                case 'nostr':
-                  return (
-                    <NostrCard
-                      key={channel}
-                      nostr={status}
-                      accounts={accounts}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
-                case 'googlechat':
+                case 'webchat':
                   return (
                     <GenericChannelCard
                       key={channel}
-                      title="Google Chat"
-                      description="Bot status and channel configuration."
-                      status={status}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
-                case 'mobile':
-                  return (
-                    <GenericChannelCard
-                      key={channel}
-                      title="Mobile Gateway"
-                      description="Tailnet publish host and API-key access for the Expo client."
-                      status={status}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
-                case 'slack':
-                  return (
-                    <GenericChannelCard
-                      key={channel}
-                      title="Slack"
-                      description="Socket mode status and channel configuration."
-                      status={status}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
-                case 'signal':
-                  return (
-                    <GenericChannelCard
-                      key={channel}
-                      title="Signal"
-                      description="Signal daemon status."
-                      status={status}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
-                case 'imessage':
-                  return (
-                    <GenericChannelCard
-                      key={channel}
-                      title="iMessage"
-                      description="macOS Messages integration status."
+                      title="Web Chat"
+                      description="Embedded web chat widget for browser-based access."
                       status={status}
                       onConfigure={() => props.onOpenChannelConfig(channel)}
                       onToggleEnabled={handleToggle}
@@ -261,19 +163,28 @@ export function ChannelsPage(props: ChannelsProps) {
                     />
                   );
                 default:
-                  return (
-                    <GenericChannelCard
-                      key={channel}
-                      title={channel}
-                      description="Channel details"
-                      status={status}
-                      onConfigure={() => props.onOpenChannelConfig(channel)}
-                      onToggleEnabled={handleToggle}
-                      enabled={running}
-                    />
-                  );
+                  return null;
               }
             })}
+
+          {/* Mobile — coming soon */}
+          <Card className="bg-card border-border flex flex-col h-full opacity-60">
+            <CardHeader className="pb-3 flex flex-row justify-between items-start space-y-0 border-b border-border/50">
+              <div>
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                  <SmartphoneIcon className="w-5 h-5 text-muted-foreground" />
+                  Mobile
+                </CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">Native iOS and Android app.</p>
+              </div>
+              <Badge variant="secondary" className="text-[10px] h-5">Coming Soon</Badge>
+            </CardHeader>
+            <CardContent className="flex-1 pt-4">
+              <p className="text-xs text-muted-foreground">
+                The mobile app is under development and will be available soon.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

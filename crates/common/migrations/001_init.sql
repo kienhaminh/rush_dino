@@ -1,6 +1,11 @@
+-- Consolidated schema (previously 001–012)
+
+-- ─── Conversations & Messages ────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS conversations (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'user',
   archived_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -13,6 +18,7 @@ CREATE TABLE IF NOT EXISTS messages (
   content TEXT NOT NULL,
   tool_calls TEXT,
   rich_content TEXT,
+  thinking TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
@@ -28,6 +34,8 @@ CREATE TABLE IF NOT EXISTS tool_logs (
   FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
 
+-- ─── Jobs ────────────────────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
   instructions TEXT NOT NULL,
@@ -36,6 +44,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at TEXT NOT NULL,
   completed_at TEXT
 );
+
+-- ─── Gateway Sessions ────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS gateway_sessions (
   id TEXT PRIMARY KEY,
@@ -51,6 +61,8 @@ CREATE TABLE IF NOT EXISTS gateway_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_gateway_sessions_last_active
   ON gateway_sessions(last_active DESC);
+
+-- ─── Knowledge Graph ─────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS kg_sources (
   id TEXT PRIMARY KEY,
@@ -99,6 +111,8 @@ CREATE INDEX IF NOT EXISTS idx_kg_entities_last_seen ON kg_entities(last_seen_at
 CREATE INDEX IF NOT EXISTS idx_kg_relations_last_seen ON kg_relations(last_seen_at DESC);
 CREATE INDEX IF NOT EXISTS idx_kg_evidence_relation ON kg_relation_evidence(relation_id);
 
+-- ─── Workflows ───────────────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS workflows (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -117,6 +131,7 @@ CREATE TABLE IF NOT EXISTS workflow_steps (
   name TEXT NOT NULL,
   instructions TEXT NOT NULL,
   agent_id TEXT NOT NULL,
+  step_type TEXT NOT NULL DEFAULT 'agent',
   depends_on TEXT,
   max_retries INTEGER NOT NULL DEFAULT 0,
   timeout_secs INTEGER,
@@ -167,6 +182,8 @@ CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow_status
 CREATE INDEX IF NOT EXISTS idx_workflow_steps_workflow_position
   ON workflow_steps(workflow_id, position);
 
+-- ─── Runtime Logs ────────────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS runtime_logs (
   id TEXT PRIMARY KEY,
   level TEXT NOT NULL,
@@ -179,11 +196,14 @@ CREATE TABLE IF NOT EXISTS runtime_logs (
 CREATE INDEX IF NOT EXISTS idx_runtime_logs_created_at
   ON runtime_logs(created_at DESC);
 
+-- ─── Usage Metrics ───────────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS usage_metrics (
   id TEXT PRIMARY KEY,
   conversation_id TEXT NOT NULL,
   provider TEXT NOT NULL,
   model TEXT NOT NULL,
+  auth_method TEXT,
   prompt_tokens INTEGER NOT NULL,
   completion_tokens INTEGER NOT NULL,
   total_tokens INTEGER NOT NULL,
@@ -196,6 +216,8 @@ CREATE INDEX IF NOT EXISTS idx_usage_metrics_conversation_created
 
 CREATE INDEX IF NOT EXISTS idx_usage_metrics_created
   ON usage_metrics(created_at DESC);
+
+-- ─── Runtime Runs & Events ───────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS runtime_runs (
   id TEXT PRIMARY KEY,
@@ -260,6 +282,11 @@ CREATE TABLE IF NOT EXISTS runtime_run_events (
   FOREIGN KEY (run_id) REFERENCES runtime_runs(id) ON DELETE CASCADE
 );
 
+CREATE INDEX IF NOT EXISTS idx_runtime_run_events_run_created
+  ON runtime_run_events(run_id, created_at DESC);
+
+-- ─── Dashboard Auth ──────────────────────────────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS dashboard_login_codes (
   id TEXT PRIMARY KEY,
   code_hash TEXT NOT NULL UNIQUE,
@@ -286,8 +313,7 @@ CREATE TABLE IF NOT EXISTS dashboard_sessions (
 CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_active
   ON dashboard_sessions(expires_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_runtime_run_events_run_created
-  ON runtime_run_events(run_id, created_at DESC);
+-- ─── Channel Pairing ─────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS channel_pairing_requests (
   id TEXT PRIMARY KEY,
@@ -322,6 +348,8 @@ CREATE TABLE IF NOT EXISTS channel_pairing_approvals (
 
 CREATE INDEX IF NOT EXISTS idx_channel_pairing_approvals_last_seen
   ON channel_pairing_approvals(channel_id, last_seen_at DESC);
+
+-- ─── Cron Jobs ───────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS cron_jobs (
   id TEXT PRIMARY KEY,
@@ -362,3 +390,153 @@ CREATE TABLE IF NOT EXISTS cron_job_runs (
 
 CREATE INDEX IF NOT EXISTS idx_cron_job_runs_job_started
   ON cron_job_runs(job_id, started_at DESC);
+
+-- ─── Sandbox Audit ───────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS sandbox_audit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  agent_id TEXT,
+  ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+  category TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  binary TEXT,
+  destination TEXT,
+  method TEXT,
+  path TEXT,
+  reason TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sandbox_audit_session ON sandbox_audit_log(session_id);
+CREATE INDEX IF NOT EXISTS idx_sandbox_audit_ts ON sandbox_audit_log(ts);
+
+-- ─── Kanban Tasks ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS kanban_tasks (
+  id TEXT PRIMARY KEY,
+  source_request_id TEXT,
+  parent_task_id TEXT,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  tags TEXT NOT NULL DEFAULT '',
+  priority TEXT NOT NULL DEFAULT 'medium',
+  status TEXT NOT NULL DEFAULT 'backlog',
+  assigned_agent TEXT,
+  conversation_id TEXT,
+  notify_conversation_id TEXT,
+  result TEXT,
+  review_feedback TEXT,
+  block_reason TEXT,
+  complexity_level INTEGER NOT NULL DEFAULT 2,
+  depth INTEGER NOT NULL DEFAULT 0,
+  revision_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  claimed_at TEXT,
+  completed_at TEXT,
+  FOREIGN KEY (parent_task_id) REFERENCES kanban_tasks(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_kanban_tasks_status
+  ON kanban_tasks(status);
+
+CREATE INDEX IF NOT EXISTS idx_kanban_tasks_assigned_agent
+  ON kanban_tasks(assigned_agent);
+
+CREATE INDEX IF NOT EXISTS idx_kanban_tasks_source_request
+  ON kanban_tasks(source_request_id);
+
+CREATE INDEX IF NOT EXISTS idx_kanban_tasks_parent
+  ON kanban_tasks(parent_task_id);
+
+CREATE INDEX IF NOT EXISTS idx_kanban_tasks_created
+  ON kanban_tasks(created_at DESC);
+
+-- ─── Skill Graph ─────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS sg_nodes (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  node_type TEXT NOT NULL CHECK(node_type IN ('skill', 'category')),
+  description TEXT NOT NULL DEFAULT '',
+  tags TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sg_nodes_type ON sg_nodes(node_type);
+CREATE INDEX IF NOT EXISTS idx_sg_nodes_name ON sg_nodes(name);
+
+CREATE TABLE IF NOT EXISTS sg_edges (
+  id TEXT PRIMARY KEY,
+  source_id TEXT NOT NULL REFERENCES sg_nodes(id) ON DELETE CASCADE,
+  target_id TEXT NOT NULL REFERENCES sg_nodes(id) ON DELETE CASCADE,
+  edge_type TEXT NOT NULL CHECK(edge_type IN ('belongs_to', 'related_to')),
+  weight REAL NOT NULL DEFAULT 1.0,
+  origin TEXT NOT NULL DEFAULT 'manual',
+  created_at TEXT NOT NULL,
+  UNIQUE(source_id, target_id, edge_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sg_edges_source ON sg_edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_sg_edges_target ON sg_edges(target_id);
+
+CREATE TABLE IF NOT EXISTS sg_meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- ─── Agent Match Outcomes & Health ───────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS agent_match_outcomes (
+  id TEXT PRIMARY KEY,
+  agent_name TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  tags TEXT NOT NULL DEFAULT '',
+  succeeded INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_match_outcomes_agent
+  ON agent_match_outcomes(agent_name, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS agent_health_events (
+  id TEXT PRIMARY KEY,
+  agent_name TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  task_id TEXT,
+  error_message TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_health_events_agent
+  ON agent_health_events(agent_name, created_at DESC);
+
+-- ─── Agent Messages ──────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+  id TEXT PRIMARY KEY,
+  from_agent TEXT NOT NULL,
+  to_agent TEXT NOT NULL,
+  content TEXT NOT NULL,
+  read INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_messages_to
+  ON agent_messages(to_agent, read, created_at DESC);
+
+-- ─── Mobile Gateway API Keys ─────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS mobile_gateway_api_keys (
+  id TEXT PRIMARY KEY,
+  key_hash TEXT NOT NULL UNIQUE,
+  sender_id TEXT NOT NULL UNIQUE,
+  label TEXT,
+  created_at TEXT NOT NULL,
+  last_seen_at TEXT,
+  revoked_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_mobile_gateway_api_keys_revoked
+  ON mobile_gateway_api_keys(revoked_at);

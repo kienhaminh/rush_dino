@@ -6,26 +6,12 @@ import type { GatewaySummaryResponse, SystemSummaryResponse } from '@/lib/types'
 import type { ChannelKey } from '@/pages/channels/ChannelsPage';
 import { GatewayPage, type GatewayPageChannel } from './GatewayPage';
 
-const ORDERED_CHANNELS: ChannelKey[] = [
-  'whatsapp',
-  'telegram',
-  'discord',
-  'mobile',
-  'googlechat',
-  'slack',
-  'signal',
-  'imessage',
-  'nostr',
-];
+const ORDERED_CHANNELS: ChannelKey[] = ['telegram', 'discord', 'webchat'];
 
 function channelLabel(channel: ChannelKey): string {
   switch (channel) {
-    case 'googlechat':
-      return 'Google Chat';
-    case 'imessage':
-      return 'iMessage';
-    case 'mobile':
-      return 'Mobile Gateway';
+    case 'webchat':
+      return 'Web Chat';
     default:
       return channel.charAt(0).toUpperCase() + channel.slice(1);
   }

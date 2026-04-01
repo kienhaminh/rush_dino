@@ -178,8 +178,6 @@ pub struct AppState {
     pub guardrail_registry: Arc<GuardrailRegistry>,
     /// Temporary OAuth PKCE sessions for UI-driven headless login.
     pub pending_oauth: Arc<PendingOAuthStore>,
-    /// Skill graph service for keyword-based skill routing.
-    pub skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
     /// MCP server manager — manages connections and discovered tools.
     pub mcp_manager: Arc<McpManager>,
     /// In-memory vault for sensitive values collected via secret input fields.
@@ -208,7 +206,6 @@ pub struct AppStateConfig {
     pub mobile_gateway_adapter: Arc<MobileGatewayAdapter>,
     pub guardrail_registry: Arc<GuardrailRegistry>,
     pub pending_oauth: Arc<PendingOAuthStore>,
-    pub skill_graph: Arc<rushdino_skill_graph::SkillGraphService>,
     pub mcp_manager: Arc<McpManager>,
     pub secret_vault: SharedSecretVault,
 }
@@ -236,7 +233,6 @@ impl AppState {
             mobile_gateway_adapter: cfg.mobile_gateway_adapter,
             guardrail_registry: cfg.guardrail_registry,
             pending_oauth: cfg.pending_oauth,
-            skill_graph: cfg.skill_graph,
             mcp_manager: cfg.mcp_manager,
             secret_vault: cfg.secret_vault,
         }
@@ -260,10 +256,6 @@ impl AppState {
 
     pub fn knowledge_graph(&self) -> Option<Arc<rushdino_knowledge_graph::KgGateway>> {
         self.runtime.knowledge_graph()
-    }
-
-    pub fn skill_graph(&self) -> &Arc<rushdino_skill_graph::SkillGraphService> {
-        &self.skill_graph
     }
 
     pub fn runtime_status(&self) -> RuntimeStatus {

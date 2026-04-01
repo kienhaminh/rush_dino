@@ -183,16 +183,15 @@ export function ChatPage() {
         )}
       </div>
 
-      {/* Resize handle */}
+      {/* Resize handle + Sub-agent side panel — temporarily hidden
       <ResizeHandle panelWidth={panelWidth} onResize={setPanelWidth} min={200} max={500} />
-
-      {/* Sub-agent side panel — always visible, shows empty state when idle */}
       <SubAgentPanel
         sessions={agentSessions}
         liveRuns={liveRuns}
         width={panelWidth}
         onSessionDeleted={refreshAgentSessions}
       />
+      */}
     </div>
   );
 }

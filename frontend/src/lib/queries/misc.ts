@@ -8,7 +8,6 @@ import {
   fetchCronRuns,
   fetchDashboardAuthStatus,
 } from '../api'
-import { fetchSkillGraph } from '../../pages/skills/skill-graph-api'
 import type { KanbanBoardResponse } from '../../pages/kanban/kanban-types'
 
 export const miscKeys = {
@@ -17,7 +16,6 @@ export const miscKeys = {
   version:    () => [...miscKeys.all(), 'version'] as const,
   doctor:     () => [...miscKeys.all(), 'doctor'] as const,
   skills:     () => [...miscKeys.all(), 'skills'] as const,
-  skillGraph: () => [...miscKeys.all(), 'skill-graph'] as const,
   cron:       () => [...miscKeys.all(), 'cron'] as const,
   cronRuns:   (jobIds: string[]) => [...miscKeys.all(), 'cron-runs', jobIds] as const,
   kanban:     () => [...miscKeys.all(), 'kanban'] as const,
@@ -53,10 +51,6 @@ export function useDoctorQuery() {
 
 export function useSkillsQuery() {
   return useQuery({ queryKey: miscKeys.skills(), queryFn: fetchSkills })
-}
-
-export function useSkillGraphQuery() {
-  return useQuery({ queryKey: miscKeys.skillGraph(), queryFn: fetchSkillGraph })
 }
 
 export function useCronQuery() {

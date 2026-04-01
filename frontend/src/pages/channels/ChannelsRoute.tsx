@@ -31,16 +31,13 @@ import {
 import { ChannelSettingsPage } from './ChannelSettingsPage';
 
 const CHANNEL_UI_SETTINGS_KEY = 'rushdino.channels.ui-settings.v1';
-const CHANNEL_ENABLED_OVERRIDES_KEY = 'rushdino.channels.enabled-overrides.v1';
 
 type ChannelSettingsState = Partial<Record<ChannelKey, ChannelUiSettings>>;
-type ChannelEnabledOverrides = Partial<Record<ChannelKey, boolean>>;
 type PairingChannel = Extract<ChannelKey, 'telegram' | 'discord'>;
 
 // Grouped localStorage-persisted channel config.
 type LocalChannelState = {
   uiSettings: ChannelSettingsState;
-  enabledOverrides: ChannelEnabledOverrides;
 };
 
 function hasCredential(value: string | undefined): boolean {
@@ -66,7 +63,6 @@ function saveJsonRecord(key: string, value: object) {
 function buildSnapshot(
   config: AppConfigView | null,
   credentials: CredentialsView | null,
-  overrides: ChannelEnabledOverrides,
   telegramPairing: ChannelPairingState | undefined,
   discordPairing: ChannelPairingState | undefined,
 ): ChannelsStatusSnapshot | null {
@@ -81,16 +77,9 @@ function buildSnapshot(
     lastProbeAt: timestamp,
   });
 
-  const virtualStatus = (channel: ChannelKey) => {
-    const enabled = Boolean(overrides[channel]);
-    return status(enabled, enabled);
-  };
-
   const gateway = config.gateway;
   const telegramConfigured = hasCredential(credentials.telegram_bot_token);
   const discordConfigured = hasCredential(credentials.discord_bot_token);
-  const slackConfigured =
-    hasCredential(credentials.slack_bot_token) && hasCredential(credentials.slack_app_token);
   const mobileConfigured = hasCredential(gateway.mobile.publish_host);
 
   return {
@@ -108,27 +97,12 @@ function buildSnapshot(
         pairedCount: discordPairing?.paired.length ?? 0,
         pendingPairingCount: discordPairing?.pending.length ?? 0,
       },
+      webchat: status(gateway.webchat.enabled, true),
       mobile: status(gateway.mobile.enabled, mobileConfigured),
-      slack: status(gateway.slack.enabled, slackConfigured),
-      whatsapp: virtualStatus('whatsapp'),
-      googlechat: virtualStatus('googlechat'),
-      signal: virtualStatus('signal'),
-      imessage: virtualStatus('imessage'),
-      nostr: virtualStatus('nostr'),
     },
   };
 }
 
-function isPersistedGatewayChannel(
-  channel: ChannelKey,
-): channel is 'telegram' | 'discord' | 'mobile' | 'slack' {
-  return (
-    channel === 'telegram' ||
-    channel === 'discord' ||
-    channel === 'mobile' ||
-    channel === 'slack'
-  );
-}
 
 function supportsPairing(channel: ChannelKey): channel is PairingChannel {
   return channel === 'telegram' || channel === 'discord';
@@ -136,15 +110,10 @@ function supportsPairing(channel: ChannelKey): channel is PairingChannel {
 
 function isChannelKey(value: string | undefined): value is ChannelKey {
   return (
-    value === 'whatsapp' ||
     value === 'telegram' ||
     value === 'discord' ||
-    value === 'mobile' ||
-    value === 'googlechat' ||
-    value === 'slack' ||
-    value === 'signal' ||
-    value === 'imessage' ||
-    value === 'nostr'
+    value === 'webchat' ||
+    value === 'mobile'
   );
 }
 
@@ -198,26 +167,17 @@ export function ChannelsRoute() {
 
   const [localConfig, setLocalConfig] = useState<LocalChannelState>(() => ({
     uiSettings: loadJsonRecord<ChannelSettingsState>(CHANNEL_UI_SETTINGS_KEY),
-    enabledOverrides: loadJsonRecord<ChannelEnabledOverrides>(CHANNEL_ENABLED_OVERRIDES_KEY),
   }));
-  const { uiSettings: channelUiSettings, enabledOverrides: channelEnabledOverrides } = localConfig;
+  const { uiSettings: channelUiSettings } = localConfig;
 
-  // Persist both localStorage keys whenever localConfig changes.
+  // Persist localStorage key whenever localConfig changes.
   useEffect(() => {
     saveJsonRecord(CHANNEL_UI_SETTINGS_KEY, localConfig.uiSettings);
-    saveJsonRecord(CHANNEL_ENABLED_OVERRIDES_KEY, localConfig.enabledOverrides);
   }, [localConfig]);
 
   const snapshot = useMemo(
-    () =>
-      buildSnapshot(
-        config,
-        credentials,
-        channelEnabledOverrides,
-        telegramQuery.data,
-        discordQuery.data,
-      ),
-    [config, credentials, channelEnabledOverrides, telegramQuery.data, discordQuery.data],
+    () => buildSnapshot(config, credentials, telegramQuery.data, discordQuery.data),
+    [config, credentials, telegramQuery.data, discordQuery.data],
   );
 
   // Derive mobile gateway keys from query cache; keep lastIssuedKey as local state
@@ -229,15 +189,6 @@ export function ChannelsRoute() {
   const handleChannelToggle = useCallback(
     async (channel: ChannelKey, enabled: boolean) => {
       if (!config) return;
-
-      if (!isPersistedGatewayChannel(channel)) {
-        setLocalConfig((prev) => ({
-          ...prev,
-          enabledOverrides: { ...prev.enabledOverrides, [channel]: enabled },
-        }));
-        toast.success(`${enabled ? 'Enabled' : 'Disabled'} ${channel} for this UI session.`);
-        return;
-      }
 
       try {
         await patchConfigMutation.mutateAsync({
@@ -287,14 +238,6 @@ export function ChannelsRoute() {
           return;
         }
         if (
-          channel === 'slack' &&
-          (!hasCredential(patch.slackBotToken ?? credentials?.slack_bot_token) ||
-            !hasCredential(patch.slackAppToken ?? credentials?.slack_app_token))
-        ) {
-          toast.error('Slack test failed: both bot and app tokens are required.');
-          return;
-        }
-        if (
           channel === 'mobile' &&
           !hasCredential(
             typeof patch.mobilePublishHost === 'string'
@@ -312,17 +255,6 @@ export function ChannelsRoute() {
       }
 
       const requestedEnabled = action === 'connect' ? true : patch.enabled;
-
-      if (!isPersistedGatewayChannel(channel)) {
-        if (typeof requestedEnabled === 'boolean') {
-          setLocalConfig((prev) => ({
-            ...prev,
-            enabledOverrides: { ...prev.enabledOverrides, [channel]: requestedEnabled },
-          }));
-        }
-        toast.success(`Saved ${channel} detail configuration.`);
-        return;
-      }
 
       const configPatch: Partial<AppConfigView> = {};
       const credentialsPatch: Partial<CredentialsView> = {};
@@ -375,12 +307,6 @@ export function ChannelsRoute() {
       }
       if (patch.discordBotToken != null) {
         credentialsPatch.discord_bot_token = patch.discordBotToken;
-      }
-      if (patch.slackBotToken != null) {
-        credentialsPatch.slack_bot_token = patch.slackBotToken;
-      }
-      if (patch.slackAppToken != null) {
-        credentialsPatch.slack_app_token = patch.slackAppToken;
       }
 
       const hasConfigPatch = Object.keys(configPatch).length > 0;
@@ -538,18 +464,10 @@ export function ChannelsRoute() {
       credentials={credentials}
       channelConfigSaving={channelConfigSaving}
       channelUiSettings={channelUiSettings}
-      nostrProfileFormState={null}
-      nostrProfileAccountId={null}
       onRefresh={handleRefresh}
       onChannelToggle={handleChannelToggle}
       onChannelConfigAction={handleChannelConfigAction}
       onOpenChannelConfig={openChannelConfig}
-      onNostrProfileEdit={() => {}}
-      onNostrProfileFieldChange={() => {}}
-      onNostrProfileSave={() => {}}
-      onNostrProfileImport={() => {}}
-      onNostrProfileCancel={() => {}}
-      onNostrProfileToggleAdvanced={() => {}}
     />
   );
 }

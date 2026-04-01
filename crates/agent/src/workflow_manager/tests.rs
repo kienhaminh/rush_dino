@@ -14,7 +14,6 @@ async fn create_manager() -> WorkflowManager {
         .expect("memory sqlite");
     let migrations: &[&str] = &[
         include_str!("../../../common/migrations/001_init.sql"),
-        include_str!("../../../common/migrations/010_workflow_step_type.sql"),
     ];
     for migration in migrations {
         for statement in migration.split(';') {

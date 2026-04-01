@@ -5,7 +5,7 @@ use tokio::sync::mpsc;
 
 use rushdino_common::{models::ToolCall, AppError, Result};
 
-use crate::types::{AnthropicAuth, ChatChunk, ChatRequest, ChatResponse, ThinkingLevel};
+use crate::types::{AnthropicAuth, ChatChunk, ChatRequest, ChatResponse, ThinkingLevel, Usage};
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
@@ -100,11 +100,13 @@ impl AnthropicProvider {
             }
         }
 
+        let usage = parse_anthropic_usage(&payload);
+
         Ok(ChatResponse {
             content,
             tool_calls,
             rich_content: None,
-            usage: None,
+            usage,
             finish_reason: payload
                 .get("stop_reason")
                 .and_then(Value::as_str)
@@ -146,6 +148,8 @@ impl AnthropicProvider {
             //                  content_block_delta (type=input_json_delta, partial_json)
             //                  content_block_stop
             let mut pending_tools: Vec<ToolCall> = Vec::new();
+            let mut input_tokens: u32 = 0;
+            let mut output_tokens: u32 = 0;
 
             while let Some(item) = stream.next().await {
                 let Ok(chunk) = item else {
@@ -171,6 +175,12 @@ impl AnthropicProvider {
                     let event_type = value.get("type").and_then(Value::as_str).unwrap_or("");
 
                     match event_type {
+                        "message_start" => {
+                            // Anthropic sends input_tokens in message_start.message.usage
+                            if let Some(u) = value.pointer("/message/usage") {
+                                input_tokens += u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+                            }
+                        }
                         "content_block_start" => {
                             if value.pointer("/content_block/type").and_then(Value::as_str)
                                 == Some("tool_use")
@@ -251,6 +261,10 @@ impl AnthropicProvider {
                             }
                         }
                         "message_delta" => {
+                            // Anthropic sends output_tokens in message_delta.usage
+                            if let Some(u) = value.get("usage") {
+                                output_tokens += u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+                            }
                             // Emit accumulated tool calls once the message is finishing.
                             if !pending_tools.is_empty() {
                                 let calls = std::mem::take(&mut pending_tools);
@@ -283,12 +297,22 @@ impl AnthropicProvider {
                     .await;
             }
 
+            let final_usage = if input_tokens > 0 || output_tokens > 0 {
+                Some(Usage {
+                    prompt_tokens: input_tokens,
+                    completion_tokens: output_tokens,
+                    total_tokens: input_tokens + output_tokens,
+                })
+            } else {
+                None
+            };
+
             let _ = tx
                 .send(ChatChunk {
                     delta: String::new(),
                     tool_calls: Vec::new(),
                     done: true,
-                    usage: None,
+                    usage: final_usage,
                     thinking_delta: None,
                 })
                 .await;
@@ -428,4 +452,20 @@ fn to_anthropic_body(request: ChatRequest, model: String, stream: bool, is_oauth
     }
 
     body
+}
+
+/// Extract usage from an Anthropic non-streaming response payload.
+/// The response contains `usage.input_tokens` and `usage.output_tokens`.
+fn parse_anthropic_usage(payload: &Value) -> Option<Usage> {
+    let u = payload.get("usage")?;
+    let input = u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+    let output = u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0) as u32;
+    if input == 0 && output == 0 {
+        return None;
+    }
+    Some(Usage {
+        prompt_tokens: input,
+        completion_tokens: output,
+        total_tokens: input + output,
+    })
 }

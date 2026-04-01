@@ -318,7 +318,6 @@ mod tests {
         let pool = SqlitePool::connect(":memory:").await.expect("memory db");
         for migration in [
             include_str!("../../common/migrations/001_init.sql"),
-            include_str!("../../common/migrations/012_message_thinking.sql"),
         ] {
             for statement in migration.split(';') {
                 let sql: &str = statement.trim();

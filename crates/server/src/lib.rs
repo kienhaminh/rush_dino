@@ -338,20 +338,6 @@ pub async fn build_app(
     let guardrail_registry = state::GuardrailRegistry::new();
     let pending_oauth = state::PendingOAuthStore::new();
 
-    // Skill graph: keyword-based routing for skill selection.
-    // Seeding runs in the background on first launch (~150 DB writes); subsequent
-    // starts skip it after a single is_seeded() check.
-    let skill_graph_service = Arc::new(rushdino_skill_graph::SkillGraphService::new((*pool).clone()));
-    {
-        let sg = skill_graph_service.clone();
-        tokio::spawn(async move {
-            if let Err(err) = sg.ensure_seeded().await {
-                tracing::warn!("skill graph seeding failed: {err}");
-            }
-        });
-    }
-    runtime_state.set_skill_graph(skill_graph_service.clone());
-
     // MCP: McpManager::new() is now instant (reqwest::Client is lazy).
     // The HTTP client is created on first reconcile, which happens after
     // the user configures MCP servers — not unconditionally at startup.
@@ -405,7 +391,6 @@ pub async fn build_app(
         mobile_gateway_adapter,
         guardrail_registry,
         pending_oauth,
-        skill_graph: skill_graph_service,
         mcp_manager: mcp_manager.clone(),
         secret_vault,
     });
@@ -651,15 +636,6 @@ pub async fn build_app(
             "/api/skills/:name",
             axum::routing::delete(routes::skills::delete_skill),
         )
-        // Skill graph routing
-        .route("/api/skill-graph", get(routes::skill_graph::get_graph))
-        .route("/api/skill-graph/query", get(routes::skill_graph::query_skills))
-        .route("/api/skill-graph/nodes", post(routes::skill_graph::upsert_node))
-        .route("/api/skill-graph/nodes/:id", axum::routing::delete(routes::skill_graph::delete_node))
-        .route("/api/skill-graph/edges", post(routes::skill_graph::upsert_edge))
-        .route("/api/skill-graph/edges/:id", axum::routing::delete(routes::skill_graph::delete_edge))
-        .route("/api/skill-graph/assign", post(routes::skill_graph::assign_category))
-        .route("/api/skill-graph/reseed", post(routes::skill_graph::reseed))
         .route("/api/mcp/status", get(routes::mcp::get_mcp_status))
         .route(
             "/api/profiles/:id",
