@@ -289,6 +289,38 @@ impl KanbanDispatcher {
             ws_event_tx: None,
         };
 
+        // Create streaming event channel to intercept tool calls for WS broadcast
+        let (tool_event_tx, mut tool_event_rx) = tokio::sync::mpsc::channel::<crate::react_loop::StreamingEvent>(256);
+        let broadcast_tx_clone = self.broadcast_tx.clone();
+        let task_id_for_events = task.id.clone();
+
+        tokio::spawn(async move {
+            while let Some(event) = tool_event_rx.recv().await {
+                match event {
+                    crate::react_loop::StreamingEvent::ToolStart { ref tool_name, ref args } => {
+                        let label = build_tool_label(tool_name, args);
+                        let _ = broadcast_tx_clone.send(serde_json::json!({
+                            "type": "task_tool_event",
+                            "task_id": task_id_for_events,
+                            "tool_name": tool_name,
+                            "status": "start",
+                            "label": label,
+                        }));
+                    }
+                    crate::react_loop::StreamingEvent::ToolEnd { ref tool_name, .. } => {
+                        let _ = broadcast_tx_clone.send(serde_json::json!({
+                            "type": "task_tool_event",
+                            "task_id": task_id_for_events,
+                            "tool_name": tool_name,
+                            "status": "end",
+                            "label": format!("{} done", tool_name),
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+        });
+
         let (response, all_messages) = with_tool_execution_context(
             child_ctx,
             run_react_loop(
@@ -297,7 +329,7 @@ impl KanbanDispatcher {
                 scoped_ctx,
                 messages,
                 &child_config,
-                None,
+                Some(tool_event_tx),
             ),
         )
         .await?;
@@ -372,6 +404,39 @@ impl KanbanDispatcher {
         );
 
         Ok(())
+    }
+}
+
+/// Build a short human-readable label for a tool call.
+fn build_tool_label(tool_name: &str, args: &serde_json::Value) -> String {
+    let get_filename = |key: &str| -> String {
+        args.get(key)
+            .and_then(|v| v.as_str())
+            .map(|path| {
+                std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(path)
+                    .to_string()
+            })
+            .unwrap_or_else(|| "file".to_string())
+    };
+
+    match tool_name {
+        "read" | "Read" => format!("Read {}", get_filename("file_path")),
+        "edit" | "Edit" => format!("Edit {}", get_filename("file_path")),
+        "write" | "Write" => format!("Write {}", get_filename("file_path")),
+        "bash" | "Bash" => {
+            let cmd = args.get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("command");
+            if cmd.len() > 40 {
+                format!("Bash: {}…", &cmd[..40])
+            } else {
+                format!("Bash: {}", cmd)
+            }
+        }
+        _ => tool_name.to_string(),
     }
 }
 
