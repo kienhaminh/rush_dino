@@ -463,4 +463,76 @@ mod tests {
         assert!(entry.contains("Found: GPT-5.4"));
         assert!(entry.starts_with("## "));
     }
+
+    // ── build_tool_label ──────────────────────────────────────────────────
+
+    #[test]
+    fn build_tool_label_read_extracts_filename() {
+        let args = serde_json::json!({ "file_path": "/path/to/layout.css" });
+        assert_eq!(build_tool_label("read", &args), "Read layout.css");
+    }
+
+    #[test]
+    fn build_tool_label_read_uppercase_variant() {
+        let args = serde_json::json!({ "file_path": "/src/main.rs" });
+        assert_eq!(build_tool_label("Read", &args), "Read main.rs");
+    }
+
+    #[test]
+    fn build_tool_label_edit_extracts_filename() {
+        let args = serde_json::json!({ "file_path": "/src/kanban_dispatcher.rs" });
+        assert_eq!(build_tool_label("edit", &args), "Edit kanban_dispatcher.rs");
+    }
+
+    #[test]
+    fn build_tool_label_write_extracts_filename() {
+        let args = serde_json::json!({ "file_path": "/out/report.md" });
+        assert_eq!(build_tool_label("write", &args), "Write report.md");
+    }
+
+    #[test]
+    fn build_tool_label_bash_short_command_kept_as_is() {
+        let args = serde_json::json!({ "command": "cargo build" });
+        assert_eq!(build_tool_label("bash", &args), "Bash: cargo build");
+    }
+
+    #[test]
+    fn build_tool_label_bash_truncates_at_40_chars() {
+        // 41-character command — should be cut at 40 with ellipsis appended.
+        let cmd = "a".repeat(41);
+        let args = serde_json::json!({ "command": cmd });
+        let result = build_tool_label("bash", &args);
+        // Prefix must be "Bash: " + 40 a's + "…"
+        let expected = format!("Bash: {}…", "a".repeat(40));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn build_tool_label_bash_exactly_40_chars_not_truncated() {
+        let cmd = "b".repeat(40);
+        let args = serde_json::json!({ "command": cmd });
+        let result = build_tool_label("bash", &args);
+        assert_eq!(result, format!("Bash: {}", "b".repeat(40)));
+        assert!(!result.contains('…'), "40-char command should not be truncated");
+    }
+
+    #[test]
+    fn build_tool_label_unknown_tool_returns_tool_name() {
+        let args = serde_json::json!({});
+        assert_eq!(build_tool_label("glob", &args), "glob");
+        assert_eq!(build_tool_label("grep", &args), "grep");
+        assert_eq!(build_tool_label("some_custom_tool", &args), "some_custom_tool");
+    }
+
+    #[test]
+    fn build_tool_label_missing_file_path_falls_back_to_file() {
+        let args = serde_json::json!({});
+        assert_eq!(build_tool_label("read", &args), "Read file");
+    }
+
+    #[test]
+    fn build_tool_label_missing_command_falls_back_to_command() {
+        let args = serde_json::json!({});
+        assert_eq!(build_tool_label("bash", &args), "Bash: command");
+    }
 }
