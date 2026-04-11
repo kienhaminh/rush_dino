@@ -19,10 +19,12 @@ import type {
   TaskStatus,
 } from './kanban-types';
 import { KANBAN_COLUMNS } from './kanban-types';
+import { useChatWsConnection } from '@/hooks/use-chat-ws';
 import { useKanbanBoard } from './use-kanban-board';
 
 export function KanbanPage() {
-  const { board, loading, refreshing, error, refresh, deleteTask } = useKanbanBoard(true);
+  const { isConnected } = useChatWsConnection();
+  const { board, loading, refreshing, error, refresh, deleteTask } = useKanbanBoard(true, isConnected);
 
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
