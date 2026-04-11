@@ -22,10 +22,21 @@ import { KANBAN_COLUMNS } from './kanban-types';
 import { useChatWsConnection } from '@/hooks/use-chat-ws';
 import { useKanbanBoard } from './use-kanban-board';
 import { useKanbanRealtimeStore, type ToolEvent } from './kanban-realtime-store';
+import { SessionTabStrip } from './session-tab-strip';
 
 export function KanbanPage() {
   const { isConnected } = useChatWsConnection();
   const { board, loading, refreshing, error, refresh, deleteTask } = useKanbanBoard(true, isConnected);
+
+  function handleTabClick(taskId: string) {
+    const el = document.getElementById(`kanban-card-${taskId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+    setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
+    }, 1500);
+  }
 
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
@@ -49,6 +60,14 @@ export function KanbanPage() {
 
         {/* Stats bar */}
         {board ? <KanbanStatsBar stats={board.stats} /> : null}
+
+        {/* Session tab strip — shows active agent sessions */}
+        {board ? (
+          <SessionTabStrip
+            inProgressTasks={board.columns.inProgress}
+            onTabClick={handleTabClick}
+          />
+        ) : null}
 
         {/* Board columns */}
         {board ? <KanbanBoard columns={board.columns} onDeleteTask={deleteTask} /> : null}
