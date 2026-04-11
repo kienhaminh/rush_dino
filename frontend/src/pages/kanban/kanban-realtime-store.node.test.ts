@@ -114,21 +114,14 @@ describe('updateScore', () => {
 // ── clearTask ─────────────────────────────────────────────────────────────────
 
 describe('clearTask', () => {
-  it('removes toolEvents for the given taskId', () => {
-    const { appendToolEvent, clearTask } = useKanbanRealtimeStore.getState();
+  it('removes both toolEvents and taskScores for the given taskId', () => {
+    const { appendToolEvent, updateScore, clearTask } = useKanbanRealtimeStore.getState();
     appendToolEvent('task-1', makeEvent());
-    clearTask('task-1');
-
-    const { toolEvents } = useKanbanRealtimeStore.getState();
-    expect(toolEvents['task-1']).toBeUndefined();
-  });
-
-  it('removes taskScores for the given taskId', () => {
-    const { updateScore, clearTask } = useKanbanRealtimeStore.getState();
     updateScore('task-1', 62, 96, 2);
     clearTask('task-1');
 
-    const { taskScores } = useKanbanRealtimeStore.getState();
+    const { toolEvents, taskScores } = useKanbanRealtimeStore.getState();
+    expect(toolEvents['task-1']).toBeUndefined();
     expect(taskScores['task-1']).toBeUndefined();
   });
 
