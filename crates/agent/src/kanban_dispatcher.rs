@@ -128,12 +128,21 @@ impl KanbanDispatcher {
                         &matched.agent_name, &task.id, &task.tags, false,
                     ).await;
                     // Best-effort status update; ignore secondary failures.
-                    let _ = self.store.update_task_status(&UpdateTaskInput {
+                    if let Ok(updated) = self.store.update_task_status(&UpdateTaskInput {
                         task_id: task.id.clone(),
                         status: TaskStatus::Failed,
                         result: Some(format!("Execution error: {e}")),
                         block_reason: None,
-                    }).await;
+                    }).await {
+                        let _ = self.broadcast_tx.send(serde_json::json!({
+                            "type": "task_status_changed",
+                            "task_id": updated.id,
+                            "title": updated.title,
+                            "old_status": TaskStatus::Claimed.as_str(),
+                            "new_status": updated.status.as_str(),
+                            "agent_name": updated.assigned_agent.as_deref().unwrap_or(""),
+                        }));
+                    }
                 }
             }
         }
@@ -162,7 +171,15 @@ impl KanbanDispatcher {
             .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
 
         // 3. Claim the task in the store.
-        self.store.claim_task(&task.id, agent_name).await?;
+        let claimed_task = self.store.claim_task(&task.id, agent_name).await?;
+        let _ = self.broadcast_tx.send(serde_json::json!({
+            "type": "task_status_changed",
+            "task_id": claimed_task.id,
+            "title": claimed_task.title,
+            "old_status": TaskStatus::Backlog.as_str(),
+            "new_status": claimed_task.status.as_str(),
+            "agent_name": claimed_task.assigned_agent.as_deref().unwrap_or(""),
+        }));
 
         // 4. Create an isolated conversation for this task run.
         // Use agent name as the stable session ID so each team agent gets one persistent session.
@@ -298,12 +315,20 @@ impl KanbanDispatcher {
         }
 
         // 12. Mark task as Done (store will promote to InReview automatically).
-        self.store.update_task_status(&UpdateTaskInput {
+        let updated_task = self.store.update_task_status(&UpdateTaskInput {
             task_id: task.id.clone(),
             status: TaskStatus::Done,
             result: Some(response.content.clone()),
             block_reason: None,
         }).await?;
+        let _ = self.broadcast_tx.send(serde_json::json!({
+            "type": "task_status_changed",
+            "task_id": updated_task.id,
+            "title": updated_task.title,
+            "old_status": TaskStatus::Claimed.as_str(),
+            "new_status": updated_task.status.as_str(),
+            "agent_name": updated_task.assigned_agent.as_deref().unwrap_or(""),
+        }));
 
         // 13. Write daily note entry.
         let note = format_task_completion_note(&task.id, &task.title, agent_name, &response.content);
