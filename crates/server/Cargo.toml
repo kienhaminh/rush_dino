@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 async-trait.workspace = true
 arc-swap.workspace = true
+figment.workspace = true
 hex.workspace = true
 sha2.workspace = true
 axum.workspace = true

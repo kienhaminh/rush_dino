@@ -58,6 +58,32 @@ use crate::{
     webchat::WebChatAdapter,
 };
 
+/// Returns `Ok(Some(state))` when HMAC auth is enabled with a valid secret,
+/// `Ok(None)` when auth is disabled, and `Err` when auth is enabled but no
+/// secret is configured — fail-closed rather than fail-open.
+pub(crate) fn resolve_hmac_auth(
+    config: &AppConfig,
+    credentials: &CredentialsConfig,
+) -> Result<Option<Arc<HmacAuthState>>> {
+    if !config.security.hmac_auth_enabled {
+        return Ok(None);
+    }
+    let secret = credentials
+        .api_secret
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            AppError::Config(Box::new(figment::Error::from(
+                "security.hmac_auth_enabled is true but credentials.api_secret is not set; \
+                 refusing to start with auth disabled — set api_secret or disable hmac_auth_enabled"
+                    .to_owned(),
+            )))
+        })?;
+    let bytes = hex::decode(secret).unwrap_or_else(|_| secret.as_bytes().to_vec());
+    tracing::info!("security: HMAC-SHA256 authentication enabled");
+    Ok(Some(Arc::new(HmacAuthState::new(bytes))))
+}
+
 /// Build the Axum application router with all state wired up.
 pub async fn build_app(
     config: Arc<AppConfig>,
@@ -305,21 +331,9 @@ pub async fn build_app(
 
     let gateway_control = gateway.start().await?;
 
-    // Build optional HMAC auth state from CredentialsConfig
-    let hmac_auth = if config.security.hmac_auth_enabled {
-        if let Some(secret) = credentials.api_secret.as_deref().filter(|s| !s.is_empty()) {
-            let secret_bytes = hex::decode(secret).unwrap_or_else(|_| secret.as_bytes().to_vec());
-            tracing::info!("security: HMAC-SHA256 authentication enabled");
-            Some(Arc::new(HmacAuthState::new(secret_bytes)))
-        } else {
-            tracing::warn!(
-                "security: hmac_auth_enabled=true but no api_secret configured; auth disabled"
-            );
-            None
-        }
-    } else {
-        None
-    };
+    // Build optional HMAC auth state from CredentialsConfig — fail-closed: errors if
+    // hmac_auth_enabled=true but api_secret is missing or empty.
+    let hmac_auth = resolve_hmac_auth(&config, &credentials)?;
 
     // Always enable rate limiting
     let rate_limiters = Some(Arc::new(EndpointLimiters::new()));
@@ -826,7 +840,7 @@ async fn shutdown_signal() {
 mod tests {
     use rushdino_common::CredentialsConfig;
 
-    use super::should_register_gateway_adapter;
+    use super::{resolve_hmac_auth, should_register_gateway_adapter};
 
     #[test]
     fn telegram_adapter_registration_requires_token_at_startup() {
@@ -862,5 +876,40 @@ mod tests {
                 ..CredentialsConfig::default()
             },
         ));
+    }
+
+    #[test]
+    fn hmac_auth_enabled_without_secret_returns_err() {
+        use rushdino_common::{AppConfig, CredentialsConfig};
+        let mut config = AppConfig::default();
+        config.security.hmac_auth_enabled = true;
+        let creds = CredentialsConfig {
+            api_secret: None,
+            ..CredentialsConfig::default()
+        };
+        let result = resolve_hmac_auth(&config, &creds);
+        assert!(result.is_err(), "must error when hmac_auth_enabled but no secret");
+    }
+
+    #[test]
+    fn hmac_auth_enabled_with_secret_returns_some() {
+        use rushdino_common::{AppConfig, CredentialsConfig};
+        let mut config = AppConfig::default();
+        config.security.hmac_auth_enabled = true;
+        let creds = CredentialsConfig {
+            api_secret: Some("deadbeefdeadbeef".to_owned()),
+            ..CredentialsConfig::default()
+        };
+        let result = resolve_hmac_auth(&config, &creds);
+        assert!(result.unwrap().is_some());
+    }
+
+    #[test]
+    fn hmac_auth_disabled_returns_none() {
+        use rushdino_common::{AppConfig, CredentialsConfig};
+        let config = AppConfig::default(); // hmac_auth_enabled defaults to false
+        let creds = CredentialsConfig::default();
+        let result = resolve_hmac_auth(&config, &creds);
+        assert!(result.unwrap().is_none());
     }
 }
