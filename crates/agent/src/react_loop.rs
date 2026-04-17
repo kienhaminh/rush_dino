@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use chrono::Utc;
 use futures::future::join_all;
@@ -598,7 +599,7 @@ async fn append_tool_outputs(
                     args = %serde_json::to_string(&call.arguments).unwrap_or_default(),
                     "skipping tool call with empty name — likely a malformed provider response"
                 );
-                return (call, "tool call skipped: empty tool name".to_owned(), true);
+                return (call, "tool call skipped: empty tool name".to_owned(), true, 0i64);
             }
 
             tracing::info!(
@@ -632,6 +633,7 @@ async fn append_tool_outputs(
                     "tool execution blocked: high-confidence prompt injection detected in arguments"
                         .to_owned(),
                     true,
+                    0i64,
                 );
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
@@ -654,13 +656,16 @@ async fn append_tool_outputs(
             }
 
             if let Some(tool) = registry.get(&call.name) {
+                let start = Instant::now();
                 let result = match tool.execute(call.arguments.clone()).await {
                     Ok(value) => (call, value, false),
                     Err(err) => (call, err.to_string(), true),
                 };
+                let duration_ms = start.elapsed().as_millis() as i64;
                 tracing::info!(
                     tool = %result.0.name,
                     is_error = result.2,
+                    duration_ms = duration_ms,
                     result = %result.1.chars().take(200).collect::<String>(),
                     "tool call finished"
                 );
@@ -673,10 +678,10 @@ async fn append_tool_outputs(
                         })
                         .await;
                 }
-                result
+                (result.0, result.1, result.2, duration_ms)
             } else {
                 tracing::warn!(tool = %call.name, "tool call failed: tool not found");
-                let result = (call, "tool not found".to_owned(), true);
+                let result = (call, "tool not found".to_owned(), true, 0i64);
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
                         .send(StreamingEvent::ToolEnd {
@@ -719,7 +724,7 @@ async fn append_tool_outputs(
     }
 
     // Append normally executed tool results.
-    for (call, output, is_error) in join_all(futures).await {
+    for (call, output, is_error, _duration_ms) in join_all(futures).await {
         if !is_error && call.name == "message" {
             if let Ok(rich_content) = RichContent::from_tool_value(&call.arguments) {
                 presented_content = Some(rich_content);
