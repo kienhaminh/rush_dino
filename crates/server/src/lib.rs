@@ -71,7 +71,7 @@ pub(crate) fn resolve_hmac_auth(
     let secret = credentials
         .api_secret
         .as_deref()
-        .filter(|s| !s.is_empty())
+        .filter(|s| !s.trim().is_empty())
         .ok_or_else(|| {
             AppError::Config(Box::new(figment::Error::from(
                 "security.hmac_auth_enabled is true but credentials.api_secret is not set; \
@@ -889,6 +889,32 @@ mod tests {
         };
         let result = resolve_hmac_auth(&config, &creds);
         assert!(result.is_err(), "must error when hmac_auth_enabled but no secret");
+    }
+
+    #[test]
+    fn hmac_auth_enabled_with_empty_string_secret_returns_err() {
+        use rushdino_common::{AppConfig, CredentialsConfig};
+        let mut config = AppConfig::default();
+        config.security.hmac_auth_enabled = true;
+        let creds = CredentialsConfig {
+            api_secret: Some("".to_owned()),
+            ..CredentialsConfig::default()
+        };
+        let result = resolve_hmac_auth(&config, &creds);
+        assert!(result.is_err(), "empty string secret must not be accepted");
+    }
+
+    #[test]
+    fn hmac_auth_enabled_with_whitespace_secret_returns_err() {
+        use rushdino_common::{AppConfig, CredentialsConfig};
+        let mut config = AppConfig::default();
+        config.security.hmac_auth_enabled = true;
+        let creds = CredentialsConfig {
+            api_secret: Some("   ".to_owned()),
+            ..CredentialsConfig::default()
+        };
+        let result = resolve_hmac_auth(&config, &creds);
+        assert!(result.is_err(), "whitespace-only secret must not be accepted");
     }
 
     #[test]
