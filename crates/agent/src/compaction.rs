@@ -143,6 +143,20 @@ pub async fn compact_messages(
     result
 }
 
+/// Truncate `s` to at most `max_bytes` bytes, ensuring the result ends on a
+/// valid UTF-8 character boundary. Never panics on multi-byte characters.
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+    // Walk backward from max_bytes to find the last valid char boundary.
+    let mut end = max_bytes;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 async fn summarize_history(provider: &Provider, messages: &[Message]) -> Result<String> {
     let mut history = String::new();
     for msg in messages {
@@ -153,7 +167,7 @@ async fn summarize_history(provider: &Provider, messages: &[Message]) -> Result<
             Role::Tool => "Tool result",
         };
         let snippet = if msg.content.len() > 2_000 {
-            format!("{}…(truncated)", &msg.content[..2_000])
+            format!("{}…(truncated)", safe_truncate(&msg.content, 2_000))
         } else {
             msg.content.clone()
         };
@@ -190,7 +204,7 @@ async fn summarize_history(provider: &Provider, messages: &[Message]) -> Result<
 mod tests {
     use rushdino_common::models::{Message, Role};
 
-    use super::{group_indices, needs_compaction};
+    use super::{group_indices, needs_compaction, safe_truncate};
 
     fn msg(role: Role, content: &str) -> Message {
         Message::new(uuid::Uuid::new_v4().to_string(), role, content)
@@ -240,5 +254,30 @@ mod tests {
         let groups = group_indices(&messages);
         // System, User, [Assistant+Tool], User
         assert_eq!(groups, vec![(0, 1), (1, 2), (2, 4), (4, 5)]);
+    }
+
+    #[test]
+    fn safe_truncate_multibyte_does_not_panic() {
+        // Each CJK char is 3 bytes. "你好" repeated 400 times = 2400 bytes.
+        let long_cjk = "你好".repeat(400);
+        assert!(long_cjk.len() > 2_000);
+        // Must not panic:
+        let result = safe_truncate(&long_cjk, 2_000);
+        // Must be valid UTF-8 (no partial char):
+        assert!(std::str::from_utf8(result.as_bytes()).is_ok());
+        assert!(result.len() <= 2_000);
+    }
+
+    #[test]
+    fn safe_truncate_ascii_within_limit_unchanged() {
+        let s = "hello world";
+        assert_eq!(safe_truncate(s, 2_000), s);
+    }
+
+    #[test]
+    fn safe_truncate_ascii_over_limit_cut_at_boundary() {
+        let s = "a".repeat(3_000);
+        let result = safe_truncate(&s, 2_000);
+        assert_eq!(result.len(), 2_000);
     }
 }
