@@ -16,7 +16,15 @@ pub async fn sql_query(pool: &AnyPool, sql: &str) -> Result<Value> {
 
 /// Execute a DML statement (INSERT/UPDATE/DELETE) and return the number of
 /// affected rows.
-pub async fn sql_execute(pool: &AnyPool, sql: &str) -> Result<u64> {
+///
+/// Returns `Err` if `read_only` is true — callers must pass the `read_only`
+/// flag from the owning `SqlDatabaseSource`.
+pub async fn sql_execute(pool: &AnyPool, sql: &str, read_only: bool) -> Result<u64> {
+    if read_only {
+        return Err(AppError::Validation(
+            "cannot execute a write statement on a read-only data source".to_owned(),
+        ));
+    }
     let result = sqlx::query(sql)
         .execute(pool)
         .await

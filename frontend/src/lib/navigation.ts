@@ -52,7 +52,7 @@ export const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'workflows', label: 'Workflows', icon: GitBranch, href: '/workflows', matchPrefix: '/workflows', advancedOnly: true },
       { id: 'skills', label: 'Skills', icon: Zap, href: '/skills', matchPrefix: '/skills', advancedOnly: true },
       { id: 'knowledge-graph', label: 'Knowledge Graph', icon: Database, href: '/knowledge-graph', matchPrefix: '/knowledge-graph', advancedOnly: true, hidden: true },
-      { id: 'messages', label: 'Messages', icon: Mail, href: '/messages', matchPrefix: '/messages', advancedOnly: true, hidden: true },
+      { id: 'messages', label: 'Messages', icon: Mail, href: '/messages', matchPrefix: '/messages', advancedOnly: true },
     ],
   },
   {

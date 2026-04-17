@@ -5164,6 +5164,7 @@ dependencies = [
  "axum",
  "bytes",
  "chrono",
+ "figment",
  "futures",
  "hex",
  "reqwest 0.12.28",

@@ -89,6 +89,11 @@ impl DataSourceRegistry {
         self.sql_sources.iter().find(|s| s.name == name)
     }
 
+    /// Returns the SQL source with the given name, or `None` if not found.
+    pub fn get_sql_source(&self, name: &str) -> Option<&SqlDatabaseSource> {
+        self.sql_sources.iter().find(|s| s.name == name)
+    }
+
     /// Return `(name, description)` pairs for all registered knowledge graphs.
     pub fn kg_summary(&self) -> Vec<(String, String)> {
         self.kg_sources
