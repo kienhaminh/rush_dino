@@ -93,6 +93,11 @@ pub struct SecurityConfig {
     /// Allowed root paths for document/file operations (path traversal guard).
     /// Defaults to the `data_dir` configured in `AppConfig`.
     pub allowed_read_roots: Vec<PathBuf>,
+    /// CIDR ranges of trusted reverse proxies whose X-Forwarded-For header is
+    /// honored for rate limiting. Empty list (default) means X-Forwarded-For
+    /// is never trusted — the raw TCP peer address is always used.
+    #[serde(default)]
+    pub trusted_proxies: Vec<String>,
 }
 
 impl Default for SecurityConfig {
@@ -109,6 +114,7 @@ impl Default for SecurityConfig {
             dashboard_auth_enabled: false,
             allowed_external_hosts: Vec::new(),
             allowed_read_roots: Vec::new(),
+            trusted_proxies: Vec::new(),
         }
     }
 }

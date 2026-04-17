@@ -557,6 +557,8 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
   // Chat state (persists across navigation)
   const [chatState, dispatchChat] = useReducer(chatReducer, INITIAL_CHAT_STATE);
   const { items, isStreaming, historyLoaded } = chatState;
+  const historyLoadedRef = useRef(historyLoaded);
+  historyLoadedRef.current = historyLoaded;
 
   // Streaming refs
   const streamingConvIdRef = useRef<string | null>(null);
@@ -642,7 +644,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
     socket.onopen = () => {
       reconnectRef.current = 0;
       setIsConnected(true);
-      if (historyLoaded && !rehydratingRef.current) {
+      if (historyLoadedRef.current && !rehydratingRef.current) {
         rehydratingRef.current = true;
         void fetchConversation(MAIN_SESSION_ID)
           .then((detail) => {
@@ -684,7 +686,7 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         bumpDelegateRevision: () => setDelegateItemsRevision((n) => n + 1),
       });
     };
-  }, [historyLoaded, replaceAssistantItem, resetFromConversationDetail]);
+  }, [replaceAssistantItem, resetFromConversationDetail]);
 
   // -------------------------------------------------------------------------
   // Lifecycle

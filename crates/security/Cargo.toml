@@ -19,7 +19,7 @@ governor = "0.6"
 ipnet = "2.9"
 regex = "1"
 url.workspace = true
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1", features = ["sync", "time", "net"] }
 chrono = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true

@@ -51,7 +51,7 @@ impl AnthropicProvider {
         let model = request.model.take().unwrap_or_else(|| self.model.clone());
         let body = to_anthropic_body(request, model, false, self.is_oauth());
 
-        tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic chat request");
+        tracing::debug!(model = %body["model"].as_str().unwrap_or("unknown"), "anthropic chat request");
 
         let response = self
             .authenticate(self.client.post("https://api.anthropic.com/v1/messages"))
@@ -120,7 +120,7 @@ impl AnthropicProvider {
         let model = request.model.clone().unwrap_or_else(|| self.model.clone());
         let body = to_anthropic_body(request, model, true, self.is_oauth());
 
-        tracing::debug!(body = %serde_json::to_string_pretty(&body).unwrap_or_default(), "anthropic stream_chat request");
+        tracing::debug!(model = %body["model"].as_str().unwrap_or("unknown"), "anthropic stream_chat request");
 
         let response = self
             .authenticate(self.client.post("https://api.anthropic.com/v1/messages"))
@@ -236,18 +236,9 @@ impl AnthropicProvider {
                             if let Some(partial) =
                                 value.pointer("/delta/partial_json").and_then(Value::as_str)
                             {
-                                // Find the pending tool whose content_block index matches.
-                                // Anthropic uses a global content block index; tool blocks
-                                // start after any text blocks so we track by insertion order.
-                                if let Some(tool) = pending_tools.last_mut() {
-                                    // Re-use the arguments field as a raw JSON string buffer.
-                                    if let Some(s) = tool.arguments.as_str() {
-                                        tool.arguments = json!(format!("{s}{partial}"));
-                                    } else {
-                                        tool.arguments = json!(partial);
-                                    }
-                                    let _ = index; // index verified via insertion order
-                                }
+                                // Route by the Anthropic content block index so that
+                                // interleaved tool calls each accumulate their own JSON.
+                                append_tool_partial(&mut pending_tools, index, partial);
                             }
                         }
                         "content_block_stop" => {
@@ -319,6 +310,19 @@ impl AnthropicProvider {
         });
 
         Ok(rx)
+    }
+}
+
+/// Append `partial` JSON string to the tool at position `index` in `pending_tools`.
+/// Uses the Anthropic content block index rather than always targeting the last entry,
+/// ensuring interleaved tool calls each accumulate their own JSON arguments correctly.
+fn append_tool_partial(pending_tools: &mut [ToolCall], index: usize, partial: &str) {
+    if let Some(tool) = pending_tools.get_mut(index) {
+        if let Some(s) = tool.arguments.as_str() {
+            tool.arguments = serde_json::json!(format!("{s}{partial}"));
+        } else {
+            tool.arguments = serde_json::json!(partial);
+        }
     }
 }
 
@@ -468,4 +472,32 @@ fn parse_anthropic_usage(payload: &Value) -> Option<Usage> {
         completion_tokens: output,
         total_tokens: input + output,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rushdino_common::models::ToolCall;
+    use serde_json::json;
+
+    #[test]
+    fn append_tool_partial_routes_by_index() {
+        // Two pending tool calls
+        let mut tools: Vec<ToolCall> = vec![
+            ToolCall { id: "t1".into(), name: "tool_a".into(), arguments: json!("") },
+            ToolCall { id: "t2".into(), name: "tool_b".into(), arguments: json!("") },
+        ];
+
+        // index=0 → tool_a gets partial `{"k`
+        append_tool_partial(&mut tools, 0, r#"{"k"#);
+        // index=1 → tool_b gets partial `{"x`
+        append_tool_partial(&mut tools, 1, r#"{"x"#);
+        // index=0 → tool_a gets closing `":1}`
+        append_tool_partial(&mut tools, 0, r#"":1}"#);
+        // index=1 → tool_b gets closing `":2}`
+        append_tool_partial(&mut tools, 1, r#"":2}"#);
+
+        assert_eq!(tools[0].arguments.as_str().unwrap(), r#"{"k":1}"#);
+        assert_eq!(tools[1].arguments.as_str().unwrap(), r#"{"x":2}"#);
+    }
 }

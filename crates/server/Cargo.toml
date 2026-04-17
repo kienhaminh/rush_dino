@@ -17,6 +17,7 @@ async-trait.workspace = true
 arc-swap.workspace = true
 figment.workspace = true
 hex.workspace = true
+ipnet = { workspace = true }
 sha2.workspace = true
 axum.workspace = true
 chrono.workspace = true

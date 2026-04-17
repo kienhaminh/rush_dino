@@ -136,6 +136,48 @@ pub fn validate_url(raw: &str, allowed_hosts: &[String]) -> Result<Url, Validati
     Ok(url)
 }
 
+/// Async variant of [`validate_url`] that resolves hostnames via DNS and applies
+/// the SSRF IP blocklist to all returned addresses.
+///
+/// Use this for tool execution paths where the URL may contain a hostname
+/// (the common production case). The synchronous `validate_url` only blocks
+/// bare IPs and is advisory for hostnames.
+pub async fn validate_url_async(
+    raw: &str,
+    allowed_hosts: &[String],
+) -> Result<url::Url, ValidationError> {
+    let url = url::Url::parse(raw).map_err(|_| ValidationError::SsrfUnresolvable)?;
+    let host = url.host_str().unwrap_or("").to_owned();
+
+    // Check explicit allow-list first.
+    if !allowed_hosts.is_empty() && allowed_hosts.iter().any(|h| h == &host) {
+        return Ok(url);
+    }
+
+    // Bare IP — validate directly without DNS.
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        if is_blocked_ip(ip) {
+            return Err(ValidationError::SsrfBlocked(ip.to_string()));
+        }
+        return Ok(url);
+    }
+
+    // Hostname — resolve via DNS and check every returned address.
+    let port = url.port_or_known_default().unwrap_or(80);
+    let lookup_target = format!("{host}:{port}");
+    let addrs = tokio::net::lookup_host(&lookup_target)
+        .await
+        .map_err(|_| ValidationError::SsrfUnresolvable)?;
+
+    for addr in addrs {
+        if is_blocked_ip(addr.ip()) {
+            return Err(ValidationError::SsrfBlocked(addr.ip().to_string()));
+        }
+    }
+
+    Ok(url)
+}
+
 // ---------------------------------------------------------------------------
 // Prompt injection scanner
 // ---------------------------------------------------------------------------
@@ -294,5 +336,25 @@ mod tests {
         let big = vec![0u8; MAX_CHAT_BODY_BYTES + 1];
         assert!(check_body_size(big.len()).is_err());
         assert!(check_body_size(100).is_ok());
+    }
+
+    #[tokio::test]
+    async fn validate_url_async_blocks_localhost_hostname() {
+        // "localhost" resolves to 127.0.0.1 — must be blocked.
+        let result = validate_url_async("http://localhost/admin", &[]).await;
+        assert!(result.is_err(), "localhost must be blocked by SSRF check");
+    }
+
+    #[tokio::test]
+    async fn validate_url_async_allows_bare_public_ip() {
+        // A routable public IP should pass through.
+        let result = validate_url_async("http://8.8.8.8/dns", &[]).await;
+        assert!(result.is_ok(), "public IP should be allowed");
+    }
+
+    #[tokio::test]
+    async fn validate_url_async_blocks_bare_loopback_ip() {
+        let result = validate_url_async("http://127.0.0.1/secret", &[]).await;
+        assert!(result.is_err(), "127.0.0.1 must be blocked");
     }
 }

@@ -4,6 +4,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use ipnet::IpNet;
+
 use axum::{
     extract::{ConnectInfo, Request},
     http::{header, HeaderValue, StatusCode},
@@ -216,7 +218,14 @@ pub async fn rate_limit_middleware(
     };
 
     let path = request.uri().path().to_owned();
-    let ip = extract_ip(&request);
+    let trusted: Vec<IpNet> = state
+        .config()
+        .security
+        .trusted_proxies
+        .iter()
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let ip = extract_ip(&request, &trusted);
 
     let result = match path.as_str() {
         "/api/chat" => limiters.chat.check(ip),
@@ -248,25 +257,37 @@ pub async fn rate_limit_middleware(
     }
 }
 
-/// Extract the client IP from `X-Forwarded-For` (proxy mode) or the TCP peer address.
-fn extract_ip(request: &Request) -> IpAddr {
-    if let Some(forwarded) = request
-        .headers()
-        .get("X-Forwarded-For")
-        .and_then(|v| v.to_str().ok())
+/// Extract the client IP address, honoring `X-Forwarded-For` only when the
+/// TCP peer address belongs to a configured trusted proxy CIDR.
+///
+/// When `trusted_proxies` is empty (the default), `X-Forwarded-For` is never
+/// trusted and the raw TCP peer address is always returned — preventing IP
+/// spoofing by any client that can set arbitrary headers.
+fn extract_ip(request: &Request, trusted_proxies: &[IpNet]) -> IpAddr {
+    let peer_ip = request
+        .extensions()
+        .get::<ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.ip())
+        .unwrap_or_else(|| "0.0.0.0".parse().unwrap());
+
+    // Only honor XFF when the peer is a configured trusted proxy.
+    if !trusted_proxies.is_empty()
+        && trusted_proxies.iter().any(|net| net.contains(&peer_ip))
     {
-        if let Some(first) = forwarded.split(',').next() {
-            if let Ok(ip) = first.trim().parse::<IpAddr>() {
-                return ip;
+        if let Some(forwarded) = request
+            .headers()
+            .get("X-Forwarded-For")
+            .and_then(|v| v.to_str().ok())
+        {
+            if let Some(first) = forwarded.split(',').next() {
+                if let Ok(ip) = first.trim().parse::<IpAddr>() {
+                    return ip;
+                }
             }
         }
     }
 
-    request
-        .extensions()
-        .get::<ConnectInfo<std::net::SocketAddr>>()
-        .map(|ci| ci.0.ip())
-        .unwrap_or_else(|| "0.0.0.0".parse().unwrap())
+    peer_ip
 }
 
 #[derive(serde::Serialize)]

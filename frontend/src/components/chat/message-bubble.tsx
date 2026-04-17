@@ -32,7 +32,7 @@ export function MessageBubble({ message, onSelectContent }: MessageBubbleProps) 
         {isUser ? (
           <p className="m-0 whitespace-pre-wrap leading-relaxed">{message.content}</p>
         ) : (
-          <div className="prose prose-invert prose-sm max-w-none leading-relaxed prose-p:leading-relaxed prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/40">
+          <div className="prose dark:prose-invert prose-sm max-w-none leading-relaxed prose-p:leading-relaxed prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/40">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
           </div>
         )}
