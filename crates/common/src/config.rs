@@ -138,6 +138,12 @@ pub struct ChannelConfig {
     pub enabled: bool,
     #[serde(default)]
     pub access: ChannelAccessConfig,
+    /// If non-empty, only messages from these user IDs are forwarded to the agent.
+    /// Empty list means all non-bot users are allowed.
+    /// For Discord: use numeric user IDs as strings (e.g. "123456789012345678").
+    /// For Slack: use Slack user IDs (e.g. "U01234ABCDE").
+    #[serde(default)]
+    pub allowed_user_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -183,14 +189,17 @@ impl Default for GatewayConfig {
                     dm_policy: DmPolicy::Pairing,
                     allow_from: Vec::new(),
                 },
+                allowed_user_ids: Vec::new(),
             },
             slack: ChannelConfig {
                 enabled: false,
                 access: ChannelAccessConfig::default(),
+                allowed_user_ids: Vec::new(),
             },
             webchat: ChannelConfig {
                 enabled: true,
                 access: ChannelAccessConfig::default(),
+                allowed_user_ids: Vec::new(),
             },
             mobile: MobileGatewayConfig {
                 enabled: false,

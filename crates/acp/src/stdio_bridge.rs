@@ -13,6 +13,7 @@ use crate::protocol::types::AcpStdioEvent;
 pub struct AcpStdioBridge {
     stdin: Mutex<ChildStdin>,
     stdout: Mutex<BufReader<ChildStdout>>,
+    child: Mutex<Child>,
 }
 
 impl AcpStdioBridge {
@@ -29,7 +30,14 @@ impl AcpStdioBridge {
         Ok(Self {
             stdin: Mutex::new(stdin),
             stdout: Mutex::new(BufReader::new(stdout)),
+            child: Mutex::new(child),
         })
+    }
+
+    /// Kill the child process. Called when the ACP session is cancelled.
+    pub async fn kill(&self) {
+        let mut child = self.child.lock().await;
+        let _ = child.kill().await;
     }
 
     /// Serialize `request` as JSON and write a newline-terminated line to stdin.

@@ -372,9 +372,10 @@ async fn reconcile_discord_adapter(
 
     state
         .gateway_control
-        .upsert_adapter(
-            Arc::new(rushdino_discord::DiscordAdapter::new(token)) as Arc<dyn ChannelAdapter>
-        )
+        .upsert_adapter(Arc::new(rushdino_discord::DiscordAdapter::new_with_allowlist(
+            token,
+            config.gateway.discord.allowed_user_ids.clone(),
+        )) as Arc<dyn ChannelAdapter>)
         .await
 }
 
@@ -409,9 +410,11 @@ async fn reconcile_slack_adapter(
 
     state
         .gateway_control
-        .upsert_adapter(
-            Arc::new(rushdino_slack::SlackAdapter::new(bot, app)) as Arc<dyn ChannelAdapter>
-        )
+        .upsert_adapter(Arc::new(rushdino_slack::SlackAdapter::new_with_allowlist(
+            bot,
+            app,
+            config.gateway.slack.allowed_user_ids.clone(),
+        )) as Arc<dyn ChannelAdapter>)
         .await
 }
 

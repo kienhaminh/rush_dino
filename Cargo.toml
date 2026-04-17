@@ -3,6 +3,7 @@ members = [
   "crates/common",
   "crates/providers",
   "crates/agent",
+  "crates/acp",
   "crates/gateway",
   "crates/security",
   "crates/server",

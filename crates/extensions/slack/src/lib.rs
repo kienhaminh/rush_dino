@@ -21,6 +21,9 @@ use crate::rich_delivery::{plan_delivery, SlackDeliveryPlan};
 pub struct SlackAdapter {
     bot_token: String,
     app_token: String,
+    /// If non-empty, only messages from these Slack user IDs are forwarded.
+    /// Empty list means all non-bot users are allowed.
+    allowed_user_ids: Vec<String>,
 }
 
 impl SlackAdapter {
@@ -28,6 +31,22 @@ impl SlackAdapter {
         Self {
             bot_token: bot_token.into(),
             app_token: app_token.into(),
+            allowed_user_ids: Vec::new(),
+        }
+    }
+
+    /// Create a new adapter with an explicit user allowlist.
+    /// Only messages from the listed Slack user IDs will be forwarded.
+    /// An empty list allows all non-bot users (same as `new`).
+    pub fn new_with_allowlist(
+        bot_token: impl Into<String>,
+        app_token: impl Into<String>,
+        allowed_user_ids: Vec<String>,
+    ) -> Self {
+        Self {
+            bot_token: bot_token.into(),
+            app_token: app_token.into(),
+            allowed_user_ids,
         }
     }
 
@@ -117,6 +136,14 @@ impl SlackAdapter {
                     let channel = event["channel"].as_str().unwrap_or("").to_owned();
                     let actor_id = event["user"].as_str().unwrap_or("").to_owned();
                     let text = event["text"].as_str().unwrap_or("").to_owned();
+
+                    // If an allowlist is configured, ignore messages from unlisted users.
+                    if !self.allowed_user_ids.is_empty()
+                        && !self.allowed_user_ids.contains(&actor_id)
+                    {
+                        tracing::debug!(user_id = %actor_id, "slack: message from unlisted user ignored");
+                        continue;
+                    }
 
                     if !channel.is_empty() && !text.is_empty() {
                         let incoming = IncomingMessage {

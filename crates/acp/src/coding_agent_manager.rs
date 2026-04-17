@@ -185,7 +185,19 @@ impl CodingAgentManager {
         let mut final_text = String::new();
         loop {
             match bridge.next_event().await? {
-                None => break,
+                None => {
+                    // EOF without a Done event means the child crashed or closed
+                    // its stdout unexpectedly — treat as error, not completion.
+                    self.update_session_status(
+                        acp_session_id,
+                        AcpSessionStatus::Error,
+                        Some("acp child process closed stdout unexpectedly".to_owned()),
+                    )
+                    .await?;
+                    return Err(AppError::Agent(
+                        "acp child process closed stdout unexpectedly".to_owned(),
+                    ));
+                }
                 Some(AcpStdioEvent::Done { final_text: ft, .. }) => {
                     // Emit done event before breaking.
                     let _ = self.event_tx.send(AcpBroadcastEvent::Done {
@@ -234,8 +246,14 @@ impl CodingAgentManager {
         Ok(final_text)
     }
 
-    /// Mark a session as cancelled (does not kill the process).
+    /// Mark a session as cancelled and kill the child process.
     pub async fn cancel_session(&self, session_id: &str) -> Result<()> {
+        // Kill the child process so it stops emitting tokens after cancellation.
+        if let Some(session) = self.sessions.read().await.get(session_id) {
+            if let Some(bridge) = &session.bridge {
+                bridge.kill().await;
+            }
+        }
         self.update_session_status(
             session_id,
             AcpSessionStatus::Error,

@@ -231,7 +231,10 @@ pub async fn build_app(
                 .discord_bot_token
                 .as_deref()
                 .expect("discord token checked by should_register_gateway_adapter");
-            gateway.register(rushdino_discord::DiscordAdapter::new(token));
+            gateway.register(rushdino_discord::DiscordAdapter::new_with_allowlist(
+                token,
+                config.gateway.discord.allowed_user_ids.clone(),
+            ));
             tracing::info!("gateway: discord adapter registered");
             let _ = log_runtime(
                 &runtime_logs,
@@ -271,7 +274,11 @@ pub async fn build_app(
                 .as_deref()
                 .expect("slack app token checked by should_register_gateway_adapter")
                 .to_owned();
-            gateway.register(rushdino_slack::SlackAdapter::new(bot, app));
+            gateway.register(rushdino_slack::SlackAdapter::new_with_allowlist(
+                bot,
+                app,
+                config.gateway.slack.allowed_user_ids.clone(),
+            ));
             tracing::info!("gateway: slack adapter registered");
             let _ = log_runtime(
                 &runtime_logs,

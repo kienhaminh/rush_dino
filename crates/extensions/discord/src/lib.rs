@@ -23,6 +23,9 @@ use crate::rich_delivery::{plan_delivery, DiscordDeliveryPlan};
 struct DiscordHandler {
     tx: mpsc::Sender<IncomingMessage>,
     lifecycle: AdapterLifecycleHandle,
+    /// If non-empty, only messages from these Discord user IDs (as strings) are
+    /// forwarded to the agent. Empty list means all non-bot users are allowed.
+    allowed_user_ids: Vec<String>,
 }
 
 #[async_trait]
@@ -30,6 +33,14 @@ impl EventHandler for DiscordHandler {
     async fn message(&self, _ctx: Context, msg: Message) {
         if msg.author.bot {
             return;
+        }
+        // If an allowlist is configured, ignore messages from unlisted users.
+        if !self.allowed_user_ids.is_empty() {
+            let uid = msg.author.id.get().to_string();
+            if !self.allowed_user_ids.contains(&uid) {
+                tracing::debug!(user_id = %uid, "discord: message from unlisted user ignored");
+                return;
+            }
         }
         let incoming = IncomingMessage {
             channel_id: "discord".to_owned(),
@@ -61,6 +72,9 @@ impl EventHandler for DiscordHandler {
 /// `sender_id` / `recipient` is the Discord channel_id (u64 as string).
 pub struct DiscordAdapter {
     token: String,
+    /// If non-empty, only messages from these Discord user IDs (as strings) are
+    /// forwarded to the agent. Empty list means all non-bot users are allowed.
+    allowed_user_ids: Vec<String>,
     /// Shared Http handle updated whenever the serenity client restarts.
     http: Arc<RwLock<Option<Arc<serenity::http::Http>>>>,
 }
@@ -69,6 +83,18 @@ impl DiscordAdapter {
     pub fn new(token: impl Into<String>) -> Self {
         Self {
             token: token.into(),
+            allowed_user_ids: Vec::new(),
+            http: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Create a new adapter with an explicit user allowlist.
+    /// Only messages from the listed Discord user IDs will be forwarded.
+    /// An empty list allows all non-bot users (same as `new`).
+    pub fn new_with_allowlist(token: impl Into<String>, allowed_user_ids: Vec<String>) -> Self {
+        Self {
+            token: token.into(),
+            allowed_user_ids,
             http: Arc::new(RwLock::new(None)),
         }
     }
@@ -100,6 +126,7 @@ impl ChannelAdapter for DiscordAdapter {
             .event_handler(DiscordHandler {
                 tx: context.inbound_tx,
                 lifecycle: context.lifecycle.clone(),
+                allowed_user_ids: self.allowed_user_ids.clone(),
             })
             .await
             .map_err(|e| rushdino_common::AppError::Agent(format!("discord client build: {e}")))?;
