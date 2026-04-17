@@ -123,6 +123,7 @@ pub struct RunSnapshot {
     pub abort_requested: bool,
     pub policy: RunPolicySnapshot,
     pub error: Option<String>,
+    pub trace_id: Option<String>,
     pub created_at: String,
     pub started_at: Option<String>,
     pub completed_at: Option<String>,

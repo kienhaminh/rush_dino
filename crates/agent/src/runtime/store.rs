@@ -27,6 +27,7 @@ pub struct NewRunRecord {
     pub fallback_profile_id: Option<String>,
     pub queue_position: Option<i64>,
     pub policy: RunPolicySnapshot,
+    pub trace_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -122,13 +123,13 @@ impl RunStore {
               session_id, conversation_id, workflow_id, title, input_text,
               output_text, provider, model, fallback_profile_id, queue_position, active_tool,
               policy_decision, approval_state, sandbox_state, effective_scope, reason, error,
-              abort_requested, created_at, started_at, completed_at, updated_at
+              abort_requested, trace_id, created_at, started_at, completed_at, updated_at
             ) VALUES (
               ?1, ?2, ?3, ?4, ?5, ?6, ?7,
               ?8, ?9, ?10, ?11, ?12,
               NULL, ?13, ?14, ?15, ?16, NULL,
               ?17, ?18, ?19, ?20, ?21, NULL,
-              0, ?22, NULL, NULL, ?22
+              0, ?22, ?23, NULL, NULL, ?23
             )
             "#,
         )
@@ -153,6 +154,7 @@ impl RunStore {
         .bind(&new_run.policy.sandbox_state)
         .bind(&new_run.policy.effective_scope)
         .bind(&new_run.policy.reason)
+        .bind(&new_run.trace_id)
         .bind(&now)
         .execute(self.pool.as_ref())
         .await?;
@@ -178,7 +180,7 @@ impl RunStore {
               session_id, conversation_id, workflow_id, title, input_text,
               output_text, provider, model, fallback_profile_id, queue_position, active_tool,
               policy_decision, approval_state, sandbox_state, effective_scope, reason, error,
-              abort_requested, created_at, started_at, completed_at, updated_at
+              abort_requested, trace_id, created_at, started_at, completed_at, updated_at
             FROM runtime_runs
             WHERE id = ?1
             "#,
@@ -198,7 +200,7 @@ impl RunStore {
               session_id, conversation_id, workflow_id, title, input_text,
               output_text, provider, model, fallback_profile_id, queue_position, active_tool,
               policy_decision, approval_state, sandbox_state, effective_scope, reason, error,
-              abort_requested, created_at, started_at, completed_at, updated_at
+              abort_requested, trace_id, created_at, started_at, completed_at, updated_at
             FROM runtime_runs
             WHERE (?1 IS NULL OR kind = ?1)
               AND (?2 IS NULL OR state = ?2)
@@ -423,11 +425,49 @@ fn map_run_row(row: sqlx::sqlite::SqliteRow) -> Result<RunSnapshot> {
             reason: row.get("reason"),
         },
         error: row.get("error"),
+        trace_id: row.try_get("trace_id").ok(),
         created_at: row.get("created_at"),
         started_at: row.get("started_at"),
         completed_at: row.get("completed_at"),
         updated_at: row.get("updated_at"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rushdino_common::db::run_migrations;
+    use sqlx::SqlitePool;
+
+    #[tokio::test]
+    async fn insert_run_persists_trace_id() {
+        let pool = SqlitePool::connect(":memory:").await.expect("memory db");
+        run_migrations(&pool).await.expect("migrations");
+        let store = RunStore::new(Arc::new(pool));
+
+        let trace_id = Uuid::new_v4().to_string();
+
+        let record = NewRunRecord {
+            id: Uuid::new_v4().to_string(),
+            kind: RunKind::Assistant,
+            state: RunState::Queued,
+            origin: RunOriginMetadata::default(),
+            session_id: Some("session-test".to_owned()),
+            conversation_id: Some("conv-test".to_owned()),
+            workflow_id: None,
+            title: "Test Run".to_owned(),
+            input_text: Some("test input".to_owned()),
+            provider: "openai".to_owned(),
+            model: "gpt-5".to_owned(),
+            fallback_profile_id: None,
+            queue_position: None,
+            policy: RunPolicySnapshot::default(),
+            trace_id: Some(trace_id.clone()),
+        };
+
+        let snapshot = store.insert_run(record).await.expect("insert run");
+        assert_eq!(snapshot.trace_id, Some(trace_id));
+    }
 }
 
 fn map_event_row(row: sqlx::sqlite::SqliteRow) -> Result<RunEventRecord> {
