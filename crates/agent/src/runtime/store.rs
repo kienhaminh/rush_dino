@@ -425,7 +425,7 @@ fn map_run_row(row: sqlx::sqlite::SqliteRow) -> Result<RunSnapshot> {
             reason: row.get("reason"),
         },
         error: row.get("error"),
-        trace_id: row.try_get("trace_id").ok(),
+        trace_id: row.get("trace_id"),
         created_at: row.get("created_at"),
         started_at: row.get("started_at"),
         completed_at: row.get("completed_at"),
