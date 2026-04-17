@@ -43,8 +43,16 @@ pub fn cors_layer(config: &AppConfig) -> CorsLayer {
         .collect();
 
     if parsed.is_empty() {
-        tracing::warn!("cors: no valid allowed_origins configured; using permissive fallback");
-        return CorsLayer::permissive();
+        tracing::error!(
+            "cors: allowed_origins is non-empty but all entries failed to parse as valid \
+             HTTP origin headers — falling back to localhost-only policy. \
+             Fix the values in security.allowed_origins."
+        );
+        let localhost: HeaderValue = "http://localhost:3000".parse().expect("valid origin");
+        return CorsLayer::new()
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any)
+            .allow_origin(localhost);
     }
 
     CorsLayer::new()
