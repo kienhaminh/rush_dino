@@ -79,12 +79,38 @@ pub async fn patch_config(
     Ok(Json(result))
 }
 
-/// GET /api/credentials — return CredentialsConfig as JSON (including telegram_bot_token).
+/// Serialize credentials with all secret-valued fields replaced by `REDACTED`.
+/// This prevents raw API keys and tokens from leaking through the GET endpoint.
+pub(super) fn mask_credentials_for_response(creds: &CredentialsConfig) -> serde_json::Value {
+    let mut value = serde_json::to_value(creds)
+        .unwrap_or_else(|_| serde_json::Value::Object(Default::default()));
+    let secret_fields = [
+        "openai_api_key",
+        "anthropic_api_key",
+        "brave_api_key",
+        "gemini_api_key",
+        "telegram_bot_token",
+        "discord_bot_token",
+        "slack_bot_token",
+        "slack_app_token",
+        "api_secret",
+    ];
+    if let serde_json::Value::Object(ref mut map) = value {
+        for field in &secret_fields {
+            if let Some(v) = map.get_mut(*field) {
+                if !v.is_null() {
+                    *v = serde_json::Value::String(REDACTED.to_owned());
+                }
+            }
+        }
+    }
+    value
+}
+
+/// GET /api/credentials — return CredentialsConfig with all secret fields masked as "***".
 pub async fn get_credentials(State(state): State<AppState>) -> Result<Json<Value>> {
     let creds = CredentialsConfig::load_from_path(&state.credentials_path)?;
-    let value = serde_json::to_value(&creds)
-        .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
-    Ok(Json(value))
+    Ok(Json(mask_credentials_for_response(&creds)))
 }
 
 /// PATCH /api/credentials — merge patch, skipping any field whose value is "***".

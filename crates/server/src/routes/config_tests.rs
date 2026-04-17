@@ -4,7 +4,8 @@ use super::{
     execution_runtime_reload_required_from_config,
     execution_runtime_reload_required_from_credentials,
     gateway_runtime_reload_required_from_config,
-    gateway_runtime_reload_required_from_credentials, validate_security_config,
+    gateway_runtime_reload_required_from_credentials, mask_credentials_for_response,
+    validate_security_config,
 };
 
 #[test]
@@ -100,6 +101,41 @@ fn security_validation_rejects_dashboard_auth_with_hmac() {
         error.to_string().contains("dashboard auth"),
         "error should mention dashboard auth conflict"
     );
+}
+
+#[test]
+fn get_credentials_response_masks_all_secret_fields() {
+    use serde_json::Value;
+
+    let creds = CredentialsConfig {
+        openai_api_key: Some("sk-real-openai".to_owned()),
+        anthropic_api_key: Some("sk-ant-real".to_owned()),
+        brave_api_key: Some("brave-real".to_owned()),
+        gemini_api_key: Some("gemini-real".to_owned()),
+        telegram_bot_token: Some("12345:real-token".to_owned()),
+        discord_bot_token: Some("discord-real".to_owned()),
+        slack_bot_token: Some("slack-bot-real".to_owned()),
+        slack_app_token: Some("slack-app-real".to_owned()),
+        api_secret: Some("deadbeef".to_owned()),
+        ..CredentialsConfig::default()
+    };
+
+    let masked = mask_credentials_for_response(&creds);
+
+    let check = |field: &str| {
+        let v = masked.get(field).and_then(Value::as_str).unwrap_or("");
+        assert_eq!(v, "***", "field {field} should be masked");
+    };
+
+    check("openai_api_key");
+    check("anthropic_api_key");
+    check("brave_api_key");
+    check("gemini_api_key");
+    check("telegram_bot_token");
+    check("discord_bot_token");
+    check("slack_bot_token");
+    check("slack_app_token");
+    check("api_secret");
 }
 
 #[test]
