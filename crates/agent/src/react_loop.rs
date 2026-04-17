@@ -25,6 +25,18 @@ use crate::{
     tool_registry::{SessionToolContext, ToolRegistry},
 };
 
+/// Timing data for a single tool execution, returned from the react loop for persistence.
+#[derive(Debug, Clone)]
+pub struct ToolTimingRecord {
+    /// The tool call ID — used as message_id in tool_logs (matches the Tool role message id).
+    pub tool_call_id: String,
+    pub tool_name: String,
+    pub arguments: serde_json::Value,
+    pub result: String,
+    pub is_error: bool,
+    pub duration_ms: i64,
+}
+
 /// Compute the minimum taint level for tool arguments based on the conversation messages.
 ///
 /// Any user message makes the baseline at least `UserInput`, because the LLM's tool calls
@@ -59,11 +71,12 @@ pub async fn run_react_loop(
     mut messages: Vec<Message>,
     config: &AgentConfig,
     event_tx: Option<mpsc::Sender<StreamingEvent>>,
-) -> Result<(ChatResponse, Vec<Message>)> {
+) -> Result<(ChatResponse, Vec<Message>, Vec<ToolTimingRecord>)> {
     let mut last = None;
     let mut total_usage: Option<Usage> = None;
     let mut last_presented_content: Option<RichContent> = None;
     let mut call_counts: HashMap<String, usize> = HashMap::new();
+    let mut all_timing: Vec<ToolTimingRecord> = Vec::new();
 
     for _ in 0..config.max_iterations {
         if needs_compaction(&messages, config.max_context_tokens) {
@@ -87,7 +100,7 @@ pub async fn run_react_loop(
             };
             messages.push(assistant_message);
             response.usage = total_usage.clone();
-            return Ok((response, messages));
+            return Ok((response, messages, all_timing));
         }
 
         let assistant_message = Message {
@@ -97,7 +110,7 @@ pub async fn run_react_loop(
         messages.push(assistant_message);
 
         let base_taint = compute_base_taint(&messages);
-        if let Some(rich_content) = append_tool_outputs(
+        let (rich_content, timing) = append_tool_outputs(
             &mut messages,
             registry.clone(),
             response.tool_calls.clone(),
@@ -105,9 +118,10 @@ pub async fn run_react_loop(
             event_tx.as_ref(),
             &mut call_counts,
         )
-        .await
-        {
-            last_presented_content = Some(rich_content);
+        .await;
+        all_timing.extend(timing);
+        if let Some(rc) = rich_content {
+            last_presented_content = Some(rc);
         }
 
         last = Some(response);
@@ -143,7 +157,7 @@ pub async fn run_react_loop(
         thinking: None,
         created_at: Utc::now(),
     });
-    Ok((response, messages))
+    Ok((response, messages, all_timing))
 }
 
 pub async fn run_react_loop_streaming(
@@ -153,11 +167,12 @@ pub async fn run_react_loop_streaming(
     mut messages: Vec<Message>,
     config: &AgentConfig,
     event_tx: mpsc::Sender<StreamingEvent>,
-) -> Result<(ChatResponse, Vec<Message>)> {
+) -> Result<(ChatResponse, Vec<Message>, Vec<ToolTimingRecord>)> {
     let mut last = None;
     let mut total_usage: Option<Usage> = None;
     let mut last_presented_content: Option<RichContent> = None;
     let mut call_counts: HashMap<String, usize> = HashMap::new();
+    let mut all_timing: Vec<ToolTimingRecord> = Vec::new();
 
     for _ in 0..config.max_iterations {
         if needs_compaction(&messages, config.max_context_tokens) {
@@ -245,7 +260,7 @@ pub async fn run_react_loop_streaming(
                     thinking_delta: None,
                 }))
                 .await;
-            return Ok((final_response, messages));
+            return Ok((final_response, messages, all_timing));
         }
 
         let response = ChatResponse {
@@ -267,7 +282,7 @@ pub async fn run_react_loop_streaming(
         });
 
         let base_taint = compute_base_taint(&messages);
-        if let Some(rich_content) = append_tool_outputs(
+        let (rich_content, timing) = append_tool_outputs(
             &mut messages,
             registry.clone(),
             response.tool_calls.clone(),
@@ -275,9 +290,10 @@ pub async fn run_react_loop_streaming(
             Some(&event_tx),
             &mut call_counts,
         )
-        .await
-        {
-            last_presented_content = Some(rich_content);
+        .await;
+        all_timing.extend(timing);
+        if let Some(rc) = rich_content {
+            last_presented_content = Some(rc);
         }
         last = Some(response);
 
@@ -357,7 +373,7 @@ pub async fn run_react_loop_streaming(
             thinking_delta: None,
         }))
         .await;
-    Ok((final_response, messages))
+    Ok((final_response, messages, all_timing))
 }
 
 fn finalize_response_content(response: &mut ChatResponse, presented_content: Option<RichContent>) {
@@ -510,7 +526,7 @@ mod tests {
         registry.register(PresentMessageTool::new());
 
         let mut messages = Vec::new();
-        let rich_content = append_tool_outputs(
+        let (rich_content, _timing) = append_tool_outputs(
             &mut messages,
             Arc::new(registry),
             vec![
@@ -547,8 +563,8 @@ mod tests {
             None,
             &mut HashMap::new(),
         )
-        .await
-        .expect("present_message should capture the last rich payload");
+        .await;
+        let rich_content = rich_content.expect("present_message should capture the last rich payload");
 
         assert_eq!(rich_content.fallback_text, "Second");
         assert_eq!(messages.len(), 2);
@@ -563,7 +579,7 @@ async fn append_tool_outputs(
     base_taint: TaintLevel,
     event_tx: Option<&mpsc::Sender<StreamingEvent>>,
     call_counts: &mut HashMap<String, usize>,
-) -> Option<RichContent> {
+) -> (Option<RichContent>, Vec<ToolTimingRecord>) {
     // Pre-check rate limits and split calls into allowed vs rate-limited.
     let mut rate_limited: Vec<(ToolCall, String)> = Vec::new();
     let mut allowed: Vec<ToolCall> = Vec::new();
@@ -697,6 +713,7 @@ async fn append_tool_outputs(
     });
 
     let mut presented_content = None;
+    let mut timing_records: Vec<ToolTimingRecord> = Vec::new();
 
     // Append rate-limited tool results first.
     for (call, msg) in &rate_limited {
@@ -716,15 +733,20 @@ async fn append_tool_outputs(
                 })
                 .await;
         }
-        messages.push(Message::new(
-            call.id.clone(),
-            Role::Tool,
-            format!("[tool_error:{}] {msg}", call.name),
-        ));
+        let error_payload = format!("[tool_error:{}] {msg}", call.name);
+        timing_records.push(ToolTimingRecord {
+            tool_call_id: call.id.clone(),
+            tool_name: call.name.clone(),
+            arguments: call.arguments.clone(),
+            result: error_payload.clone(),
+            is_error: true,
+            duration_ms: 0,
+        });
+        messages.push(Message::new(call.id.clone(), Role::Tool, error_payload));
     }
 
     // Append normally executed tool results.
-    for (call, output, is_error, _duration_ms) in join_all(futures).await {
+    for (call, output, is_error, duration_ms) in join_all(futures).await {
         if !is_error && call.name == "message" {
             if let Ok(rich_content) = RichContent::from_tool_value(&call.arguments) {
                 presented_content = Some(rich_content);
@@ -735,8 +757,16 @@ async fn append_tool_outputs(
         } else {
             output
         };
+        timing_records.push(ToolTimingRecord {
+            tool_call_id: call.id.clone(),
+            tool_name: call.name.clone(),
+            arguments: call.arguments.clone(),
+            result: payload.clone(),
+            is_error,
+            duration_ms,
+        });
         messages.push(Message::new(call.id.clone(), Role::Tool, payload));
     }
 
-    presented_content
+    (presented_content, timing_records)
 }

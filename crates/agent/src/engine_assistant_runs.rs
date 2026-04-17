@@ -457,7 +457,7 @@ impl crate::engine::AgentEngine {
             .await
         };
 
-        let (response, all_messages) = result?;
+        let (response, all_messages, _timing) = result?;
         let _ = forwarder.await;
         self.persist_assistant_turn(
             conversation_id.as_str(),

@@ -329,7 +329,7 @@ impl Tool for DelegateToAgentTool {
             None
         };
 
-        let (response, all_messages) = with_tool_execution_context(
+        let (response, all_messages, _timing) = with_tool_execution_context(
             child_ctx,
             run_react_loop(
                 self.provider.clone(),

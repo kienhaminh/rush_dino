@@ -98,7 +98,7 @@ impl crate::engine::AgentEngine {
             thinking_level: self.effective_thinking_level(),
             ..self.config.clone()
         };
-        let (response, all_messages) = with_tool_execution_context(
+        let (response, all_messages, timing_records) = with_tool_execution_context(
             context,
             run_react_loop(
                 self.provider.clone(),
@@ -149,6 +149,28 @@ impl crate::engine::AgentEngine {
                     .await;
             }
         }
+
+        // Persist tool timing records after messages are saved (message_id FK must exist first).
+        for record in timing_records {
+            if let Err(e) = self.conversation
+                .save_tool_log(
+                    &record.tool_call_id,
+                    &rushdino_common::models::ToolCall {
+                        id: record.tool_call_id.clone(),
+                        name: record.tool_name.clone(),
+                        arguments: record.arguments,
+                    },
+                    &record.result,
+                    record.is_error,
+                    record.duration_ms,
+                    !record.is_error,
+                )
+                .await
+            {
+                tracing::warn!("failed to persist tool timing: {e}");
+            }
+        }
+
         self.persist_usage_metric(conversation_id, &response).await;
 
         Ok(response)
@@ -293,7 +315,7 @@ impl crate::engine::AgentEngine {
             thinking_level: self.effective_thinking_level(),
             ..self.config.clone()
         };
-        let (response, all_messages) = with_tool_execution_context(
+        let (response, all_messages, timing_records) = with_tool_execution_context(
             context,
             run_react_loop_streaming(
                 self.provider.clone(),
@@ -322,6 +344,28 @@ impl crate::engine::AgentEngine {
             self.maybe_ingest_message("conversation_message", message)
                 .await;
         }
+
+        // Persist tool timing records after messages are saved (message_id FK must exist first).
+        for record in timing_records {
+            if let Err(e) = self.conversation
+                .save_tool_log(
+                    &record.tool_call_id,
+                    &rushdino_common::models::ToolCall {
+                        id: record.tool_call_id.clone(),
+                        name: record.tool_name.clone(),
+                        arguments: record.arguments,
+                    },
+                    &record.result,
+                    record.is_error,
+                    record.duration_ms,
+                    !record.is_error,
+                )
+                .await
+            {
+                tracing::warn!("failed to persist tool timing: {e}");
+            }
+        }
+
         self.persist_usage_metric(&conversation_id, &response).await;
 
         Ok(conversation_id)
