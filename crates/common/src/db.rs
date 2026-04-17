@@ -54,3 +54,67 @@ pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     sqlx::migrate!("./migrations").run(pool).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::SqlitePool;
+
+    #[tokio::test]
+    async fn migration_002_applies_cleanly() {
+        let pool = SqlitePool::connect(":memory:").await.expect("in-memory db");
+        run_migrations(&pool).await.expect("migrations should apply");
+
+        // Verify new columns exist by inserting a row that uses them.
+        sqlx::query(
+            "INSERT INTO conversations (id, title, created_at, updated_at) \
+             VALUES ('c1', 'test', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert conversation");
+
+        sqlx::query(
+            "INSERT INTO runtime_runs \
+             (id, kind, state, title, provider, model, \
+              policy_decision, approval_state, sandbox_state, effective_scope, \
+              abort_requested, created_at, updated_at, trace_id) \
+             VALUES ('r1', 'assistant', 'queued', 'test', 'anthropic', 'claude-sonnet-4-6', \
+                     'allow', 'not_required', 'unknown', 'workspace', \
+                     0, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z', 'trace-uuid-here')",
+        )
+        .execute(&pool)
+        .await
+        .expect("runtime_runs should accept trace_id column");
+
+        // Verify tool_logs accepts duration_ms and success columns.
+        sqlx::query(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at) \
+             VALUES ('m1', 'c1', 'user', 'hello', '2026-01-01T00:00:00Z')",
+        )
+        .execute(&pool)
+        .await
+        .expect("insert message");
+
+        sqlx::query(
+            "INSERT INTO tool_logs \
+             (id, message_id, tool_name, arguments, result, is_error, created_at, duration_ms, success) \
+             VALUES ('t1', 'm1', 'bash', '{}', 'ok', 0, '2026-01-01T00:00:00Z', 42, 1)",
+        )
+        .execute(&pool)
+        .await
+        .expect("tool_logs should accept duration_ms and success columns");
+
+        // Verify usage_metrics accepts ttft_ms and total_ms columns.
+        sqlx::query(
+            "INSERT INTO usage_metrics \
+             (id, conversation_id, provider, model, auth_method, \
+              prompt_tokens, completion_tokens, total_tokens, created_at, ttft_ms, total_ms) \
+             VALUES ('u1', 'c1', 'anthropic', 'claude-sonnet-4-6', 'apikey', \
+                     100, 50, 150, '2026-01-01T00:00:00Z', 312, 1850)",
+        )
+        .execute(&pool)
+        .await
+        .expect("usage_metrics should accept ttft_ms and total_ms columns");
+    }
+}
