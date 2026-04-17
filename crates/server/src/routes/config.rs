@@ -81,10 +81,20 @@ pub async fn patch_config(
 
 /// Serialize credentials with all secret-valued fields replaced by `REDACTED`.
 /// This prevents raw API keys and tokens from leaking through the GET endpoint.
+///
+/// Top-level secret fields masked: `openai_api_key`, `anthropic_api_key`, `brave_api_key`,
+/// `gemini_api_key`, `telegram_bot_token`, `discord_bot_token`, `slack_bot_token`,
+/// `slack_app_token`, `api_secret`.
+///
+/// Nested `profiles` secrets masked: each `ProfileSecrets` entry may contain
+/// `api_key`, `access_token`, and `refresh_token` — all masked here.
+/// (`token_expires_at` is a timestamp integer, not a secret, so it is left unmasked.)
 pub(super) fn mask_credentials_for_response(creds: &CredentialsConfig) -> serde_json::Value {
     let mut value = serde_json::to_value(creds)
         .unwrap_or_else(|_| serde_json::Value::Object(Default::default()));
-    let secret_fields = [
+
+    // Top-level secret string fields.
+    let top_level_secret_fields = [
         "openai_api_key",
         "anthropic_api_key",
         "brave_api_key",
@@ -95,11 +105,30 @@ pub(super) fn mask_credentials_for_response(creds: &CredentialsConfig) -> serde_
         "slack_app_token",
         "api_secret",
     ];
+    // Per-profile secret fields inside ProfileSecrets.
+    let profile_secret_fields = ["api_key", "access_token", "refresh_token"];
+
     if let serde_json::Value::Object(ref mut map) = value {
-        for field in &secret_fields {
+        // Mask top-level secrets.
+        for field in &top_level_secret_fields {
             if let Some(v) = map.get_mut(*field) {
                 if !v.is_null() {
                     *v = serde_json::Value::String(REDACTED.to_owned());
+                }
+            }
+        }
+
+        // Mask secrets nested inside `profiles: HashMap<String, ProfileSecrets>`.
+        if let Some(serde_json::Value::Object(ref mut profiles_map)) = map.get_mut("profiles") {
+            for profile_entry in profiles_map.values_mut() {
+                if let serde_json::Value::Object(ref mut profile) = profile_entry {
+                    for field in &profile_secret_fields {
+                        if let Some(v) = profile.get_mut(*field) {
+                            if !v.is_null() {
+                                *v = serde_json::Value::String(REDACTED.to_owned());
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -147,9 +176,7 @@ pub async fn patch_credentials(
         .await?;
     }
 
-    let result = serde_json::to_value(&updated)
-        .map_err(|e| AppError::Validation(format!("serialization error: {e}")))?;
-    Ok(Json(result))
+    Ok(Json(mask_credentials_for_response(&updated)))
 }
 
 // ---------------------------------------------------------------------------
