@@ -93,6 +93,12 @@ pub struct ChatResponse {
     pub rich_content: Option<RichContent>,
     pub usage: Option<Usage>,
     pub finish_reason: String,
+    /// Wall-clock milliseconds for the entire provider call. Set by each provider after response completes.
+    #[serde(default)]
+    pub total_ms: Option<i64>,
+    /// Milliseconds from request sent to first token received (streaming only).
+    #[serde(default)]
+    pub ttft_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,6 +110,12 @@ pub struct ChatChunk {
     pub usage: Option<Usage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_delta: Option<String>,
+    /// Wall-clock milliseconds for the entire provider call (set on the final done chunk).
+    #[serde(default)]
+    pub total_ms: Option<i64>,
+    /// Milliseconds from request sent to first token received (set on the final done chunk, streaming only).
+    #[serde(default)]
+    pub ttft_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

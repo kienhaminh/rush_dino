@@ -439,6 +439,7 @@ impl crate::engine::AgentEngine {
                     messages,
                     &effective_config,
                     internal_tx,
+                    Some(run_id.as_str()),
                 ),
             )
             .await
@@ -452,12 +453,13 @@ impl crate::engine::AgentEngine {
                     messages,
                     &effective_config,
                     Some(internal_tx),
+                    Some(run_id.as_str()),
                 ),
             )
             .await
         };
 
-        let (response, all_messages) = result?;
+        let (response, all_messages, _timing) = result?;
         let _ = forwarder.await;
         self.persist_assistant_turn(
             conversation_id.as_str(),

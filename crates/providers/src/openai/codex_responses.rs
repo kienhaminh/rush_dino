@@ -90,6 +90,8 @@ impl CodexResponsesProvider {
             rich_content: None,
             usage,
             finish_reason: "stop".to_owned(),
+            ttft_ms: None,
+            total_ms: None,
         })
     }
 
@@ -192,6 +194,8 @@ impl CodexResponsesProvider {
                             done: true,
                             usage: None,
                             thinking_delta: None,
+                        total_ms: None,
+                        ttft_ms: None,
                         })
                         .await;
                     return;
@@ -208,6 +212,8 @@ impl CodexResponsesProvider {
                         done: true,
                         usage: None,
                         thinking_delta: None,
+                    total_ms: None,
+                    ttft_ms: None,
                     })
                     .await;
                 return;

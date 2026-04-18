@@ -288,9 +288,13 @@ impl ConversationManager {
         call: &ToolCall,
         result: &str,
         is_error: bool,
+        duration_ms: i64,
+        success: bool,
     ) -> Result<()> {
         sqlx::query(
-            "INSERT INTO tool_logs (id, message_id, tool_name, arguments, result, is_error, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO tool_logs \
+             (id, message_id, tool_name, arguments, result, is_error, created_at, duration_ms, success) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(Uuid::new_v4().to_string())
         .bind(message_id)
@@ -299,6 +303,8 @@ impl ConversationManager {
         .bind(result)
         .bind(i64::from(is_error))
         .bind(Utc::now().to_rfc3339())
+        .bind(duration_ms)
+        .bind(i64::from(success))
         .execute(self.pool.as_ref())
         .await?;
 
@@ -361,5 +367,57 @@ mod tests {
             .expect("archive conversation");
         assert!(archived.archived_at.is_some());
         assert_eq!(archived.conversation.id, conversation.id);
+    }
+
+    #[tokio::test]
+    async fn save_tool_log_records_duration_and_success() {
+        use rushdino_common::models::ToolCall;
+
+        let pool = SqlitePool::connect(":memory:").await.expect("memory db");
+        rushdino_common::db::run_migrations(&pool)
+            .await
+            .expect("run migrations");
+        let manager = ConversationManager::new(Arc::new(pool.clone()));
+
+        let conv = manager
+            .create_conversation("obs-test")
+            .await
+            .expect("create conversation");
+
+        let msg_id = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+        )
+        .bind(&msg_id)
+        .bind(&conv.id)
+        .bind("tool")
+        .bind("placeholder")
+        .bind(Utc::now().to_rfc3339())
+        .execute(&pool)
+        .await
+        .expect("insert message");
+
+        let call = ToolCall {
+            id: Uuid::new_v4().to_string(),
+            name: "bash".to_owned(),
+            arguments: serde_json::json!({"command": "echo hello"}),
+        };
+
+        manager
+            .save_tool_log(&msg_id, &call, "hello\n", false, 123, true)
+            .await
+            .expect("save_tool_log with duration and success");
+
+        let row = sqlx::query(
+            "SELECT duration_ms, success FROM tool_logs WHERE message_id = ?1",
+        )
+        .bind(&msg_id)
+        .fetch_one(&pool)
+        .await
+        .expect("fetch tool log");
+
+        assert_eq!(row.get::<Option<i64>, _>("duration_ms"), Some(123));
+        assert_eq!(row.get::<i64, _>("success"), 1);
     }
 }

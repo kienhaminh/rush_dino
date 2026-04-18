@@ -119,6 +119,7 @@ impl AgentRuntime {
                 fallback_profile_id: None,
                 queue_position: None,
                 policy: RunPolicySnapshot::default(),
+                trace_id: Some(Uuid::new_v4().to_string()),
             })
             .await?;
 
@@ -172,6 +173,7 @@ impl AgentRuntime {
                 fallback_profile_id: None,
                 queue_position: None,
                 policy: RunPolicySnapshot::default(),
+                trace_id: Some(Uuid::new_v4().to_string()),
             })
             .await?;
         self.notify_run(run_id).await;

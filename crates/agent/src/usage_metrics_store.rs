@@ -38,6 +38,7 @@ impl UsageMetricsStore {
         Self { pool }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn insert_usage(
         &self,
         conversation_id: &str,
@@ -45,13 +46,15 @@ impl UsageMetricsStore {
         model: &str,
         auth_method: &str,
         usage: &Usage,
+        ttft_ms: Option<i64>,
+        total_ms: Option<i64>,
     ) -> Result<()> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
         sqlx::query(
             "INSERT INTO usage_metrics \
-             (id, conversation_id, provider, model, auth_method, prompt_tokens, completion_tokens, total_tokens, created_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+             (id, conversation_id, provider, model, auth_method, prompt_tokens, completion_tokens, total_tokens, created_at, ttft_ms, total_ms) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(id)
         .bind(conversation_id)
@@ -62,6 +65,8 @@ impl UsageMetricsStore {
         .bind(i64::from(usage.completion_tokens))
         .bind(i64::from(usage.total_tokens))
         .bind(now)
+        .bind(ttft_ms)
+        .bind(total_ms)
         .execute(self.pool.as_ref())
         .await?;
         Ok(())
@@ -182,6 +187,8 @@ mod tests {
                 "gpt-4o",
                 "oauth",
                 &oauth_usage,
+                None,
+                None,
             )
             .await
             .expect("insert oauth usage");
@@ -200,6 +207,8 @@ mod tests {
                 "gpt-4o",
                 "apikey",
                 &apikey_usage,
+                None,
+                None,
             )
             .await
             .expect("insert apikey usage");
@@ -224,5 +233,58 @@ mod tests {
         assert_eq!(latest.provider, "openai");
         assert_eq!(latest.model, "gpt-4o");
         assert_eq!(latest.total_tokens, 30);
+    }
+
+    #[tokio::test]
+    async fn insert_usage_records_timing() {
+        use sqlx::Row;
+
+        let pool = SqlitePool::connect(":memory:").await.expect("connect sqlite");
+        run_migrations(&pool).await.expect("run migrations");
+
+        let store = UsageMetricsStore::new(Arc::new(pool.clone()));
+
+        // Insert a conversation first (FK requirement)
+        let conversation_id = "test-conv-timing";
+        let now = Utc::now().to_rfc3339();
+        sqlx::query(
+            "INSERT INTO conversations (id, title, created_at, updated_at, archived_at) VALUES (?1, ?2, ?3, ?4, NULL)",
+        )
+        .bind(conversation_id)
+        .bind("timing test")
+        .bind(&now)
+        .bind(&now)
+        .execute(&pool)
+        .await
+        .expect("insert conversation");
+
+        let usage = rushdino_providers::types::Usage {
+            prompt_tokens: 50,
+            completion_tokens: 20,
+            total_tokens: 70,
+        };
+        store
+            .insert_usage(
+                conversation_id,
+                "anthropic",
+                "claude-sonnet-4-6",
+                "apikey",
+                &usage,
+                Some(312),   // ttft_ms
+                Some(1850),  // total_ms
+            )
+            .await
+            .expect("insert usage with timing");
+
+        let row = sqlx::query(
+            "SELECT ttft_ms, total_ms FROM usage_metrics WHERE conversation_id = ?1",
+        )
+        .bind(conversation_id)
+        .fetch_one(&pool)
+        .await
+        .expect("fetch usage row");
+
+        assert_eq!(row.get::<Option<i64>, _>("ttft_ms"), Some(312));
+        assert_eq!(row.get::<Option<i64>, _>("total_ms"), Some(1850));
     }
 }

@@ -541,7 +541,7 @@ impl WorkflowRunner {
             .session_ctx
             .upgrade()
             .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
-        let (response, all_messages) = with_tool_execution_context(
+        let (response, all_messages, _timing) = with_tool_execution_context(
             tool_context,
             run_react_loop(
                 self.provider.clone(),
@@ -549,6 +549,7 @@ impl WorkflowRunner {
                 session_ctx,
                 messages,
                 &self.config,
+                None,
                 None,
             ),
         )

@@ -247,6 +247,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                             done: true,
                             usage: None,
                             thinking_delta: None,
+                        total_ms: None,
+                        ttft_ms: None,
                         })
                         .await;
                     return;
@@ -311,6 +313,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     done: false,
                                     usage: None,
                                     thinking_delta: None,
+                                total_ms: None,
+                                ttft_ms: None,
                                 })
                                 .await;
                         }
@@ -331,6 +335,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     done: false,
                                     usage: None,
                                     thinking_delta: None,
+                                total_ms: None,
+                                ttft_ms: None,
                                 })
                                 .await;
                         }
@@ -416,6 +422,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                             done: false,
                                             usage: None,
                                             thinking_delta: None,
+                                        total_ms: None,
+                                        ttft_ms: None,
                                         })
                                         .await;
                                 }
@@ -446,6 +454,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 done: true,
                                 usage,
                                 thinking_delta: None,
+                            total_ms: None,
+                            ttft_ms: None,
                             })
                             .await;
                         return;
@@ -468,6 +478,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 done: true,
                                 usage: None,
                                 thinking_delta: None,
+                            total_ms: None,
+                            ttft_ms: None,
                             })
                             .await;
                         return;
@@ -481,6 +493,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                 done: true,
                                 usage: None,
                                 thinking_delta: None,
+                            total_ms: None,
+                            ttft_ms: None,
                             })
                             .await;
                         return;
@@ -496,6 +510,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
                                     done: false,
                                     usage: None,
                                     thinking_delta: Some(text.to_owned()),
+                                total_ms: None,
+                                ttft_ms: None,
                                 })
                                 .await;
                         }
@@ -515,6 +531,8 @@ pub async fn process_responses_stream(response: Response, tx: mpsc::Sender<ChatC
             done: true,
             usage: None,
             thinking_delta: None,
+        total_ms: None,
+        ttft_ms: None,
         })
         .await;
 }

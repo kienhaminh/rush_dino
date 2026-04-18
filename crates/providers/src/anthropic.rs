@@ -53,6 +53,7 @@ impl AnthropicProvider {
 
         tracing::debug!(model = %body["model"].as_str().unwrap_or("unknown"), "anthropic chat request");
 
+        let call_start = std::time::Instant::now();
         let response = self
             .authenticate(self.client.post("https://api.anthropic.com/v1/messages"))
             .header("anthropic-version", "2023-06-01")
@@ -101,6 +102,7 @@ impl AnthropicProvider {
         }
 
         let usage = parse_anthropic_usage(&payload);
+        let total_ms = Some(call_start.elapsed().as_millis() as i64);
 
         Ok(ChatResponse {
             content,
@@ -112,6 +114,8 @@ impl AnthropicProvider {
                 .and_then(Value::as_str)
                 .unwrap_or("stop")
                 .to_owned(),
+            total_ms,
+            ttft_ms: None,
         })
     }
 
@@ -122,6 +126,7 @@ impl AnthropicProvider {
 
         tracing::debug!(model = %body["model"].as_str().unwrap_or("unknown"), "anthropic stream_chat request");
 
+        let call_start = std::time::Instant::now();
         let response = self
             .authenticate(self.client.post("https://api.anthropic.com/v1/messages"))
             .header("anthropic-version", "2023-06-01")
@@ -150,6 +155,8 @@ impl AnthropicProvider {
             let mut pending_tools: Vec<ToolCall> = Vec::new();
             let mut input_tokens: u32 = 0;
             let mut output_tokens: u32 = 0;
+            // Track time-to-first-token (ms from request sent to first text/tool delta received).
+            let mut ttft_ms: Option<i64> = None;
 
             while let Some(item) = stream.next().await {
                 let Ok(chunk) = item else {
@@ -208,6 +215,10 @@ impl AnthropicProvider {
                             // Text delta
                             if let Some(text) = value.pointer("/delta/text").and_then(Value::as_str)
                             {
+                                // Record time-to-first-text-token (thinking deltas are excluded intentionally).
+                                if ttft_ms.is_none() {
+                                    ttft_ms = Some(call_start.elapsed().as_millis() as i64);
+                                }
                                 let _ = tx
                                     .send(ChatChunk {
                                         delta: text.to_owned(),
@@ -215,6 +226,8 @@ impl AnthropicProvider {
                                         done: false,
                                         usage: None,
                                         thinking_delta: None,
+                                        total_ms: None,
+                                        ttft_ms: None,
                                     })
                                     .await;
                             }
@@ -229,6 +242,8 @@ impl AnthropicProvider {
                                         done: false,
                                         usage: None,
                                         thinking_delta: Some(thinking.to_owned()),
+                                        total_ms: None,
+                                        ttft_ms: None,
                                     })
                                     .await;
                             }
@@ -266,6 +281,8 @@ impl AnthropicProvider {
                                         done: false,
                                         usage: None,
                                         thinking_delta: None,
+                                        total_ms: None,
+                                        ttft_ms: None,
                                     })
                                     .await;
                             }
@@ -284,6 +301,8 @@ impl AnthropicProvider {
                         done: false,
                         usage: None,
                         thinking_delta: None,
+                        total_ms: None,
+                        ttft_ms: None,
                     })
                     .await;
             }
@@ -305,6 +324,8 @@ impl AnthropicProvider {
                     done: true,
                     usage: final_usage,
                     thinking_delta: None,
+                    total_ms: Some(call_start.elapsed().as_millis() as i64),
+                    ttft_ms,
                 })
                 .await;
         });
