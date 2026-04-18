@@ -71,6 +71,7 @@ pub async fn run_react_loop(
     mut messages: Vec<Message>,
     config: &AgentConfig,
     event_tx: Option<mpsc::Sender<StreamingEvent>>,
+    trace_id: Option<&str>,
 ) -> Result<(ChatResponse, Vec<Message>, Vec<ToolTimingRecord>)> {
     let mut last = None;
     let mut total_usage: Option<Usage> = None;
@@ -82,6 +83,15 @@ pub async fn run_react_loop(
         if needs_compaction(&messages, config.max_context_tokens) {
             messages = compact_messages(&provider, messages, config.max_context_tokens).await;
         }
+        // --- Context size log (observability) ---
+        let context_tokens_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+        tracing::info!(
+            trace_id = trace_id.unwrap_or("none"),
+            context_tokens_estimate = context_tokens_estimate,
+            message_count = messages.len(),
+            "llm_call_context_size"
+        );
+        // ----------------------------------------
         let response = provider
             .chat(build_chat_request(messages.clone(), &session_ctx, config))
             .await?;
@@ -140,6 +150,15 @@ pub async fn run_react_loop(
     let mut wrap_up_request = build_chat_request(messages.clone(), &session_ctx, config);
     wrap_up_request.tools = None; // force text response, no more tool calls
 
+    // --- Context size log (observability) ---
+    let context_tokens_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+    tracing::info!(
+        trace_id = trace_id.unwrap_or("none"),
+        context_tokens_estimate = context_tokens_estimate,
+        message_count = messages.len(),
+        "llm_call_context_size"
+    );
+    // ----------------------------------------
     let mut response = provider.chat(wrap_up_request).await?;
     let wrap_up_usage = response.usage.clone().unwrap_or_else(|| {
         estimate_turn_usage(&messages, &response.content, &[])
@@ -167,6 +186,7 @@ pub async fn run_react_loop_streaming(
     mut messages: Vec<Message>,
     config: &AgentConfig,
     event_tx: mpsc::Sender<StreamingEvent>,
+    trace_id: Option<&str>,
 ) -> Result<(ChatResponse, Vec<Message>, Vec<ToolTimingRecord>)> {
     let mut last = None;
     let mut total_usage: Option<Usage> = None;
@@ -178,6 +198,15 @@ pub async fn run_react_loop_streaming(
         if needs_compaction(&messages, config.max_context_tokens) {
             messages = compact_messages(&provider, messages, config.max_context_tokens).await;
         }
+        // --- Context size log (observability) ---
+        let context_tokens_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+        tracing::info!(
+            trace_id = trace_id.unwrap_or("none"),
+            context_tokens_estimate = context_tokens_estimate,
+            message_count = messages.len(),
+            "llm_call_context_size"
+        );
+        // ----------------------------------------
         let mut stream = provider
             .stream_chat(build_chat_request(messages.clone(), &session_ctx, config))
             .await?;
@@ -325,6 +354,15 @@ pub async fn run_react_loop_streaming(
     let mut wrap_up_request = build_chat_request(messages.clone(), &session_ctx, config);
     wrap_up_request.tools = None; // force text response, no more tool calls
 
+    // --- Context size log (observability) ---
+    let context_tokens_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+    tracing::info!(
+        trace_id = trace_id.unwrap_or("none"),
+        context_tokens_estimate = context_tokens_estimate,
+        message_count = messages.len(),
+        "llm_call_context_size"
+    );
+    // ----------------------------------------
     let mut stream = provider.stream_chat(wrap_up_request).await?;
     let mut content = String::new();
     let mut wrap_up_thinking = String::new();
@@ -483,6 +521,35 @@ mod tests {
         accumulate_usage, append_tool_outputs, estimate_turn_usage, Message, ToolCall, Usage,
     };
     use crate::{tool_registry::ToolRegistry, tools::present_message::PresentMessageTool};
+
+    #[test]
+    fn context_token_estimate_is_sum_of_message_char_counts_divided_by_4() {
+        use crate::context::estimate_tokens;
+
+        let messages = vec![
+            Message {
+                id: "1".to_owned(),
+                role: Role::System,
+                content: "a".repeat(400), // 400 chars → 100 tokens
+                tool_calls: None,
+                rich_content: None,
+                thinking: None,
+                created_at: Utc::now(),
+            },
+            Message {
+                id: "2".to_owned(),
+                role: Role::User,
+                content: "b".repeat(200), // 200 chars → 50 tokens
+                tool_calls: None,
+                rich_content: None,
+                thinking: None,
+                created_at: Utc::now(),
+            },
+        ];
+
+        let token_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+        assert_eq!(token_estimate, 150);
+    }
 
     #[test]
     fn accumulates_usage_across_iterations() {
