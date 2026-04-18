@@ -88,3 +88,5 @@ __tests__
 tasks/
 .gitnexus
 .superpowers
+# Local cargo config (machine-specific target-dir path)
+.cargo/

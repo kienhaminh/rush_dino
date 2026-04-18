@@ -14,7 +14,7 @@ members = [
   "crates/auth",
   "crates/knowledge-graph",
   "crates/skill-graph",
-  "crates/desktop-native",
+  "crates/desktop-app/src-tauri",
 ]
 resolver = "2"
 
