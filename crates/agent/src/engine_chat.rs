@@ -202,8 +202,10 @@ impl crate::engine::AgentEngine {
                     done: true,
                     usage: None,
                     thinking_delta: None,
-                    total_ms: None,
-                    ttft_ms: None,
+                    // Propagate timing so any downstream consumer reading the done chunk
+                    // gets accurate latency data rather than silently-zero values.
+                    total_ms: response.total_ms,
+                    ttft_ms: response.ttft_ms,
                 })
                 .await;
         });

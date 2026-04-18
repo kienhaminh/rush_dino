@@ -215,7 +215,7 @@ impl AnthropicProvider {
                             // Text delta
                             if let Some(text) = value.pointer("/delta/text").and_then(Value::as_str)
                             {
-                                // Record time-to-first-token on the first text delta.
+                                // Record time-to-first-text-token (thinking deltas are excluded intentionally).
                                 if ttft_ms.is_none() {
                                     ttft_ms = Some(call_start.elapsed().as_millis() as i64);
                                 }
