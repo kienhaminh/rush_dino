@@ -439,6 +439,7 @@ impl crate::engine::AgentEngine {
                     messages,
                     &effective_config,
                     internal_tx,
+                    Some(run_id.as_str()),
                 ),
             )
             .await
@@ -452,6 +453,7 @@ impl crate::engine::AgentEngine {
                     messages,
                     &effective_config,
                     Some(internal_tx),
+                    Some(run_id.as_str()),
                 ),
             )
             .await

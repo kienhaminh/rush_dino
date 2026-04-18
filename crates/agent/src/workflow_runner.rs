@@ -550,6 +550,7 @@ impl WorkflowRunner {
                 messages,
                 &self.config,
                 None,
+                None,
             ),
         )
         .await?;

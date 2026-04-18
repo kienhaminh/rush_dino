@@ -107,6 +107,7 @@ impl crate::engine::AgentEngine {
                 messages,
                 &effective_config,
                 None,
+                None,
             ),
         )
         .await?;
@@ -330,6 +331,7 @@ impl crate::engine::AgentEngine {
                 messages,
                 &effective_config,
                 internal_tx,
+                None,
             ),
         )
         .await?;

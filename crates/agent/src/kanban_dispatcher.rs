@@ -281,6 +281,7 @@ impl KanbanDispatcher {
                 messages,
                 &child_config,
                 None,
+                None,
             ),
         )
         .await?;

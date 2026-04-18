@@ -109,6 +109,7 @@ async fn run_session_turn(
             messages,
             &deps.config,
             None,
+            None,
         ),
     )
     .await?;

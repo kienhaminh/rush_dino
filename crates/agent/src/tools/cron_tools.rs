@@ -103,7 +103,7 @@ async fn run_agent_turn(ctx: AgentTurnCtx, conversation_id: &str, input: &str) -
     };
     let (response, all_messages, _timing) = with_tool_execution_context(
         tool_ctx,
-        run_react_loop(ctx.provider, registry, session_ctx, messages, &ctx.config, None),
+        run_react_loop(ctx.provider, registry, session_ctx, messages, &ctx.config, None, None),
     )
     .await?;
     for message in all_messages.iter().skip(old_len + 1) {

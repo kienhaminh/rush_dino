@@ -338,6 +338,7 @@ impl Tool for DelegateToAgentTool {
                 messages,
                 &child_config,
                 child_event_tx,
+                None,
             ),
         )
         .await?;
