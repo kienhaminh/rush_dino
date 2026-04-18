@@ -402,12 +402,16 @@ impl CompletionsProvider {
         let mut content = String::new();
         let mut tool_calls = Vec::new();
         let mut usage = None;
+        let mut ttft_ms = None;
+        let mut total_ms = None;
 
         while let Some(chunk) = rx.recv().await {
             content.push_str(&chunk.delta);
             tool_calls.extend(chunk.tool_calls);
             if chunk.done {
                 usage = chunk.usage;
+                ttft_ms = chunk.ttft_ms;
+                total_ms = chunk.total_ms;
                 break;
             }
         }
@@ -418,6 +422,8 @@ impl CompletionsProvider {
             rich_content: None,
             usage,
             finish_reason: "stop".to_owned(),
+            ttft_ms,
+            total_ms,
         })
     }
 
@@ -526,6 +532,7 @@ impl CompletionsProvider {
             }
         }
 
+        let call_start = std::time::Instant::now();
         tokio::spawn(async move {
             let mut req = client
                 .post(&url)
@@ -547,6 +554,8 @@ impl CompletionsProvider {
                             done: true,
                             usage: None,
                             thinking_delta: None,
+                            total_ms: None,
+                            ttft_ms: None,
                         })
                         .await;
                     return;
@@ -563,6 +572,8 @@ impl CompletionsProvider {
                         done: true,
                         usage: None,
                         thinking_delta: None,
+                        total_ms: None,
+                        ttft_ms: None,
                     })
                     .await;
                 return;
@@ -577,6 +588,8 @@ impl CompletionsProvider {
             let mut index_to_id: HashMap<String, String> = HashMap::new();
             // Usage captured from the usage SSE event (sent by OpenAI before [DONE] when include_usage=true)
             let mut pending_usage: Option<Usage> = None;
+            // Track time-to-first-token (ms from request sent to first text delta received).
+            let mut ttft_ms: Option<i64> = None;
 
             while let Some(item) = stream.next().await {
                 let Ok(chunk) = item else { break };
@@ -598,6 +611,8 @@ impl CompletionsProvider {
                                 done: true,
                                 usage: pending_usage,
                                 thinking_delta: None,
+                                total_ms: Some(call_start.elapsed().as_millis() as i64),
+                                ttft_ms,
                             })
                             .await;
                         return;
@@ -708,6 +723,10 @@ impl CompletionsProvider {
                     }
 
                     if !delta_text.is_empty() || !finished_tool_calls.is_empty() {
+                        // Record time-to-first-token on the first non-empty text delta.
+                        if ttft_ms.is_none() && !delta_text.is_empty() {
+                            ttft_ms = Some(call_start.elapsed().as_millis() as i64);
+                        }
                         let _ = tx
                             .send(ChatChunk {
                                 delta: delta_text,
@@ -715,6 +734,8 @@ impl CompletionsProvider {
                                 done: false,
                                 usage: None,
                                 thinking_delta: None,
+                                total_ms: None,
+                                ttft_ms: None,
                             })
                             .await;
                     }
@@ -733,6 +754,8 @@ impl CompletionsProvider {
                     done: true,
                     usage: pending_usage,
                     thinking_delta: None,
+                    total_ms: Some(call_start.elapsed().as_millis() as i64),
+                    ttft_ms,
                 })
                 .await;
         });

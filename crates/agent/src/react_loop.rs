@@ -186,6 +186,9 @@ pub async fn run_react_loop_streaming(
         let mut thinking = String::new();
         let mut tool_calls: Vec<ToolCall> = Vec::new();
         let mut emitted_text = false;
+        // Timing captured from the done chunk.
+        let mut stream_ttft_ms: Option<i64> = None;
+        let mut stream_total_ms: Option<i64> = None;
 
         while let Some(chunk) = stream.recv().await {
             if !chunk.tool_calls.is_empty() {
@@ -207,6 +210,8 @@ pub async fn run_react_loop_streaming(
                         done: false,
                         usage: None,
                         thinking_delta: Some(thinking_delta),
+                        total_ms: None,
+                        ttft_ms: None,
                     }))
                     .await;
             }
@@ -221,11 +226,15 @@ pub async fn run_react_loop_streaming(
                         done: false,
                         usage: None,
                         thinking_delta: None,
+                        total_ms: None,
+                        ttft_ms: None,
                     }))
                     .await;
             }
 
             if chunk.done {
+                stream_ttft_ms = chunk.ttft_ms;
+                stream_total_ms = chunk.total_ms;
                 break;
             }
         }
@@ -240,6 +249,8 @@ pub async fn run_react_loop_streaming(
                 rich_content: None,
                 usage: total_usage.clone(),
                 finish_reason: "stop".to_owned(),
+                ttft_ms: stream_ttft_ms,
+                total_ms: stream_total_ms,
             };
             finalize_response_content(&mut final_response, last_presented_content.take());
             messages.push(Message {
@@ -258,6 +269,8 @@ pub async fn run_react_loop_streaming(
                     done: true,
                     usage: None,
                     thinking_delta: None,
+                    total_ms: None,
+                    ttft_ms: None,
                 }))
                 .await;
             return Ok((final_response, messages, all_timing));
@@ -269,6 +282,8 @@ pub async fn run_react_loop_streaming(
             rich_content: None,
             usage: Some(iteration_usage),
             finish_reason: "tool_calls".to_owned(),
+            ttft_ms: stream_ttft_ms,
+            total_ms: stream_total_ms,
         };
 
         messages.push(Message {
@@ -313,6 +328,8 @@ pub async fn run_react_loop_streaming(
     let mut stream = provider.stream_chat(wrap_up_request).await?;
     let mut content = String::new();
     let mut wrap_up_thinking = String::new();
+    let mut wrap_up_ttft_ms: Option<i64> = None;
+    let mut wrap_up_total_ms: Option<i64> = None;
 
     while let Some(chunk) = stream.recv().await {
         if let Some(thinking_delta) = chunk.thinking_delta {
@@ -324,6 +341,8 @@ pub async fn run_react_loop_streaming(
                     done: false,
                     usage: None,
                     thinking_delta: Some(thinking_delta),
+                    total_ms: None,
+                    ttft_ms: None,
                 }))
                 .await;
         }
@@ -336,10 +355,14 @@ pub async fn run_react_loop_streaming(
                     done: false,
                     usage: None,
                     thinking_delta: None,
+                    total_ms: None,
+                    ttft_ms: None,
                 }))
                 .await;
         }
         if chunk.done {
+            wrap_up_ttft_ms = chunk.ttft_ms;
+            wrap_up_total_ms = chunk.total_ms;
             break;
         }
     }
@@ -353,6 +376,8 @@ pub async fn run_react_loop_streaming(
         rich_content: None,
         usage: total_usage.clone(),
         finish_reason: "stop".to_owned(),
+        ttft_ms: wrap_up_ttft_ms,
+        total_ms: wrap_up_total_ms,
     };
     finalize_response_content(&mut final_response, last_presented_content.take());
     messages.push(Message {
@@ -371,6 +396,8 @@ pub async fn run_react_loop_streaming(
             done: true,
             usage: None,
             thinking_delta: None,
+            total_ms: None,
+            ttft_ms: None,
         }))
         .await;
     Ok((final_response, messages, all_timing))

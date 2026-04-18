@@ -191,6 +191,8 @@ impl crate::engine::AgentEngine {
                     done: false,
                     usage: response.usage,
                     thinking_delta: None,
+                    total_ms: None,
+                    ttft_ms: None,
                 })
                 .await;
             let _ = tx
@@ -200,6 +202,8 @@ impl crate::engine::AgentEngine {
                     done: true,
                     usage: None,
                     thinking_delta: None,
+                    total_ms: None,
+                    ttft_ms: None,
                 })
                 .await;
         });

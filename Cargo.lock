@@ -4938,6 +4938,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "rushdino-acp"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures",
+ "rushdino-common",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "rushdino-agent"
 version = "0.1.0"
 dependencies = [
@@ -5167,6 +5183,7 @@ dependencies = [
  "figment",
  "futures",
  "hex",
+ "ipnet",
  "reqwest 0.12.28",
  "rushdino-agent",
  "rushdino-auth",

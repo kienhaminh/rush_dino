@@ -289,6 +289,8 @@ impl AgentEngine {
                 self.provider.model(),
                 auth_method_db,
                 usage,
+                response.ttft_ms,
+                response.total_ms,
             )
             .await
         {
