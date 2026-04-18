@@ -1,0 +1,163 @@
+/* RushDino desktop — design tokens
+ * Source: rushdino-design-system/project/colors_and_type.css
+ * Mood: dark terminal, teal accent, Geist sans / Geist Mono for code.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ── Brand palette (extracted from the RushDino dino logo) ─────────── */
+  --brand-navy:  #1a3a5c;
+  --brand-ocean: #1b70a0;
+  --brand-teal:  #1b9db8;
+  --brand-cyan:  #17c4d6;
+  --brand-mint:  #3dbe8a;
+  --brand-lime:  #82c840;
+  --brand-amber: #f5c118;
+  --brand-glow:  #f07830;
+  --brand-ice:   #e8f5fb;
+  --brand-dark:  #1a2e44;
+
+  /* ── Surface (dark) ───────────────────────────────────────────────── */
+  --ds-bg-base:     #080c10;
+  --ds-bg-side:     #0b1016;
+  --ds-bg-main:     #0d1117;
+  --ds-bg-surface:  #0d1117;
+  --ds-bg-card:     #111820;
+  --ds-bg-panel:    #111820;
+  --ds-bg-elevated: #161e28;
+  --ds-bg-overlay:  #1c2430;
+  --ds-bg-input:    rgba(22, 30, 40, 0.6);
+
+  /* ── Text ─────────────────────────────────────────────────────────── */
+  --ds-text-primary:   rgba(255, 255, 255, 0.92);
+  --ds-text-secondary: rgba(255, 255, 255, 0.65);
+  --ds-text-muted:     rgba(255, 255, 255, 0.55);
+  --ds-text-dim:       rgba(255, 255, 255, 0.32);
+  --ds-text-faint:     rgba(255, 255, 255, 0.15);
+
+  /* ── Borders ──────────────────────────────────────────────────────── */
+  --ds-border-subtle: rgba(255, 255, 255, 0.06);
+  --ds-border-base:   rgba(255, 255, 255, 0.08);
+  --ds-border-strong: rgba(255, 255, 255, 0.12);
+  --ds-border-line:   rgba(255, 255, 255, 0.07);
+
+  /* ── Teal scale (accents inside dark product) ─────────────────────── */
+  --ds-teal-950: #0a2e2c;
+  --ds-teal-800: #0e7a72;
+  --ds-teal-600: #0ea898;
+  --ds-teal-400: #22d3c8;
+  --ds-teal-300: #67e8e3;
+  --ds-teal-200: #a5f3ef;
+  --ds-teal-soft: rgba(34, 211, 200, 0.08);
+  --ds-teal-line: rgba(34, 211, 200, 0.25);
+
+  /* ── Semantic status ──────────────────────────────────────────────── */
+  --ds-success: #4ade80;
+  --ds-warning: #f5c118;
+  --ds-error:   #f87171;
+  --ds-info:    #60a5fa;
+  --ds-violet:  #a78bfa;
+
+  /* ── Glows ────────────────────────────────────────────────────────── */
+  --ds-glow-teal:  0 0 0 1px rgba(34, 211, 200, 0.12), 0 4px 20px rgba(0, 0, 0, 0.4);
+  --ds-glow-amber: 0 0 0 1px rgba(245, 158, 11, 0.15), 0 4px 20px rgba(0, 0, 0, 0.4);
+
+  /* ── Radii ────────────────────────────────────────────────────────── */
+  --ds-radius-sm:   4px;
+  --ds-radius-md:   8px;
+  --ds-radius-lg:   10px;
+  --ds-radius-xl:   14px;
+  --ds-radius-2xl:  22px;
+  --ds-radius-pill: 999px;
+
+  /* ── Motion ───────────────────────────────────────────────────────── */
+  --ease-cubic: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ── Typography ───────────────────────────────────────────────────── */
+  --font-sans: 'Geist', ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--ds-bg-main);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--ds-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background:
+    radial-gradient(1200px 600px at 20% 30%, rgba(34, 211, 200, 0.05) 0%, transparent 60%),
+    radial-gradient(900px 500px at 80% 80%, rgba(167, 139, 250, 0.04) 0%, transparent 60%),
+    var(--ds-bg-main);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(34, 211, 200, 0.35);
+  color: var(--ds-text-primary);
+}
+
+:focus-visible {
+  outline: 1.5px solid var(--ds-teal-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Overlay scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+textarea::placeholder,
+input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+code,
+kbd,
+pre {
+  font-family: var(--font-mono);
+}
+
+/* Shared agent-state keyframes */
+@keyframes rd-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+@keyframes rd-shimmer {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%      { opacity: 1;   transform: scale(1); }
+}
+@keyframes rd-blink {
+  50% { opacity: 0; }
+}
+@keyframes rd-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

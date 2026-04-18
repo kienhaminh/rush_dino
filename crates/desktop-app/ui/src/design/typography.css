@@ -1,0 +1,57 @@
+/* RushDino typography — Geist sans for UI, Geist Mono for code/terminal. */
+
+.rd-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(34, 211, 200, 0.7);
+  margin: 0 0 12px;
+}
+
+.rd-title {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  color: var(--ds-text-primary);
+  margin: 0;
+}
+
+.rd-title-lg {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: clamp(28px, 3vw, 40px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ds-text-primary);
+  margin: 0;
+}
+
+.rd-lede {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ds-text-secondary);
+  max-width: 58ch;
+}
+
+.rd-section-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ds-text-dim);
+}
+
+.rd-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
+}
+
+.rd-tnum {
+  font-feature-settings: 'tnum' 1;
+}

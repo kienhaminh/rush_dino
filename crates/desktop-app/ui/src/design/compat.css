@@ -1,0 +1,102 @@
+/* Compatibility layer: aliases the legacy "Obsidian & Copper" variable
+ * names AND typography class names used by the existing component CSS onto
+ * the new `--ds-*` design-system tokens + `.rd-*` classes defined in
+ * tokens.css and typography.css. Imported AFTER both in main.tsx.
+ *
+ * When a component is touched it should be migrated to `--ds-*` /
+ * `.rd-*` directly; this layer exists to avoid a single atomic rewrite.
+ */
+
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────────────── */
+  --night-0: var(--ds-bg-base);
+  --night-1: var(--ds-bg-main);
+  --night-2: var(--ds-bg-card);
+  --night-3: var(--ds-bg-elevated);
+
+  /* ── Text ─────────────────────────────────────────────────────────── */
+  --ice-100: var(--ds-text-primary);
+  --ice-400: var(--ds-text-secondary);
+  --ice-600: var(--ds-text-dim);
+
+  /* ── Accent: teal replaces copper but keeps the old variable names ── */
+  --copper-300: var(--ds-teal-300);
+  --copper-500: var(--ds-teal-400);
+  --copper-700: var(--ds-teal-600);
+
+  /* ── Semantic signals ─────────────────────────────────────────────── */
+  --ember: var(--ds-error);
+  --viridian: var(--ds-success);
+  --lithium: var(--ds-warning);
+
+  /* ── Glass ────────────────────────────────────────────────────────── */
+  --glass-tint: var(--ds-teal-soft);
+  --glass-stroke: var(--ds-border-base);
+  --glass-highlight: var(--ds-border-strong);
+
+  /* ── Iridescent hairline — teal → violet → cyan → amber ──────────── */
+  --iridescent: linear-gradient(
+    90deg,
+    var(--ds-teal-400),
+    var(--ds-violet),
+    var(--brand-cyan),
+    var(--brand-amber)
+  );
+
+  /* ── Geometry ─────────────────────────────────────────────────────── */
+  --radius-sm: var(--ds-radius-sm);
+  --radius-md: var(--ds-radius-md);
+  --radius-lg: var(--ds-radius-lg);
+  --radius-xl: var(--ds-radius-xl);
+
+  /* ── Shadows ──────────────────────────────────────────────────────── */
+  --shadow-lift: 0 24px 48px -24px rgba(0, 0, 0, 0.6);
+  --shadow-inset-top: inset 0 1px 0 var(--ds-border-strong);
+}
+
+/* ── Legacy typography classes ───────────────────────────────────────── */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(34, 211, 200, 0.7);
+  margin: 0 0 12px;
+}
+
+.display-title {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: clamp(32px, 3.4vw, 48px);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ds-text-primary);
+  margin: 0;
+}
+
+.lede {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ds-text-secondary);
+  max-width: 58ch;
+  margin: 16px 0 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Metric numerals shift from Fraunces serif to Geist Mono with tabular
+ * figures — still distinct, but coherent with the new design direction. */
+.metric-numeral {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ds-text-primary);
+  letter-spacing: -0.01em;
+}

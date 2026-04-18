@@ -1,0 +1,239 @@
+/* Light-mode theme tokens.
+ *
+ * Cascade rules:
+ *   • no `data-theme` on <html> AND system prefers light → media query applies
+ *   • `data-theme="light"` → explicit light, always applies
+ *   • `data-theme="dark"`  → explicit dark; the media-query rule below is
+ *     gated on `:root:not([data-theme="dark"])` so it's ignored here
+ *
+ * Dark tokens remain the baseline in tokens.css; this file only overrides.
+ */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    /* Surfaces */
+    --ds-bg-base:     #ffffff;
+    --ds-bg-side:     #f4f6f9;
+    --ds-bg-main:     #ffffff;
+    --ds-bg-surface:  #ffffff;
+    --ds-bg-card:     #ffffff;
+    --ds-bg-panel:    #f8fafc;
+    --ds-bg-elevated: #ffffff;
+    --ds-bg-overlay:  #eef1f5;
+    --ds-bg-input:    rgba(15, 23, 42, 0.03);
+
+    /* Text */
+    --ds-text-primary:   rgba(15, 23, 42, 0.92);
+    --ds-text-secondary: rgba(15, 23, 42, 0.65);
+    --ds-text-muted:     rgba(15, 23, 42, 0.55);
+    --ds-text-dim:       rgba(15, 23, 42, 0.38);
+    --ds-text-faint:     rgba(15, 23, 42, 0.15);
+
+    /* Borders */
+    --ds-border-subtle: rgba(15, 23, 42, 0.06);
+    --ds-border-base:   rgba(15, 23, 42, 0.09);
+    --ds-border-strong: rgba(15, 23, 42, 0.13);
+    --ds-border-line:   rgba(15, 23, 42, 0.09);
+
+    /* Teal accents — brighter hues hold up better against white */
+    --ds-teal-400: #0ea898;
+    --ds-teal-300: #22d3c8;
+    --ds-teal-200: #67e8e3;
+    --ds-teal-soft: rgba(14, 168, 152, 0.1);
+    --ds-teal-line: rgba(14, 168, 152, 0.32);
+
+    /* Status colors — darkened slightly for legibility on white */
+    --ds-success: #16a34a;
+    --ds-warning: #d97706;
+    --ds-error:   #dc2626;
+    --ds-info:    #2563eb;
+    --ds-violet:  #7c3aed;
+
+    color-scheme: light;
+  }
+}
+
+:root[data-theme='light'] {
+  --ds-bg-base:     #ffffff;
+  --ds-bg-side:     #f4f6f9;
+  --ds-bg-main:     #ffffff;
+  --ds-bg-surface:  #ffffff;
+  --ds-bg-card:     #ffffff;
+  --ds-bg-panel:    #f8fafc;
+  --ds-bg-elevated: #ffffff;
+  --ds-bg-overlay:  #eef1f5;
+  --ds-bg-input:    rgba(15, 23, 42, 0.03);
+
+  --ds-text-primary:   rgba(15, 23, 42, 0.92);
+  --ds-text-secondary: rgba(15, 23, 42, 0.65);
+  --ds-text-muted:     rgba(15, 23, 42, 0.55);
+  --ds-text-dim:       rgba(15, 23, 42, 0.38);
+  --ds-text-faint:     rgba(15, 23, 42, 0.15);
+
+  --ds-border-subtle: rgba(15, 23, 42, 0.06);
+  --ds-border-base:   rgba(15, 23, 42, 0.09);
+  --ds-border-strong: rgba(15, 23, 42, 0.13);
+  --ds-border-line:   rgba(15, 23, 42, 0.09);
+
+  --ds-teal-400: #0ea898;
+  --ds-teal-300: #22d3c8;
+  --ds-teal-200: #67e8e3;
+  --ds-teal-soft: rgba(14, 168, 152, 0.1);
+  --ds-teal-line: rgba(14, 168, 152, 0.32);
+
+  --ds-success: #16a34a;
+  --ds-warning: #d97706;
+  --ds-error:   #dc2626;
+  --ds-info:    #2563eb;
+  --ds-violet:  #7c3aed;
+
+  color-scheme: light;
+}
+
+/* Body ambient gradient — bumped opacity so the teal/violet haze stays
+ * visible on a white background. Scoped to light contexts only. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) body {
+    background:
+      radial-gradient(1200px 600px at 20% 30%, rgba(14, 168, 152, 0.07) 0%, transparent 60%),
+      radial-gradient(900px 500px at 80% 80%, rgba(124, 58, 237, 0.05) 0%, transparent 60%),
+      var(--ds-bg-main);
+  }
+}
+:root[data-theme='light'] body {
+  background:
+    radial-gradient(1200px 600px at 20% 30%, rgba(14, 168, 152, 0.07) 0%, transparent 60%),
+    radial-gradient(900px 500px at 80% 80%, rgba(124, 58, 237, 0.05) 0%, transparent 60%),
+    var(--ds-bg-main);
+}
+
+/* A few hover / stroke utilities were hard-coded to white in the original
+ * dark-only CSS. These scoped overrides swap them to black tints when the
+ * app is rendering light. Without these, hover states read as "nothing
+ * happened" on a white background. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --ds-hover-soft: rgba(15, 23, 42, 0.04);
+    --ds-hover-strong: rgba(15, 23, 42, 0.07);
+    --ds-overlay-kbd: rgba(15, 23, 42, 0.05);
+  }
+  :root:not([data-theme='dark']) .sidebar-row:hover,
+  :root:not([data-theme='dark']) .rail-item:hover,
+  :root:not([data-theme='dark']) .nav-item:hover,
+  :root:not([data-theme='dark']) .session-row:hover,
+  :root:not([data-theme='dark']) .cron-row:hover,
+  :root:not([data-theme='dark']) .log-line:hover,
+  :root:not([data-theme='dark']) .sidebar__footer-btn:hover,
+  :root:not([data-theme='dark']) .sidebar__footer-icon:hover,
+  :root:not([data-theme='dark']) .sidebar__icon-btn:hover,
+  :root:not([data-theme='dark']) .composer__icon:hover,
+  :root:not([data-theme='dark']) .chat-topbar__edit:hover,
+  :root:not([data-theme='dark']) .btn--ghost:hover:not(:disabled),
+  :root:not([data-theme='dark']) .settings-nav__item:hover {
+    background: rgba(15, 23, 42, 0.04);
+  }
+  :root:not([data-theme='dark']) .sidebar-kbd,
+  :root:not([data-theme='dark']) .composer__send-kbd {
+    background: rgba(15, 23, 42, 0.05);
+    color: rgba(15, 23, 42, 0.7);
+  }
+  :root:not([data-theme='dark']) .palette-overlay {
+    background: rgba(255, 255, 255, 0.55);
+  }
+}
+
+:root[data-theme='light'] .sidebar-row:hover,
+:root[data-theme='light'] .rail-item:hover,
+:root[data-theme='light'] .nav-item:hover,
+:root[data-theme='light'] .session-row:hover,
+:root[data-theme='light'] .cron-row:hover,
+:root[data-theme='light'] .log-line:hover,
+:root[data-theme='light'] .sidebar__footer-btn:hover,
+:root[data-theme='light'] .sidebar__footer-icon:hover,
+:root[data-theme='light'] .sidebar__icon-btn:hover,
+:root[data-theme='light'] .composer__icon:hover,
+:root[data-theme='light'] .chat-topbar__edit:hover,
+:root[data-theme='light'] .btn--ghost:hover:not(:disabled),
+:root[data-theme='light'] .settings-nav__item:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+:root[data-theme='light'] .sidebar-kbd,
+:root[data-theme='light'] .composer__send-kbd {
+  background: rgba(15, 23, 42, 0.05);
+  color: rgba(15, 23, 42, 0.7);
+}
+:root[data-theme='light'] .palette-overlay {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Theme switcher UI ───────────────────────────────────────────────── */
+.theme-switcher {
+  padding: 22px 26px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.theme-switcher__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.theme-switcher__title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ds-text-primary);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.theme-switcher__hint {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--ds-text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.theme-switcher__options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--ds-border-strong);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-bg-panel);
+  color: var(--ds-text-muted);
+  cursor: pointer;
+  transition: border-color 140ms var(--ease-cubic), background 140ms var(--ease-cubic),
+    color 140ms var(--ease-cubic);
+  font-family: var(--font-sans);
+  text-align: left;
+}
+.theme-option:hover {
+  color: var(--ds-text-primary);
+  border-color: var(--ds-teal-line);
+}
+.theme-option--active {
+  color: var(--ds-teal-400);
+  background: var(--ds-teal-soft);
+  border-color: var(--ds-teal-line);
+  box-shadow: 0 0 0 1px var(--ds-teal-line) inset;
+}
+.theme-option__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ds-text-primary);
+}
+.theme-option--active .theme-option__label { color: var(--ds-teal-400); }
+.theme-option__hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--ds-text-dim);
+  letter-spacing: 0.04em;
+}

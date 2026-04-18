@@ -1,0 +1,95 @@
+/* Skeleton primitives — consumed by src/components/Skeleton.tsx.
+ * Shimmer uses two tokens from the design system so both themes read
+ * as a quiet pulse (no harsh white flashes in dark mode). */
+
+.skeleton {
+  display: inline-block;
+  background: var(--ds-bg-panel);
+  background-image: linear-gradient(
+    90deg,
+    var(--ds-bg-panel) 0%,
+    var(--ds-bg-overlay) 40%,
+    var(--ds-bg-elevated) 50%,
+    var(--ds-bg-overlay) 60%,
+    var(--ds-bg-panel) 100%
+  );
+  background-size: 220% 100%;
+  animation: rd-skeleton-shimmer 1.6s ease-in-out infinite;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.skeleton--line { display: block; margin-top: 6px; }
+.skeleton--square { border-radius: 6px; }
+.skeleton--pill { border-radius: 999px; }
+
+@keyframes rd-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation-duration: 2.4s; }
+}
+
+/* ── Composite layouts ───────────────────────────────────────────────── */
+
+.skeleton-text { display: flex; flex-direction: column; gap: 6px; }
+
+.skeleton-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--ds-bg-card);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-md);
+}
+.skeleton-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+}
+.skeleton-row__body { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+
+.skeleton-kcard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--ds-bg-card);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-md);
+}
+.skeleton-kcard__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.skeleton-kcard__meta {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.skeleton-run {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--ds-bg-card);
+  border: 1px solid var(--ds-border-subtle);
+  border-radius: var(--ds-radius-md);
+}
+.skeleton-run__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
