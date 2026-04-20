@@ -427,6 +427,10 @@ function AddModelDialog({ onClose, onAdded }: { onClose: () => void; onAdded: ()
   const showApiKey = selectedProvider.providerKind !== 'ollama'
   const canOAuth =
     selectedProvider.providerKind === 'openai' || selectedProvider.providerKind === 'anthropic'
+  const requiresApiKey =
+    showApiKey &&
+    (selectedProvider.providerKind === 'openai' || selectedProvider.providerKind === 'anthropic') &&
+    authMode === 'apikey'
 
   const handleProviderChange = (id: ProviderSelection) => {
     const next = PROVIDERS.find((item) => item.id === id)
@@ -444,6 +448,10 @@ function AddModelDialog({ onClose, onAdded }: { onClose: () => void; onAdded: ()
       setFormError('Model ID is required.')
       return
     }
+    if (requiresApiKey && !apiKey.trim()) {
+      setFormError('API key is required for API-key profiles.')
+      return
+    }
 
     const providerKind =
       selectedProvider.providerKind ?? (protocol === 'Anthropic' ? 'anthropic' : 'openai')
@@ -456,7 +464,7 @@ function AddModelDialog({ onClose, onAdded }: { onClose: () => void; onAdded: ()
       default_model: trimmedModel,
       base_url: baseUrl.trim() || null,
       api_key:
-        showApiKey && (!canOAuth || authMode === 'apikey') ? apiKey.trim() || undefined : undefined,
+        requiresApiKey ? apiKey.trim() : undefined,
     }
 
     create.mutate(payload, {
@@ -545,7 +553,7 @@ function AddModelDialog({ onClose, onAdded }: { onClose: () => void; onAdded: ()
                   placeholder={
                     canOAuth && authMode === 'oauth'
                       ? 'Not needed for OAuth profiles'
-                      : 'Optional for now — you can add it later'
+                      : 'Required for API-key profiles'
                   }
                   value={apiKey}
                   onChange={(event) => setApiKey(event.target.value)}
@@ -624,7 +632,7 @@ function AddModelDialog({ onClose, onAdded }: { onClose: () => void; onAdded: ()
             type="button"
             className="ma-btn ma-btn--primary"
             onClick={handleAdd}
-            disabled={create.isPending || !modelId.trim()}
+            disabled={create.isPending || !modelId.trim() || (requiresApiKey && !apiKey.trim())}
           >
             {create.isPending ? 'Adding…' : 'Add'}
           </button>

@@ -358,7 +358,9 @@
   background: rgba(0, 0, 0, 0.05);
   color: var(--ds-text-primary);
 }
-:root[data-theme='dark'] .sidebar-floating-toggle:hover,
+:root[data-theme='dark'] .sidebar-floating-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) .sidebar-floating-toggle:hover {
     background: rgba(255, 255, 255, 0.06);

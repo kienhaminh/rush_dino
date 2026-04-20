@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   ShieldCheck,
@@ -35,6 +35,7 @@ import { FileText, X as XIcon } from 'lucide-react'
 export default function Chat() {
   const qc = useQueryClient()
   const { id: agentId } = useParams<{ id?: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const agentList = useQuery({
     queryKey: ['agents'],
     queryFn: listAgents,
@@ -62,12 +63,39 @@ export default function Chat() {
     queryFn: listConversations,
     staleTime: 30_000,
   })
+  const requestedConversationId = searchParams.get('conversation')
 
   useEffect(() => {
-    if (conversationId === null && conversations.data && conversations.data.length > 0) {
+    if (requestedConversationId && requestedConversationId !== conversationId) {
+      setConversationId(requestedConversationId)
+    }
+  }, [requestedConversationId, conversationId])
+
+  useEffect(() => {
+    if (
+      !requestedConversationId &&
+      conversationId === null &&
+      conversations.data &&
+      conversations.data.length > 0
+    ) {
       setConversationId(conversations.data[0]!.id)
     }
-  }, [conversations.data, conversationId])
+  }, [conversations.data, conversationId, requestedConversationId])
+
+  useEffect(() => {
+    if (agentId || !conversationId || requestedConversationId === conversationId) {
+      return
+    }
+    const next = new URLSearchParams(searchParams)
+    next.set('conversation', conversationId)
+    setSearchParams(next, { replace: true })
+  }, [
+    agentId,
+    conversationId,
+    requestedConversationId,
+    searchParams,
+    setSearchParams,
+  ])
 
   const detail = useQuery<ConversationDetail | null>({
     queryKey: ['conversation', conversationId],

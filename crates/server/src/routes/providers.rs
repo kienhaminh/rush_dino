@@ -74,6 +74,7 @@ pub async fn create_profile(
     Json(payload): Json<CreateProfileRequest>,
 ) -> Result<Json<ProviderProfile>> {
     tracing::info!("POST /api/profiles - creating profile: {}", payload.name);
+    validate_create_profile_request(&payload)?;
     let mut config = AppConfig::load_from_path(&state.config_path)?;
     let mut credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
 
@@ -109,6 +110,40 @@ pub async fn create_profile(
     let _ = crate::refresh_engine_provider(&state).await;
 
     Ok(Json(profile))
+}
+
+fn validate_create_profile_request(payload: &CreateProfileRequest) -> Result<()> {
+    if payload.default_model.trim().is_empty() {
+        return Err(AppError::Validation("default_model is required".to_owned()));
+    }
+
+    match payload.provider_kind {
+        Provider::Ollama => {
+            if payload.auth_method == AuthMethod::OAuth {
+                return Err(AppError::Validation(
+                    "ollama profiles do not support OAuth".to_owned(),
+                ));
+            }
+        }
+        Provider::OpenAI | Provider::Anthropic => match payload.auth_method {
+            AuthMethod::ApiKey => {
+                let api_key = payload.api_key.as_deref().map(str::trim).unwrap_or("");
+                if api_key.is_empty() {
+                    return Err(AppError::Validation(
+                        "API key is required for API-key profiles".to_owned(),
+                    ));
+                }
+            }
+            AuthMethod::OAuth => {}
+            AuthMethod::None => {
+                return Err(AppError::Validation(
+                    "provider profiles must use API key or OAuth authentication".to_owned(),
+                ));
+            }
+        },
+    }
+
+    Ok(())
 }
 
 pub async fn update_profile(
@@ -491,11 +526,14 @@ fn normalize_models(mut models: Vec<ModelInfo>, defaults: &[ModelInfo]) -> Vec<M
 mod tests {
     use std::time::{Duration, Instant};
 
-    use rushdino_common::config::{AuthMethod, Provider, ProviderProfile};
+    use rushdino_common::{config::{AuthMethod, Provider, ProviderProfile}, AppError};
 
     use crate::state::PendingOAuthStore;
 
-    use super::{consume_pending_oauth_session, profile_supports_oauth_connect};
+    use super::{
+        consume_pending_oauth_session, profile_supports_oauth_connect,
+        validate_create_profile_request, CreateProfileRequest,
+    };
 
     fn profile(provider_kind: Provider, auth_method: AuthMethod) -> ProviderProfile {
         ProviderProfile {
@@ -530,6 +568,49 @@ mod tests {
             Provider::Anthropic,
             AuthMethod::OAuth,
         )));
+    }
+
+    #[test]
+    fn create_profile_requires_api_key_for_api_key_auth() {
+        let err = validate_create_profile_request(&CreateProfileRequest {
+            name: "OpenAI".to_owned(),
+            provider_kind: Provider::OpenAI,
+            auth_method: AuthMethod::ApiKey,
+            default_model: "gpt-5.4".to_owned(),
+            base_url: None,
+            api_key: None,
+        })
+        .expect_err("missing API key should be rejected");
+
+        assert!(matches!(err, AppError::Validation(_)));
+    }
+
+    #[test]
+    fn create_profile_allows_oauth_without_api_key() {
+        validate_create_profile_request(&CreateProfileRequest {
+            name: "OpenAI OAuth".to_owned(),
+            provider_kind: Provider::OpenAI,
+            auth_method: AuthMethod::OAuth,
+            default_model: "gpt-5.4".to_owned(),
+            base_url: None,
+            api_key: None,
+        })
+        .expect("OAuth profiles should not require an API key");
+    }
+
+    #[test]
+    fn create_profile_rejects_oauth_for_ollama() {
+        let err = validate_create_profile_request(&CreateProfileRequest {
+            name: "Ollama".to_owned(),
+            provider_kind: Provider::Ollama,
+            auth_method: AuthMethod::OAuth,
+            default_model: "llama3.2".to_owned(),
+            base_url: Some("http://localhost:11434".to_owned()),
+            api_key: None,
+        })
+        .expect_err("Ollama should not accept OAuth");
+
+        assert!(matches!(err, AppError::Validation(_)));
     }
 
     #[tokio::test]

@@ -4,10 +4,12 @@
  * outside Tauri (e.g. a pure web dev preview). Errors are swallowed so a
  * missing permission or backend failure never breaks the chat flow.
  */
+
+import { invoke } from '@tauri-apps/api/core'
+
 export async function notify(title: string, body: string): Promise<void> {
   if (typeof (window as { __TAURI__?: unknown }).__TAURI__ === 'undefined') return
   try {
-    const { invoke } = await import('@tauri-apps/api/core')
     await invoke('notify', { title, body })
   } catch (e) {
     console.warn('[rushdino] notify failed', e)

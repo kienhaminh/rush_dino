@@ -4,6 +4,8 @@
  * renders cleanly in pure web previews.
  */
 
+import { invoke } from '@tauri-apps/api/core'
+
 export type UpdateInfo = {
   version: string
   current_version: string
@@ -17,7 +19,6 @@ function isTauri(): boolean {
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
   if (!isTauri()) return null
-  const { invoke } = await import('@tauri-apps/api/core')
   return await invoke<UpdateInfo | null>('check_for_updates')
 }
 
@@ -28,6 +29,5 @@ export async function checkForUpdates(): Promise<UpdateInfo | null> {
  */
 export async function installUpdate(): Promise<void> {
   if (!isTauri()) return
-  const { invoke } = await import('@tauri-apps/api/core')
   await invoke('install_update')
 }
