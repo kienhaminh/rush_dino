@@ -19,10 +19,24 @@ import type {
   TaskStatus,
 } from './kanban-types';
 import { KANBAN_COLUMNS } from './kanban-types';
+import { useChatWsConnection } from '@/hooks/use-chat-ws';
 import { useKanbanBoard } from './use-kanban-board';
+import { useKanbanRealtimeStore, type ToolEvent } from './kanban-realtime-store';
+import { SessionTabStrip } from './session-tab-strip';
 
 export function KanbanPage() {
-  const { board, loading, refreshing, error, refresh, deleteTask } = useKanbanBoard(true);
+  const { isConnected } = useChatWsConnection();
+  const { board, loading, refreshing, error, refresh, deleteTask } = useKanbanBoard(true, isConnected);
+
+  function handleTabClick(taskId: string) {
+    const el = document.getElementById(`kanban-card-${taskId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+    setTimeout(() => {
+      el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
+    }, 1500);
+  }
 
   return (
     <div className="flex flex-col h-full bg-background min-h-[calc(100vh-72px)] p-6 md:p-8 overflow-y-auto w-full">
@@ -46,6 +60,14 @@ export function KanbanPage() {
 
         {/* Stats bar */}
         {board ? <KanbanStatsBar stats={board.stats} /> : null}
+
+        {/* Session tab strip — shows active agent sessions */}
+        {board ? (
+          <SessionTabStrip
+            inProgressTasks={board.columns.inProgress}
+            onTabClick={handleTabClick}
+          />
+        ) : null}
 
         {/* Board columns */}
         {board ? <KanbanBoard columns={board.columns} onDeleteTask={deleteTask} /> : null}
@@ -165,6 +187,64 @@ function KanbanBoard({
   );
 }
 
+function TaskEventFeed({ taskId }: { taskId: string }) {
+  const toolEvents = useKanbanRealtimeStore((s) => s.toolEvents[taskId] ?? []);
+
+  if (toolEvents.length === 0) return null;
+
+  const visible = toolEvents.slice(-4);
+
+  return (
+    <div className="mt-2 border-t border-border/40 pt-2">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground/60">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+        <span>Live</span>
+        <span className="ml-auto">{toolEvents.length} events</span>
+      </div>
+      <div className="relative">
+        {toolEvents.length > 4 && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-background to-transparent z-10" />
+        )}
+        <div className="space-y-0.5">
+          {visible.map((ev, i) => (
+            <EventLine key={i} event={ev} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventLine({ event }: { event: ToolEvent }) {
+  const isDone = event.status === 'end';
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      <span className={isDone ? 'text-emerald-500' : 'text-amber-400'}>
+        {isDone ? '✓' : '⟳'}
+      </span>
+      <span className="truncate">{event.label}</span>
+    </div>
+  );
+}
+
+function ScoreFooter({ taskId }: { taskId: string }) {
+  const score = useKanbanRealtimeStore((s) => s.taskScores[taskId]);
+
+  if (!score) return null;
+
+  return (
+    <div className="mt-2 flex items-center justify-between border-t border-border/40 pt-2">
+      <span className="text-[10px] text-muted-foreground/50">
+        iter {score.iteration}
+      </span>
+      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-800/40 bg-emerald-950/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
+        <span className="text-muted-foreground/40 line-through mr-0.5">{score.prev}</span>
+        {score.current}
+      </span>
+    </div>
+  );
+}
+
 function TaskCard({
   task,
   onDelete,
@@ -173,7 +253,7 @@ function TaskCard({
   onDelete: (taskId: string) => Promise<void>;
 }) {
   return (
-    <article className="group relative rounded-md border border-border/50 bg-background p-3 space-y-2 transition-colors hover:border-border">
+    <article id={`kanban-card-${task.id}`} className="group relative rounded-md border border-border/50 bg-background p-3 space-y-2 transition-colors hover:border-border">
       {/* Delete button — visible on hover */}
       <button
         type="button"
@@ -261,6 +341,9 @@ function TaskCard({
           )}
         </div>
       )}
+
+      {task.status === 'in_progress' && <TaskEventFeed taskId={task.id} />}
+      {task.status === 'in_progress' && <ScoreFooter taskId={task.id} />}
     </article>
   );
 }

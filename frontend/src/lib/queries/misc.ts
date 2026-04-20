@@ -66,13 +66,13 @@ export function useAllCronRunsQuery(jobIds: string[]) {
   })
 }
 
-// Kanban board — polls every 3s when enabled
-export function useKanbanBoardQuery(enabled = true) {
+// Kanban board — polls every 3s normally, slows to 30s when WS is connected
+export function useKanbanBoardQuery(enabled = true, isWsConnected = false) {
   return useQuery({
     queryKey: miscKeys.kanban(),
     queryFn: fetchKanbanBoard,
     enabled,
-    refetchInterval: enabled ? 3_000 : false,
+    refetchInterval: enabled ? (isWsConnected ? 30_000 : 3_000) : false,
   })
 }
 
@@ -87,9 +87,9 @@ export function useDashboardAuthStatusQuery(enabled: boolean) {
 }
 
 // Kanban board hook with delete mutation
-export function useKanbanBoard(enabled: boolean) {
+export function useKanbanBoard(enabled: boolean, isWsConnected = false) {
   const queryClient = useQueryClient()
-  const { data: board, isPending: loading, isRefetching: refreshing, error: queryError } = useKanbanBoardQuery(enabled)
+  const { data: board, isPending: loading, isRefetching: refreshing, error: queryError } = useKanbanBoardQuery(enabled, isWsConnected)
 
   const deleteMutation = useMutation({
     mutationFn: deleteKanbanTask,

@@ -128,12 +128,21 @@ impl KanbanDispatcher {
                         &matched.agent_name, &task.id, &task.tags, false,
                     ).await;
                     // Best-effort status update; ignore secondary failures.
-                    let _ = self.store.update_task_status(&UpdateTaskInput {
+                    if let Ok(updated) = self.store.update_task_status(&UpdateTaskInput {
                         task_id: task.id.clone(),
                         status: TaskStatus::Failed,
                         result: Some(format!("Execution error: {e}")),
                         block_reason: None,
-                    }).await;
+                    }).await {
+                        let _ = self.broadcast_tx.send(serde_json::json!({
+                            "type": "task_status_changed",
+                            "task_id": updated.id,
+                            "title": updated.title,
+                            "old_status": TaskStatus::Claimed.as_str(),
+                            "new_status": updated.status.as_str(),
+                            "agent_name": updated.assigned_agent.as_deref().unwrap_or(""),
+                        }));
+                    }
                 }
             }
         }
@@ -162,7 +171,15 @@ impl KanbanDispatcher {
             .ok_or_else(|| AppError::Agent("session context unavailable".to_owned()))?;
 
         // 3. Claim the task in the store.
-        self.store.claim_task(&task.id, agent_name).await?;
+        let claimed_task = self.store.claim_task(&task.id, agent_name).await?;
+        let _ = self.broadcast_tx.send(serde_json::json!({
+            "type": "task_status_changed",
+            "task_id": claimed_task.id,
+            "title": claimed_task.title,
+            "old_status": TaskStatus::Backlog.as_str(),
+            "new_status": claimed_task.status.as_str(),
+            "agent_name": claimed_task.assigned_agent.as_deref().unwrap_or(""),
+        }));
 
         // 4. Create an isolated conversation for this task run.
         // Use agent name as the stable session ID so each team agent gets one persistent session.
@@ -272,6 +289,38 @@ impl KanbanDispatcher {
             ws_event_tx: None,
         };
 
+        // Create streaming event channel to intercept tool calls for WS broadcast
+        let (tool_event_tx, mut tool_event_rx) = tokio::sync::mpsc::channel::<crate::react_loop::StreamingEvent>(256);
+        let broadcast_tx_clone = self.broadcast_tx.clone();
+        let task_id_for_events = task.id.clone();
+
+        tokio::spawn(async move {
+            while let Some(event) = tool_event_rx.recv().await {
+                match event {
+                    crate::react_loop::StreamingEvent::ToolStart { ref tool_name, ref args } => {
+                        let label = build_tool_label(tool_name, args);
+                        let _ = broadcast_tx_clone.send(serde_json::json!({
+                            "type": "task_tool_event",
+                            "task_id": task_id_for_events,
+                            "tool_name": tool_name,
+                            "status": "start",
+                            "label": label,
+                        }));
+                    }
+                    crate::react_loop::StreamingEvent::ToolEnd { ref tool_name, .. } => {
+                        let _ = broadcast_tx_clone.send(serde_json::json!({
+                            "type": "task_tool_event",
+                            "task_id": task_id_for_events,
+                            "tool_name": tool_name,
+                            "status": "end",
+                            "label": format!("{} done", tool_name),
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+        });
+
         let (response, all_messages, _timing) = with_tool_execution_context(
             child_ctx,
             run_react_loop(
@@ -280,7 +329,7 @@ impl KanbanDispatcher {
                 scoped_ctx,
                 messages,
                 &child_config,
-                None,
+                Some(tool_event_tx),
                 None,
             ),
         )
@@ -299,12 +348,20 @@ impl KanbanDispatcher {
         }
 
         // 12. Mark task as Done (store will promote to InReview automatically).
-        self.store.update_task_status(&UpdateTaskInput {
+        let updated_task = self.store.update_task_status(&UpdateTaskInput {
             task_id: task.id.clone(),
             status: TaskStatus::Done,
             result: Some(response.content.clone()),
             block_reason: None,
         }).await?;
+        let _ = self.broadcast_tx.send(serde_json::json!({
+            "type": "task_status_changed",
+            "task_id": updated_task.id,
+            "title": updated_task.title,
+            "old_status": TaskStatus::Claimed.as_str(),
+            "new_status": updated_task.status.as_str(),
+            "agent_name": updated_task.assigned_agent.as_deref().unwrap_or(""),
+        }));
 
         // 13. Write daily note entry.
         let note = format_task_completion_note(&task.id, &task.title, agent_name, &response.content);
@@ -351,6 +408,39 @@ impl KanbanDispatcher {
     }
 }
 
+/// Build a short human-readable label for a tool call.
+fn build_tool_label(tool_name: &str, args: &serde_json::Value) -> String {
+    let get_filename = |key: &str| -> String {
+        args.get(key)
+            .and_then(|v| v.as_str())
+            .map(|path| {
+                std::path::Path::new(path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(path)
+                    .to_string()
+            })
+            .unwrap_or_else(|| "file".to_string())
+    };
+
+    match tool_name {
+        "read" | "Read" => format!("Read {}", get_filename("file_path")),
+        "edit" | "Edit" => format!("Edit {}", get_filename("file_path")),
+        "write" | "Write" => format!("Write {}", get_filename("file_path")),
+        "bash" | "Bash" => {
+            let cmd = args.get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("command");
+            if cmd.len() > 40 {
+                format!("Bash: {}…", &cmd[..40])
+            } else {
+                format!("Bash: {}", cmd)
+            }
+        }
+        _ => tool_name.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,5 +463,77 @@ mod tests {
         assert!(entry.contains("researcher"));
         assert!(entry.contains("Found: GPT-5.4"));
         assert!(entry.starts_with("## "));
+    }
+
+    // ── build_tool_label ──────────────────────────────────────────────────
+
+    #[test]
+    fn build_tool_label_read_extracts_filename() {
+        let args = serde_json::json!({ "file_path": "/path/to/layout.css" });
+        assert_eq!(build_tool_label("read", &args), "Read layout.css");
+    }
+
+    #[test]
+    fn build_tool_label_read_uppercase_variant() {
+        let args = serde_json::json!({ "file_path": "/src/main.rs" });
+        assert_eq!(build_tool_label("Read", &args), "Read main.rs");
+    }
+
+    #[test]
+    fn build_tool_label_edit_extracts_filename() {
+        let args = serde_json::json!({ "file_path": "/src/kanban_dispatcher.rs" });
+        assert_eq!(build_tool_label("edit", &args), "Edit kanban_dispatcher.rs");
+    }
+
+    #[test]
+    fn build_tool_label_write_extracts_filename() {
+        let args = serde_json::json!({ "file_path": "/out/report.md" });
+        assert_eq!(build_tool_label("write", &args), "Write report.md");
+    }
+
+    #[test]
+    fn build_tool_label_bash_short_command_kept_as_is() {
+        let args = serde_json::json!({ "command": "cargo build" });
+        assert_eq!(build_tool_label("bash", &args), "Bash: cargo build");
+    }
+
+    #[test]
+    fn build_tool_label_bash_truncates_at_40_chars() {
+        // 41-character command — should be cut at 40 with ellipsis appended.
+        let cmd = "a".repeat(41);
+        let args = serde_json::json!({ "command": cmd });
+        let result = build_tool_label("bash", &args);
+        // Prefix must be "Bash: " + 40 a's + "…"
+        let expected = format!("Bash: {}…", "a".repeat(40));
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn build_tool_label_bash_exactly_40_chars_not_truncated() {
+        let cmd = "b".repeat(40);
+        let args = serde_json::json!({ "command": cmd });
+        let result = build_tool_label("bash", &args);
+        assert_eq!(result, format!("Bash: {}", "b".repeat(40)));
+        assert!(!result.contains('…'), "40-char command should not be truncated");
+    }
+
+    #[test]
+    fn build_tool_label_unknown_tool_returns_tool_name() {
+        let args = serde_json::json!({});
+        assert_eq!(build_tool_label("glob", &args), "glob");
+        assert_eq!(build_tool_label("grep", &args), "grep");
+        assert_eq!(build_tool_label("some_custom_tool", &args), "some_custom_tool");
+    }
+
+    #[test]
+    fn build_tool_label_missing_file_path_falls_back_to_file() {
+        let args = serde_json::json!({});
+        assert_eq!(build_tool_label("read", &args), "Read file");
+    }
+
+    #[test]
+    fn build_tool_label_missing_command_falls_back_to_command() {
+        let args = serde_json::json!({});
+        assert_eq!(build_tool_label("bash", &args), "Bash: command");
     }
 }

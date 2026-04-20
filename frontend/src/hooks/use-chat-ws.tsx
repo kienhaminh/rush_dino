@@ -21,6 +21,8 @@ import type {
   RichContent,
   WsEvent,
 } from '@/lib/types';
+import { useKanbanRealtimeStore } from '@/pages/kanban/kanban-realtime-store';
+import type { WsTaskStatusChangedEvent, WsTaskToolEvent, WsTaskGradedEvent } from '@/lib/types/websocket';
 
 const MAIN_SESSION_ID = 'main';
 
@@ -137,6 +139,10 @@ interface HandleWsMsgDeps {
   ) => ConversationItem[];
   delegateItemsRef: MutableRefObject<Map<string, ConversationItem[]>>;
   bumpDelegateRevision: () => void;
+  // Kanban realtime store actions
+  appendToolEvent: ReturnType<typeof useKanbanRealtimeStore.getState>['appendToolEvent'];
+  updateScore: ReturnType<typeof useKanbanRealtimeStore.getState>['updateScore'];
+  clearTask: ReturnType<typeof useKanbanRealtimeStore.getState>['clearTask'];
 }
 
 /** Applies an inner WsEvent from a delegate to its ConversationItem[] array,
@@ -273,6 +279,9 @@ function handleWsMessage(msg: WsEvent, deps: HandleWsMsgDeps): void {
     replaceAssistantItem,
     delegateItemsRef,
     bumpDelegateRevision,
+    appendToolEvent,
+    updateScore,
+    clearTask,
   } = deps;
 
   // --- delegate_event (route to nested timeline) ---
@@ -528,6 +537,35 @@ function handleWsMessage(msg: WsEvent, deps: HandleWsMsgDeps): void {
     return;
   }
 
+  // --- task_status_changed ---
+  if (msg.type === 'task_status_changed') {
+    const e = msg as WsTaskStatusChangedEvent;
+    // When a task moves out of in_progress, clear its realtime state
+    if (e.new_status !== 'in_progress') {
+      clearTask(e.task_id);
+    }
+    return;
+  }
+
+  // --- task_tool_event ---
+  if (msg.type === 'task_tool_event') {
+    const e = msg as WsTaskToolEvent;
+    appendToolEvent(e.task_id, {
+      tool_name: e.tool_name,
+      label: e.label,
+      status: e.status,
+      timestamp: Date.now(),
+    });
+    return;
+  }
+
+  // --- task_graded ---
+  if (msg.type === 'task_graded') {
+    const e = msg as WsTaskGradedEvent;
+    updateScore(e.task_id, e.old_score, e.new_score, e.iteration);
+    return;
+  }
+
   // --- pairing_request_created ---
   if (msg.type === 'pairing_request_created') {
     setPairingRequestCount((n) => n + 1);
@@ -573,6 +611,11 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
 
   const [pairingRequestCount, setPairingRequestCount] = useState(0);
   const rehydratingRef = useRef(false);
+
+  // Kanban realtime store actions (stable references from Zustand)
+  const appendToolEvent = useKanbanRealtimeStore((s) => s.appendToolEvent);
+  const updateScore = useKanbanRealtimeStore((s) => s.updateScore);
+  const clearTask = useKanbanRealtimeStore((s) => s.clearTask);
 
   // -------------------------------------------------------------------------
   // Helpers
@@ -684,6 +727,9 @@ export function ChatWsProvider({ children }: { children: ReactNode }) {
         replaceAssistantItem,
         delegateItemsRef,
         bumpDelegateRevision: () => setDelegateItemsRevision((n) => n + 1),
+        appendToolEvent,
+        updateScore,
+        clearTask,
       });
     };
   }, [replaceAssistantItem, resetFromConversationDetail]);

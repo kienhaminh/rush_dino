@@ -13,6 +13,9 @@ export type WsEventType =
   | 'user_message'
   | 'runtime_log_error'
   | 'task_review_ready'
+  | 'task_status_changed'
+  | 'task_tool_event'
+  | 'task_graded'
   | 'pairing_request_created'
   | 'session_reset'
   | 'error';
@@ -121,6 +124,36 @@ export interface WsTaskReviewReadyEvent {
   notification: string;
 }
 
+/** Emitted when a kanban task's status changes (e.g. in_progress → review). */
+export interface WsTaskStatusChangedEvent {
+  type: 'task_status_changed';
+  task_id: string;
+  title: string;
+  old_status: string;
+  new_status: string;
+  agent_name: string;
+}
+
+/** Emitted for individual tool invocations within a kanban task agent run. */
+export interface WsTaskToolEvent {
+  type: 'task_tool_event';
+  task_id: string;
+  tool_name: string;
+  /** "start" or "end" */
+  status: 'start' | 'end';
+  /** Human-readable label, e.g. "Read layout.css" */
+  label: string;
+}
+
+/** Emitted when a kanban task is graded after review. */
+export interface WsTaskGradedEvent {
+  type: 'task_graded';
+  task_id: string;
+  old_score: number;
+  new_score: number;
+  iteration: number;
+}
+
 /** Emitted when the active profile changes and all sessions are cleared. */
 export interface WsSessionResetEvent {
   type: 'session_reset';
@@ -160,6 +193,9 @@ export type WsEvent =
   | WsRuntimeLogErrorEvent
   | WsUserMessageEvent
   | WsTaskReviewReadyEvent
+  | WsTaskStatusChangedEvent
+  | WsTaskToolEvent
+  | WsTaskGradedEvent
   | WsPairingRequestCreatedEvent
   | WsSessionResetEvent
   | WsDelegateEvent;
