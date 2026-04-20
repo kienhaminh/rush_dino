@@ -9,6 +9,7 @@ export default function Guardrail() {
   const q = useQuery({ queryKey: ['config'], queryFn: getConfig })
   const sec = q.data?.security as Record<string, unknown> | undefined
   const exec = q.data?.execution as Record<string, unknown> | undefined
+  const sandbox = exec?.shell_exec_sandbox as Record<string, unknown> | undefined
 
   return (
     <div className="settings-page">
@@ -25,20 +26,21 @@ export default function Guardrail() {
         </PostureCard>
 
         <PostureCard icon={<Globe size={15} />} title="Network">
-          <Row label="Allowed origins" value={countHint(sec?.allowed_origins)} />
-          <Row label="SSRF allow-list" value={countHint(sec?.ssrf_allowlist)} />
-          <Row label="Egress proxy" value={boolText(sec?.egress_proxy_enabled)} />
+          <Row label="Allowed origins" value={listHint(sec?.allowed_origins)} />
+          <Row label="External hosts" value={listHint(sec?.allowed_external_hosts)} />
+          <Row label="Trusted proxies" value={listHint(sec?.trusted_proxies)} />
         </PostureCard>
 
         <PostureCard icon={<HardDrive size={15} />} title="Execution">
-          <Row label="Shell sandbox" value={boolText(exec?.shell_sandbox_enabled)} />
-          <Row label="Workspace root" value={String(exec?.workspace_root ?? '—')} trunc />
-          <Row label="Write roots" value={countHint(exec?.write_roots)} />
+          <Row label="Shell sandbox" value={boolText(sandbox?.enabled)} />
+          <Row label="Workspace root" value={String(sandbox?.workspace_root ?? '—')} trunc />
+          <Row label="Network access" value={boolText(sandbox?.allow_network)} />
         </PostureCard>
 
-        <PostureCard icon={<Lock size={15} />} title="Rate limits">
-          <Row label="Per-endpoint caps" value={countHint(sec?.rate_limits)} />
-          <Row label="Trusted proxies" value={countHint(sec?.trusted_proxies)} />
+        <PostureCard icon={<Lock size={15} />} title="Filesystem">
+          <Row label="Read roots" value={listHint(sec?.allowed_read_roots)} />
+          <Row label="Extra write roots" value={listHint(sandbox?.extra_write_roots)} />
+          <Row label="Profile count" value={countHint(q.data?.profiles)} />
         </PostureCard>
       </div>
     </div>
@@ -82,4 +84,11 @@ function countHint(v: unknown): string {
   if (Array.isArray(v)) return v.length === 0 ? 'empty' : `${v.length} entries`
   if (v && typeof v === 'object') return `${Object.keys(v).length} keys`
   return '—'
+}
+
+function listHint(v: unknown): string {
+  if (!Array.isArray(v)) return '—'
+  if (v.length === 0) return 'empty'
+  if (v.length <= 2) return v.map((item) => String(item)).join(', ')
+  return `${v.length} entries`
 }

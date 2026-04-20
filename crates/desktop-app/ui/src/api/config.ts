@@ -46,6 +46,19 @@ export async function getConfig(): Promise<AppConfigJson> {
   return (await res.json()) as AppConfigJson
 }
 
+export async function patchConfig(patch: Record<string, unknown>): Promise<AppConfigJson> {
+  const res = await apiFetch('/api/config', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`config.patch ${res.status}: ${text}`)
+  }
+  return (await res.json()) as AppConfigJson
+}
+
 export async function getCredentials(): Promise<CredentialsJson> {
   const res = await apiFetch('/api/credentials')
   if (!res.ok) throw new Error(`credentials: ${res.status}`)

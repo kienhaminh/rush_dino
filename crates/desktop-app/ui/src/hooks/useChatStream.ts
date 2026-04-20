@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { wsOrigin } from '@/api/bootstrap'
-import type { ToolCall } from '@/api/chat'
+import type { PendingInputRequest as ChatInputRequest, ToolCall } from '@/api/chat'
+import type { ThinkingLevel } from '@/api/system'
 
 type StreamState =
   | { phase: 'idle' }
@@ -22,6 +23,8 @@ export type PendingApproval = {
   args: unknown
 }
 
+export type PendingInputRequest = ChatInputRequest
+
 /**
  * Streams chat messages over /api/ws/chat. One long-lived WebSocket per
  * component lifetime. Callers plug in per-event callbacks and call
@@ -38,6 +41,8 @@ export function useChatStream(opts: {
   onError: (message: string) => void
   onApprovalRequest: (req: PendingApproval) => void
   onApprovalResolved: (requestId: string, approved: boolean) => void
+  onInputRequest: (req: PendingInputRequest) => void
+  onSessionReset?: () => void
 }) {
   const {
     conversationId,
@@ -49,6 +54,8 @@ export function useChatStream(opts: {
     onError,
     onApprovalRequest,
     onApprovalResolved,
+    onInputRequest,
+    onSessionReset,
   } = opts
 
   const [state, setState] = useState<StreamState>({ phase: 'idle' })
@@ -63,6 +70,8 @@ export function useChatStream(opts: {
     onError,
     onApprovalRequest,
     onApprovalResolved,
+    onInputRequest,
+    onSessionReset,
     setConversationId,
   })
   useEffect(() => {
@@ -74,6 +83,8 @@ export function useChatStream(opts: {
       onError,
       onApprovalRequest,
       onApprovalResolved,
+      onInputRequest,
+      onSessionReset,
       setConversationId,
     }
   }, [
@@ -84,6 +95,8 @@ export function useChatStream(opts: {
     onError,
     onApprovalRequest,
     onApprovalResolved,
+    onInputRequest,
+    onSessionReset,
     setConversationId,
   ])
 
@@ -190,12 +203,22 @@ export function useChatStream(opts: {
           break
         }
         case 'input_request': {
-          /* Full input-request UX lands in a follow-up — for now, surface a
-             friendly banner so the user knows they need to pop over to the
-             Approvals/Config flow (if one ever exists for input requests). */
-          handlers.current.onError(
-            `agent paused on an input request — resolve it from the server log for now`,
-          )
+          const convId = payload.conversation_id as string | undefined
+          if (convId) handlers.current.setConversationId(convId)
+          handlers.current.onInputRequest({
+            requestId: payload.request_id as string,
+            sessionId: (payload.session_id as string | undefined) ?? '',
+            conversationId: (payload.conversation_id as string | undefined) ?? '',
+            runId: payload.run_id as string | undefined,
+            payload: payload.payload as PendingInputRequest['payload'],
+            createdAt:
+              (payload.created_at as string | undefined) ?? new Date().toISOString(),
+          })
+          break
+        }
+        case 'session_reset': {
+          buffer.current = { role: 'assistant', content: '', tool_calls: [] }
+          handlers.current.onSessionReset?.()
           break
         }
         default:
@@ -205,7 +228,13 @@ export function useChatStream(opts: {
   }, [conversationId])
 
   const send = useCallback(
-    async (message: string) => {
+    async (
+      message: string,
+      opts?: {
+        profileId?: string
+        thinkingMode?: ThinkingLevel
+      },
+    ) => {
       buffer.current = { role: 'assistant', content: '', tool_calls: [] }
       await connect()
       const sock = socketRef.current
@@ -215,7 +244,12 @@ export function useChatStream(opts: {
       }
       const dispatch = () =>
         sock.send(
-          JSON.stringify({ message, conversation_id: conversationId ?? undefined }),
+          JSON.stringify({
+            message,
+            conversation_id: conversationId ?? undefined,
+            profile_id: opts?.profileId ?? undefined,
+            thinking_mode: opts?.thinkingMode ?? undefined,
+          }),
         )
       if (sock.readyState === WebSocket.OPEN) dispatch()
       else sock.addEventListener('open', dispatch, { once: true })

@@ -13,10 +13,10 @@ use rushdino_common::{
     models::Message,
     Result,
 };
-use rushdino_providers::types::ChatResponse;
+use rushdino_providers::{types::ChatResponse, Provider};
 
 use crate::{
-    engine::{AgentConfig, AssistantRunJob, GatewayRunHandle, WsStreamEvent},
+    engine::{AgentConfig, AssistantRunJob, AssistantRunOverrides, GatewayRunHandle, WsStreamEvent},
     engine_bootstrap::{resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message},
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     runtime::{AgentRuntime, AssistantRunParams, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
@@ -54,6 +54,9 @@ impl crate::engine::AgentEngine {
                 session_id: session_id.to_owned(),
                 conversation_id,
                 user_input: user_input.to_owned(),
+                provider_override: None,
+                model: self.provider.model().to_owned(),
+                thinking_level_override: None,
                 ws_event_tx: None,
                 gateway_event_tx: None,
                 completion_tx: Some(result_tx),
@@ -97,6 +100,7 @@ impl crate::engine::AgentEngine {
                 input_text: user_input,
                 provider: &self.provider_name,
                 model: self.provider.model(),
+                fallback_profile_id: None,
                 origin: RunOriginMetadata {
                     source: Some("gateway".to_owned()),
                     channel_id: Some(channel_id.to_owned()),
@@ -120,6 +124,9 @@ impl crate::engine::AgentEngine {
                 session_id: gateway_session_id.to_owned(),
                 conversation_id: conversation_id.to_owned(),
                 user_input: user_input.to_owned(),
+                provider_override: None,
+                model: self.provider.model().to_owned(),
+                thinking_level_override: None,
                 ws_event_tx: None,
                 gateway_event_tx,
                 completion_tx: Some(result_tx),
@@ -152,19 +159,28 @@ impl crate::engine::AgentEngine {
         session_id: &str,
         conversation_id: Option<String>,
         user_input: &str,
+        overrides: AssistantRunOverrides,
         event_tx: mpsc::Sender<WsStreamEvent>,
     ) -> Result<RunSnapshot> {
         let conversation_id = conversation_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+        let provider_name = overrides
+            .provider_name
+            .unwrap_or_else(|| self.provider_name.clone());
+        let model = overrides
+            .model
+            .unwrap_or_else(|| self.provider.model().to_owned());
         let (snapshot, start_now) = self
             .runtime
-            .submit_assistant_run(
+            .submit_assistant_run_with_origin(AssistantRunParams {
                 session_id,
-                &conversation_id,
-                title_from(user_input),
-                user_input,
-                &self.provider_name,
-                self.provider.model(),
-            )
+                conversation_id: &conversation_id,
+                title: title_from(user_input),
+                input_text: user_input,
+                provider: &provider_name,
+                model: &model,
+                fallback_profile_id: overrides.profile_id.as_deref(),
+                origin: RunOriginMetadata::default(),
+            })
             .await?;
 
         self.pending_assistant_runs.lock().await.insert(
@@ -174,6 +190,9 @@ impl crate::engine::AgentEngine {
                 session_id: session_id.to_owned(),
                 conversation_id,
                 user_input: user_input.to_owned(),
+                provider_override: overrides.provider,
+                model,
+                thinking_level_override: overrides.thinking_level,
                 ws_event_tx: Some(event_tx),
                 gateway_event_tx: None,
                 completion_tx: None,
@@ -270,6 +289,9 @@ impl crate::engine::AgentEngine {
             let session_id = job.session_id.clone();
             let conversation_id = job.conversation_id.clone();
             let user_input = job.user_input.clone();
+            let provider_override = job.provider_override.clone();
+            let model = job.model.clone();
+            let thinking_level_override = job.thinking_level_override.clone();
             let ws_event_tx = job.ws_event_tx.clone();
             let gateway_event_tx = job.gateway_event_tx.clone();
             let result = self
@@ -278,6 +300,9 @@ impl crate::engine::AgentEngine {
                     &session_id,
                     &conversation_id,
                     &user_input,
+                    provider_override,
+                    &model,
+                    thinking_level_override,
                     ws_event_tx.clone(),
                     gateway_event_tx,
                 )
@@ -382,12 +407,16 @@ impl crate::engine::AgentEngine {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn execute_assistant_with_runtime(
         &self,
         run_id: &str,
         session_id: &str,
         conversation_id: &str,
         user_input: &str,
+        provider_override: Option<Arc<Provider>>,
+        model: &str,
+        thinking_level_override: Option<rushdino_providers::types::ThinkingLevel>,
         ws_event_tx: Option<mpsc::Sender<WsStreamEvent>>,
         gateway_event_tx: Option<mpsc::Sender<StreamingEvent>>,
     ) -> Result<ChatResponse> {
@@ -426,14 +455,16 @@ impl crate::engine::AgentEngine {
         };
 
         let effective_config = AgentConfig {
-            thinking_level: self.effective_thinking_level(),
+            model_override: Some(model.to_owned()),
+            thinking_level: thinking_level_override.unwrap_or_else(|| self.effective_thinking_level()),
             ..self.config.clone()
         };
+        let provider = provider_override.unwrap_or_else(|| self.provider.clone());
         let result = if ws_event_tx.is_some() || gateway_event_tx.is_some() {
             with_tool_execution_context(
                 tool_context,
                 run_react_loop_streaming(
-                    self.provider.clone(),
+                    provider.clone(),
                     self.tool_registry.clone(),
                     self.session_ctx.clone(),
                     messages,
@@ -447,7 +478,7 @@ impl crate::engine::AgentEngine {
             with_tool_execution_context(
                 tool_context,
                 run_react_loop(
-                    self.provider.clone(),
+                    provider,
                     self.tool_registry.clone(),
                     self.session_ctx.clone(),
                     messages,

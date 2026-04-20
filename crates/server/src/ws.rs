@@ -8,14 +8,18 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use rushdino_agent::engine::WsStreamEvent;
+use rushdino_agent::engine::{AssistantRunOverrides, WsStreamEvent};
+use rushdino_common::CredentialsConfig;
+use rushdino_providers::{types::ThinkingLevel, ProviderService};
 
-use crate::state::AppState;
+use crate::{provider_runtime::{provider_kind_label, resolve_profile_provider}, state::AppState};
 
 #[derive(Debug, Deserialize)]
 struct WsChatRequest {
     conversation_id: Option<String>,
     message: String,
+    profile_id: Option<String>,
+    thinking_mode: Option<ThinkingLevel>,
 }
 
 pub async fn ws_chat(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
@@ -83,6 +87,7 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
     let runtime = state.runtime.clone();
     let gate = state.gate.clone();
     let runtime_logs = state.runtime_logs.clone();
+    let state_for_overrides = state.clone();
     let session_id_clone = session_id.clone();
     let mut recv_task = tokio::spawn(async move {
         let mut active_conversation: Option<String> = None;
@@ -132,7 +137,9 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                 continue;
             }
 
-            let (conversation_id, user_text) = parse_chat_payload(&text, &active_conversation);
+            let request = parse_chat_payload(&text, &active_conversation);
+            let conversation_id = request.conversation_id;
+            let user_text = request.message;
             let Some(user_text) = user_text else {
                 continue;
             };
@@ -161,12 +168,31 @@ async fn handle_socket(socket: axum::extract::ws::WebSocket, state: AppState) {
                     continue;
                 }
             };
+            let overrides = match resolve_run_overrides(
+                &state_for_overrides,
+                request.profile_id,
+                request.thinking_mode,
+            )
+            .await
+            {
+                Ok(overrides) => overrides,
+                Err(err) => {
+                    let _ = outbound_tx
+                        .send(serde_json::json!({
+                            "type": "error",
+                            "message": err.to_string(),
+                        }))
+                        .await;
+                    continue;
+                }
+            };
 
             match engine
                 .submit_ws_run(
                     &session_id_clone,
                     Some(conversation_id.clone()),
                     &user_text,
+                    overrides,
                     event_tx,
                 )
                 .await
@@ -303,17 +329,191 @@ fn serialize_ws_event(event: WsStreamEvent) -> serde_json::Value {
     }
 }
 
-fn parse_chat_payload(
-    text: &str,
-    active_conversation: &Option<String>,
-) -> (Option<String>, Option<String>) {
+#[derive(Default)]
+struct ParsedChatPayload {
+    conversation_id: Option<String>,
+    message: Option<String>,
+    profile_id: Option<String>,
+    thinking_mode: Option<ThinkingLevel>,
+}
+
+fn parse_chat_payload(text: &str, active_conversation: &Option<String>) -> ParsedChatPayload {
     if let Ok(request) = serde_json::from_str::<WsChatRequest>(text) {
-        return (
-            request
+        return ParsedChatPayload {
+            conversation_id: request
                 .conversation_id
                 .or_else(|| active_conversation.clone()),
-            Some(request.message),
-        );
+            message: Some(request.message),
+            profile_id: request.profile_id,
+            thinking_mode: request.thinking_mode,
+        };
     }
-    (active_conversation.clone(), Some(text.to_owned()))
+    ParsedChatPayload {
+        conversation_id: active_conversation.clone(),
+        message: Some(text.to_owned()),
+        profile_id: None,
+        thinking_mode: None,
+    }
+}
+
+async fn resolve_run_overrides(
+    state: &AppState,
+    profile_id: Option<String>,
+    thinking_mode: Option<ThinkingLevel>,
+) -> rushdino_common::Result<AssistantRunOverrides> {
+    let mut overrides = AssistantRunOverrides {
+        thinking_level: thinking_mode.clone(),
+        ..AssistantRunOverrides::default()
+    };
+
+    let Some(profile_id) = profile_id.filter(|value| !value.trim().is_empty()) else {
+        return Ok(overrides);
+    };
+
+    let config = state.config();
+    let profile_overrides = resolve_profile_override(
+        config.as_ref(),
+        &state.credentials_path,
+        &profile_id,
+        thinking_mode,
+    )
+    .await?;
+    overrides.provider = profile_overrides.provider;
+    overrides.provider_name = profile_overrides.provider_name;
+    overrides.model = profile_overrides.model;
+    overrides.profile_id = profile_overrides.profile_id;
+    Ok(overrides)
+}
+
+async fn resolve_profile_override(
+    config: &rushdino_common::AppConfig,
+    credentials_path: &std::path::Path,
+    profile_id: &str,
+    thinking_mode: Option<ThinkingLevel>,
+) -> rushdino_common::Result<AssistantRunOverrides> {
+    let mut credentials = CredentialsConfig::load_from_path(credentials_path)?;
+    let resolved =
+        resolve_profile_provider(config, &mut credentials, credentials_path, profile_id).await?;
+    let provider = ProviderService::from_config(&resolved.provider_config)?;
+    let model = provider.model().to_owned();
+
+    Ok(AssistantRunOverrides {
+        provider: Some(std::sync::Arc::new(provider)),
+        provider_name: Some(provider_kind_label(&resolved.provider_kind).to_owned()),
+        model: Some(model),
+        profile_id: Some(resolved.profile_id),
+        thinking_level: thinking_mode,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use rushdino_common::{
+        config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
+        AppConfig, CredentialsConfig,
+    };
+    use rushdino_providers::types::ThinkingLevel;
+
+    use super::{parse_chat_payload, resolve_profile_override};
+
+    fn temp_credentials_path() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!(
+            "rushdino-ws-overrides-{}.toml",
+            uuid::Uuid::new_v4()
+        ))
+    }
+
+    fn profile(id: &str, model: &str) -> ProviderProfile {
+        ProviderProfile {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            provider_kind: Provider::OpenAI,
+            auth_method: AuthMethod::ApiKey,
+            default_model: model.to_owned(),
+            base_url: Some("https://api.openai.com/v1".to_owned()),
+        }
+    }
+
+    #[test]
+    fn parse_chat_payload_reads_profile_and_thinking_mode() {
+        let payload = parse_chat_payload(
+            r#"{"conversation_id":"conv-1","message":"hello","profile_id":"primary","thinking_mode":"high"}"#,
+            &None,
+        );
+
+        assert_eq!(payload.conversation_id.as_deref(), Some("conv-1"));
+        assert_eq!(payload.message.as_deref(), Some("hello"));
+        assert_eq!(payload.profile_id.as_deref(), Some("primary"));
+        assert_eq!(payload.thinking_mode, Some(ThinkingLevel::High));
+    }
+
+    #[test]
+    fn parse_chat_payload_uses_active_conversation_for_plain_text() {
+        let payload = parse_chat_payload("hello", &Some("active-conv".to_owned()));
+
+        assert_eq!(payload.conversation_id.as_deref(), Some("active-conv"));
+        assert_eq!(payload.message.as_deref(), Some("hello"));
+        assert_eq!(payload.profile_id, None);
+        assert_eq!(payload.thinking_mode, None);
+    }
+
+    #[tokio::test]
+    async fn resolve_profile_override_builds_run_specific_provider_and_model() {
+        let credentials_path = temp_credentials_path();
+        let mut config = AppConfig::default();
+        config.profiles = vec![profile("primary", "gpt-5.4"), profile("secondary", "gpt-4.1-mini")];
+
+        let mut credentials = CredentialsConfig::default();
+        credentials.profiles.insert(
+            "secondary".to_owned(),
+            ProfileSecrets {
+                api_key: Some("sk-secondary".to_owned()),
+                ..ProfileSecrets::default()
+            },
+        );
+        credentials
+            .save_to_path(&credentials_path)
+            .expect("credentials should save");
+
+        let overrides = resolve_profile_override(
+            &config,
+            credentials_path.as_path(),
+            "secondary",
+            Some(ThinkingLevel::Low),
+        )
+        .await
+        .expect("profile override should resolve");
+
+        assert_eq!(overrides.profile_id.as_deref(), Some("secondary"));
+        assert_eq!(overrides.provider_name.as_deref(), Some("openai"));
+        assert_eq!(overrides.model.as_deref(), Some("gpt-4.1-mini"));
+        assert_eq!(overrides.thinking_level, Some(ThinkingLevel::Low));
+        assert!(overrides.provider.is_some(), "provider override should be built");
+
+        let _ = fs::remove_file(credentials_path);
+    }
+
+    #[tokio::test]
+    async fn resolve_profile_override_rejects_unknown_profile() {
+        let credentials_path = temp_credentials_path();
+        CredentialsConfig::default()
+            .save_to_path(&credentials_path)
+            .expect("credentials should save");
+
+        let err = resolve_profile_override(
+            &AppConfig::default(),
+            credentials_path.as_path(),
+            "missing",
+            Some(ThinkingLevel::Medium),
+        )
+        .await
+        .err()
+        .expect("missing profile should fail");
+
+        assert!(err.to_string().contains("does not exist"));
+
+        let _ = fs::remove_file(credentials_path);
+    }
 }

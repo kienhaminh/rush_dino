@@ -1,11 +1,11 @@
 use std::time::{Duration, Instant};
 
 use crate::state::AppState;
+use crate::state::{PendingOAuthSession, PendingOAuthStore};
 use axum::{
     extract::{Path, State},
     Json,
 };
-use crate::state::{PendingOAuthSession, PendingOAuthStore};
 use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
@@ -41,6 +41,15 @@ pub struct StartOAuthResponse {
     pub auth_url: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerifyProviderResponse {
+    pub ok: bool,
+    pub source: String,
+    pub message: String,
+    pub model_count: usize,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CompleteOAuthRequest {
     pub session_id: String,
@@ -49,7 +58,10 @@ pub struct CompleteOAuthRequest {
 
 fn profile_supports_oauth_connect(profile: &ProviderProfile) -> bool {
     profile.auth_method == AuthMethod::OAuth
-        && matches!(profile.provider_kind, Provider::OpenAI | Provider::Anthropic)
+        && matches!(
+            profile.provider_kind,
+            Provider::OpenAI | Provider::Anthropic
+        )
 }
 
 pub async fn list_profiles(State(state): State<AppState>) -> Result<Json<Vec<ProviderProfile>>> {
@@ -287,130 +299,22 @@ pub async fn delete_profile(
 
     Ok(Json(serde_json::json!({ "status": "deleted" })))
 }
+
 pub async fn list_provider_models(
     State(state): State<AppState>,
     Path(profile_id): Path<String>,
 ) -> Result<Json<Vec<ModelInfo>>> {
     let credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
     let config = AppConfig::load_from_path(&state.config_path)?;
-
-    let profile = config
-        .profiles
-        .iter()
-        .find(|p| p.id == profile_id)
-        .ok_or_else(|| AppError::Validation(format!("Profile not found: {}", profile_id)))?;
-
-    let secrets = credentials
-        .profiles
-        .get(&profile_id)
-        .cloned()
-        .unwrap_or_default();
-
-    let defaults = rushdino_providers::catalog::get_static_models_for_auth(
-        profile.provider_kind.clone(),
-        &profile.auth_method,
-    );
-
-    let provider_config = match profile.provider_kind {
-        Provider::Ollama => {
-            let mut base_url = profile
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "http://localhost:11434/v1".to_owned());
-            if !base_url.ends_with("/v1") && !base_url.ends_with("/v1/") {
-                base_url = format!("{}/v1", base_url.trim_end_matches('/'));
-            }
-            ProviderConfig::Ollama {
-                base_url,
-                model: profile.default_model.clone(),
-                api_key: None,
-            }
-        }
-        Provider::OpenAI => {
-            let bearer = secrets
-                .api_key
-                .as_deref()
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_owned);
-            let Some(bearer) = bearer else {
-                return Ok(Json(defaults));
-            };
-            ProviderConfig::OpenAI {
-                auth: OpenAIAuth::ApiKey { api_key: bearer },
-                model: profile.default_model.clone(),
-                base_url: profile.base_url.clone(),
-            }
-        }
-        Provider::Anthropic => {
-            let auth = if profile.auth_method == AuthMethod::OAuth {
-                let token = secrets
-                    .access_token
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned);
-                let Some(access_token) = token else {
-                    return Ok(Json(defaults));
-                };
-                AnthropicAuth::OAuth { access_token }
-            } else {
-                let key = secrets
-                    .api_key
-                    .as_deref()
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned);
-                let Some(api_key) = key else {
-                    return Ok(Json(defaults));
-                };
-                AnthropicAuth::ApiKey { api_key }
-            };
-            ProviderConfig::Anthropic {
-                auth,
-                model: profile.default_model.clone(),
-            }
-        }
+    let (profile, secrets, defaults) =
+        load_profile_runtime_state(&config, &credentials, &profile_id)?;
+    let Some(provider_config) = build_provider_config(&profile, &secrets) else {
+        return Ok(Json(defaults));
     };
 
     let provider = ProviderService::from_config(&provider_config)?;
     match provider.list_models().await {
-        Ok(mut models) if !models.is_empty() => {
-            // Filter returned models to those that match our static catalog selection
-            // for the profile's authentication method.
-            //
-            // (This avoids relying on a fragile `id.contains("codex")` heuristic,
-            // since Codex models can now include IDs like `gpt-5.4`.)
-            models.retain(|m| defaults.iter().any(|d| d.id == m.id));
-
-            for m in models.iter_mut() {
-                if let Some(d) = defaults.iter().find(|d| d.id == m.id) {
-                    if m.name.is_none() {
-                        m.name = d.name.clone();
-                    }
-                    if m.description.is_none() {
-                        m.description = d.description.clone();
-                    }
-                    if m.context_window.is_none() {
-                        m.context_window = d.context_window;
-                    }
-                    if m.is_reasoning.is_none() || m.is_reasoning == Some(false) {
-                        m.is_reasoning = d.is_reasoning;
-                    }
-                }
-            }
-
-            // Sort: Known models (with descriptions) first, then alphabetically by ID
-            models.sort_by(
-                |a, b| match (a.description.is_some(), b.description.is_some()) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.id.cmp(&b.id),
-                },
-            );
-
-            Ok(Json(models))
-        }
+        Ok(models) if !models.is_empty() => Ok(Json(normalize_models(models, &defaults))),
         Err(e) => {
             tracing::error!("Failed to fetch models from API: {e}");
             Ok(Json(defaults))
@@ -420,6 +324,167 @@ pub async fn list_provider_models(
             Ok(Json(defaults))
         }
     }
+}
+
+pub async fn verify_provider_connection(
+    State(state): State<AppState>,
+    Path(profile_id): Path<String>,
+) -> Result<Json<VerifyProviderResponse>> {
+    let credentials = CredentialsConfig::load_from_path(&state.credentials_path)?;
+    let config = AppConfig::load_from_path(&state.config_path)?;
+    let (profile, secrets, defaults) =
+        load_profile_runtime_state(&config, &credentials, &profile_id)?;
+
+    let Some(provider_config) = build_provider_config(&profile, &secrets) else {
+        return Ok(Json(VerifyProviderResponse {
+            ok: false,
+            source: "missing_credentials".to_owned(),
+            message: "No API key or OAuth token is saved for this profile yet.".to_owned(),
+            model_count: defaults.len(),
+        }));
+    };
+
+    let provider = ProviderService::from_config(&provider_config)?;
+    match provider.list_models().await {
+        Ok(models) if !models.is_empty() => Ok(Json(VerifyProviderResponse {
+            ok: true,
+            source: "remote".to_owned(),
+            message: "Connected successfully and fetched models from the provider.".to_owned(),
+            model_count: normalize_models(models, &defaults).len(),
+        })),
+        Ok(_) => Ok(Json(VerifyProviderResponse {
+            ok: false,
+            source: "empty_remote".to_owned(),
+            message: "The provider responded, but returned an empty model list.".to_owned(),
+            model_count: 0,
+        })),
+        Err(error) => Ok(Json(VerifyProviderResponse {
+            ok: false,
+            source: "remote_error".to_owned(),
+            message: error.to_string(),
+            model_count: defaults.len(),
+        })),
+    }
+}
+
+fn load_profile_runtime_state(
+    config: &AppConfig,
+    credentials: &CredentialsConfig,
+    profile_id: &str,
+) -> Result<(ProviderProfile, ProfileSecrets, Vec<ModelInfo>)> {
+    let profile = config
+        .profiles
+        .iter()
+        .find(|p| p.id == profile_id)
+        .cloned()
+        .ok_or_else(|| AppError::Validation(format!("Profile not found: {}", profile_id)))?;
+
+    let secrets = credentials
+        .profiles
+        .get(profile_id)
+        .cloned()
+        .unwrap_or_default();
+
+    let defaults = rushdino_providers::catalog::get_static_models_for_auth(
+        profile.provider_kind.clone(),
+        &profile.auth_method,
+    );
+
+    Ok((profile, secrets, defaults))
+}
+
+fn build_provider_config(
+    profile: &ProviderProfile,
+    secrets: &ProfileSecrets,
+) -> Option<ProviderConfig> {
+    match profile.provider_kind {
+        Provider::Ollama => {
+            let mut base_url = profile
+                .base_url
+                .clone()
+                .unwrap_or_else(|| "http://localhost:11434/v1".to_owned());
+            if !base_url.ends_with("/v1") && !base_url.ends_with("/v1/") {
+                base_url = format!("{}/v1", base_url.trim_end_matches('/'));
+            }
+            Some(ProviderConfig::Ollama {
+                base_url,
+                model: profile.default_model.clone(),
+                api_key: None,
+            })
+        }
+        Provider::OpenAI => {
+            let bearer = secrets
+                .api_key
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)?;
+            Some(ProviderConfig::OpenAI {
+                auth: OpenAIAuth::ApiKey { api_key: bearer },
+                model: profile.default_model.clone(),
+                base_url: profile.base_url.clone(),
+            })
+        }
+        Provider::Anthropic => {
+            let auth = if profile.auth_method == AuthMethod::OAuth {
+                let access_token = secrets
+                    .access_token
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)?;
+                AnthropicAuth::OAuth { access_token }
+            } else {
+                let api_key = secrets
+                    .api_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)?;
+                AnthropicAuth::ApiKey { api_key }
+            };
+            Some(ProviderConfig::Anthropic {
+                auth,
+                model: profile.default_model.clone(),
+            })
+        }
+    }
+}
+
+fn normalize_models(mut models: Vec<ModelInfo>, defaults: &[ModelInfo]) -> Vec<ModelInfo> {
+    // Filter returned models to those that match our static catalog selection
+    // for the profile's authentication method.
+    //
+    // (This avoids relying on a fragile `id.contains("codex")` heuristic,
+    // since Codex models can now include IDs like `gpt-5.4`.)
+    models.retain(|m| defaults.iter().any(|d| d.id == m.id));
+
+    for model in models.iter_mut() {
+        if let Some(default_model) = defaults.iter().find(|d| d.id == model.id) {
+            if model.name.is_none() {
+                model.name = default_model.name.clone();
+            }
+            if model.description.is_none() {
+                model.description = default_model.description.clone();
+            }
+            if model.context_window.is_none() {
+                model.context_window = default_model.context_window;
+            }
+            if model.is_reasoning.is_none() || model.is_reasoning == Some(false) {
+                model.is_reasoning = default_model.is_reasoning;
+            }
+        }
+    }
+
+    models.sort_by(
+        |a, b| match (a.description.is_some(), b.description.is_some()) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.id.cmp(&b.id),
+        },
+    );
+
+    models
 }
 
 #[cfg(test)]
@@ -481,5 +546,4 @@ mod tests {
 
         assert!(error.to_string().contains("expired"));
     }
-
 }

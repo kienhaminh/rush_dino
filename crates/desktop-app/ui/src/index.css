@@ -971,6 +971,69 @@
   justify-content: flex-end;
   gap: 8px;
 }
+.approval-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.approval-card__title {
+  font-size: 14px;
+  color: var(--ds-text-primary);
+}
+.approval-card--input {
+  border-color: rgba(34, 211, 200, 0.45);
+  border-left-color: var(--ds-teal-400);
+  background: rgba(34, 211, 200, 0.06);
+}
+.approval-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.approval-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.approval-form__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ds-text-primary);
+}
+.approval-form__hint {
+  font-size: 12px;
+  color: var(--ds-text-muted);
+}
+.approval-form__control {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-border-line);
+  border-radius: 8px;
+  background: var(--ds-bg-base);
+  color: var(--ds-text-primary);
+  font: inherit;
+}
+.approval-form__control--textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.approval-form__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.approval-form__choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ds-text-secondary);
+}
+.approval-form__choice--single {
+  padding-top: 4px;
+}
 
 /* Empty chat */
 .chat-empty {
@@ -1068,8 +1131,68 @@
   background: rgba(255, 255, 255, 0.04);
 }
 
+.composer__icon:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .composer__spacer {
   flex: 1;
+}
+
+.composer__control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--ds-border-strong);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.composer__control-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ds-text-dim);
+}
+
+.composer__control-meta {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ds-teal-300);
+}
+
+.composer__select {
+  min-width: 116px;
+  max-width: 220px;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+
+.composer__select:disabled {
+  cursor: default;
+  color: var(--ds-text-dim);
+}
+
+.composer__select option {
+  background: #0d1117;
+  color: var(--ds-text-primary);
+}
+
+.composer__pill:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .composer__model {

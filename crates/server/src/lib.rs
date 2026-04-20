@@ -1,18 +1,18 @@
 pub mod approval_gate;
-pub mod input_request_gate;
-pub mod guardrail_broker;
-pub mod mcp_manager;
 pub mod channel_pairing;
-pub mod mobile_gateway;
-pub mod secret_vault;
 mod chat_broadcast;
 mod cron_runtime;
+pub mod guardrail_broker;
+pub mod input_request_gate;
 mod knowledge_graph_bridge;
+pub mod mcp_manager;
 pub mod middleware;
+pub mod mobile_gateway;
 mod provider_runtime;
 pub mod routes;
 mod runtime_log_store;
 mod runtime_state;
+pub mod secret_vault;
 pub mod state;
 pub mod static_files;
 mod system_broker;
@@ -42,15 +42,15 @@ use rushdino_security::rate_limit::EndpointLimiters;
 use crate::{
     approval_gate::ApprovalGate,
     channel_pairing::{ChannelPairingIngressPolicy, ChannelPairingService},
-    mcp_manager::McpManager,
-    mobile_gateway::{MobileGatewayAdapter, MobileGatewayService},
     chat_broadcast::{ChatBroadcastHub, GatewayChatObserver},
-    input_request_gate::InputRequestGate,
     cron_runtime::spawn_cron_runtime,
+    input_request_gate::InputRequestGate,
+    mcp_manager::McpManager,
     middleware::{
         cors_layer, dashboard_auth_middleware, hmac_auth_middleware, rate_limit_middleware,
         HmacAuthState,
     },
+    mobile_gateway::{MobileGatewayAdapter, MobileGatewayService},
     provider_runtime::refresh_runtime_from_disk,
     runtime_log_store::RuntimeLogStore,
     runtime_state::RuntimeState,
@@ -115,8 +115,7 @@ pub async fn build_app(
         input_gate.clone(),
         runtime.clone(),
         secret_vault.clone(),
-    ))
-        as rushdino_agent::SharedSystemBroker;
+    )) as rushdino_agent::SharedSystemBroker;
     let runtime_state = Arc::new(RuntimeState::new(
         config.clone(),
         pool.clone(),
@@ -387,7 +386,9 @@ pub async fn build_app(
     tokio::spawn(async move {
         if let Some(engine) = runtime_state_bg.engine_opt() {
             let registry = engine.tool_registry.clone();
-            mcp_manager_bg.reconcile_and_register(&servers_bg, registry).await;
+            mcp_manager_bg
+                .reconcile_and_register(&servers_bg, registry)
+                .await;
             engine.ensure_main_session().await.ok();
         }
     });
@@ -456,7 +457,10 @@ pub async fn build_app(
             "/api/sessions",
             get(routes::sessions::list_sessions).post(routes::sessions::create_session),
         )
-        .route("/api/agent-sessions", get(routes::sessions::list_agent_sessions))
+        .route(
+            "/api/agent-sessions",
+            get(routes::sessions::list_agent_sessions),
+        )
         .route(
             "/api/sessions/:id",
             get(routes::sessions::get_session).delete(routes::sessions::delete_session),
@@ -621,7 +625,10 @@ pub async fn build_app(
         // Kanban task board
         .route("/api/kanban/board", get(routes::kanban::get_kanban_board))
         .route("/api/kanban/tasks", get(routes::kanban::list_kanban_tasks))
-        .route("/api/kanban/tasks/:id", get(routes::kanban::get_kanban_task).delete(routes::kanban::delete_kanban_task))
+        .route(
+            "/api/kanban/tasks/:id",
+            get(routes::kanban::get_kanban_task).delete(routes::kanban::delete_kanban_task),
+        )
         .route("/api/kanban/stats", get(routes::kanban::get_kanban_stats))
         .route("/api/messages", get(routes::messages::list_messages))
         .route("/api/graph/search", get(routes::graph::search))
@@ -668,6 +675,10 @@ pub async fn build_app(
             get(routes::providers::list_provider_models),
         )
         .route(
+            "/api/providers/:profile_id/verify",
+            get(routes::providers::verify_provider_connection),
+        )
+        .route(
             "/api/providers/:profile_id/connect-oauth/start",
             post(routes::providers::connect_profile_oauth_start),
         )
@@ -694,8 +705,14 @@ pub async fn build_app(
         )
         // Version update API
         .route("/api/version/check", get(routes::version::check_version))
-        .route("/api/version/upgrade", post(routes::version::trigger_upgrade))
-        .route("/api/version/restart", post(routes::version::trigger_restart))
+        .route(
+            "/api/version/upgrade",
+            post(routes::version::trigger_upgrade),
+        )
+        .route(
+            "/api/version/restart",
+            post(routes::version::trigger_restart),
+        )
         .route("/api/version/skip", post(routes::version::skip_version))
         .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(
@@ -729,7 +746,14 @@ pub async fn run_server() -> Result<()> {
     let pool = Arc::new(db::init_pool(&config.db_path).await?);
     db::run_migrations(pool.as_ref()).await?;
 
-    let app = build_app(config.clone(), credentials, config_path, credentials_path, pool).await?;
+    let app = build_app(
+        config.clone(),
+        credentials,
+        config_path,
+        credentials_path,
+        pool,
+    )
+    .await?;
 
     let addr = format!("{}:{}", config.host, config.port);
     let listener = TcpListener::bind(&addr).await?;
@@ -818,7 +842,12 @@ fn should_register_gateway_adapter(
 pub async fn refresh_engine_provider(state: &AppState) -> Result<()> {
     // init_optional_services=true: user explicitly triggered a config update,
     // so KgGateway and MCP are connected/reconciled if enabled.
-    refresh_runtime_from_disk(state.runtime.as_ref(), Some(state.mcp_manager.as_ref()), true).await
+    refresh_runtime_from_disk(
+        state.runtime.as_ref(),
+        Some(state.mcp_manager.as_ref()),
+        true,
+    )
+    .await
 }
 
 async fn shutdown_signal() {
@@ -895,7 +924,10 @@ mod tests {
             ..CredentialsConfig::default()
         };
         let result = resolve_hmac_auth(&config, &creds);
-        assert!(result.is_err(), "must error when hmac_auth_enabled but no secret");
+        assert!(
+            result.is_err(),
+            "must error when hmac_auth_enabled but no secret"
+        );
     }
 
     #[test]
@@ -921,7 +953,10 @@ mod tests {
             ..CredentialsConfig::default()
         };
         let result = resolve_hmac_auth(&config, &creds);
-        assert!(result.is_err(), "whitespace-only secret must not be accepted");
+        assert!(
+            result.is_err(),
+            "whitespace-only secret must not be accepted"
+        );
     }
 
     #[test]

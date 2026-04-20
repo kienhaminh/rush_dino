@@ -77,6 +77,11 @@ export default function Search() {
           )}
         </div>
 
+        <p className="search-page__hint">
+          Search matches cached chats and agent metadata already loaded in this desktop app. It is
+          local filtering, not server-side full-text search.
+        </p>
+
         {empty && (
           <p className="kg-hint">Nothing matches <span className="mono">{query}</span>.</p>
         )}

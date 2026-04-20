@@ -134,9 +134,21 @@ pub(crate) struct AssistantRunJob {
     pub(crate) session_id: String,
     pub(crate) conversation_id: String,
     pub(crate) user_input: String,
+    pub(crate) provider_override: Option<Arc<Provider>>,
+    pub(crate) model: String,
+    pub(crate) thinking_level_override: Option<ThinkingLevel>,
     pub(crate) ws_event_tx: Option<mpsc::Sender<WsStreamEvent>>,
     pub(crate) gateway_event_tx: Option<mpsc::Sender<StreamingEvent>>,
     pub(crate) completion_tx: Option<oneshot::Sender<std::result::Result<ChatResponse, String>>>,
+}
+
+#[derive(Default)]
+pub struct AssistantRunOverrides {
+    pub provider: Option<Arc<Provider>>,
+    pub provider_name: Option<String>,
+    pub model: Option<String>,
+    pub profile_id: Option<String>,
+    pub thinking_level: Option<ThinkingLevel>,
 }
 
 pub struct GatewayRunHandle {
