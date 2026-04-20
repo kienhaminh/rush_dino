@@ -25,17 +25,28 @@ export type UsageMetricRow = {
 }
 
 export type UsageMetricsResponse = {
-  rows?: UsageMetricRow[]
-  items?: UsageMetricRow[]
-  totals?: UsageTotals
-  byProvider?: Array<{ key: string; totals: UsageTotals }>
-  byModel?: Array<{ key: string; totals: UsageTotals }>
-  byDay?: Array<{ key: string; totals: UsageTotals }>
-  [key: string]: unknown
+  items: UsageMetricRow[]
+  aggregates: {
+    totals: UsageTotals
+    byProvider: Array<{ key: string; totals: UsageTotals }>
+    byModel: Array<{ key: string; totals: UsageTotals }>
+  }
+  daily: Array<{ date: string; totals: UsageTotals }>
 }
 
-export async function getUsageMetrics(): Promise<UsageMetricsResponse> {
-  const res = await apiFetch('/api/usage/metrics')
+export type UsageMetricsFilters = {
+  start?: string
+  end?: string
+}
+
+export async function getUsageMetrics(
+  filters: UsageMetricsFilters = {},
+): Promise<UsageMetricsResponse> {
+  const params = new URLSearchParams()
+  if (filters.start) params.set('start', filters.start)
+  if (filters.end) params.set('end', filters.end)
+  const suffix = params.size > 0 ? `?${params.toString()}` : ''
+  const res = await apiFetch(`/api/usage/metrics${suffix}`)
   if (!res.ok) throw new Error(`usage/metrics: ${res.status}`)
   return (await res.json()) as UsageMetricsResponse
 }

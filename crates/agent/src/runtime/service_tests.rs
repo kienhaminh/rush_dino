@@ -178,3 +178,37 @@ async fn stream_output_persists_partial_text_before_completion() {
     let reloaded = runtime.get_run(&run.id).await.expect("reload run");
     assert_eq!(reloaded.output_text.as_deref(), Some("partial streamed answer"));
 }
+
+#[tokio::test]
+async fn submit_assistant_run_with_origin_persists_override_metadata() {
+    let runtime = create_runtime().await;
+
+    let (run, started) = runtime
+        .submit_assistant_run_with_origin(AssistantRunParams {
+            session_id: "session-6",
+            conversation_id: "conv-6",
+            title: "Override",
+            input_text: "body",
+            provider: "openai",
+            model: "gpt-5.4",
+            fallback_profile_id: Some("secondary"),
+            origin: RunOriginMetadata {
+                source: Some("desktop".to_owned()),
+                ..RunOriginMetadata::default()
+            },
+        })
+        .await
+        .expect("submit run with overrides");
+
+    assert!(started);
+    assert_eq!(run.provider, "openai");
+    assert_eq!(run.model, "gpt-5.4");
+    assert_eq!(run.fallback_profile_id.as_deref(), Some("secondary"));
+    assert_eq!(run.source.as_deref(), Some("desktop"));
+
+    let reloaded = runtime.get_run(&run.id).await.expect("reload run");
+    assert_eq!(reloaded.provider, "openai");
+    assert_eq!(reloaded.model, "gpt-5.4");
+    assert_eq!(reloaded.fallback_profile_id.as_deref(), Some("secondary"));
+    assert_eq!(reloaded.source.as_deref(), Some("desktop"));
+}

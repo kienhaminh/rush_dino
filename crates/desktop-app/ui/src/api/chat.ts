@@ -19,6 +19,57 @@ export type ToolCall = {
   result?: unknown
 }
 
+export type InputRequestFieldType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'multiselect'
+  | 'boolean'
+  | 'number'
+
+export type InputFieldOption = {
+  label: string
+  value: string
+}
+
+export type InputFieldSpec = {
+  name: string
+  label: string
+  description?: string
+  type: InputRequestFieldType
+  required?: boolean
+  placeholder?: string
+  defaultValue?: unknown
+  min?: number
+  max?: number
+  minLength?: number
+  maxLength?: number
+  options?: InputFieldOption[]
+  secret?: boolean
+}
+
+export type InputRequestSpec = {
+  kind: 'question' | 'form'
+  title: string
+  description?: string
+  submitLabel?: string
+  cancelLabel?: string
+  fields: InputFieldSpec[]
+}
+
+export type PendingInputRequest = {
+  requestId: string
+  sessionId: string
+  conversationId: string
+  runId?: string
+  payload: {
+    spec: InputRequestSpec
+  }
+  createdAt: string
+}
+
+export type InputRequestStatus = 'submitted' | 'cancelled'
+
 export type ConversationSummary = {
   id: string
   title?: string
@@ -30,7 +81,7 @@ export type ConversationDetail = {
   id: string
   title?: string
   messages: ChatMessage[]
-  pendingInputRequests?: unknown[]
+  pendingInputRequests?: PendingInputRequest[]
   latestMetrics?: unknown
   activeRun?: unknown
 }
@@ -90,5 +141,24 @@ export async function deleteConversation(id: string): Promise<void> {
   })
   if (!res.ok && res.status !== 404) {
     throw new Error(`deleteConversation: ${res.status}`)
+  }
+}
+
+export async function resolveInputRequest(
+  requestId: string,
+  status: InputRequestStatus,
+  values?: Record<string, unknown>,
+): Promise<void> {
+  const res = await apiFetch(`/api/input-requests/${encodeURIComponent(requestId)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      status,
+      values,
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.statusText)
+    throw new Error(`resolveInputRequest ${res.status}: ${text}`)
   }
 }

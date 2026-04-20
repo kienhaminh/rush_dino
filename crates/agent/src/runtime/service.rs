@@ -24,6 +24,7 @@ pub struct AssistantRunParams<'a> {
     pub input_text: &'a str,
     pub provider: &'a str,
     pub model: &'a str,
+    pub fallback_profile_id: Option<&'a str>,
     pub origin: RunOriginMetadata,
 }
 
@@ -92,6 +93,7 @@ impl AgentRuntime {
             input_text,
             provider,
             model,
+            fallback_profile_id: None,
             origin: RunOriginMetadata::default(),
         })
         .await
@@ -116,7 +118,7 @@ impl AgentRuntime {
                 input_text: Some(p.input_text.to_owned()),
                 provider: p.provider.to_owned(),
                 model: p.model.to_owned(),
-                fallback_profile_id: None,
+                fallback_profile_id: p.fallback_profile_id.map(ToOwned::to_owned),
                 queue_position: None,
                 policy: RunPolicySnapshot::default(),
                 trace_id: Some(Uuid::new_v4().to_string()),

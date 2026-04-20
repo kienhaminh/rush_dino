@@ -56,3 +56,4 @@ tempfile = "3"
 tower.workspace = true
 uuid.workspace = true
 sqlx.workspace = true
+tokio-tungstenite = { version = "0.23", features = ["rustls-tls-native-roots"] }

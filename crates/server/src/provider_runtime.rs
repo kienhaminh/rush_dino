@@ -230,6 +230,16 @@ pub async fn resolve_default_profile_provider(
     credentials_path: &Path,
 ) -> Result<ResolvedRuntimeProvider> {
     let profile = require_default_profile(config)?;
+    resolve_profile_provider(config, credentials, credentials_path, &profile.id).await
+}
+
+pub async fn resolve_profile_provider(
+    config: &AppConfig,
+    credentials: &mut CredentialsConfig,
+    credentials_path: &Path,
+    profile_id: &str,
+) -> Result<ResolvedRuntimeProvider> {
+    let profile = require_profile(config, profile_id)?;
     let provider_config =
         provider_config_from_profile(config, credentials, credentials_path, profile).await?;
 
@@ -240,7 +250,6 @@ pub async fn resolve_default_profile_provider(
     })
 }
 
-
 fn require_default_profile(config: &AppConfig) -> Result<&ProviderProfile> {
     let Some(profile_id) = config.default_profile_id.as_ref() else {
         return Err(AppError::Provider(
@@ -249,10 +258,14 @@ fn require_default_profile(config: &AppConfig) -> Result<&ProviderProfile> {
         ));
     };
 
+    require_profile(config, profile_id)
+}
+
+fn require_profile<'a>(config: &'a AppConfig, profile_id: &str) -> Result<&'a ProviderProfile> {
     config
         .profiles
         .iter()
-        .find(|profile| profile.id == *profile_id)
+        .find(|profile| profile.id == profile_id)
         .ok_or_else(|| {
             AppError::Provider(format!("default profile '{}' does not exist", profile_id))
         })
