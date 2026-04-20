@@ -69,9 +69,17 @@ eframe = "0.30"
 [workspace.lints.clippy]
 pedantic = "warn"
 
+[profile.dev.package."*"]
+# Compile all external crates (crates.io deps) without debug info.
+# Cuts deps/ directory size by ~60-70% (e.g. serenity drops from 74 MB to ~15 MB).
+# Workspace crates still get full debug info from [profile.dev].
+debug = false
+opt-level = 1
+
 [profile.release]
-opt-level = 3     # Optimize for speed
-lto = true          # Enable Link Time Optimization
-codegen-units = 1   # Maximize LTO impact
-panic = "abort"     # Remove unwinding infrastructure
-strip = true        # Remove symbols
+opt-level = 3         # Optimize for speed
+lto = true            # Enable Link Time Optimization
+codegen-units = 1     # Maximize LTO impact
+panic = "abort"       # Remove unwinding infrastructure
+strip = true          # Remove symbols from final binary
+debug = false         # Skip generating debug info — strip = true would discard it anyway
