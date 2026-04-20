@@ -51,6 +51,8 @@ pub async fn init_pool(db_path: &Path) -> Result<SqlitePool> {
 }
 
 pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
+    // Keep this wrapper close to the migration directory so new SQL files
+    // are picked up by rebuilds in test-only crates as well.
     sqlx::migrate!("./migrations").run(pool).await?;
     Ok(())
 }

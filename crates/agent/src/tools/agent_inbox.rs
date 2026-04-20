@@ -7,15 +7,23 @@ use serde_json::{json, Value};
 
 use rushdino_common::{AppError, Result};
 
-use crate::{agent_message_store::AgentMessageStore, tool_registry::Tool};
+use crate::{
+    agent_manager::AgentManager,
+    agent_message_store::{AgentMessageState, AgentMessageStore},
+    tool_registry::Tool,
+};
 
 pub struct AgentInboxTool {
     store: Arc<AgentMessageStore>,
+    agent_manager: Arc<AgentManager>,
 }
 
 impl AgentInboxTool {
-    pub fn new(store: Arc<AgentMessageStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<AgentMessageStore>, agent_manager: Arc<AgentManager>) -> Self {
+        Self {
+            store,
+            agent_manager,
+        }
     }
 }
 
@@ -73,13 +81,30 @@ impl Tool for AgentInboxTool {
                 let to = args.get("to").and_then(Value::as_str).ok_or_else(|| {
                     AppError::Validation("to is required for send action".to_owned())
                 })?;
-                let content =
-                    args.get("content").and_then(Value::as_str).ok_or_else(|| {
-                        AppError::Validation("content is required for send action".to_owned())
-                    })?;
+                let content = args.get("content").and_then(Value::as_str).ok_or_else(|| {
+                    AppError::Validation("content is required for send action".to_owned())
+                })?;
 
-                let msg = self.store.send(from, to, content).await?;
-                Ok(format!("Message sent to {} (id: {})", to, msg.id))
+                let target = self
+                    .agent_manager
+                    .get(to)
+                    .ok_or_else(|| AppError::Validation(format!("unknown agent: {to}")))?;
+                let initial_state = if target.inbox_enabled {
+                    AgentMessageState::Pending
+                } else {
+                    AgentMessageState::Processed
+                };
+
+                let msg = self
+                    .store
+                    .send(from, to, content, initial_state, None)
+                    .await?;
+                let status = if initial_state == AgentMessageState::Pending {
+                    "queued"
+                } else {
+                    "sent"
+                };
+                Ok(format!("Message {status} to {} (id: {})", to, msg.id))
             }
             "check" => {
                 let messages = self.store.inbox(from, true).await?;
@@ -87,7 +112,6 @@ impl Tool for AgentInboxTool {
                     return Ok("No unread messages.".to_owned());
                 }
 
-                // Mark all as read
                 for msg in &messages {
                     let _ = self.store.mark_read(&msg.id).await;
                 }
@@ -95,8 +119,11 @@ impl Tool for AgentInboxTool {
                 let mut output = format!("{} unread message(s):\n\n", messages.len());
                 for msg in &messages {
                     output.push_str(&format!(
-                        "From: {}\nTime: {}\n{}\n---\n",
-                        msg.from_agent, msg.created_at, msg.content
+                        "From: {}\nTime: {}\nState: {}\n{}\n---\n",
+                        msg.from_agent,
+                        msg.created_at,
+                        msg.state.as_str(),
+                        msg.content
                     ));
                 }
                 Ok(output)

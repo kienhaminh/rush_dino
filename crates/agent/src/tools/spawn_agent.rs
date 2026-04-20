@@ -96,6 +96,7 @@ impl Tool for SpawnAgentTool {
             skills: None,
             color: None,
             model: None,
+            inbox_enabled: false,
             claims_tasks: true,
             claim_tags,
             sandbox_policy: None,

@@ -18,6 +18,7 @@ fn sample_template(name: &str) -> AgentTemplate {
         skills: None,
         color: None,
         model: None,
+        inbox_enabled: false,
         claims_tasks: true,
         claim_tags: Vec::new(),
         sandbox_policy: None,
@@ -147,6 +148,21 @@ fn markdown_skills_round_trip() {
 }
 
 #[test]
+fn markdown_inbox_enabled_round_trip() {
+    let content =
+        "---\nname: writer\ndescription: Writer\ninbox_enabled: true\n---\n\nReply briefly.";
+    let template = parse_agent_markdown(content).expect("should parse");
+    assert!(template.inbox_enabled);
+
+    let dir = temp_dir();
+    let manager = AgentManager::new(dir.clone());
+    manager.save(&template).expect("save should succeed");
+    let loaded = manager.get("writer").expect("should load");
+    assert!(loaded.inbox_enabled);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn bundled_agent_templates_do_not_pin_models() {
     let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../common/src/agents");
     let entries = read_dir(&common_agents_dir).expect("bundled agents dir should exist");
@@ -188,4 +204,37 @@ fn bundled_agent_templates_define_expected_team_skills() {
     assert_eq!(planner.skills.as_deref(), Some("skill-creator"));
     assert_eq!(workflow_generator.skills.as_deref(), Some("skill-creator"));
     assert!(writer.skills.is_none());
+}
+
+#[test]
+fn bundled_agent_templates_enable_agent_inbox() {
+    let common_agents_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../common/src/agents");
+    let entries = read_dir(&common_agents_dir).expect("bundled agents dir should exist");
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(ext) = path.extension().and_then(|ext| ext.to_str()) else {
+            continue;
+        };
+        if !matches!(ext, "toml" | "md") {
+            continue;
+        }
+
+        let content = fs::read_to_string(&path).expect("bundled agent template should load");
+        let Some(template) = parse_agent_markdown(&content) else {
+            continue;
+        };
+        let tools = template.tools.unwrap_or_default();
+        assert!(
+            tools.split(',').any(|tool| tool.trim() == "agent_inbox"),
+            "bundled agent template {} is missing agent_inbox",
+            path.display()
+        );
+        assert!(
+            template.inbox_enabled,
+            "bundled agent template {} should enable inbox processing",
+            path.display()
+        );
+    }
 }

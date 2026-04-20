@@ -24,6 +24,9 @@ pub struct AgentTemplate {
     /// overrides the engine's default model for this agent's requests.
     #[serde(default)]
     pub model: Option<String>,
+    /// Whether this agent should auto-consume inter-agent inbox messages.
+    #[serde(default)]
+    pub inbox_enabled: bool,
     /// Whether this agent participates in kanban auto-claim matching.
     /// Defaults to `true`. Set to `false` for meta-agents that should never claim tasks.
     #[serde(default = "default_claims_tasks")]
@@ -83,6 +86,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
     let mut skills: Option<String> = None;
     let mut color: Option<String> = None;
     let mut model: Option<String> = None;
+    let mut inbox_enabled: Option<bool> = None;
     let mut claims_tasks: Option<bool> = None;
     let mut claim_tags: Option<String> = None;
 
@@ -98,6 +102,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
                 "skills" => skills = Some(value),
                 "color" => color = Some(value),
                 "model" => model = Some(value),
+                "inbox_enabled" => inbox_enabled = Some(value == "true"),
                 "claims_tasks" => claims_tasks = Some(value == "true"),
                 "claim_tags" => claim_tags = Some(value),
                 _ => {}
@@ -125,6 +130,7 @@ pub fn parse_agent_markdown(content: &str) -> Option<AgentTemplate> {
         skills,
         color,
         model,
+        inbox_enabled: inbox_enabled.unwrap_or(false),
         claims_tasks: claims_tasks.unwrap_or(true),
         claim_tags,
         // sandbox_policy is populated by AgentManager::get/list after parsing.
@@ -272,6 +278,9 @@ impl AgentManager {
         }
         if let Some(model) = &template.model {
             content.push_str(&format!("model: {}\n", model));
+        }
+        if template.inbox_enabled {
+            content.push_str("inbox_enabled: true\n");
         }
         if !template.claims_tasks {
             content.push_str("claims_tasks: false\n");

@@ -32,6 +32,7 @@ fn agent(name: &str, claims: bool) -> AgentTemplate {
         skills: None,
         color: None,
         model: None,
+        inbox_enabled: false,
         claims_tasks: claims,
         claim_tags: Vec::new(),
         sandbox_policy: None,

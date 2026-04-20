@@ -1,9 +1,12 @@
-use std::{path::PathBuf, sync::{Arc, Weak}};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Weak},
+};
 
-use sqlx::SqlitePool;
 use rushdino_common::Result;
 use rushdino_providers::Provider;
 use rushdino_security::guardrail::pipeline::GuardrailPipeline;
+use sqlx::SqlitePool;
 
 use crate::{
     agent_health_store::AgentHealthStore,
@@ -22,16 +25,16 @@ use crate::{
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
         agent_inbox::AgentInboxTool,
+        bash::ShellExecTool,
         cron_tools::{cron_list_tool, cron_manage_tool, AgentTurnCtx},
         delegate_to_agent::DelegateToAgentTool,
-        kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
-        team_status::TeamStatusTool,
         file_edit::FileEditTool,
         file_read::FileReadTool,
         file_write::FileWriteTool,
         glob_search::GlobSearchTool,
         grep_search::GrepSearchTool,
         image::ImageTool,
+        kanban_tools::{ClaimTaskTool, PostTaskTool, ReviewTaskTool, UpdateTaskTool},
         knowledge_graph::KnowledgeGraphTool,
         memory_search::MemorySearchTool,
         memory_write::MemoryWriteTool,
@@ -39,8 +42,8 @@ use crate::{
         request_user_input::RequestUserInputTool,
         run_workflow::RunWorkflowTool,
         session_tools::{SessionManageTool, SessionSendTool},
-        bash::ShellExecTool,
         spawn_agent::SpawnAgentTool,
+        team_status::TeamStatusTool,
         web_fetch::WebFetchTool,
         web_search::WebSearchTool,
         workflow_manage::WorkflowManageTool,
@@ -83,6 +86,7 @@ pub struct EngineDeps {
     pub home_dir: std::path::PathBuf,
     pub broadcast_tx: tokio::sync::broadcast::Sender<serde_json::Value>,
     pub task_notify: Arc<tokio::sync::Notify>,
+    pub message_notify: Arc<tokio::sync::Notify>,
 }
 
 pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
@@ -105,9 +109,13 @@ pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
     let cron_manager = Arc::new(CronManager::new(pool.clone()));
     let task_memory = Arc::new(AgentTaskMemory::new(home_dir.clone()));
     let task_notify = Arc::new(tokio::sync::Notify::new());
+    let message_notify = Arc::new(tokio::sync::Notify::new());
     let kanban_store = Arc::new(KanbanStore::with_notify(pool.clone(), task_notify.clone()));
     let health_store = Arc::new(AgentHealthStore::new(pool.clone()));
-    let message_store = Arc::new(AgentMessageStore::new(pool.clone()));
+    let message_store = Arc::new(AgentMessageStore::with_notify(
+        pool.clone(),
+        message_notify.clone(),
+    ));
 
     let agent_manager = Arc::new(AgentManager::new(home_dir.join("agents")));
 
@@ -181,7 +189,10 @@ pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
     registry.register(TeamStatusTool::new(kanban_store.clone()));
 
     // Inter-agent messaging tool.
-    registry.register(AgentInboxTool::new(message_store.clone()));
+    registry.register(AgentInboxTool::new(
+        message_store.clone(),
+        agent_manager.clone(),
+    ));
 
     let _ = system_broker;
 
@@ -281,5 +292,6 @@ pub fn build_engine_deps(input: EngineBuildInput) -> Result<EngineDeps> {
         home_dir,
         broadcast_tx,
         task_notify,
+        message_notify,
     })
 }

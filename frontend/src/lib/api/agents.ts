@@ -19,6 +19,21 @@ export type AgentMessageRecord = {
   content: string;
   read: boolean;
   createdAt: string;
+  state: 'pending' | 'processing' | 'processed' | 'failed';
+  replyToMessageId: string | null;
+  failureReason: string | null;
+};
+
+type ApiAgentMessageRecord = {
+  id: string;
+  from_agent: string;
+  to_agent: string;
+  content: string;
+  read: boolean;
+  created_at: string;
+  state?: 'pending' | 'processing' | 'processed' | 'failed';
+  reply_to_message_id?: string | null;
+  failure_reason?: string | null;
 };
 
 export async function fetchAgents(): Promise<AgentRecord[]> {
@@ -85,7 +100,17 @@ export async function fetchMessages(params?: {
   const qs = searchParams.toString();
   const res = await fetch(`/api/messages${qs ? `?${qs}` : ''}`);
   const data = await parseJsonOrThrow(res, 'messages');
-  return data.items;
+  return (data.items ?? []).map((item: ApiAgentMessageRecord) => ({
+    id: item.id,
+    fromAgent: item.from_agent,
+    toAgent: item.to_agent,
+    content: item.content,
+    read: item.read,
+    createdAt: item.created_at,
+    state: item.state ?? 'processed',
+    replyToMessageId: item.reply_to_message_id ?? null,
+    failureReason: item.failure_reason ?? null,
+  }));
 }
 
 export async function fetchAgentSessions(): Promise<SessionSummary[]> {

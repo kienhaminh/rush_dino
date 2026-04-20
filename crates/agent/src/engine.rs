@@ -245,6 +245,20 @@ impl AgentEngine {
         });
         dispatcher.start();
 
+        let inbox_dispatcher = Arc::new(crate::inbox_dispatcher::InboxDispatcher::new(
+            deps.message_store.clone(),
+            deps.agent_manager.clone(),
+            provider.clone(),
+            config.clone(),
+            Arc::downgrade(&deps.tool_registry),
+            Arc::downgrade(&deps.session_ctx),
+            deps.conversation.clone(),
+            deps.task_memory.clone(),
+            deps.home_dir.clone(),
+            deps.message_notify.clone(),
+        ));
+        inbox_dispatcher.start();
+
         Ok(Self {
             provider,
             conversation: deps.conversation,
@@ -282,7 +296,11 @@ impl AgentEngine {
         }
     }
 
-    pub(crate) async fn persist_usage_metric(&self, conversation_id: &str, response: &ChatResponse) {
+    pub(crate) async fn persist_usage_metric(
+        &self,
+        conversation_id: &str,
+        response: &ChatResponse,
+    ) {
         let Some(usage) = response.usage.as_ref() else {
             return;
         };
@@ -336,5 +354,4 @@ impl AgentEngine {
             ),
         ))
     }
-
 }

@@ -412,6 +412,7 @@ mod tests {
                 skills: None,
                 color: None,
                 model: None,
+                inbox_enabled: false,
                 claims_tasks: false,
                 claim_tags: Vec::new(),
                 sandbox_policy: None,

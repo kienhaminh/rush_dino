@@ -48,11 +48,19 @@ export function MessagesPage() {
                   <span className="font-semibold">{msg.toAgent}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  {msg.state !== 'processed' && (
+                    <Badge variant="outline" className="text-[7px] px-1 uppercase">
+                      {msg.state}
+                    </Badge>
+                  )}
                   {!msg.read && <Badge variant="secondary" className="text-[7px] px-1">NEW</Badge>}
                   <span className="text-[10px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
                 </div>
               </div>
               <p className="text-[9px] text-muted-foreground leading-relaxed">{msg.content}</p>
+              {msg.failureReason && (
+                <p className="mt-1 text-[8px] text-destructive">{msg.failureReason}</p>
+              )}
             </CardContent>
           </Card>
         ))}

@@ -61,11 +61,19 @@ function AgentMessagesPanel({ agentName }: { agentName: string }) {
               <span className="text-muted-foreground mx-1">→</span>
               <span>{msg.toAgent}</span>
             </span>
-            <span className="text-[8px] text-muted-foreground">
-              {formatMessageTime(msg.createdAt)}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {msg.state !== 'processed' && (
+                <span className="text-[8px] uppercase text-muted-foreground">{msg.state}</span>
+              )}
+              <span className="text-[8px] text-muted-foreground">
+                {formatMessageTime(msg.createdAt)}
+              </span>
+            </div>
           </div>
           <p className="text-[9px] text-muted-foreground">{msg.content}</p>
+          {msg.failureReason && (
+            <p className="mt-1 text-[8px] text-destructive">{msg.failureReason}</p>
+          )}
         </div>
       ))}
     </div>
