@@ -1,0 +1,7 @@
+Meet RushDino.
+One local-first AI companion, not a pile of disconnected bots.
+Behind one identity, specialist agents work in parallel.
+Memory, tone, and relationship context stay connected across every channel.
+Telegram, Discord, Slack, and Web all reach the same companion.
+And the operator stays in control: runs, approvals, policies, logs, and local state.
+RushDino. One companion. Many specialists. Your machine.
