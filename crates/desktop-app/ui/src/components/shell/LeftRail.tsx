@@ -16,14 +16,11 @@ import { SkeletonRow } from '@/components/Skeleton'
 import { cn } from '@/lib/cn'
 
 type Props = {
-  onOpenPalette: () => void
   onNewChat?: () => void
   onToggleSidebar?: () => void
 }
 
-export function LeftRail({ onOpenPalette: _unused, onNewChat, onToggleSidebar }: Props) {
-  void _unused
-
+export function LeftRail({ onNewChat, onToggleSidebar }: Props) {
   const conversations = useQuery({
     queryKey: ['conversations'],
     queryFn: listConversations,

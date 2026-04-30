@@ -13,7 +13,6 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
 
-  const openPalette = useCallback(() => setPaletteOpen(true), [])
   const startNewChat = useCallback(() => navigate('/'), [navigate])
   const toggleSidebar = useCallback(() => setCollapsed((v) => !v), [])
 
@@ -84,7 +83,6 @@ export function AppShell() {
         />
       )}
       <LeftRail
-        onOpenPalette={openPalette}
         onNewChat={startNewChat}
         onToggleSidebar={toggleSidebar}
       />

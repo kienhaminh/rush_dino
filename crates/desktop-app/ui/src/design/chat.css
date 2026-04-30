@@ -107,6 +107,19 @@
   color: var(--ds-text-primary);
 }
 .chat-topbar__spacer { flex: 1; }
+.chat-topbar__running-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, currentColor);
+  opacity: 0.8;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1); }
+}
 .chat-topbar__actions {
   display: flex;
   gap: 6px;
