@@ -6,19 +6,13 @@ import { Check, Copy } from 'lucide-react'
 /* ── List context so li knows whether it's inside ul or ol ─────────── */
 const ListTypeCtx = createContext<'ul' | 'ol'>('ul')
 
-/* ── Inline code ────────────────────────────────────────────────────── */
+/* ── Inline code ──────────────────────────────────────────────────────
+   Background = --ds-teal-soft (rgba 34,211,200,0.08).
+   Border 0.14 alpha has no token — keep it as an arbitrary value to
+   preserve fidelity (--ds-teal-line is 0.25, too strong here). */
 function InlineCode({ children }: { children?: ReactNode }) {
   return (
-    <code style={{
-      fontFamily: 'var(--font-mono)',
-      fontSize: '12.5px',
-      padding: '1px 6px',
-      borderRadius: '4px',
-      background: 'rgba(34, 211, 200, 0.08)',
-      color: 'var(--ds-teal-300)',
-      border: '1px solid rgba(34, 211, 200, 0.14)',
-      whiteSpace: 'nowrap',
-    }}>
+    <code className="font-mono text-[12.5px] px-[6px] py-[1px] rounded-[4px] bg-teal-soft text-teal-300 border border-[rgba(34,211,200,0.14)] whitespace-nowrap">
       {children}
     </code>
   )
@@ -37,49 +31,22 @@ function CodeBlock({ lang, children }: { lang?: string; children: ReactNode }) {
   }
 
   return (
-    <div style={{
-      margin: '0.55em 0 0.85em',
-      border: '1px solid var(--ds-border-strong)',
-      borderLeft: '2px solid var(--ds-teal-800)',
-      borderRadius: '6px',
-      background: 'var(--ds-bg-card)',
-      overflow: 'hidden',
-    }}>
-      {/* Header bar */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '5px 12px',
-        borderBottom: '1px solid var(--ds-border-subtle)',
-        background: 'rgba(0,0,0,0.18)',
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '10px',
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-          color: lang ? 'var(--ds-teal-600)' : 'var(--ds-text-dim)',
-        }}>
+    <div className="mt-[0.55em] mb-[0.85em] border border-border-strong border-l-2 border-l-teal-800 rounded-[6px] bg-bg-card overflow-hidden">
+      {/* Header bar — semi-opaque black sits on top of card surface */}
+      <div className="flex items-center justify-between px-3 py-[5px] border-b border-border-subtle bg-[rgba(0,0,0,0.18)]">
+        <span
+          className={`font-mono text-[10px] tracking-[0.1em] uppercase ${
+            lang ? 'text-teal-600' : 'text-text-dim'
+          }`}
+        >
           {lang || 'code'}
         </span>
         <button
           type="button"
           onClick={copy}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            color: copied ? 'var(--ds-teal-400)' : 'var(--ds-text-dim)',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '2px 6px',
-            borderRadius: '3px',
-            transition: 'color 0.15s',
-          }}
+          className={`flex items-center gap-1 font-mono text-[10px] bg-transparent border-none cursor-pointer px-[6px] py-[2px] rounded-[3px] transition-colors duration-150 ${
+            copied ? 'text-teal-400' : 'text-text-dim'
+          }`}
         >
           {copied ? <Check size={10} /> : <Copy size={10} />}
           {copied ? 'copied' : 'copy'}
@@ -87,15 +54,7 @@ function CodeBlock({ lang, children }: { lang?: string; children: ReactNode }) {
       </div>
       <pre
         ref={preRef}
-        style={{
-          margin: 0,
-          padding: '12px 16px',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '12.5px',
-          lineHeight: '1.65',
-          color: 'var(--ds-text-primary)',
-          overflowX: 'auto',
-        }}
+        className="m-0 px-4 py-3 font-mono text-[12.5px] leading-[1.65] text-text-primary overflow-x-auto"
       >
         {children}
       </pre>
@@ -109,31 +68,28 @@ function ListItem({ children }: ComponentPropsWithoutRef<'li'> & { node?: unknow
 
   if (listType === 'ol') {
     return (
-      <li style={{ marginBottom: '0.22em', lineHeight: '1.72', paddingLeft: '0.15em' }}>
+      <li className="mb-[0.22em] leading-[1.72] pl-[0.15em]">
         {children}
       </li>
     )
   }
 
   return (
-    <li style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '0.28em', listStyle: 'none' }}>
-      {/* Rotated square diamond marker in teal */}
-      <span style={{
-        width: '5px',
-        height: '5px',
-        flexShrink: 0,
-        marginTop: '0.6em',
-        borderRadius: '1px',
-        background: 'var(--ds-teal-700, #0e7a72)',
-        transform: 'rotate(45deg)',
-      }} />
-      <span style={{ flex: 1, lineHeight: '1.72' }}>{children}</span>
+    <li className="flex items-start gap-2 mb-[0.28em] list-none">
+      {/* Rotated square diamond marker in teal-800 (#0e7a72 — original used
+          --ds-teal-700 fallback which equals teal-800 in tokens.css). */}
+      <span className="w-[5px] h-[5px] shrink-0 mt-[0.6em] rounded-[1px] bg-teal-800 rotate-45" />
+      <span className="flex-1 leading-[1.72]">{children}</span>
     </li>
   )
 }
 
 /* ── Main renderer ──────────────────────────────────────────────────── */
 export function MarkdownRenderer({ children }: { children: string }) {
+  /* The `prose-md` class is intentionally retained: chat.css scopes
+     user-bubble overrides through `.bubble--user .prose-md code` and
+     `.bubble--user .prose-md > div`. Removing this class regresses the
+     user-side code/code-block rendering. */
   return (
     <div className="prose-md">
       <ReactMarkdown
@@ -141,42 +97,27 @@ export function MarkdownRenderer({ children }: { children: string }) {
         components={{
           /* Paragraph */
           p: ({ children }) => (
-            <p style={{ margin: '0 0 0.6em', lineHeight: '1.72' }}>{children}</p>
+            <p className="m-0 mb-[0.6em] leading-[1.72]">{children}</p>
           ),
 
           /* Headings */
           h1: ({ children }) => (
-            <h1 style={{
-              fontSize: '17px', fontWeight: 700, letterSpacing: '-0.02em',
-              color: 'var(--ds-text-primary)', margin: '1.3em 0 0.5em', lineHeight: 1.2,
-            }}>
+            <h1 className="text-[17px] font-bold tracking-[-0.02em] text-text-primary mt-[1.3em] mb-[0.5em] leading-[1.2]">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 style={{
-              fontSize: '15px', fontWeight: 600, letterSpacing: '-0.01em',
-              color: 'var(--ds-text-primary)', margin: '1.2em 0 0.45em',
-              paddingBottom: '0.3em', borderBottom: '1px solid var(--ds-border-subtle)',
-              lineHeight: 1.3,
-            }}>
+            <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-text-primary mt-[1.2em] mb-[0.45em] pb-[0.3em] border-b border-border-subtle leading-[1.3]">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 style={{
-              fontSize: '13.5px', fontWeight: 600,
-              color: 'var(--ds-teal-300)', margin: '1em 0 0.3em', lineHeight: 1.4,
-            }}>
+            <h3 className="text-[13.5px] font-semibold text-teal-300 mt-[1em] mb-[0.3em] leading-[1.4]">
               {children}
             </h3>
           ),
           h4: ({ children }) => (
-            <h4 style={{
-              fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
-              textTransform: 'uppercase', color: 'var(--ds-text-secondary)',
-              margin: '0.8em 0 0.25em',
-            }}>
+            <h4 className="text-[11px] font-bold tracking-[0.08em] uppercase text-text-secondary mt-[0.8em] mb-[0.25em]">
               {children}
             </h4>
           ),
@@ -184,14 +125,14 @@ export function MarkdownRenderer({ children }: { children: string }) {
           /* Lists */
           ul: ({ children }) => (
             <ListTypeCtx.Provider value="ul">
-              <ul style={{ margin: '0 0 0.65em', padding: 0, listStyle: 'none' }}>
+              <ul className="m-0 mb-[0.65em] p-0 list-none">
                 {children}
               </ul>
             </ListTypeCtx.Provider>
           ),
           ol: ({ children }) => (
             <ListTypeCtx.Provider value="ol">
-              <ol style={{ margin: '0 0 0.65em', paddingLeft: '1.5em' }}>
+              <ol className="m-0 mb-[0.65em] pl-[1.5em] list-decimal">
                 {children}
               </ol>
             </ListTypeCtx.Provider>
@@ -209,8 +150,11 @@ export function MarkdownRenderer({ children }: { children: string }) {
           },
           code: ({ className, children }) => {
             if (className) {
+              /* Inside a fenced block — let CodeBlock's <pre> drive color/size.
+                 We only set font-mono + size/leading to prevent the default
+                 react-markdown styles from sneaking in. */
               return (
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px', lineHeight: '1.65' }}>
+                <code className="font-mono text-[12.5px] leading-[1.65]">
                   {children}
                 </code>
               )
@@ -218,78 +162,57 @@ export function MarkdownRenderer({ children }: { children: string }) {
             return <InlineCode>{children}</InlineCode>
           },
 
-          /* Blockquote */
+          /* Blockquote — alpha 0.04 is half of teal-soft (0.08); keep it
+             as an arbitrary value rather than reusing teal-soft. */
           blockquote: ({ children }) => (
-            <blockquote style={{
-              margin: '0 0 0.7em',
-              padding: '8px 14px',
-              borderLeft: '2px solid var(--ds-teal-600)',
-              background: 'rgba(34, 211, 200, 0.04)',
-              borderRadius: '0 6px 6px 0',
-              color: 'var(--ds-text-secondary)',
-            }}>
+            <blockquote className="m-0 mb-[0.7em] py-2 px-[14px] border-l-2 border-l-teal-600 bg-[rgba(34,211,200,0.04)] rounded-r-[6px] text-text-secondary">
               {children}
             </blockquote>
           ),
 
           /* Table */
           table: ({ children }) => (
-            <div style={{ overflowX: 'auto', margin: '0 0 0.75em' }}>
-              <table style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: '13px',
-                border: '1px solid var(--ds-border-strong)',
-                borderRadius: '6px',
-                overflow: 'hidden',
-              }}>
+            <div className="overflow-x-auto m-0 mb-[0.75em]">
+              <table className="w-full border-collapse text-[13px] border border-border-strong rounded-[6px] overflow-hidden">
                 {children}
               </table>
             </div>
           ),
           thead: ({ children }) => (
-            <thead style={{ background: 'var(--ds-bg-elevated)', borderBottom: '1px solid var(--ds-border-strong)' }}>
+            <thead className="bg-bg-elevated border-b border-border-strong">
               {children}
             </thead>
           ),
           th: ({ children }) => (
-            <th style={{
-              padding: '7px 12px', textAlign: 'left',
-              fontWeight: 600, fontSize: '11px', letterSpacing: '0.05em',
-              textTransform: 'uppercase', color: 'var(--ds-text-secondary)',
-            }}>
+            <th className="px-3 py-[7px] text-left font-semibold text-[11px] tracking-[0.05em] uppercase text-text-secondary">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td style={{
-              padding: '7px 12px',
-              borderBottom: '1px solid var(--ds-border-subtle)',
-              color: 'var(--ds-text-primary)',
-            }}>
+            <td className="px-3 py-[7px] border-b border-border-subtle text-text-primary">
               {children}
             </td>
           ),
 
           /* Misc */
           hr: () => (
-            <hr style={{ border: 'none', borderTop: '1px solid var(--ds-border-strong)', margin: '1em 0' }} />
+            <hr className="border-0 border-t border-t-border-strong my-[1em]" />
           ),
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" style={{
-              color: 'var(--ds-teal-300)',
-              textDecoration: 'none',
-              borderBottom: '1px solid rgba(34, 211, 200, 0.28)',
-              transition: 'border-color 0.12s',
-            }}>
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-teal-300 no-underline border-b border-b-teal-line transition-colors duration-[120ms]"
+            >
               {children}
             </a>
           ),
           strong: ({ children }) => (
-            <strong style={{ fontWeight: 600, color: 'var(--ds-text-primary)' }}>{children}</strong>
+            <strong className="font-semibold text-text-primary">{children}</strong>
           ),
           em: ({ children }) => (
-            <em style={{ fontStyle: 'italic', color: 'var(--ds-text-secondary)' }}>{children}</em>
+            <em className="italic text-text-secondary">{children}</em>
           ),
         }}
       >
