@@ -364,7 +364,7 @@ export default function Chat() {
     profiles.find((profile) => profile.id === selectedProfileId) ?? profiles[0] ?? null
 
   return (
-    <div className="chat">
+    <div className="flex flex-col flex-1 min-h-0 bg-bg-main">
       <ChatTopbar
         title={title}
         running={isStreaming}
@@ -372,12 +372,21 @@ export default function Chat() {
         onTogglePanel={() => setShowPanel((v) => !v)}
       />
 
-      {errorBanner && <div className="chat-error">{errorBanner}</div>}
+      {errorBanner && (
+        <div className="max-w-[820px] mx-auto mt-4 px-3.5 py-2.5 bg-[rgb(248_113_113_/_0.08)] border border-[rgb(248_113_113_/_0.4)] text-error rounded-md font-mono text-xs">
+          {errorBanner}
+        </div>
+      )}
 
-      <div className="chat-body">
-        <div className="chat-main">
-          <div className="chat-scroll" ref={scrollerRef} onScroll={handleScroll}>
-            <div className="chat-stream">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
+        {/* `relative` anchors the absolutely-positioned "Jump to latest" pill */}
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
+          <div
+            className="flex-1 min-h-0 overflow-y-auto pt-6 pb-7"
+            ref={scrollerRef}
+            onScroll={handleScroll}
+          >
+            <div className="max-w-[820px] mx-auto px-7 flex flex-col gap-5">
               {messages.length === 0 &&
                 !isStreaming &&
                 approvals.length === 0 &&
@@ -414,10 +423,12 @@ export default function Chat() {
           </div>
 
           {!nearBottom && (
-            <div className="chat-scroll-bottom-wrap">
+            // pointer-events-none on the wrapper so the surrounding gap above
+            // the composer doesn't intercept clicks; the button re-enables them.
+            <div className="flex justify-center px-3 pt-1.5 flex-shrink-0 pointer-events-none">
               <button
                 type="button"
-                className="chat-scroll-bottom"
+                className="pointer-events-auto py-1.5 px-3.5 bg-bg-card border border-border-strong rounded-full text-text-secondary font-sans text-[11px] font-medium tracking-[0.02em] cursor-pointer shadow-[0_4px_14px_rgb(0_0_0_/_0.18)] transition-[color,border-color,background] duration-150 ease-ease-cubic hover:text-teal-300 hover:border-teal-line hover:bg-teal-soft"
                 onClick={() => {
                   const el = scrollerRef.current
                   if (el) el.scrollTop = el.scrollHeight
