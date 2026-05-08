@@ -18,7 +18,7 @@ export default function SettingsMcpServers() {
   const servers = (q.data?.mcp_servers ?? []) as McpServer[]
 
   return (
-    <div className="settings-page">
+    <div className="flex w-full max-w-[920px] flex-col gap-5">
       <SettingsPageHeader
         title="MCP Servers"
         eyebrow="Integrations"
