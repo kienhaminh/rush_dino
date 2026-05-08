@@ -161,3 +161,13 @@ pre {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* Command palette enter animations (consumed via Tailwind arbitrary-value `animate-[rd-palette-in_...]`). */
+@keyframes rd-palette-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes rd-palette-panel-in {
+  from { transform: scale(0.96); opacity: 0.8; }
+  to   { transform: scale(1);    opacity: 1;   }
+}
