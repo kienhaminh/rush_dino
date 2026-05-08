@@ -16,6 +16,19 @@ const LEVELS: Array<{ value: LogLevel | 'all'; label: string }> = [
   { value: 'debug', label: 'debug' },
 ]
 
+// Shared log-row layout for both skeleton and live rows. Mirrors the legacy
+// `.log-line` BEM rule (grid 92/56/180/1fr, mono, dimmed text, theme-aware
+// hover wash).
+const LOG_ROW_CLASSES =
+  'grid grid-cols-[92px_56px_180px_1fr] gap-3 whitespace-nowrap py-0.5 text-text-muted hover:bg-[rgba(15,23,42,0.04)] dark:hover:bg-[rgba(255,255,255,0.03)]'
+
+const LEVEL_COLORS: Record<LogLevel, string> = {
+  error: 'text-error',
+  warn: 'text-warning',
+  info: 'text-success',
+  debug: 'text-text-dim',
+}
+
 export default function Logs() {
   const [level, setLevel] = useState<LogLevel | 'all'>('all')
   const [search, setSearch] = useState('')
@@ -93,7 +106,7 @@ export default function Logs() {
         <div id="log-stream" className="log-stream">
           {q.isLoading &&
             Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="log-line">
+              <div key={i} className={LOG_ROW_CLASSES}>
                 <Skeleton width={92} height={11} />
                 <Skeleton width={56} height={11} />
                 <Skeleton width={180} height={11} />
@@ -111,16 +124,27 @@ export default function Logs() {
 function LogLine({ row }: { row: RuntimeLogView }) {
   const ts = new Date(row.createdAt)
   return (
-    <div className={cn('log-line', `log-line--${row.level}`)}>
-      <span className="log-line__time mono">
+    <div className={LOG_ROW_CLASSES}>
+      <span className="font-mono text-text-dim">
         {ts.toLocaleTimeString([], { hour12: false })}
-        <span className="log-line__ms">.{ts.getMilliseconds().toString().padStart(3, '0')}</span>
+        <span className="opacity-[0.55]">
+          .{ts.getMilliseconds().toString().padStart(3, '0')}
+        </span>
       </span>
-      <span className={cn('log-line__level mono', `log-line__level--${row.level}`)}>
+      <span
+        className={cn(
+          'font-mono font-bold tracking-[0.04em]',
+          LEVEL_COLORS[row.level],
+        )}
+      >
         {row.level.toUpperCase().padEnd(5)}
       </span>
-      <span className="log-line__target mono">{row.target}</span>
-      <span className="log-line__msg">{row.message}</span>
+      <span className="overflow-hidden text-ellipsis font-mono text-text-dim">
+        {row.target}
+      </span>
+      <span className="whitespace-pre-wrap break-words text-text-primary">
+        {row.message}
+      </span>
     </div>
   )
 }

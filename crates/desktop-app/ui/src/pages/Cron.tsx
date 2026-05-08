@@ -7,6 +7,13 @@ import { PageTopbar } from '@/components/shell/PageTopbar'
 import { Skeleton } from '@/components/Skeleton'
 import { cn } from '@/lib/cn'
 
+// Shared row layout used for both skeleton loaders and live rows.
+// `[&:not(:first-child)]` reproduces the legacy `.cron-row + .cron-row` rule
+// (top border on every row except the first) without needing a parent class.
+// Hover wash flips per theme — light mode darkens, dark mode lightens.
+const CRON_ROW_CLASSES =
+  'grid grid-cols-[1fr_auto_auto] items-center gap-3.5 rounded-md px-4 py-3.5 transition-colors hover:bg-[rgba(15,23,42,0.04)] dark:hover:bg-[rgba(255,255,255,0.03)] [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border-line'
+
 export default function Cron() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['cron'], queryFn: listCronJobs })
@@ -48,19 +55,19 @@ export default function Cron() {
         <GlassPanel variant="body" className="cron-list">
           {q.isLoading
             ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="cron-row">
-                  <div className="cron-row__head">
+                <div key={i} className={CRON_ROW_CLASSES}>
+                  <div className="col-span-full flex items-center gap-3">
                     <Skeleton width={7} height={7} rounded />
                     <Skeleton width="35%" height={12} />
                     <Skeleton width={92} height={14} rounded />
                   </div>
-                  <div className="cron-row__meta">
+                  <div className="col-span-2 flex items-center gap-2.5 font-mono text-[11px] text-text-muted">
                     <Skeleton width={36} height={9} />
                     <Skeleton width={60} height={10} />
                     <Skeleton width={24} height={9} />
                     <Skeleton width={140} height={11} />
                   </div>
-                  <div className="cron-row__actions">
+                  <div className="col-start-3 row-span-2 row-start-1 flex gap-1.5 self-center">
                     <Skeleton width={56} height={22} rounded />
                     <Skeleton width={72} height={22} rounded />
                   </div>
@@ -94,28 +101,34 @@ function CronRow({
 }) {
   const paused = job.status === 'paused' || job.enabled === false
   return (
-    <div className="cron-row">
-      <div className="cron-row__head">
+    <div className={CRON_ROW_CLASSES}>
+      <div className="col-span-full flex items-center gap-3">
         <span
           className={cn(
-            'cron-row__dot',
-            paused ? 'cron-row__dot--paused' : 'cron-row__dot--live',
+            'h-[7px] w-[7px] shrink-0 rounded-full',
+            paused
+              ? 'bg-text-dim'
+              : 'bg-success shadow-[0_0_8px_rgba(74,222,128,0.6)]',
           )}
         />
-        <span className="cron-row__name">{job.name ?? job.id}</span>
-        <span className="cron-row__schedule mono">{job.schedule ?? '—'}</span>
+        <span className="text-sm font-medium text-text-primary">
+          {job.name ?? job.id}
+        </span>
+        <span className="rounded-[4px] bg-teal-soft px-2 py-[3px] font-mono text-[11px] text-teal-300">
+          {job.schedule ?? '—'}
+        </span>
       </div>
-      <div className="cron-row__meta">
-        <span className="mono cron-row__label">agent</span>
+      <div className="col-span-2 flex items-center gap-2.5 font-mono text-[11px] text-text-muted">
+        <span className="text-[9px] uppercase tracking-[0.1em] text-text-dim">agent</span>
         <span className="mono">{job.agent_id?.slice(0, 10) ?? '—'}</span>
-        <span className="mono cron-row__label">next</span>
-        <span className="metric-numeral cron-row__next">
+        <span className="text-[9px] uppercase tracking-[0.1em] text-text-dim">next</span>
+        <span className="metric-numeral font-mono text-xs text-text-primary">
           {job.next_run_at
             ? new Date(job.next_run_at).toLocaleString([], { hour12: false })
             : '—'}
         </span>
       </div>
-      <div className="cron-row__actions">
+      <div className="col-start-3 row-span-2 row-start-1 flex gap-1.5 self-center">
         {paused ? (
           <button type="button" className="btn" onClick={onResume}>
             <Play size={11} strokeWidth={1.8} /> resume
