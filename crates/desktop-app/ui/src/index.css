@@ -1253,12 +1253,6 @@
 .glass-panel--inspector { padding: 18px 16px; border-radius: var(--ds-radius-md); }
 .glass-panel--compact { padding: 16px 20px; border-radius: var(--ds-radius-md); }
 
-.placeholder-body {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--ds-border-line);
-}
-
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 10px;
