@@ -1,36 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useParams, useSearchParams } from 'react-router-dom'
-import {
-  Plus,
-  ShieldCheck,
-  ChevronDown,
-  PanelRight,
-  Mic,
-  ArrowUp,
-} from 'lucide-react'
 
 import {
   getConversation,
   listConversations,
-  resolveInputRequest,
   type ChatMessage,
   type ConversationDetail,
-  type InputFieldSpec,
   type PendingInputRequest,
+  type ToolCall,
 } from '@/api/chat'
 import { listAgents } from '@/api/agents'
 import { getConfig } from '@/api/config'
-import { listProfiles, type ProviderProfile } from '@/api/providers'
+import { listProfiles } from '@/api/providers'
 import { getSystemSummary, type ThinkingLevel } from '@/api/system'
 import { useChatStream, type PendingApproval, type StreamingTurn } from '@/hooks/useChatStream'
-import { ToolCall, Streaming } from '@/components/agent-states'
 import { AgentPanel } from '@/components/AgentPanel'
 import { notifyIfBlurred } from '@/lib/notify'
-import { useAttachments, formatAttachments, basename } from '@/hooks/useAttachments'
-import { FileText, X as XIcon } from 'lucide-react'
+import { useAttachments, formatAttachments } from '@/hooks/useAttachments'
+
+import { mergeInputRequests } from './chat/merge-input-requests'
+import { EmptyChat } from './chat/empty-chat'
+import { MessageBlock } from './chat/message-block'
+import { InlineApproval } from './chat/inline-approval'
+import { InlineInputRequest } from './chat/inline-input-request'
+import { Composer } from './chat/chat-composer'
+import { ChatTopbar } from './chat/chat-topbar'
 
 export default function Chat() {
   const qc = useQueryClient()
@@ -48,6 +43,7 @@ export default function Chat() {
   const [composer, setComposer] = useState('')
   const [pending, setPending] = useState<ChatMessage[]>([])
   const [streaming, setStreaming] = useState<{ content: string } | null>(null)
+  const [liveToolCalls, setLiveToolCalls] = useState<Array<ToolCall & { done: boolean }>>([])
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
   const [approvals, setApprovals] = useState<PendingApproval[]>([])
   const [inputRequests, setInputRequests] = useState<PendingInputRequest[]>([])
@@ -64,23 +60,50 @@ export default function Chat() {
     staleTime: 30_000,
   })
   const requestedConversationId = searchParams.get('conversation')
+  /* Captured ONCE per mount-with-?new=1 so subsequent renders (after we strip
+     the sentinel) still know to skip the auto-select-first-conversation
+     fallback. Without this ref the param removal would race the next render. */
+  const newChatIntentRef = useRef(searchParams.has('new'))
 
   useEffect(() => {
-    if (requestedConversationId && requestedConversationId !== conversationId) {
-      setConversationId(requestedConversationId)
+    if (requestedConversationId) {
+      // URL param wins
+      if (requestedConversationId !== conversationId) {
+        setConversationId(requestedConversationId)
+      }
+      newChatIntentRef.current = false
+      return
     }
-  }, [requestedConversationId, conversationId])
-
-  useEffect(() => {
-    if (
-      !requestedConversationId &&
-      conversationId === null &&
-      conversations.data &&
-      conversations.data.length > 0
-    ) {
+    /* Explicit "new chat" intent: clear selection and strip the marker so a
+       refresh doesn't keep forcing empty state. The ref keeps us in this
+       branch until the user actually sends a message (which sets a
+       conversationId via the WS chat_chunk handler). */
+    if (newChatIntentRef.current) {
+      if (conversationId !== null) setConversationId(null)
+      if (searchParams.has('new')) {
+        const next = new URLSearchParams(searchParams)
+        next.delete('new')
+        setSearchParams(next, { replace: true })
+      }
+      return
+    }
+    // Fallback: auto-select first conversation when nothing is selected
+    if (conversationId === null && conversations.data && conversations.data.length > 0) {
       setConversationId(conversations.data[0]!.id)
     }
-  }, [conversations.data, conversationId, requestedConversationId])
+  }, [
+    requestedConversationId,
+    conversationId,
+    conversations.data,
+    searchParams,
+    setSearchParams,
+  ])
+
+  /* Once a real conversation lands (server assigns id mid-stream, or user
+     navigates), drop the new-chat lock. */
+  useEffect(() => {
+    if (conversationId !== null) newChatIntentRef.current = false
+  }, [conversationId])
 
   useEffect(() => {
     if (agentId || !conversationId || requestedConversationId === conversationId) {
@@ -153,10 +176,14 @@ export default function Chat() {
   const onToken = useCallback((delta: string) => {
     setStreaming((prev) => ({ content: (prev?.content ?? '') + delta }))
   }, [])
-  const onReset = useCallback(() => setStreaming(null), [])
+  const onReset = useCallback(() => {
+    setStreaming(null)
+    setLiveToolCalls([])
+  }, [])
   const onTurnEnd = useCallback(
     (turn: StreamingTurn) => {
       setStreaming(null)
+      setLiveToolCalls([])
       setPending([])
       qc.invalidateQueries({ queryKey: ['conversation', conversationId] })
       qc.invalidateQueries({ queryKey: ['conversations'] })
@@ -169,7 +196,16 @@ export default function Chat() {
     },
     [qc, conversationId, activeAgent],
   )
-  const onToolCall = useCallback(() => {}, [])
+  const onToolCall = useCallback((tc: ToolCall & { done: boolean }) => {
+    setLiveToolCalls((prev) => {
+      if (!tc.done) return [...prev, tc]
+      // mark the last matching in-progress call as done
+      const idx = [...prev].reverse().findIndex((t) => t.name === tc.name && !t.done)
+      if (idx === -1) return [...prev, tc]
+      const real = prev.length - 1 - idx
+      return prev.map((t, i) => (i === real ? { ...t, ...tc } : t))
+    })
+  }, [])
   const onError = useCallback((msg: string) => {
     setErrorBanner(msg)
     setStreaming(null)
@@ -204,6 +240,7 @@ export default function Chat() {
   )
   const onSessionReset = useCallback(() => {
     setStreaming(null)
+    setLiveToolCalls([])
     setPending([])
     setApprovals([])
     setInputRequests([])
@@ -239,14 +276,55 @@ export default function Chat() {
 
   const messages: ChatMessage[] = useMemo(() => {
     const base = [...(detail.data?.messages ?? []), ...pending]
-    if (streaming) base.push({ role: 'assistant', content: streaming.content })
+    if (streaming || liveToolCalls.length > 0) {
+      base.push({
+        role: 'assistant',
+        content: streaming?.content ?? '',
+        tool_calls: liveToolCalls,
+      })
+    }
     return base
-  }, [detail.data, pending, streaming])
+  }, [detail.data, pending, streaming, liveToolCalls])
 
+  /* Esc while streaming = stop. The handler reads `streaming` via a ref so
+     the listener doesn't rebind on every token (setStreaming returns a new
+     object reference for every chunk). */
+  const isStreamingRef = useRef(false)
   useEffect(() => {
+    isStreamingRef.current = streaming !== null
+  }, [streaming])
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if (!isStreamingRef.current) return
+      e.preventDefault()
+      void stream.stop()
+      setPending([])
+      qc.invalidateQueries({ queryKey: ['conversation', conversationId] })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stream, qc, conversationId])
+
+  /* Smart auto-scroll: only follow new content if the user is already near
+     the bottom. Reading older context shouldn't yank you down on every token. */
+  const [nearBottom, setNearBottom] = useState(true)
+  /* Reset to "near bottom" whenever the user switches conversations so the
+     new thread starts pinned, not stuck where the old scroll position was. */
+  useEffect(() => {
+    setNearBottom(true)
+  }, [conversationId])
+  const handleScroll = useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    setNearBottom(distance < 120)
+  }, [])
+  useEffect(() => {
+    if (!nearBottom) return
     const el = scrollerRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages.length, streaming?.content])
+  }, [messages.length, streaming?.content, nearBottom])
 
   useEffect(() => {
     const ta = composerRef.current
@@ -298,7 +376,7 @@ export default function Chat() {
 
       <div className="chat-body">
         <div className="chat-main">
-          <div className="chat-scroll" ref={scrollerRef}>
+          <div className="chat-scroll" ref={scrollerRef} onScroll={handleScroll}>
             <div className="chat-stream">
               {messages.length === 0 &&
                 !isStreaming &&
@@ -335,12 +413,35 @@ export default function Chat() {
             </div>
           </div>
 
+          {!nearBottom && (
+            <div className="chat-scroll-bottom-wrap">
+              <button
+                type="button"
+                className="chat-scroll-bottom"
+                onClick={() => {
+                  const el = scrollerRef.current
+                  if (el) el.scrollTop = el.scrollHeight
+                  setNearBottom(true)
+                }}
+                aria-label="Jump to latest message"
+              >
+                ↓ Jump to latest
+              </button>
+            </div>
+          )}
           <Composer
             value={composer}
             onChange={setComposer}
             onSubmit={submit}
+            onStop={() => {
+              void stream.stop()
+              /* The user pressed stop — drop optimistic pending and reload
+                 history so any partially-persisted state is reconciled. */
+              setPending([])
+              qc.invalidateQueries({ queryKey: ['conversation', conversationId] })
+            }}
             textareaRef={composerRef}
-            disabled={isStreaming}
+            streaming={isStreaming}
             attachments={attachments.paths}
             dragActive={attachments.dragActive}
             onPickFiles={() => void attachments.pick()}
@@ -368,592 +469,4 @@ export default function Chat() {
       </div>
     </div>
   )
-}
-
-/* ───────── Topbar ──────────────────────────────────────── */
-function ChatTopbar({
-  title,
-  running: _running,
-  showPanel,
-  onTogglePanel,
-}: {
-  title: string
-  running: boolean
-  showPanel: boolean
-  onTogglePanel: () => void
-}) {
-  void _running
-  return (
-    <div className={`chat-topbar ${showPanel ? 'chat-topbar--panel-open' : ''}`} data-tauri-drag-region>
-      <span className="chat-topbar__title-text">{title}</span>
-      <div className="chat-topbar__spacer" />
-      <div className="chat-topbar__actions" data-tauri-drag-region="false">
-        <button
-          type="button"
-          className={`chat-topbar__panel-btn ${showPanel ? 'chat-topbar__panel-btn--active' : ''}`}
-          aria-label="Toggle activity panel"
-          onClick={onTogglePanel}
-        >
-          <PanelRight size={14} strokeWidth={1.7} />
-        </button>
-      </div>
-    </div>
-  )
-}
-
-/* ───────── Message stream ──────────────────────────────── */
-function MessageBlock({ message, streaming }: { message: ChatMessage; streaming?: boolean }) {
-  if (message.role === 'user') {
-    return (
-      <div className="msg msg--user">
-        <div className="bubble bubble--user">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-        </div>
-        <span className="msg__time rd-mono">{timeFmt(message.timestamp)}</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="msg msg--assistant">
-      <div className="msg__avatar">R</div>
-      <div className="msg__body">
-        <div className="msg__head">
-          <span className="msg__role">rushdino</span>
-          <span className="msg__time rd-mono">{timeFmt(message.timestamp)}</span>
-        </div>
-        <div className="msg__prose">
-          {streaming && !message.content ? (
-            <Streaming text="thinking" />
-          ) : (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
-          )}
-        </div>
-        {message.tool_calls && message.tool_calls.length > 0 && (
-          <div className="msg__tools">
-            {message.tool_calls.map((tc, i) => (
-              <ToolCall
-                key={tc.id ?? `tc-${i}`}
-                name={tc.name ?? 'tool'}
-                status="done"
-                args={(tc.arguments as Record<string, unknown>) ?? {}}
-                defaultOpen={false}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function timeFmt(ts?: string | number): string {
-  if (!ts) return ''
-  const d = typeof ts === 'number' ? new Date(ts) : new Date(ts)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-}
-
-function InlineApproval({
-  approval,
-  onDecide,
-}: {
-  approval: PendingApproval
-  onDecide: (approved: boolean) => void
-}) {
-  return (
-    <div className="msg msg--approval">
-      <div className="approval-card">
-        <div className="approval-card__head">
-          <span className="approval-card__label">APPROVAL NEEDED</span>
-          <span className="approval-card__tool rd-mono">{approval.tool}</span>
-        </div>
-        <p className="approval-card__prompt">
-          The agent wants to run <code>{approval.tool}</code> with these arguments.
-        </p>
-        <pre className="approval-card__args rd-mono">{JSON.stringify(approval.args, null, 2)}</pre>
-        <div className="approval-card__actions">
-          <button type="button" className="btn" onClick={() => onDecide(false)}>
-            Deny
-          </button>
-          <button type="button" className="btn btn--primary" onClick={() => onDecide(true)}>
-            Approve
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function InlineInputRequest({
-  request,
-  onResolved,
-  onError,
-}: {
-  request: PendingInputRequest
-  onResolved: (requestId: string) => void
-  onError: (message: string) => void
-}) {
-  const spec = request.payload.spec
-  const [values, setValues] = useState<Record<string, unknown>>(() =>
-    createInitialInputValues(spec.fields),
-  )
-  const [busy, setBusy] = useState<'submitted' | 'cancelled' | null>(null)
-  const [formError, setFormError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setValues(createInitialInputValues(spec.fields))
-    setBusy(null)
-    setFormError(null)
-  }, [request.requestId, spec.fields])
-
-  const handleSubmit = async (status: 'submitted' | 'cancelled') => {
-    setFormError(null)
-    setBusy(status)
-    try {
-      const payload =
-        status === 'submitted' ? buildInputRequestSubmission(spec.fields, values) : undefined
-      await resolveInputRequest(request.requestId, status, payload)
-      onResolved(request.requestId)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to resolve input request'
-      setFormError(message)
-      onError(message)
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  return (
-    <div className="msg msg--approval">
-      <div className="approval-card approval-card--input">
-        <div className="approval-card__head">
-          <span className="approval-card__label">INPUT NEEDED</span>
-          <span className="approval-card__tool rd-mono">{spec.kind}</span>
-        </div>
-        <div className="approval-card__content">
-          <strong className="approval-card__title">{spec.title}</strong>
-          {spec.description && <p className="approval-card__prompt">{spec.description}</p>}
-        </div>
-        <div className="approval-form">
-          {spec.fields.map((field) => (
-            <label key={field.name} className="approval-form__field">
-              <span className="approval-form__label">
-                {field.label}
-                {field.required ? ' *' : ''}
-              </span>
-              {field.description && (
-                <span className="approval-form__hint">{field.description}</span>
-              )}
-              <InputFieldControl
-                field={field}
-                value={values[field.name]}
-                disabled={busy !== null}
-                onChange={(nextValue) =>
-                  setValues((prev) => ({
-                    ...prev,
-                    [field.name]: nextValue,
-                  }))
-                }
-              />
-            </label>
-          ))}
-        </div>
-        {formError && <div className="chat-error-banner rd-mono">{formError}</div>}
-        <div className="approval-card__actions">
-          <button
-            type="button"
-            className="btn"
-            disabled={busy !== null}
-            onClick={() => void handleSubmit('cancelled')}
-          >
-            {busy === 'cancelled' ? 'Cancelling…' : spec.cancelLabel ?? 'Cancel'}
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={busy !== null}
-            onClick={() => void handleSubmit('submitted')}
-          >
-            {busy === 'submitted' ? 'Submitting…' : spec.submitLabel ?? 'Submit'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function InputFieldControl({
-  field,
-  value,
-  disabled,
-  onChange,
-}: {
-  field: InputFieldSpec
-  value: unknown
-  disabled?: boolean
-  onChange: (nextValue: unknown) => void
-}) {
-  switch (field.type) {
-    case 'textarea':
-      return (
-        <textarea
-          className="approval-form__control approval-form__control--textarea"
-          value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          minLength={field.minLength}
-          maxLength={field.maxLength}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-          rows={4}
-        />
-      )
-    case 'select':
-      return (
-        <select
-          className="approval-form__control"
-          value={typeof value === 'string' ? value : ''}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {!field.required && <option value="">Select an option</option>}
-          {(field.options ?? []).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      )
-    case 'multiselect': {
-      const selected = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-      return (
-        <div className="approval-form__choices">
-          {(field.options ?? []).map((option) => {
-            const checked = selected.includes(option.value)
-            return (
-              <label key={option.value} className="approval-form__choice">
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={(event) => {
-                    const next = event.target.checked
-                      ? [...selected, option.value]
-                      : selected.filter((item) => item !== option.value)
-                    onChange(next)
-                  }}
-                />
-                <span>{option.label}</span>
-              </label>
-            )
-          })}
-        </div>
-      )
-    }
-    case 'boolean':
-      return (
-        <label className="approval-form__choice approval-form__choice--single">
-          <input
-            type="checkbox"
-            checked={Boolean(value)}
-            disabled={disabled}
-            onChange={(event) => onChange(event.target.checked)}
-          />
-          <span>{field.placeholder ?? 'Enabled'}</span>
-        </label>
-      )
-    case 'number':
-      return (
-        <input
-          className="approval-form__control"
-          type="number"
-          value={typeof value === 'number' ? String(value) : typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          min={field.min}
-          max={field.max}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      )
-    case 'text':
-    default:
-      return (
-        <input
-          className="approval-form__control"
-          type={field.secret ? 'password' : 'text'}
-          value={typeof value === 'string' ? value : ''}
-          placeholder={field.placeholder}
-          minLength={field.minLength}
-          maxLength={field.maxLength}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      )
-  }
-}
-
-function mergeInputRequests(
-  current: PendingInputRequest[],
-  incoming: PendingInputRequest[],
-): PendingInputRequest[] {
-  const byId = new Map<string, PendingInputRequest>()
-  for (const request of current) byId.set(request.requestId, request)
-  for (const request of incoming) byId.set(request.requestId, request)
-  return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt))
-}
-
-function createInitialInputValues(fields: InputFieldSpec[]): Record<string, unknown> {
-  return Object.fromEntries(
-    fields.map((field) => {
-      const raw = field.defaultValue
-      switch (field.type) {
-        case 'multiselect':
-          return [field.name, Array.isArray(raw) ? raw.filter((item) => typeof item === 'string') : []]
-        case 'boolean':
-          return [field.name, typeof raw === 'boolean' ? raw : false]
-        case 'number':
-          return [field.name, typeof raw === 'number' || typeof raw === 'string' ? raw : '']
-        default:
-          return [field.name, typeof raw === 'string' ? raw : '']
-      }
-    }),
-  )
-}
-
-function buildInputRequestSubmission(
-  fields: InputFieldSpec[],
-  values: Record<string, unknown>,
-): Record<string, unknown> {
-  const payload: Record<string, unknown> = {}
-
-  for (const field of fields) {
-    const raw = values[field.name]
-
-    if (field.type === 'boolean') {
-      payload[field.name] = Boolean(raw)
-      continue
-    }
-
-    if (field.type === 'multiselect') {
-      const selected = Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : []
-      if (field.required && selected.length === 0) {
-        throw new Error(`${field.label} is required`)
-      }
-      if (selected.length > 0) payload[field.name] = selected
-      continue
-    }
-
-    if (field.type === 'number') {
-      const value = typeof raw === 'number' ? String(raw) : typeof raw === 'string' ? raw.trim() : ''
-      if (!value) {
-        if (field.required) throw new Error(`${field.label} is required`)
-        continue
-      }
-      const numeric = Number(value)
-      if (Number.isNaN(numeric)) throw new Error(`${field.label} must be a number`)
-      if (field.min !== undefined && numeric < field.min) {
-        throw new Error(`${field.label} must be at least ${field.min}`)
-      }
-      if (field.max !== undefined && numeric > field.max) {
-        throw new Error(`${field.label} must be at most ${field.max}`)
-      }
-      payload[field.name] = numeric
-      continue
-    }
-
-    const value = typeof raw === 'string' ? raw.trim() : ''
-    if (!value) {
-      if (field.required) throw new Error(`${field.label} is required`)
-      continue
-    }
-    if (field.minLength !== undefined && value.length < field.minLength) {
-      throw new Error(`${field.label} must be at least ${field.minLength} characters`)
-    }
-    if (field.maxLength !== undefined && value.length > field.maxLength) {
-      throw new Error(`${field.label} must be at most ${field.maxLength} characters`)
-    }
-    payload[field.name] = value
-  }
-
-  return payload
-}
-
-function EmptyChat() {
-  return (
-    <div className="chat-empty">
-      <div className="chat-empty__eyebrow">FRESH SESSION</div>
-      <h2 className="chat-empty__title">Run AI everywhere. Own your data.</h2>
-      <p className="chat-empty__lede">
-        RushDino runs locally on your machine. Start with a question, a task, or a paste of code —
-        tool output streams into the same thread.
-      </p>
-    </div>
-  )
-}
-
-/* ───────── Composer ────────────────────────────────────── */
-function Composer({
-  value,
-  onChange,
-  onSubmit,
-  textareaRef,
-  disabled,
-  attachments,
-  dragActive,
-  onPickFiles,
-  onRemoveAttachment,
-  activeProfile,
-  profiles,
-  selectedProfileId,
-  thinkingMode,
-  onSelectProfile,
-  onSelectThinkingMode,
-}: {
-  value: string
-  onChange: (v: string) => void
-  onSubmit: () => void
-  textareaRef: React.RefObject<HTMLTextAreaElement>
-  disabled?: boolean
-  attachments: string[]
-  dragActive: boolean
-  onPickFiles: () => void
-  onRemoveAttachment: (path: string) => void
-  activeProfile: ProviderProfile | null
-  profiles: ProviderProfile[]
-  selectedProfileId: string
-  thinkingMode: ThinkingLevel
-  onSelectProfile: (profileId: string) => void
-  onSelectThinkingMode: (level: ThinkingLevel) => void
-}) {
-  return (
-    <form
-      className={`composer ${dragActive ? 'composer--drop' : ''}`}
-      onSubmit={(e) => {
-        e.preventDefault()
-        onSubmit()
-      }}
-    >
-      <div className="composer__wrap">
-        {attachments.length > 0 && (
-          <ul className="composer__attachments">
-            {attachments.map((p) => (
-              <li key={p} className="composer-attach">
-                <FileText size={11} strokeWidth={1.7} className="composer-attach__icon" />
-                <span className="composer-attach__name" title={p}>
-                  {basename(p)}
-                </span>
-                <button
-                  type="button"
-                  className="composer-attach__remove"
-                  onClick={() => onRemoveAttachment(p)}
-                  aria-label={`Remove ${basename(p)}`}
-                >
-                  <XIcon size={10} strokeWidth={1.8} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <textarea
-          ref={textareaRef}
-          className="composer__input"
-          placeholder={dragActive ? 'Drop files to attach…' : 'Message rushdino'}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (disabled) return
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-              e.preventDefault()
-              onSubmit()
-            } else if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              onSubmit()
-            }
-          }}
-          rows={3}
-        />
-        <div className="composer__actions">
-          <button
-            type="button"
-            className="composer__icon"
-            aria-label="Attach files"
-            onClick={onPickFiles}
-            title="Attach files (⌘⇧F)"
-            disabled={disabled}
-          >
-            <Plus size={15} strokeWidth={1.8} />
-          </button>
-          <button type="button" className="composer__pill" aria-label="Permissions" disabled={disabled}>
-            <ShieldCheck size={13} strokeWidth={1.7} />
-            <span>Default permissions</span>
-            <ChevronDown size={10} strokeWidth={2} />
-          </button>
-          <div className="composer__spacer" />
-          <label className="composer__control" aria-label="Model profile">
-            <span className="composer__control-label">Model</span>
-            <select
-              className="composer__select"
-              value={selectedProfileId}
-              disabled={disabled || profiles.length === 0}
-              onChange={(event) => onSelectProfile(event.target.value)}
-            >
-              {profiles.length === 0 ? (
-                <option value="">No profile configured</option>
-              ) : (
-                profiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {profileLabel(profile)}
-                  </option>
-                ))
-              )}
-            </select>
-            {activeProfile && (
-              <span className="composer__control-meta">{activeProfile.default_model}</span>
-            )}
-          </label>
-          <label className="composer__control" aria-label="Thinking mode">
-            <span className="composer__control-label">Thinking</span>
-            <select
-              className="composer__select"
-              value={thinkingMode}
-              disabled={disabled}
-              onChange={(event) => onSelectThinkingMode(event.target.value as ThinkingLevel)}
-            >
-              {THINKING_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="composer__icon" aria-label="Voice" disabled={disabled}>
-            <Mic size={14} strokeWidth={1.7} />
-          </button>
-          <button
-            type="submit"
-            className="composer__send"
-            disabled={disabled}
-            aria-label="Send message"
-          >
-            <ArrowUp size={15} strokeWidth={2.5} />
-          </button>
-        </div>
-      </div>
-    </form>
-  )
-}
-
-const THINKING_OPTIONS: Array<{ value: ThinkingLevel; label: string }> = [
-  { value: 'off', label: 'Off' },
-  { value: 'minimal', label: 'Minimal' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'XHigh' },
-  { value: 'adaptive', label: 'Adaptive' },
-]
-
-function profileLabel(profile: ProviderProfile): string {
-  const provider = profile.provider_kind.toLowerCase()
-  return `${profile.name} · ${provider}`
 }

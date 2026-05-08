@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { wsOrigin } from '@/api/bootstrap'
+import { abortRun } from '@/api/agent-runtime'
 import type { PendingInputRequest as ChatInputRequest, ToolCall } from '@/api/chat'
 import type { ThinkingLevel } from '@/api/system'
 
@@ -61,6 +62,7 @@ export function useChatStream(opts: {
   const [state, setState] = useState<StreamState>({ phase: 'idle' })
   const socketRef = useRef<WebSocket | null>(null)
   const buffer = useRef<StreamingTurn>({ role: 'assistant', content: '', tool_calls: [] })
+  const activeRunId = useRef<string | null>(null)
 
   const handlers = useRef({
     onToken,
@@ -129,6 +131,8 @@ export function useChatStream(opts: {
         return
       }
       const type = payload.type as string | undefined
+      const runId = payload.run_id as string | undefined
+      if (runId) activeRunId.current = runId
       switch (type) {
         case 'chat_chunk': {
           const delta = (payload.delta as string) ?? ''
@@ -141,6 +145,7 @@ export function useChatStream(opts: {
           if (payload.done) {
             const finalTurn = { ...buffer.current }
             buffer.current = { role: 'assistant', content: '', tool_calls: [] }
+            activeRunId.current = null
             handlers.current.onTurnEnd(finalTurn)
           }
           break
@@ -178,6 +183,7 @@ export function useChatStream(opts: {
             tool_calls: buffer.current.tool_calls,
           }
           buffer.current = { role: 'assistant', content: '', tool_calls: [] }
+          activeRunId.current = null
           handlers.current.onTurnEnd(turn)
           break
         }
@@ -275,6 +281,25 @@ export function useChatStream(opts: {
     [],
   )
 
+  /**
+   * Aborts the in-flight turn. Calls REST `abortRun` if we have a run id,
+   * then resets local stream state. Discards any partial response — when
+   * the user hits stop they want it to stop, not preserved.
+   */
+  const stop = useCallback(async () => {
+    const runId = activeRunId.current
+    activeRunId.current = null
+    buffer.current = { role: 'assistant', content: '', tool_calls: [] }
+    handlers.current.onReset()
+    if (runId) {
+      try {
+        await abortRun(runId)
+      } catch (err) {
+        console.warn('[rushdino] abort run failed', err)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     return () => {
       socketRef.current?.close()
@@ -282,7 +307,7 @@ export function useChatStream(opts: {
     }
   }, [])
 
-  return { state, send, sendApproval } as const
+  return { state, send, sendApproval, stop } as const
 }
 
 export type { StreamingTurn }
