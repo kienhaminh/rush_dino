@@ -8,6 +8,15 @@ type Props = {
   opacity?: number
 }
 
+// Static gradient — copper→teal hairline. For the animated variant, the
+// background is widened to 200% and the @keyframes rd-iridescent-sweep
+// animation (declared in index.css alongside the legacy rule) shifts the
+// background-position.
+const STATIC_BG =
+  'bg-[linear-gradient(90deg,rgba(34,211,200,0.4)_0%,transparent_70%)]'
+const ANIMATED_BG =
+  'bg-[linear-gradient(90deg,rgba(34,211,200,0.4)_0%,rgba(34,211,200,0.15)_40%,transparent_80%)] bg-[length:200%_100%] animate-[rd-iridescent-sweep_6s_linear_infinite]'
+
 /**
  * A 1px horizontal hairline rendered with the copper→magenta→teal→gold
  * iridescent gradient. Reserved for exactly four surfaces app-wide:
@@ -21,7 +30,11 @@ export function IridescentLine({ className, animated = false, opacity = 0.4 }: P
   return (
     <span
       aria-hidden
-      className={cn('iridescent-line', animated && 'iridescent-line--animated', className)}
+      className={cn(
+        'block h-px w-full',
+        animated ? ANIMATED_BG : STATIC_BG,
+        className,
+      )}
       style={{ opacity }}
     />
   )
