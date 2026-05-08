@@ -340,13 +340,9 @@
 
 /* Legacy page wrappers self-center via margin: 0 auto. */
 .main > .kg-page,
-.main > .sessions-page,
 .main > .providers-page,
 .main > .agents-page,
-.main > .logs-page,
 .main > .skills-page,
-.main > .cron-page,
-.main > .approvals-page,
 .main > .metrics-page,
 .main > .config-page,
 .main > .channels-page,
@@ -1450,8 +1446,8 @@ select.chip {
 }
 
 /* ── Feature-area page cards ─────────────────────────────────────────── */
-.kg-page, .sessions-page, .providers-page, .agents-page, .logs-page,
-.skills-page, .cron-page, .approvals-page, .metrics-page, .config-page,
+.kg-page, .providers-page, .agents-page,
+.skills-page, .metrics-page, .config-page,
 .channels-page, .workflows-page, .guardrail-page {
   width: 100%;
   max-width: 1120px;
@@ -1551,34 +1547,8 @@ select.chip {
 }
 
 /* Sessions */
-.sessions-list { padding: 8px 4px !important; }
-.session-items { list-style: none; margin: 0; padding: 0; }
-.session-row {
-  display: grid;
-  grid-template-columns: 180px 1fr auto auto;
-  align-items: baseline;
-  gap: 16px;
-  padding: 14px 18px;
-  border-radius: var(--ds-radius-md);
-  transition: background 140ms var(--ease-cubic);
-}
-.session-row:hover { background: rgba(255, 255, 255, 0.03); }
-.session-row + .session-row { border-top: 1px solid var(--ds-border-line); }
-.session-row__time {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ds-text-dim);
-}
-.session-row__title { font-size: 14px; color: var(--ds-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-row__meta { font-size: 11px; color: var(--ds-text-muted); }
-.session-row__duration {
-  font-size: 13px;
-  color: var(--ds-teal-400);
-  font-feature-settings: 'tnum' 1;
-  opacity: 0;
-  transition: opacity 180ms var(--ease-cubic);
-}
-.session-row:hover .session-row__duration { opacity: 1; }
+/* Sessions list, row layout, and meta cells migrated to Tailwind in
+   src/pages/Sessions.tsx (unit 8b). */
 
 /* Providers */
 .provider-grid {
@@ -1705,28 +1675,7 @@ select.chip {
   font-size: 12px;
   line-height: 1.5;
 }
-.log-line {
-  display: grid;
-  grid-template-columns: 92px 56px 180px 1fr;
-  gap: 12px;
-  padding: 2px 0;
-  color: var(--ds-text-muted);
-  white-space: nowrap;
-}
-.log-line:hover { background: rgba(255, 255, 255, 0.03); }
-.log-line__time { color: var(--ds-text-dim); }
-.log-line__ms { opacity: 0.55; }
-.log-line__level { font-weight: 700; letter-spacing: 0.05em; }
-.log-line__level--error { color: var(--ds-error); }
-.log-line__level--warn  { color: var(--ds-warning); }
-.log-line__level--info  { color: var(--ds-success); }
-.log-line__level--debug { color: var(--ds-text-dim); }
-.log-line__target { color: var(--ds-text-dim); overflow: hidden; text-overflow: ellipsis; }
-.log-line__msg {
-  color: var(--ds-text-primary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
+/* Log row layout migrated to Tailwind in src/pages/Logs.tsx (unit 8). */
 
 /* Skills */
 .skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
@@ -1754,46 +1703,14 @@ select.chip {
 
 /* Cron */
 .cron-list { padding: 8px !important; }
-.cron-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 18px;
-  border-radius: var(--ds-radius-md);
-}
-.cron-row + .cron-row { border-top: 1px solid var(--ds-border-line); }
-.cron-row:hover { background: rgba(255, 255, 255, 0.03); }
-.cron-row__head { display: flex; align-items: center; gap: 12px; grid-column: 1 / -1; }
-.cron-row__dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.cron-row__dot--live {
-  background: var(--ds-success);
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
-}
-.cron-row__dot--paused { background: var(--ds-text-dim); }
-.cron-row__name { font-size: 14px; color: var(--ds-text-primary); font-weight: 600; }
-.cron-row__schedule {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ds-teal-400);
-  background: var(--ds-teal-soft);
-  padding: 3px 8px;
-  border-radius: 4px;
-}
-.cron-row__meta { grid-column: 1 / span 2; display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--ds-text-muted); }
-.cron-row__label {
-  font-family: var(--font-mono);
-  color: var(--ds-text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 9px;
-  font-weight: 700;
-}
-.cron-row__next { font-size: 14px; color: var(--ds-text-primary); font-feature-settings: 'tnum' 1; }
-.cron-row__actions { grid-column: 3; display: flex; gap: 6px; grid-row: 1 / span 2; align-self: center; }
+/* Cron row layout migrated to Tailwind in src/pages/Cron.tsx (unit 8). */
 
 /* Approvals */
-.approvals-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+/* Page-level layout (.approvals-list, __ids) migrated to Tailwind in
+   src/pages/Approvals.tsx (unit 8b). The remaining .approval-card*,
+   __head, __tool, __args, __actions rules are still used by the chat
+   inline-approval surface (Unit 2 owns those). The .approval-btn* rules
+   are still used by src/pages/Config.tsx (Unit 6 territory). */
 .approval-card { padding: 18px 20px !important; }
 .approval-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .approval-card__tool {
@@ -1803,11 +1720,6 @@ select.chip {
   background: rgba(245, 193, 24, 0.12);
   padding: 4px 10px;
   border-radius: 999px;
-}
-.approval-card__ids {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ds-text-dim);
 }
 .approval-card__args {
   margin: 0;

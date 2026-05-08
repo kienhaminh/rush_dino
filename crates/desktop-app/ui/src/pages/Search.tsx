@@ -6,6 +6,18 @@ import { Search as SearchIcon, MessageCircle, Users } from 'lucide-react'
 import { listAgents, type AgentListItem } from '@/api/agents'
 import { listConversations, type ConversationSummary } from '@/api/chat'
 import { PageTopbar } from '@/components/shell/PageTopbar'
+import { cn } from '@/lib/cn'
+
+// Shared search-item link layout (12 px gap, hover wash, theme-aware).
+// Replaces the legacy `.search-item__link` BEM rule. The hover wash uses
+// dark: + light defaults so it survives without theme-light overrides.
+const SEARCH_LINK_CLASSES =
+  'flex items-center gap-3 rounded-[8px] px-3.5 py-2.5 text-text-primary no-underline transition-colors hover:bg-[rgba(0,0,0,0.04)] dark:hover:bg-[rgba(255,255,255,0.05)]'
+
+const SEARCH_ITEM_TITLE = 'truncate font-sans text-sm text-text-primary'
+const SEARCH_ITEM_DESC = 'truncate text-xs text-text-muted'
+const SEARCH_ITEM_KIND =
+  'shrink-0 rounded-pill border border-border-strong px-2 py-[3px] text-[10px] uppercase tracking-[0.12em] text-text-dim'
 
 /**
  * Client-side fuzzy-ish search across conversations and agents. The server
@@ -54,7 +66,7 @@ export default function Search() {
   return (
     <div className="page--framed">
       <PageTopbar eyebrow="Browse" title="Search" />
-      <div className="page__body search-page">
+      <div className="page__body mx-auto w-full max-w-[860px]">
         <div className="search-bar">
           <SearchIcon size={16} strokeWidth={1.7} className="search-bar__icon" />
           <input
@@ -77,7 +89,7 @@ export default function Search() {
           )}
         </div>
 
-        <p className="search-page__hint">
+        <p className="mx-0.5 mt-2.5 text-xs leading-[1.5] text-text-dim">
           Search matches cached chats and agent metadata already loaded in this desktop app. It is
           local filtering, not server-side full-text search.
         </p>
@@ -123,16 +135,21 @@ export default function Search() {
 
 function AgentResult({ agent }: { agent: AgentListItem }) {
   return (
-    <li className="search-item">
-      <Link to={`/agents/${encodeURIComponent(agent.id)}`} className="search-item__link">
-        <span className="search-item__sigil">{agent.emoji || '•'}</span>
-        <div className="search-item__body">
-          <div className="search-item__title">{agent.name}</div>
+    <li>
+      <Link
+        to={`/agents/${encodeURIComponent(agent.id)}`}
+        className={SEARCH_LINK_CLASSES}
+      >
+        <span className="w-7 text-center text-[20px] leading-none">
+          {agent.emoji || '•'}
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className={SEARCH_ITEM_TITLE}>{agent.name}</div>
           {agent.description && (
-            <div className="search-item__desc">{agent.description}</div>
+            <div className={SEARCH_ITEM_DESC}>{agent.description}</div>
           )}
         </div>
-        <span className="search-item__kind mono">agent</span>
+        <span className={cn(SEARCH_ITEM_KIND, 'mono')}>agent</span>
       </Link>
     </li>
   )
@@ -140,18 +157,26 @@ function AgentResult({ agent }: { agent: AgentListItem }) {
 
 function ConvoResult({ convo }: { convo: ConversationSummary }) {
   return (
-    <li className="search-item">
-      <Link to={`/?conversation=${encodeURIComponent(convo.id)}`} className="search-item__link">
-        <MessageCircle size={14} strokeWidth={1.6} className="search-item__icon" />
-        <div className="search-item__body">
-          <div className="search-item__title">{convo.title || 'Untitled'}</div>
-          <div className="search-item__desc mono">
+    <li>
+      <Link
+        to={`/?conversation=${encodeURIComponent(convo.id)}`}
+        className={SEARCH_LINK_CLASSES}
+      >
+        <MessageCircle
+          size={14}
+          strokeWidth={1.6}
+          className="shrink-0 text-text-muted"
+        />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className={SEARCH_ITEM_TITLE}>{convo.title || 'Untitled'}</div>
+          <div className={cn(SEARCH_ITEM_DESC, 'mono')}>
             {convo.id.slice(0, 12)}…
             {convo.updated_at && ` · ${new Date(convo.updated_at).toLocaleString()}`}
           </div>
         </div>
-        <span className="search-item__kind mono">chat</span>
+        <span className={cn(SEARCH_ITEM_KIND, 'mono')}>chat</span>
       </Link>
     </li>
   )
 }
+
