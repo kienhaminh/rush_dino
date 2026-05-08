@@ -1,20 +1,22 @@
 import { useState, type ReactNode } from 'react'
-import { TEAL, MUTED, DIM, INK, LINE, SURFACE, STATUS, type StatusKey } from './tokens'
+import { cn } from '@/lib/cn'
+import { TEAL, STATUS, type StatusKey } from './tokens'
+
+/* ────────────────────────────────────────────────────────────────────
+   Card primitives for the agent-states component family.
+   The `borderLeft` accent + `kind` label color are genuinely dynamic
+   (callers may pass tokens, raw rgba literals, or status colors), so
+   those stay as inline `style` props. Everything else is utilities.
+   ──────────────────────────────────────────────────────────────────── */
 
 export function Dot({ color, pulse }: { color: string; pulse?: boolean }) {
   return (
     <span
-      style={{
-        width: 7,
-        height: 7,
-        borderRadius: 999,
-        background: color,
-        display: 'inline-block',
-        flexShrink: 0,
-        boxShadow: `0 0 8px ${color}`,
-        opacity: 0.95,
-        animation: pulse ? 'rd-pulse 1.4s ease-in-out infinite' : undefined,
-      }}
+      className={cn(
+        'inline-block flex-shrink-0 w-[7px] h-[7px] rounded-full opacity-95',
+        pulse && 'animate-[rd-pulse_1.4s_ease-in-out_infinite]',
+      )}
+      style={{ background: color, boxShadow: `0 0 8px ${color}` }}
     />
   )
 }
@@ -26,15 +28,11 @@ export function Chevron({ open }: { open: boolean }) {
       height={12}
       viewBox="0 0 24 24"
       fill="none"
-      stroke={MUTED}
+      stroke="var(--ds-text-muted)"
       strokeWidth={2.5}
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{
-        transform: open ? 'rotate(90deg)' : 'none',
-        transition: 'transform .15s ease',
-        flexShrink: 0,
-      }}
+      className={cn('flex-shrink-0 transition-transform duration-150 ease-ease-cubic', open && 'rotate-90')}
     >
       <polyline points="9 18 15 12 9 6" />
     </svg>
@@ -43,16 +41,7 @@ export function Chevron({ open }: { open: boolean }) {
 
 export function ArgLabel({ children }: { children: ReactNode }) {
   return (
-    <div
-      style={{
-        color: DIM,
-        fontSize: 10,
-        letterSpacing: '.14em',
-        textTransform: 'uppercase',
-        fontWeight: 600,
-        marginBottom: 6,
-      }}
-    >
+    <div className="text-[10px] tracking-[.14em] uppercase font-semibold mb-1.5 text-text-dim">
       {children}
     </div>
   )
@@ -76,87 +65,42 @@ export function Card({ kind, title, meta, status, defaultOpen = false, compact, 
 
   return (
     <div
-      style={{
-        border: `1px solid ${LINE}`,
-        borderLeft: `2px solid ${borderLeft}`,
-        background: SURFACE,
-        borderRadius: 8,
-        overflow: 'hidden',
-      }}
+      className="border border-border-line bg-bg-surface rounded-lg overflow-hidden"
+      style={{ borderLeft: `2px solid ${borderLeft}` }}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          padding: '10px 12px',
-          background: 'transparent',
-          border: 'none',
-          color: 'inherit',
-          cursor: 'pointer',
-          textAlign: 'left',
-          fontFamily: 'inherit',
-          fontSize: 12,
-        }}
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 bg-transparent border-none text-inherit cursor-pointer text-left font-[inherit] text-xs"
       >
         <Chevron open={open} />
         <span
-          style={{
-            color: borderLeft,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '.12em',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            minWidth: 58,
-            flexShrink: 0,
-          }}
+          className="font-mono text-[10px] tracking-[.12em] font-bold uppercase min-w-[58px] flex-shrink-0"
+          style={{ color: borderLeft }}
         >
           {kind}
         </span>
-        <span
-          style={{
-            color: INK,
-            fontWeight: 500,
-            fontSize: 13,
-            flex: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
+        <span className="text-text-primary font-medium text-[13px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
           {title}
         </span>
         {compact && !open ? (
-          <span
-            style={{
-              color: DIM,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              flexShrink: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              maxWidth: 180,
-            }}
-          >
+          <span className="text-text-dim font-mono text-[11px] flex-shrink-0 overflow-hidden text-ellipsis whitespace-nowrap max-w-[180px]">
             {compact}
           </span>
         ) : null}
         {meta ? (
-          <span style={{ color: MUTED, fontFamily: 'var(--font-mono)', fontSize: 11, flexShrink: 0 }}>{meta}</span>
+          <span className="text-text-muted font-mono text-[11px] flex-shrink-0">{meta}</span>
         ) : null}
         {s ? (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, color: MUTED, fontSize: 11 }}>
+          <span className="flex items-center gap-1.5 flex-shrink-0 text-text-muted text-[11px]">
             <Dot color={s.dot} pulse={s.pulse} />
             {s.label}
           </span>
         ) : null}
       </button>
-      {open ? <div style={{ padding: '4px 12px 14px', borderTop: `1px solid ${LINE}` }}>{children}</div> : null}
+      {open ? (
+        <div className="pt-1 px-3 pb-3.5 border-t border-border-line">{children}</div>
+      ) : null}
     </div>
   )
 }

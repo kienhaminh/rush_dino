@@ -1,15 +1,13 @@
-export const TEAL      = 'var(--ds-teal-400)'
-export const SUCCESS   = 'var(--ds-success)'
-export const WARN      = 'var(--ds-warning)'
-export const ERROR     = 'var(--ds-error)'
-export const INK       = 'var(--ds-text-primary)'
-export const MUTED     = 'var(--ds-text-muted)'
-export const DIM       = 'var(--ds-text-dim)'
-export const LINE      = 'var(--ds-border-line)'
-export const LINE_STRONG = 'var(--ds-border-strong)'
-export const SURFACE   = 'var(--ds-bg-surface)'
-export const SURFACE_2 = 'var(--ds-bg-card)'
-export const MONO      = 'var(--font-mono)'
+/* Color string constants used by agent-states components for the few cases
+   where values must flow through component props (e.g. `<Card accent={…}/>`
+   sets inline `style.borderLeft` on a runtime-chosen color). Tailwind classes
+   handle everything statically — these stay as `var(--ds-*)` strings so they
+   resolve to the same tokens. */
+export const TEAL    = 'var(--ds-teal-400)'
+export const SUCCESS = 'var(--ds-success)'
+export const WARN    = 'var(--ds-warning)'
+export const ERROR   = 'var(--ds-error)'
+export const DIM     = 'var(--ds-text-dim)'
 
 export type StatusKey = 'running' | 'done' | 'error' | 'idle'
 

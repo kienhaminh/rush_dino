@@ -1,22 +1,6 @@
-import { type CSSProperties } from 'react'
-import { TEAL, MUTED, ERROR, LINE_STRONG } from './tokens'
+import { ERROR } from './tokens'
 import { Card } from './card'
-
-function artBtn(primary: boolean): CSSProperties {
-  return {
-    fontFamily: 'inherit',
-    fontSize: 11,
-    letterSpacing: '.08em',
-    textTransform: 'uppercase',
-    padding: '6px 12px',
-    borderRadius: 999,
-    cursor: 'pointer',
-    background: primary ? TEAL : 'transparent',
-    color: primary ? 'var(--ds-bg-base)' : MUTED,
-    border: primary ? 'none' : `1px solid ${LINE_STRONG}`,
-    fontWeight: 600,
-  }
-}
+import { PILL_BASE, PILL_GHOST, PILL_PRIMARY } from './pill'
 
 export function ErrorBlock({
   title = 'Tool call failed',
@@ -31,26 +15,19 @@ export function ErrorBlock({
 }) {
   return (
     <Card kind="ERROR" title={title} status="error" defaultOpen={defaultOpen} accent={ERROR}>
-      <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div
-          style={{
-            background: 'rgba(248,113,113,.06)',
-            border: `1px solid rgba(248,113,113,.25)`,
-            borderRadius: 6,
-            padding: '10px 12px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            color: ERROR,
-            lineHeight: 1.5,
-          }}
-        >
+      <div className="mt-2.5 flex flex-col gap-3">
+        <div className="bg-[rgb(248_113_113_/_0.06)] border border-[rgb(248_113_113_/_0.25)] rounded-md px-3 py-2.5 font-mono text-xs text-error leading-[1.5]">
           {detail}
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" onClick={onRetry} style={artBtn(true)}>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onRetry}
+            className={`${PILL_BASE} ${PILL_PRIMARY}`}
+          >
             Retry
           </button>
-          <button type="button" style={artBtn(false)}>
+          <button type="button" className={`${PILL_BASE} ${PILL_GHOST}`}>
             Copy error
           </button>
         </div>
