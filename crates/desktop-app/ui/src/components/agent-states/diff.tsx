@@ -1,4 +1,5 @@
-import { TEAL, SUCCESS, ERROR, INK, DIM, LINE, SURFACE_2 } from './tokens'
+import { cn } from '@/lib/cn'
+import { TEAL } from './tokens'
 import { Card } from './card'
 
 export type DiffHunk = { line: string | number; text: string; kind?: '+' | '-' }
@@ -20,47 +21,28 @@ export function Diff({
       accent={TEAL}
       meta={`${hunks.length} hunk${hunks.length > 1 ? 's' : ''}`}
     >
-      <div
-        style={{
-          marginTop: 10,
-          background: SURFACE_2,
-          border: `1px solid ${LINE}`,
-          borderRadius: 6,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 12,
-          lineHeight: 1.7,
-          overflow: 'auto',
-        }}
-      >
-        {hunks.map((h, i) => (
-          <div key={i} style={{ display: 'flex', borderTop: i ? `1px solid ${LINE}` : 'none' }}>
+      <div className="mt-2.5 bg-bg-card border border-border-line rounded-md font-mono text-xs leading-[1.7] overflow-auto">
+        {hunks.map((h, i) => {
+          const rowBg =
+            h.kind === '+'
+              ? 'bg-[rgb(74_222_128_/_0.08)] text-success'
+              : h.kind === '-'
+                ? 'bg-[rgb(248_113_113_/_0.08)] text-error'
+                : 'bg-transparent text-text-primary'
+          return (
             <div
-              style={{
-                padding: '8px 10px',
-                color: DIM,
-                background: 'rgba(0,0,0,.2)',
-                minWidth: 38,
-                textAlign: 'right',
-                userSelect: 'none',
-                fontSize: 11,
-              }}
+              key={i}
+              className={cn('flex', i && 'border-t border-border-line')}
             >
-              {h.line}
+              <div className="px-2.5 py-2 text-text-dim bg-[rgb(0_0_0_/_0.2)] min-w-[38px] text-right select-none text-[11px]">
+                {h.line}
+              </div>
+              <div className={`px-3 py-2 flex-1 whitespace-pre ${rowBg}`}>
+                {`${h.kind ?? ' '} ${h.text}`}
+              </div>
             </div>
-            <div
-              style={{
-                padding: '8px 12px',
-                flex: 1,
-                background:
-                  h.kind === '+' ? 'rgba(74,222,128,.08)' : h.kind === '-' ? 'rgba(248,113,113,.08)' : 'transparent',
-                color: h.kind === '+' ? SUCCESS : h.kind === '-' ? ERROR : INK,
-                whiteSpace: 'pre',
-              }}
-            >
-              {`${h.kind ?? ' '} ${h.text}`}
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </Card>
   )

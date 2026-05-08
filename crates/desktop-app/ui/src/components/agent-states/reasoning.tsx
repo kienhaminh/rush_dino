@@ -1,4 +1,3 @@
-import { DIM } from './tokens'
 import { Card } from './card'
 
 export function Reasoning({
@@ -19,34 +18,13 @@ export function Reasoning({
       accent="rgba(255,255,255,.2)"
       compact={`${steps.length} steps`}
     >
-      <div
-        style={{
-          marginTop: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          fontSize: 13,
-          lineHeight: 1.6,
-          color: 'rgba(255,255,255,.65)',
-          fontStyle: 'italic',
-        }}
-      >
+      <div className="mt-2.5 flex flex-col gap-3 text-[13px] leading-[1.6] italic text-[rgb(255_255_255_/_0.65)]">
         {steps.map((s, i) => (
-          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-            <span
-              style={{
-                color: DIM,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                fontStyle: 'normal',
-                width: 22,
-                flexShrink: 0,
-                lineHeight: 1.7,
-              }}
-            >
+          <div key={i} className="flex gap-2.5 items-start">
+            <span className="text-text-dim font-mono text-[11px] not-italic w-[22px] flex-shrink-0 leading-[1.7]">
               {String(i + 1).padStart(2, '0')}
             </span>
-            <span style={{ flex: 1, minWidth: 0 }}>{s}</span>
+            <span className="flex-1 min-w-0">{s}</span>
           </div>
         ))}
       </div>

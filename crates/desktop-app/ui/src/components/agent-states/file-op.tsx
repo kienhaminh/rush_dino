@@ -1,4 +1,4 @@
-import { TEAL, SUCCESS, WARN, ERROR, INK, LINE, SURFACE_2 } from './tokens'
+import { TEAL, SUCCESS, WARN, ERROR } from './tokens'
 import { Card } from './card'
 
 export type FileOpKind = 'read' | 'write' | 'edit' | 'del'
@@ -36,20 +36,7 @@ export function FileOp({
       compact={op === 'read' ? 'read-only' : null}
     >
       {preview && (
-        <pre
-          style={{
-            margin: '10px 0 0',
-            padding: '10px 12px',
-            background: SURFACE_2,
-            border: `1px solid ${LINE}`,
-            borderRadius: 6,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            lineHeight: 1.6,
-            color: INK,
-            overflow: 'auto',
-          }}
-        >
+        <pre className="mt-2.5 mb-0 mx-0 px-3 py-2.5 bg-bg-card border border-border-line rounded-md font-mono text-xs leading-[1.6] text-text-primary overflow-auto">
           {preview}
         </pre>
       )}

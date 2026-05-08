@@ -1,22 +1,6 @@
-import { type CSSProperties } from 'react'
-import { TEAL, MUTED, INK, LINE_STRONG } from './tokens'
+import { TEAL } from './tokens'
 import { Card } from './card'
-
-function artBtn(primary: boolean): CSSProperties {
-  return {
-    fontFamily: 'inherit',
-    fontSize: 11,
-    letterSpacing: '.08em',
-    textTransform: 'uppercase',
-    padding: '6px 12px',
-    borderRadius: 999,
-    cursor: 'pointer',
-    background: primary ? TEAL : 'transparent',
-    color: primary ? 'var(--ds-bg-base)' : MUTED,
-    border: primary ? 'none' : `1px solid ${LINE_STRONG}`,
-    fontWeight: 600,
-  }
-}
+import { PILL_BASE, PILL_GHOST, PILL_PRIMARY } from './pill'
 
 export function Artifact({
   kind = 'Image',
@@ -33,36 +17,24 @@ export function Artifact({
 }) {
   return (
     <Card kind="ARTIFACT" title={name} meta={size} defaultOpen={defaultOpen} accent={TEAL} compact={kind}>
-      <div style={{ marginTop: 10, display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+      <div className="mt-2.5 flex gap-3.5 items-start">
         <div
-          style={{
-            width: 120,
-            height: 80,
-            flexShrink: 0,
-            borderRadius: 6,
-            background: thumb ?? 'linear-gradient(135deg, rgba(34,211,200,.15), rgba(34,211,200,.3))',
-            border: `1px solid ${LINE_STRONG}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: TEAL,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '.12em',
-          }}
+          className="w-[120px] h-20 flex-shrink-0 rounded-md border border-border-strong flex items-center justify-center text-teal-400 font-mono text-[10px] tracking-[.12em]"
+          // `thumb` may be any background value (image url, gradient); keep dynamic.
+          style={{ background: thumb ?? 'linear-gradient(135deg, rgba(34,211,200,.15), rgba(34,211,200,.3))' }}
         >
           {kind.toUpperCase()}
         </div>
-        <div style={{ flex: 1, fontSize: 12, color: MUTED, lineHeight: 1.6 }}>
-          <div style={{ color: INK, marginBottom: 4 }}>{name}</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+        <div className="flex-1 text-xs text-text-muted leading-[1.6]">
+          <div className="text-text-primary mb-1">{name}</div>
+          <div className="font-mono text-[11px]">
             {kind} · {size}
           </div>
-          <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-            <button type="button" style={artBtn(true)}>
+          <div className="mt-2.5 flex gap-2">
+            <button type="button" className={`${PILL_BASE} ${PILL_PRIMARY}`}>
               Open
             </button>
-            <button type="button" style={artBtn(false)}>
+            <button type="button" className={`${PILL_BASE} ${PILL_GHOST}`}>
               Download
             </button>
           </div>
