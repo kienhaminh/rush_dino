@@ -1547,34 +1547,8 @@ select.chip {
 }
 
 /* Sessions */
-.sessions-list { padding: 8px 4px !important; }
-.session-items { list-style: none; margin: 0; padding: 0; }
-.session-row {
-  display: grid;
-  grid-template-columns: 180px 1fr auto auto;
-  align-items: baseline;
-  gap: 16px;
-  padding: 14px 18px;
-  border-radius: var(--ds-radius-md);
-  transition: background 140ms var(--ease-cubic);
-}
-.session-row:hover { background: rgba(255, 255, 255, 0.03); }
-.session-row + .session-row { border-top: 1px solid var(--ds-border-line); }
-.session-row__time {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ds-text-dim);
-}
-.session-row__title { font-size: 14px; color: var(--ds-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-row__meta { font-size: 11px; color: var(--ds-text-muted); }
-.session-row__duration {
-  font-size: 13px;
-  color: var(--ds-teal-400);
-  font-feature-settings: 'tnum' 1;
-  opacity: 0;
-  transition: opacity 180ms var(--ease-cubic);
-}
-.session-row:hover .session-row__duration { opacity: 1; }
+/* Sessions list, row layout, and meta cells migrated to Tailwind in
+   src/pages/Sessions.tsx (unit 8b). */
 
 /* Providers */
 .provider-grid {
@@ -1732,7 +1706,11 @@ select.chip {
 /* Cron row layout migrated to Tailwind in src/pages/Cron.tsx (unit 8). */
 
 /* Approvals */
-.approvals-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+/* Page-level layout (.approvals-list, __ids) migrated to Tailwind in
+   src/pages/Approvals.tsx (unit 8b). The remaining .approval-card*,
+   __head, __tool, __args, __actions rules are still used by the chat
+   inline-approval surface (Unit 2 owns those). The .approval-btn* rules
+   are still used by src/pages/Config.tsx (Unit 6 territory). */
 .approval-card { padding: 18px 20px !important; }
 .approval-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .approval-card__tool {
@@ -1742,11 +1720,6 @@ select.chip {
   background: rgba(245, 193, 24, 0.12);
   padding: 4px 10px;
   border-radius: 999px;
-}
-.approval-card__ids {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ds-text-dim);
 }
 .approval-card__args {
   margin: 0;

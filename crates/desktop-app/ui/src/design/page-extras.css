@@ -524,16 +524,8 @@ select.chip { font-family: var(--font-mono); font-size: 11px; padding-right: 22p
 /* `.search-item*` row layout migrated to Tailwind utilities in src/pages/Search.tsx (unit 8). */
 
 /* ── Sessions ───────────────────────────────────────────────────────── */
-.sessions-list { padding: 6px 4px !important; }
-.session-items { list-style: none; margin: 0; padding: 0; }
-.session-row { display: grid; grid-template-columns: 180px 1fr auto auto; align-items: baseline; gap: 16px; padding: 12px 16px; border-radius: var(--ds-radius-md); transition: background 140ms var(--ease-cubic); }
-.session-row:hover { background: rgba(255, 255, 255, 0.03); }
-.session-row + .session-row { border-top: 1px solid var(--ds-border-line); }
-.session-row__time { font-family: var(--font-mono); font-size: 11px; color: var(--ds-text-dim); }
-.session-row__title { font-size: 14px; color: var(--ds-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.session-row__meta { font-family: var(--font-mono); font-size: 11px; color: var(--ds-text-muted); }
-.session-row__duration { font-size: 13px; color: var(--ds-text-dim); opacity: 0; transform: translateX(-4px); transition: opacity 180ms var(--ease-cubic), transform 180ms var(--ease-cubic); }
-.session-row:hover .session-row__duration { opacity: 1; transform: translateX(0); color: var(--ds-teal-300); }
+/* Sessions list, row layout, and meta cells migrated to Tailwind in
+   src/pages/Sessions.tsx (unit 8b). */
 
 /* ── Models & API (ma-*) ────────────────────────────────────────────── */
 .ma-section { display: flex; flex-direction: column; gap: 10px; }
@@ -710,11 +702,14 @@ select.chip { font-family: var(--font-mono); font-size: 11px; padding-right: 22p
 /* Row layout migrated to Tailwind utilities in src/pages/Cron.tsx (unit 8). */
 
 /* ── Approvals ──────────────────────────────────────────────────────── */
-.approvals-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+/* Page-level layout (.approvals-list, __ids) migrated to Tailwind in
+   src/pages/Approvals.tsx (unit 8b). The remaining .approval-card*,
+   __head, __tool, __args, __actions rules are still used by the chat
+   inline-approval surface (Unit 2 owns those). The .approval-btn* rules
+   are still used by src/pages/Config.tsx (Unit 6 territory). */
 .approval-card { padding: 18px 22px !important; display: flex; flex-direction: column; gap: 10px; }
 .approval-card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .approval-card__tool { font-family: var(--font-mono); font-size: 11px; color: var(--ds-warning); background: rgba(245, 193, 24, 0.14); padding: 3px 9px; border-radius: 999px; letter-spacing: 0.04em; }
-.approval-card__ids { font-family: var(--font-mono); font-size: 10px; color: var(--ds-text-dim); }
 .approval-card__args { margin: 0; padding: 10px 12px; background: var(--ds-bg-base); border: 1px solid var(--ds-border-strong); border-radius: var(--ds-radius-md); font-family: var(--font-mono); font-size: 11.5px; color: var(--ds-text-muted); max-height: 220px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .approval-card__actions { display: flex; justify-content: flex-end; gap: 10px; }
 .approval-btn { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-sans); font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; padding: 7px 14px; border-radius: var(--ds-radius-md); border: 1px solid transparent; cursor: pointer; transition: background 140ms var(--ease-cubic), border-color 140ms var(--ease-cubic); }
