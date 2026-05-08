@@ -1,6 +1,11 @@
 /* RushDino desktop — design tokens
  * Source: rushdino-design-system/project/colors_and_type.css
  * Mood: dark terminal, teal accent, Geist sans / Geist Mono for code.
+ *
+ * Unit 14/16 note: this file is now PURELY variable declarations.
+ * Element-level resets, scrollbar/selection/focus styles, and shared
+ * @keyframes have moved into `tailwind.css` (`@layer base` + global).
+ * Keep this file token-only — Tailwind config references these vars.
  */
 
 @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
@@ -80,84 +85,4 @@
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   color-scheme: dark;
-}
-
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-  background: var(--ds-bg-main);
-}
-
-body {
-  font-family: var(--font-sans);
-  color: var(--ds-text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background:
-    radial-gradient(1200px 600px at 20% 30%, rgba(34, 211, 200, 0.05) 0%, transparent 60%),
-    radial-gradient(900px 500px at 80% 80%, rgba(167, 139, 250, 0.04) 0%, transparent 60%),
-    var(--ds-bg-main);
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-::selection {
-  background: rgba(34, 211, 200, 0.35);
-  color: var(--ds-text-primary);
-}
-
-:focus-visible {
-  outline: 1.5px solid var(--ds-teal-400);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-/* Overlay scrollbars */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-textarea::placeholder,
-input::placeholder {
-  color: rgba(255, 255, 255, 0.35);
-}
-
-code,
-kbd,
-pre {
-  font-family: var(--font-mono);
-}
-
-/* Shared agent-state keyframes */
-@keyframes rd-pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
-}
-@keyframes rd-shimmer {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50%      { opacity: 1;   transform: scale(1); }
-}
-@keyframes rd-blink {
-  50% { opacity: 0; }
-}
-@keyframes rd-fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
 }
