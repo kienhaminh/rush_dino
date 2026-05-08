@@ -12,13 +12,13 @@ export default function Guardrail() {
   const sandbox = exec?.shell_exec_sandbox as Record<string, unknown> | undefined
 
   return (
-    <div className="settings-page">
+    <div className="flex w-full max-w-[920px] flex-col gap-5">
       <SettingsPageHeader
         title="Data & Privacy"
         lede="A read-out of the security posture as it lives on disk. The server applies changes live; execution policy resets sessions on shift."
       />
 
-      <div className="guardrail-grid">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] gap-3.5">
         <PostureCard icon={<Shield size={15} />} title="Authentication">
           <Row label="HMAC auth" value={boolText(sec?.hmac_auth_enabled)} />
           <Row label="Dashboard auth" value={boolText(sec?.dashboard_auth_enabled)} />
@@ -57,20 +57,33 @@ function PostureCard({
   children: React.ReactNode
 }) {
   return (
-    <GlassPanel variant="body" className="posture-card">
-      <h2 className="posture-card__title">
+    <GlassPanel
+      variant="body"
+      className="!flex flex-col gap-2.5 !px-[22px] !py-5"
+    >
+      <h2 className="m-0 inline-flex items-center gap-2.5 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted [&>svg]:text-teal-400">
         {icon} {title}
       </h2>
-      <dl className="posture-card__list">{children}</dl>
+      <dl className="m-0 flex flex-col gap-2">{children}</dl>
     </GlassPanel>
   )
 }
 
 function Row({ label, value, trunc = false }: { label: string; value: string; trunc?: boolean }) {
   return (
-    <div className="posture-card__row">
-      <dt className="mono">{label}</dt>
-      <dd className={trunc ? 'mono posture-card__trunc' : 'mono'}>{value}</dd>
+    <div className="grid grid-cols-[150px_1fr] items-baseline gap-2.5">
+      <dt className="mono font-mono text-[10px] font-bold uppercase tracking-[0.06em] text-text-dim">
+        {label}
+      </dt>
+      <dd
+        className={
+          trunc
+            ? 'mono m-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs text-text-primary'
+            : 'mono m-0 text-xs text-text-primary'
+        }
+      >
+        {value}
+      </dd>
     </div>
   )
 }

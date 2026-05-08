@@ -128,8 +128,7 @@
   :root:not([data-theme='dark']) .sidebar__icon-btn:hover,
   :root:not([data-theme='dark']) .composer__icon:hover,
   :root:not([data-theme='dark']) .chat-topbar__edit:hover,
-  :root:not([data-theme='dark']) .btn--ghost:hover:not(:disabled),
-  :root:not([data-theme='dark']) .settings-nav__item:hover {
+  :root:not([data-theme='dark']) .btn--ghost:hover:not(:disabled) {
     background: rgba(15, 23, 42, 0.04);
   }
   :root:not([data-theme='dark']) .sidebar-kbd,
@@ -153,8 +152,7 @@
 :root[data-theme='light'] .sidebar__icon-btn:hover,
 :root[data-theme='light'] .composer__icon:hover,
 :root[data-theme='light'] .chat-topbar__edit:hover,
-:root[data-theme='light'] .btn--ghost:hover:not(:disabled),
-:root[data-theme='light'] .settings-nav__item:hover {
+:root[data-theme='light'] .btn--ghost:hover:not(:disabled) {
   background: rgba(15, 23, 42, 0.04);
 }
 :root[data-theme='light'] .sidebar-kbd,

@@ -36,24 +36,49 @@ const ENTRIES: NavEntry[] = [
 export default function SettingsLayout() {
   const navigate = useNavigate()
   return (
-    <div className="settings-root">
-      <aside className="settings-nav" aria-label="Settings navigation">
-        <div className="settings-nav__titlebar" data-tauri-drag-region />
+    <div className="grid h-screen w-screen grid-cols-[280px_1fr] bg-bg-side">
+      <aside
+        className="flex flex-col"
+        aria-label="Settings navigation"
+      >
+        {/* Empty drag strip sitting over the macOS traffic-light area. */}
+        <div
+          className="h-11 flex-shrink-0 [-webkit-app-region:drag] [app-region:drag]"
+          data-tauri-drag-region
+        />
         <button
           type="button"
-          className="settings-nav__back"
+          className={cn(
+            'mx-2 mb-1 mt-0.5 flex items-center gap-2 rounded-md px-2.5 py-2',
+            'border-none bg-transparent font-sans text-[13px] font-medium text-text-muted',
+            'cursor-pointer text-left',
+            'hover:bg-[rgba(0,0,0,0.04)] hover:text-text-primary',
+            'dark:hover:bg-[rgba(255,255,255,0.05)]',
+            '[-webkit-app-region:no-drag] [app-region:no-drag]',
+          )}
           onClick={() => navigate('/')}
         >
           <ArrowLeft size={14} strokeWidth={1.7} />
           <span>Back to App</span>
         </button>
-        <nav className="settings-nav__list">
+        <nav className="flex flex-col gap-0.5 overflow-y-auto px-2.5 py-3">
           {ENTRIES.map(({ to, label, Icon }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                cn('settings-nav__item', isActive && 'settings-nav__item--active')
+                cn(
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-2',
+                  'font-sans text-[13px] no-underline',
+                  'transition-colors duration-[140ms] ease-ease-cubic',
+                  isActive
+                    ? 'bg-teal-soft text-teal-400'
+                    : cn(
+                        'text-text-muted',
+                        'hover:bg-[rgba(0,0,0,0.04)] hover:text-text-primary',
+                        'dark:hover:bg-[rgba(255,255,255,0.04)]',
+                      ),
+                )
               }
             >
               <Icon size={15} strokeWidth={1.7} aria-hidden />
@@ -63,7 +88,7 @@ export default function SettingsLayout() {
         </nav>
       </aside>
 
-      <main className="settings-main">
+      <main className="settings-main flex flex-col gap-5 overflow-y-auto rounded-l-xl bg-bg-main px-10 pb-10 pt-8 shadow-[-1px_0_0_var(--ds-border-base)]">
         <Outlet />
       </main>
     </div>

@@ -344,14 +344,11 @@
 .main > .providers-page,
 .main > .agents-page,
 .main > .logs-page,
-.main > .skills-page,
 .main > .cron-page,
 .main > .approvals-page,
 .main > .metrics-page,
 .main > .config-page,
-.main > .channels-page,
 .main > .workflows-page,
-.main > .guardrail-page,
 .main > .chat-page {
   margin: 0 auto;
 }
@@ -1451,8 +1448,8 @@ select.chip {
 
 /* ── Feature-area page cards ─────────────────────────────────────────── */
 .kg-page, .sessions-page, .providers-page, .agents-page, .logs-page,
-.skills-page, .cron-page, .approvals-page, .metrics-page, .config-page,
-.channels-page, .workflows-page, .guardrail-page {
+.cron-page, .approvals-page, .metrics-page, .config-page,
+.workflows-page {
   width: 100%;
   max-width: 1120px;
   display: flex;
@@ -1586,7 +1583,7 @@ select.chip {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 14px;
 }
-.provider-card, .agent-card, .skill-card, .channel-card, .workflow-card, .posture-card {
+.provider-card, .agent-card, .workflow-card {
   padding: 18px 20px !important;
   background: var(--ds-bg-panel);
   border: 1px solid var(--ds-border-strong);
@@ -1595,7 +1592,7 @@ select.chip {
   flex-direction: column;
   gap: 10px;
 }
-.provider-card__head, .channel-card__head, .agent-card__head, .skill-card__head, .workflow-card__head {
+.provider-card__head, .agent-card__head, .workflow-card__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1624,7 +1621,7 @@ select.chip {
   font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--ds-text-dim);
 }
-.provider-card__name, .agent-card__name, .skill-card__name, .channel-card__name, .workflow-card__name {
+.provider-card__name, .agent-card__name, .workflow-card__name {
   font-size: 16px;
   font-weight: 600;
   color: var(--ds-text-primary);
@@ -1726,30 +1723,6 @@ select.chip {
   color: var(--ds-text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-/* Skills */
-.skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.skill-card__icon { color: var(--ds-teal-400); }
-.skill-card__badge {
-  display: inline-flex; align-items: center; gap: 5px;
-  font-family: var(--font-mono);
-  font-size: 10px; letter-spacing: 0.12em;
-  color: var(--ds-text-dim); text-transform: uppercase;
-  font-weight: 700;
-}
-.skill-card__description {
-  font-size: 13px;
-  color: var(--ds-text-muted);
-  line-height: 1.5;
-  margin: 0;
-}
-.skill-card__tools { display: flex; flex-wrap: wrap; gap: 6px; }
-.skill-card__path {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ds-text-dim);
-  word-break: break-all;
 }
 
 /* Cron */
@@ -1994,53 +1967,6 @@ select.chip {
   word-break: break-word;
 }
 
-/* Channels */
-.channel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.channel-card__status {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  border: 1px solid var(--ds-border-strong);
-  color: var(--ds-text-dim);
-  font-weight: 700;
-}
-.channel-card__status--running {
-  color: var(--ds-success);
-  border-color: rgba(74, 222, 128, 0.4);
-}
-.channel-card__status--failed {
-  color: var(--ds-error);
-  border-color: rgba(248, 113, 113, 0.4);
-}
-.channel-card__status--reconnecting {
-  color: var(--ds-warning);
-  border-color: rgba(245, 193, 24, 0.4);
-}
-.channel-card__error {
-  margin: 0;
-  color: var(--ds-error);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  background: rgba(248, 113, 113, 0.08);
-  padding: 6px 10px;
-  border-radius: 4px;
-}
-.channel-card__meta { display: grid; grid-template-columns: 1fr auto; gap: 10px 20px; margin: 0; }
-.channel-card__meta div { display: flex; justify-content: space-between; gap: 10px; }
-.channel-card__meta dt {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ds-text-dim);
-  font-weight: 700;
-}
-.channel-card__meta dd { margin: 0; font-size: 12px; color: var(--ds-text-primary); }
-.channel-card__actions { display: flex; gap: 6px; justify-content: flex-end; }
-
 /* Workflows */
 .workflow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
 .workflow-card__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ds-text-dim); }
@@ -2083,43 +2009,6 @@ select.chip {
   font-weight: 700;
 }
 .workflow-card__meta dd { margin: 0; font-size: 12px; color: var(--ds-text-primary); }
-
-/* Guardrail */
-.guardrail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
-.posture-card__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ds-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  margin: 0;
-  font-weight: 700;
-}
-.posture-card__title > svg { color: var(--ds-teal-400); }
-.posture-card__list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.posture-card__row {
-  display: grid;
-  grid-template-columns: 150px 1fr;
-  gap: 10px;
-  align-items: baseline;
-}
-.posture-card__row dt {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ds-text-dim);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-.posture-card__row dd { margin: 0; font-size: 12px; color: var(--ds-text-primary); }
-.posture-card__trunc {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* ── Legacy chat fallbacks (some pages still use) ────────────────────── */
 .chat-error-banner {
