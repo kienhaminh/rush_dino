@@ -1,49 +1,12 @@
 /* RushDino desktop — shell CSS
- * Layout: 240px left sidebar (traffic lights + nav) | main content area.
+ * Layout: 280px left sidebar (traffic lights + nav) | main content area.
  * Dark terminal aesthetic with teal accent.
+ *
+ * The `.app-root` and `.sidebar*` legacy rules were migrated to Tailwind
+ * utilities in `components/shell/{AppShell,LeftRail}.tsx` (Unit 5/16).
  */
 
-.app-root {
-  position: relative;
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden;
-  background: var(--ds-bg-main);
-  color: var(--ds-text-primary);
-  font-family: var(--font-sans);
-}
-
-/* ── Sidebar ─────────────────────────────────────────────────────────── */
-.sidebar {
-  background: var(--ds-bg-side);
-  border-right: 1px solid var(--ds-border-line);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.sidebar__titlebar {
-  height: 56px;
-  padding: 0 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  border-bottom: 1px solid var(--ds-border-line);
-  flex-shrink: 0;
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
-.sidebar__traffic {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-
+/* ── Legacy nav primitives (kept until later units land) ──────────── */
 .traffic-dot {
   width: 12px;
   height: 12px;
@@ -56,13 +19,6 @@
 .traffic-dot--close    { background: #ff5f57; }
 .traffic-dot--minimize { background: #febc2e; }
 .traffic-dot--maximize { background: #28c840; }
-
-.sidebar__lockup {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  overflow: hidden;
-}
 
 .logo-mark {
   width: 22px;
@@ -78,97 +34,6 @@
   font-weight: 700;
   letter-spacing: -0.05em;
   flex-shrink: 0;
-}
-
-.sidebar__brand {
-  min-width: 0;
-}
-
-.sidebar__brand-name {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  line-height: 1;
-  color: var(--ds-text-primary);
-}
-
-.sidebar__brand-tag {
-  font-family: var(--font-mono);
-  font-size: 8px;
-  color: var(--ds-text-dim);
-  letter-spacing: 0.2em;
-  font-weight: 700;
-  margin-top: 3px;
-}
-
-.sidebar__actions {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.sidebar-cta {
-  background: var(--ds-teal-400);
-  color: var(--ds-bg-base);
-  border-radius: var(--ds-radius-md);
-  padding: 9px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-  text-decoration: none;
-  font-family: inherit;
-}
-
-.sidebar-cta__hint {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  opacity: 0.7;
-}
-
-.sidebar-search {
-  background: transparent;
-  color: var(--ds-text-muted);
-  border: 1px solid var(--ds-border-strong);
-  border-radius: var(--ds-radius-md);
-  padding: 8px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: inherit;
-}
-
-.sidebar-search__label {
-  flex: 1;
-  text-align: left;
-}
-
-.sidebar-kbd {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--ds-border-strong);
-  color: var(--ds-text-muted);
-}
-
-.sidebar__nav {
-  flex: 1;
-  padding: 4px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow-y: auto;
 }
 
 .nav-group {
@@ -229,15 +94,6 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-}
-
-.sidebar__footer {
-  padding: 10px;
-  border-top: 1px solid var(--ds-border-line);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 .model-switcher {

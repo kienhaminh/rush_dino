@@ -69,9 +69,17 @@ export function AppShell() {
   return (
     <div
       className={cn(
-        'app-root',
-        collapsed && 'app-root--collapsed',
-        showBanner && 'app-root--with-banner',
+        /* Layout: 280px sidebar + main content. Animate the column widths
+           so collapse/expand reads as a smooth slide. The
+           `app-root--collapsed` class is preserved so the un-migrated
+           chat-topbar can still react via its legacy descendant
+           selector — drop after the chat shell unit migrates. */
+        'relative grid h-screen w-screen overflow-hidden bg-bg-side text-text-primary font-sans',
+        'transition-[grid-template-columns] duration-[220ms] ease-ease-cubic',
+        showBanner && 'grid-rows-[36px_1fr]',
+        collapsed
+          ? 'app-root--collapsed grid-cols-[0_1fr]'
+          : 'grid-cols-[280px_1fr]',
       )}
     >
       {showBanner && updater.info && (
@@ -85,20 +93,32 @@ export function AppShell() {
       <LeftRail
         onNewChat={startNewChat}
         onToggleSidebar={toggleSidebar}
+        collapsed={collapsed}
+        bannerRow={showBanner}
       />
       {collapsed && (
         <button
           type="button"
-          className="sidebar-floating-toggle"
           onClick={toggleSidebar}
           aria-label="Show sidebar"
-          title="Show sidebar (⌘\\)"
+          title="Show sidebar (⌘\)"
+          className={cn(
+            /* Floating toggle: parked just right of the macOS traffic
+               lights so it's always reachable when the sidebar is hidden. */
+            'fixed top-[10px] left-[88px] z-50 inline-flex items-center justify-center',
+            'w-7 h-7 rounded-md border border-transparent bg-transparent text-text-secondary cursor-pointer',
+            '[-webkit-app-region:no-drag] [app-region:no-drag]',
+            'transition-[background-color,color] duration-[140ms] ease-ease-cubic',
+            'hover:bg-black/5 hover:text-text-primary dark:hover:bg-white/5',
+          )}
         >
           <PanelLeft size={15} strokeWidth={1.7} />
         </button>
       )}
-      <main className="main">
-        <Outlet />
+      {/* The `.main` class still drives padding / radius / box-shadow via
+          shell-v2.css + index.css — both rule sets stay until later units. */}
+      <main className={cn('main', showBanner && 'row-start-2')}>
+        <Outlet context={{ collapsed }} />
       </main>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
