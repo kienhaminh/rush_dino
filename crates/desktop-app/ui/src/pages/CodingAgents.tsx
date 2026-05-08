@@ -8,7 +8,7 @@ export default function CodingAgents() {
       <div className="page__body">
         <GlassPanel variant="body">
           <p className="eyebrow">Paused</p>
-          <h2 className="display-title" style={{ fontSize: 22 }}>
+          <h2 className="display-title !text-[22px]">
             Coding Agents integration is staged for a follow-up
           </h2>
           <p className="lede">

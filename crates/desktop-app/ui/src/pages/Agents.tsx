@@ -32,7 +32,7 @@ export default function Agents() {
             <p className="kg-hint">Could not reach the embedded server.</p>
           </GlassPanel>
         )}
-        <div className="agent-grid">
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
           {q.isLoading
             ? Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
             : q.data?.map((a) => <AgentCard key={a.id} agent={a} />)}
@@ -44,22 +44,22 @@ export default function Agents() {
 
 function AgentCard({ agent }: { agent: AgentListItem }) {
   return (
-    <GlassPanel variant="body" className="agent-card">
-      <div className="agent-card__head">
-        <span className="agent-card__sigil">{agent.emoji || '•'}</span>
+    <GlassPanel variant="body" className="!p-[20px_22px] flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[26px] leading-none">{agent.emoji || '•'}</span>
         {agent.isDefault && (
-          <span className="agent-card__default">
+          <span className="inline-flex items-center gap-1 font-mono text-[10px] tracking-[0.1em] uppercase text-teal-300">
             <Star size={11} strokeWidth={2} /> default
           </span>
         )}
       </div>
-      <h3 className="agent-card__name">{agent.name}</h3>
-      <p className="agent-card__workspace mono">{agent.workspace || '—'}</p>
-      <p className="agent-card__description">
+      <h3 className="text-base font-medium text-text-primary mt-0.5 mb-0">{agent.name}</h3>
+      <p className="font-mono text-[11px] text-text-dim m-0">{agent.workspace || '—'}</p>
+      <p className="text-[13px] text-text-muted leading-[1.5] mt-1 mb-0 line-clamp-3">
         {agent.description || <span className="kg-hint">no description</span>}
       </p>
       {agent.claimTags && agent.claimTags.length > 0 && (
-        <div className="agent-card__tags">
+        <div className="flex flex-wrap gap-1.5 mt-2">
           {agent.claimTags.slice(0, 4).map((t) => (
             <span key={t} className="tag">{t}</span>
           ))}
