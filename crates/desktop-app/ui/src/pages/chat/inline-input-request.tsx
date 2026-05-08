@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import { resolveInputRequest, type InputFieldSpec, type PendingInputRequest } from '@/api/chat'
 import { createInitialInputValues, buildInputRequestSubmission } from './merge-input-requests'
 
+// Shared form-control utilities for the input-request card. The legacy
+// .approval-form__control rule was a 40px-min, full-width, padded box on the
+// app's base surface — converted verbatim into Tailwind utilities here so
+// every field type renders identically across the two themes.
+const CONTROL_CLASSES =
+  'w-full min-h-[40px] px-3 py-2.5 border border-border-line rounded-lg bg-bg-base text-text-primary font-[inherit]'
+
 /** Renders a single field control based on its type spec. */
 function InputFieldControl({
   field,
@@ -18,7 +25,7 @@ function InputFieldControl({
     case 'textarea':
       return (
         <textarea
-          className="approval-form__control approval-form__control--textarea"
+          className={`${CONTROL_CLASSES} min-h-[110px] resize-y`}
           value={typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
           minLength={field.minLength}
@@ -31,7 +38,7 @@ function InputFieldControl({
     case 'select':
       return (
         <select
-          className="approval-form__control"
+          className={CONTROL_CLASSES}
           value={typeof value === 'string' ? value : ''}
           disabled={disabled}
           onChange={(event) => onChange(event.target.value)}
@@ -47,11 +54,14 @@ function InputFieldControl({
     case 'multiselect': {
       const selected = Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
       return (
-        <div className="approval-form__choices">
+        <div className="flex flex-col gap-2 py-1">
           {(field.options ?? []).map((option) => {
             const checked = selected.includes(option.value)
             return (
-              <label key={option.value} className="approval-form__choice">
+              <label
+                key={option.value}
+                className="flex items-center gap-2 text-[13px] text-text-secondary"
+              >
                 <input
                   type="checkbox"
                   checked={checked}
@@ -72,7 +82,7 @@ function InputFieldControl({
     }
     case 'boolean':
       return (
-        <label className="approval-form__choice approval-form__choice--single">
+        <label className="flex items-center gap-2 text-[13px] text-text-secondary pt-1">
           <input
             type="checkbox"
             checked={Boolean(value)}
@@ -85,7 +95,7 @@ function InputFieldControl({
     case 'number':
       return (
         <input
-          className="approval-form__control"
+          className={CONTROL_CLASSES}
           type="number"
           value={typeof value === 'number' ? String(value) : typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
@@ -99,7 +109,7 @@ function InputFieldControl({
     default:
       return (
         <input
-          className="approval-form__control"
+          className={CONTROL_CLASSES}
           type={field.secret ? 'password' : 'text'}
           value={typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
@@ -153,25 +163,31 @@ export function InlineInputRequest({
   }
 
   return (
-    <div className="msg msg--approval">
-      <div className="approval-card approval-card--input">
-        <div className="approval-card__head">
-          <span className="approval-card__label">INPUT NEEDED</span>
-          <span className="approval-card__tool rd-mono">{spec.kind}</span>
+    // .msg--approval is a column flex container (legacy reset). We mirror that
+    // here so the surrounding stream layout (gap-5 between siblings) matches.
+    <div className="flex flex-col font-sans">
+      <div className="w-full p-4 bg-[rgb(34_211_200_/_0.06)] border border-[rgb(34_211_200_/_0.45)] border-l-[3px] border-l-teal-400 rounded-lg flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="font-mono text-[10px] font-bold tracking-[0.2em] text-warning">
+            INPUT NEEDED
+          </span>
+          <span className="rd-mono text-[11px] text-text-primary">{spec.kind}</span>
         </div>
-        <div className="approval-card__content">
-          <strong className="approval-card__title">{spec.title}</strong>
-          {spec.description && <p className="approval-card__prompt">{spec.description}</p>}
+        <div className="flex flex-col gap-1.5">
+          <strong className="text-sm text-text-primary">{spec.title}</strong>
+          {spec.description && (
+            <p className="m-0 text-[13px] text-text-secondary">{spec.description}</p>
+          )}
         </div>
-        <div className="approval-form">
+        <div className="flex flex-col gap-3">
           {spec.fields.map((field) => (
-            <label key={field.name} className="approval-form__field">
-              <span className="approval-form__label">
+            <label key={field.name} className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-text-primary">
                 {field.label}
                 {field.required ? ' *' : ''}
               </span>
               {field.description && (
-                <span className="approval-form__hint">{field.description}</span>
+                <span className="text-xs text-text-muted">{field.description}</span>
               )}
               <InputFieldControl
                 field={field}
@@ -187,8 +203,12 @@ export function InlineInputRequest({
             </label>
           ))}
         </div>
-        {formError && <div className="chat-error-banner rd-mono">{formError}</div>}
-        <div className="approval-card__actions">
+        {formError && (
+          <div className="rd-mono px-3.5 py-2.5 bg-[rgb(248_113_113_/_0.08)] border border-[rgb(248_113_113_/_0.3)] text-error rounded-md text-xs">
+            {formError}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
           <button
             type="button"
             className="btn"
