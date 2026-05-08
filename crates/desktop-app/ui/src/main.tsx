@@ -9,7 +9,6 @@ import './design/compat.css'
 import './index.css'
 import './design/shell-v2.css'
 import './design/page-extras.css'
-import './design/chat.css'
 import './design/skeleton.css'
 import './design/theme-light.css'
 

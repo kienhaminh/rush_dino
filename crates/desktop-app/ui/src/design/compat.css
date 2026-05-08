@@ -4,38 +4,18 @@
  * tokens.css; `.rd-*` classes come from tailwind.css `@layer components`
  * (moved there in Unit 14). Imported AFTER both in main.tsx.
  *
- * When a component is touched it should be migrated to `--ds-*` /
- * `.rd-*` directly; this layer exists to avoid a single atomic rewrite.
+ * Unit 16 trimmed legacy variable aliases that no consumer references
+ * (--night-*, --ice-*, --ember, --viridian, --lithium, --glass-*, --radius-*,
+ * --shadow-*). Only `--copper-500` (Channels.tsx) and `--iridescent`
+ * (page-extras.css) remain.
  */
 
 :root {
-  /* ── Surfaces ─────────────────────────────────────────────────────── */
-  --night-0: var(--ds-bg-base);
-  --night-1: var(--ds-bg-main);
-  --night-2: var(--ds-bg-card);
-  --night-3: var(--ds-bg-elevated);
-
-  /* ── Text ─────────────────────────────────────────────────────────── */
-  --ice-100: var(--ds-text-primary);
-  --ice-400: var(--ds-text-secondary);
-  --ice-600: var(--ds-text-dim);
-
-  /* ── Accent: teal replaces copper but keeps the old variable names ── */
-  --copper-300: var(--ds-teal-300);
+  /* Accent alias still consumed by Channels.tsx fallback. */
   --copper-500: var(--ds-teal-400);
-  --copper-700: var(--ds-teal-600);
 
-  /* ── Semantic signals ─────────────────────────────────────────────── */
-  --ember: var(--ds-error);
-  --viridian: var(--ds-success);
-  --lithium: var(--ds-warning);
-
-  /* ── Glass ────────────────────────────────────────────────────────── */
-  --glass-tint: var(--ds-teal-soft);
-  --glass-stroke: var(--ds-border-base);
-  --glass-highlight: var(--ds-border-strong);
-
-  /* ── Iridescent hairline — teal → violet → cyan → amber ──────────── */
+  /* Iridescent hairline — teal → violet → cyan → amber.
+   * Consumed by `.iridescent-line` in page-extras.css. */
   --iridescent: linear-gradient(
     90deg,
     var(--ds-teal-400),
@@ -43,16 +23,6 @@
     var(--brand-cyan),
     var(--brand-amber)
   );
-
-  /* ── Geometry ─────────────────────────────────────────────────────── */
-  --radius-sm: var(--ds-radius-sm);
-  --radius-md: var(--ds-radius-md);
-  --radius-lg: var(--ds-radius-lg);
-  --radius-xl: var(--ds-radius-xl);
-
-  /* ── Shadows ──────────────────────────────────────────────────────── */
-  --shadow-lift: 0 24px 48px -24px rgba(0, 0, 0, 0.6);
-  --shadow-inset-top: inset 0 1px 0 var(--ds-border-strong);
 }
 
 /* ── Legacy typography classes ───────────────────────────────────────── */
