@@ -14,12 +14,19 @@ export function SettingsPageHeader({
 }: Props) {
   return (
     <>
-      <header className="settings-page__header">
-        <p className="eyebrow">{eyebrow}</p>
-        <h1 className="display-title">{title}</h1>
-        {lede && <p className="lede">{lede}</p>}
+      <header className="pb-1 [-webkit-app-region:drag] [app-region:drag]">
+        <p className="eyebrow mb-2">{eyebrow}</p>
+        <h1 className="display-title mt-0 text-[clamp(24px,2.6vw,32px)] leading-[1.1]">
+          {title}
+        </h1>
+        {lede && <p className="lede mt-2 text-sm">{lede}</p>}
       </header>
-      {divider && <div className="settings-page__divider" aria-hidden />}
+      {divider && (
+        <div
+          className="h-px w-full bg-border-line"
+          aria-hidden
+        />
+      )}
     </>
   )
 }
