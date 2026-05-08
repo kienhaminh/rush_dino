@@ -76,6 +76,17 @@ export default {
         'ease-cubic':     'var(--ease-cubic)',
         'ease-overshoot': 'var(--ease-overshoot)',
       },
+      keyframes: {
+        // Topbar "running" dot — opacity + scale pulse, kept in sync with the
+        // legacy `@keyframes pulse` definition that lived in chat.css.
+        'rd-dot-pulse': {
+          '0%, 100%': { opacity: '0.4', transform: 'scale(0.85)' },
+          '50%':      { opacity: '1',   transform: 'scale(1)' },
+        },
+      },
+      animation: {
+        'rd-dot-pulse': 'rd-dot-pulse 1.2s ease-in-out infinite',
+      },
       fontFamily: {
         // Token-driven sans/mono; legacy display kept for back-compat.
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
