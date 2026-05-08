@@ -1,12 +1,22 @@
-import { type ReactNode } from 'react'
 import { TEAL, SUCCESS, LINE, SURFACE_2, type StatusKey } from './tokens'
 import { Card, ArgLabel } from './card'
+
+function formatArgValue(v: unknown): string {
+  if (typeof v === 'string') return `"${v}"`
+  if (v == null || typeof v === 'number' || typeof v === 'boolean') return String(v)
+  try {
+    return JSON.stringify(v, null, 2)
+  } catch {
+    return String(v)
+  }
+}
 
 type ToolCallProps = {
   name?: string
   status?: StatusKey
   args?: Record<string, unknown>
-  result?: ReactNode
+  /** Server-provided tool result. Rendered as JSON when object, string otherwise. */
+  result?: unknown
   defaultOpen?: boolean
 }
 
@@ -43,11 +53,12 @@ export function ToolCall({
             }}
           >
             {entries.map(([k, v], i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, whiteSpace: 'nowrap' }}>
+              <div
+                key={i}
+                style={{ display: 'flex', gap: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
                 <span style={{ color: TEAL, minWidth: 90, flexShrink: 0 }}>{k}:</span>
-                <span style={{ color: 'rgba(255,255,255,.82)' }}>
-                  {typeof v === 'string' ? `"${v}"` : String(v)}
-                </span>
+                <span style={{ color: 'rgba(255,255,255,.82)' }}>{formatArgValue(v)}</span>
               </div>
             ))}
           </div>
@@ -64,10 +75,16 @@ export function ToolCall({
               padding: '10px 12px',
               fontFamily: 'var(--font-mono)',
               fontSize: 12,
-              color: SUCCESS,
+              color: status === 'error' ? 'var(--ds-error)' : SUCCESS,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              maxHeight: 320,
+              overflow: 'auto',
             }}
           >
-            {typeof result === 'object' ? JSON.stringify(result) : String(result)}
+            {typeof result === 'object'
+              ? JSON.stringify(result, null, 2)
+              : String(result)}
           </div>
         </div>
       )}

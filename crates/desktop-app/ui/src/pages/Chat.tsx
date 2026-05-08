@@ -60,6 +60,10 @@ export default function Chat() {
     staleTime: 30_000,
   })
   const requestedConversationId = searchParams.get('conversation')
+  /* Captured ONCE per mount-with-?new=1 so subsequent renders (after we strip
+     the sentinel) still know to skip the auto-select-first-conversation
+     fallback. Without this ref the param removal would race the next render. */
+  const newChatIntentRef = useRef(searchParams.has('new'))
 
   useEffect(() => {
     if (requestedConversationId) {
@@ -67,13 +71,39 @@ export default function Chat() {
       if (requestedConversationId !== conversationId) {
         setConversationId(requestedConversationId)
       }
+      newChatIntentRef.current = false
+      return
+    }
+    /* Explicit "new chat" intent: clear selection and strip the marker so a
+       refresh doesn't keep forcing empty state. The ref keeps us in this
+       branch until the user actually sends a message (which sets a
+       conversationId via the WS chat_chunk handler). */
+    if (newChatIntentRef.current) {
+      if (conversationId !== null) setConversationId(null)
+      if (searchParams.has('new')) {
+        const next = new URLSearchParams(searchParams)
+        next.delete('new')
+        setSearchParams(next, { replace: true })
+      }
       return
     }
     // Fallback: auto-select first conversation when nothing is selected
     if (conversationId === null && conversations.data && conversations.data.length > 0) {
       setConversationId(conversations.data[0]!.id)
     }
-  }, [requestedConversationId, conversationId, conversations.data])
+  }, [
+    requestedConversationId,
+    conversationId,
+    conversations.data,
+    searchParams,
+    setSearchParams,
+  ])
+
+  /* Once a real conversation lands (server assigns id mid-stream, or user
+     navigates), drop the new-chat lock. */
+  useEffect(() => {
+    if (conversationId !== null) newChatIntentRef.current = false
+  }, [conversationId])
 
   useEffect(() => {
     if (agentId || !conversationId || requestedConversationId === conversationId) {
@@ -256,10 +286,45 @@ export default function Chat() {
     return base
   }, [detail.data, pending, streaming, liveToolCalls])
 
+  /* Esc while streaming = stop. The handler reads `streaming` via a ref so
+     the listener doesn't rebind on every token (setStreaming returns a new
+     object reference for every chunk). */
+  const isStreamingRef = useRef(false)
   useEffect(() => {
+    isStreamingRef.current = streaming !== null
+  }, [streaming])
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      if (!isStreamingRef.current) return
+      e.preventDefault()
+      void stream.stop()
+      setPending([])
+      qc.invalidateQueries({ queryKey: ['conversation', conversationId] })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stream, qc, conversationId])
+
+  /* Smart auto-scroll: only follow new content if the user is already near
+     the bottom. Reading older context shouldn't yank you down on every token. */
+  const [nearBottom, setNearBottom] = useState(true)
+  /* Reset to "near bottom" whenever the user switches conversations so the
+     new thread starts pinned, not stuck where the old scroll position was. */
+  useEffect(() => {
+    setNearBottom(true)
+  }, [conversationId])
+  const handleScroll = useCallback(() => {
+    const el = scrollerRef.current
+    if (!el) return
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
+    setNearBottom(distance < 120)
+  }, [])
+  useEffect(() => {
+    if (!nearBottom) return
     const el = scrollerRef.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [messages.length, streaming?.content])
+  }, [messages.length, streaming?.content, nearBottom])
 
   useEffect(() => {
     const ta = composerRef.current
@@ -311,7 +376,7 @@ export default function Chat() {
 
       <div className="chat-body">
         <div className="chat-main">
-          <div className="chat-scroll" ref={scrollerRef}>
+          <div className="chat-scroll" ref={scrollerRef} onScroll={handleScroll}>
             <div className="chat-stream">
               {messages.length === 0 &&
                 !isStreaming &&
@@ -348,12 +413,35 @@ export default function Chat() {
             </div>
           </div>
 
+          {!nearBottom && (
+            <div className="chat-scroll-bottom-wrap">
+              <button
+                type="button"
+                className="chat-scroll-bottom"
+                onClick={() => {
+                  const el = scrollerRef.current
+                  if (el) el.scrollTop = el.scrollHeight
+                  setNearBottom(true)
+                }}
+                aria-label="Jump to latest message"
+              >
+                ↓ Jump to latest
+              </button>
+            </div>
+          )}
           <Composer
             value={composer}
             onChange={setComposer}
             onSubmit={submit}
+            onStop={() => {
+              void stream.stop()
+              /* The user pressed stop — drop optimistic pending and reload
+                 history so any partially-persisted state is reconciled. */
+              setPending([])
+              qc.invalidateQueries({ queryKey: ['conversation', conversationId] })
+            }}
             textareaRef={composerRef}
-            disabled={isStreaming}
+            streaming={isStreaming}
             attachments={attachments.paths}
             dragActive={attachments.dragActive}
             onPickFiles={() => void attachments.pick()}

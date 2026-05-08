@@ -1,4 +1,4 @@
-import { Plus, ShieldCheck, ChevronDown, ArrowUp } from 'lucide-react'
+import { Plus, ShieldCheck, ChevronDown, ArrowUp, Square } from 'lucide-react'
 import { FileText, X as XIcon } from 'lucide-react'
 import type { ProviderProfile } from '@/api/providers'
 import type { ThinkingLevel } from '@/api/system'
@@ -25,8 +25,10 @@ export function Composer({
   value,
   onChange,
   onSubmit,
+  onStop,
   textareaRef,
   disabled,
+  streaming,
   attachments,
   dragActive,
   onPickFiles,
@@ -41,8 +43,11 @@ export function Composer({
   value: string
   onChange: (v: string) => void
   onSubmit: () => void
+  onStop?: () => void
   textareaRef: React.RefObject<HTMLTextAreaElement>
   disabled?: boolean
+  /** True while the agent is actively streaming. Renders the stop button and disables input. */
+  streaming?: boolean
   attachments: string[]
   dragActive: boolean
   onPickFiles: () => void
@@ -54,6 +59,7 @@ export function Composer({
   onSelectProfile: (profileId: string) => void
   onSelectThinkingMode: (level: ThinkingLevel) => void
 }) {
+  const inputDisabled = disabled || streaming === true
   return (
     <form
       className={`composer ${dragActive ? 'composer--drop' : ''}`}
@@ -88,10 +94,10 @@ export function Composer({
           className="composer__input"
           placeholder={dragActive ? 'Drop files to attach…' : 'Message rushdino'}
           value={value}
-          disabled={disabled}
+          disabled={inputDisabled}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
-            if (disabled) return
+            if (inputDisabled) return
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
               e.preventDefault()
               onSubmit()
@@ -109,11 +115,11 @@ export function Composer({
             aria-label="Attach files"
             onClick={onPickFiles}
             title="Attach files (⌘⇧F)"
-            disabled={disabled}
+            disabled={inputDisabled}
           >
             <Plus size={15} strokeWidth={1.8} />
           </button>
-          <button type="button" className="composer__pill" aria-label="Permissions" disabled={disabled}>
+          <button type="button" className="composer__pill" aria-label="Permissions" disabled={inputDisabled}>
             <ShieldCheck size={13} strokeWidth={1.7} />
             <span>Default permissions</span>
             <ChevronDown size={10} strokeWidth={2} />
@@ -124,7 +130,7 @@ export function Composer({
             <select
               className="composer__select"
               value={selectedProfileId}
-              disabled={disabled || profiles.length === 0}
+              disabled={inputDisabled || profiles.length === 0}
               onChange={(event) => onSelectProfile(event.target.value)}
             >
               {profiles.length === 0 ? (
@@ -146,7 +152,7 @@ export function Composer({
             <select
               className="composer__select"
               value={thinkingMode}
-              disabled={disabled}
+              disabled={inputDisabled}
               onChange={(event) => onSelectThinkingMode(event.target.value as ThinkingLevel)}
             >
               {THINKING_OPTIONS.map((option) => (
@@ -156,14 +162,26 @@ export function Composer({
               ))}
             </select>
           </label>
-          <button
-            type="submit"
-            className="composer__send"
-            disabled={disabled}
-            aria-label="Send message"
-          >
-            <ArrowUp size={15} strokeWidth={2.5} />
-          </button>
+          {streaming ? (
+            <button
+              type="button"
+              className="composer__send composer__send--stop"
+              onClick={onStop}
+              aria-label="Stop generating"
+              title="Stop generating (Esc)"
+            >
+              <Square size={11} strokeWidth={2.5} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="composer__send"
+              disabled={disabled}
+              aria-label="Send message"
+            >
+              <ArrowUp size={15} strokeWidth={2.5} />
+            </button>
+          )}
         </div>
       </div>
     </form>
