@@ -1,5 +1,13 @@
 /* Shell v2 — macOS-inspired minimalist sidebar + settings full-screen
  * layout. Layered after index.css; respects the existing --ds-* tokens.
+ *
+ * The shell sidebar (`.app-root*`, `.sidebar*`), chat row (`.chat-row*`),
+ * page topbar (`.page-topbar*`), settings nav (`.settings-nav*`,
+ * `.settings-root`), Appearance preview cards (`.ap-section*`,
+ * `.ap-theme-card*`, `.ap-accent-*`, `.ap-theme-grid`), and About metadata
+ * grid (`.about-meta*`) were migrated to Tailwind utilities and removed
+ * in unit 16. Accent CSS-variable overrides survive at the bottom — they
+ * drive the live theme switcher via `:root[data-accent='…']`.
  */
 
 /* ── About page ──────────────────────────────────────────────────────── */
@@ -62,37 +70,6 @@
   padding: 4px 10px;
   border-radius: 999px;
   flex-shrink: 0;
-}
-
-/* Metadata grid */
-.about-meta {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--ds-border-base);
-  border: 1px solid var(--ds-border-base);
-  border-radius: var(--ds-radius-lg);
-  overflow: hidden;
-}
-.about-meta__cell {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  padding: 16px 20px;
-  background: var(--ds-bg-card);
-}
-.about-meta__label {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ds-text-dim);
-}
-.about-meta__value {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--ds-text-primary);
 }
 
 /* Description blocks */
@@ -192,17 +169,13 @@
 /* ── Floating-card main area ─────────────────────────────────────────
  * The main pane has rounded top-left + bottom-left corners so the seam
  * between sidebar and content reads as a soft notch, not a hard divider.
- * Right side meets the window edge flush. (`.app-root` background is now
- * applied via Tailwind on the JSX root.) */
+ * Right side meets the window edge flush. */
 .main {
   background: var(--ds-bg-main);
   border-top-left-radius: 12px;
   border-bottom-left-radius: 12px;
   overflow: hidden;
   box-shadow: -1px 0 0 var(--ds-border-base);
-}
-.settings-root {
-  background: var(--ds-bg-side) !important;
 }
 .settings-main {
   background: var(--ds-bg-main);
@@ -212,25 +185,7 @@
   overflow-y: auto;
 }
 
-/* ── Dividers removed — the rounded card replaces them ─────────────── */
-.chat-topbar:not(.chat-topbar--panel-open) { border-bottom-color: transparent !important; }
-.settings-nav { border-right: none !important; }
-.settings-nav__back { border-bottom: none !important; }
-
-/* When the sidebar is collapsed, reserve ~130px at the left of the chat
- * topbar so content doesn't crash into the macOS traffic lights (0–80)
- * or the floating sidebar toggle (88–116). The PageTopbar component
- * handles its own collapsed padding via Tailwind utilities. The
- * `.app-root--collapsed` class is preserved on the JSX root so this
- * legacy rule keeps working until the chat shell migration. */
-.app-root--collapsed .chat-topbar {
-  padding-left: 132px;
-}
-
-/* Sidebar (`.sidebar*`), chat-row (`.chat-row*`), and page-topbar
- * (`.page-topbar*`) rules were migrated to Tailwind utilities in
- * `components/shell/{LeftRail,PageTopbar}.tsx` (Unit 5/16). */
-
+/* ── Generic page frame (page--framed, page__body) ──────────────────── */
 .page--framed {
   flex: 1;
   min-height: 0;
@@ -247,96 +202,7 @@
   gap: 18px;
 }
 
-/* ── Settings full-screen layout ─────────────────────────────────────── */
-.settings-root {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  height: 100vh;
-  width: 100vw;
-  background: var(--ds-bg-main);
-}
-.settings-nav {
-  background: var(--ds-bg-side);
-  border-right: 1px solid var(--ds-border-line);
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-/* Titlebar: empty drag strip sitting over the macOS traffic-light area. */
-.settings-nav__titlebar {
-  height: 44px;
-  -webkit-app-region: drag;
-  app-region: drag;
-  flex-shrink: 0;
-}
-
-.settings-nav__back {
-  margin: 2px 8px 4px;
-  padding: 8px 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--ds-text-muted);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  text-align: left;
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-}
-.settings-nav__back:hover {
-  color: var(--ds-text-primary);
-  background: rgba(0, 0, 0, 0.04);
-}
-:root[data-theme='dark'] .settings-nav__back:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .settings-nav__back:hover {
-    background: rgba(255, 255, 255, 0.05);
-  }
-}
-
-.settings-nav__list {
-  display: flex;
-  flex-direction: column;
-  padding: 12px 10px;
-  gap: 2px;
-  overflow-y: auto;
-}
-.settings-nav__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: var(--ds-radius-md);
-  color: var(--ds-text-muted);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  text-decoration: none;
-  transition: color 140ms var(--ease-cubic), background 140ms var(--ease-cubic);
-}
-.settings-nav__item:hover {
-  color: var(--ds-text-primary);
-  background: rgba(0, 0, 0, 0.04);
-}
-:root[data-theme='dark'] .settings-nav__item:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .settings-nav__item:hover {
-    background: rgba(255, 255, 255, 0.04);
-  }
-}
-.settings-nav__item--active {
-  color: var(--ds-teal-400);
-  background: var(--ds-teal-soft);
-}
-
+/* ── Settings full-screen layout (only the page wrapper survives) ─── */
 .settings-main {
   overflow-y: auto;
   display: flex;
@@ -353,25 +219,6 @@
   width: 100%;
 }
 
-/* Shared header used by SettingsPageHeader component */
-.settings-page__header {
-  -webkit-app-region: drag;
-  app-region: drag;
-  padding-bottom: 4px;
-}
-.settings-page__header .eyebrow {
-  margin-bottom: 8px;
-}
-.settings-page__header .display-title {
-  font-size: clamp(24px, 2.6vw, 32px);
-  margin-top: 0;
-  line-height: 1.1;
-}
-.settings-page__header .lede {
-  font-size: 14px;
-  margin-top: 8px;
-}
-
 /* Normalize all page headers rendered inside settings (legacy pages) */
 .settings-main .display-title {
   font-size: clamp(24px, 2.6vw, 32px);
@@ -385,175 +232,7 @@
   padding-bottom: 4px;
 }
 
-/* ── Appearance page ─────────────────────────────────────────────────── */
-.ap-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px 24px;
-  background: var(--ds-bg-card);
-  border: 1px solid var(--ds-border-strong);
-  border-radius: var(--ds-radius-lg);
-}
-.ap-section__head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.ap-section__title {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ds-text-primary);
-  letter-spacing: -0.01em;
-}
-.ap-section__hint {
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--ds-text-muted);
-}
-
-/* Theme cards */
-.ap-theme-grid {
-  display: flex;
-  gap: 12px;
-}
-.ap-theme-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  border-radius: var(--ds-radius-md);
-}
-.ap-theme-card__preview {
-  width: 120px;
-  height: 80px;
-  border-radius: var(--ds-radius-md);
-  border: 2px solid var(--ds-border-base);
-  display: flex;
-  overflow: hidden;
-  transition: border-color 140ms var(--ease-cubic);
-}
-.ap-theme-card--active .ap-theme-card__preview {
-  border-color: var(--ds-teal-400);
-}
-/* Dark preview (default) */
-.ap-theme-card__preview--dark,
-.ap-theme-card__preview--auto {
-  background: #0d1117;
-}
-.ap-theme-card__preview--dark .ap-theme-card__preview-sidebar,
-.ap-theme-card__preview--auto .ap-theme-card__preview-sidebar {
-  background: #0b1016;
-}
-.ap-theme-card__preview--dark .ap-theme-card__preview-topbar,
-.ap-theme-card__preview--auto .ap-theme-card__preview-topbar {
-  background: rgba(255,255,255,0.06);
-}
-.ap-theme-card__preview--dark .ap-theme-card__preview-bubble,
-.ap-theme-card__preview--auto .ap-theme-card__preview-bubble {
-  background: rgba(255,255,255,0.08);
-}
-.ap-theme-card__preview--dark .ap-theme-card__preview-bubble--user,
-.ap-theme-card__preview--auto .ap-theme-card__preview-bubble--user {
-  background: var(--ds-teal-400);
-  opacity: 0.7;
-}
-/* Light preview */
-.ap-theme-card__preview--light { background: #ffffff; }
-.ap-theme-card__preview--light .ap-theme-card__preview-sidebar { background: #f4f6f9; }
-.ap-theme-card__preview--light .ap-theme-card__preview-topbar { background: rgba(0,0,0,0.05); }
-.ap-theme-card__preview--light .ap-theme-card__preview-bubble { background: rgba(0,0,0,0.07); }
-.ap-theme-card__preview--light .ap-theme-card__preview-bubble--user { background: #0ea898; opacity: 0.8; }
-
-.ap-theme-card__preview-sidebar {
-  width: 30%;
-  flex-shrink: 0;
-  border-right: 1px solid rgba(255,255,255,0.04);
-}
-.ap-theme-card__preview--light .ap-theme-card__preview-sidebar {
-  border-right-color: rgba(0,0,0,0.06);
-}
-.ap-theme-card__preview-body {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px;
-}
-.ap-theme-card__preview-topbar {
-  height: 8px;
-  border-radius: 2px;
-  margin-bottom: 4px;
-}
-.ap-theme-card__preview-bubble {
-  height: 10px;
-  border-radius: 3px;
-  width: 80%;
-}
-.ap-theme-card__preview-bubble--user {
-  width: 55%;
-  align-self: flex-end;
-}
-.ap-theme-card__foot {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--ds-text-secondary);
-  padding: 0 2px;
-  transition: color 140ms var(--ease-cubic);
-}
-.ap-theme-card--active .ap-theme-card__foot {
-  color: var(--ds-text-primary);
-  font-weight: 500;
-}
-
-/* Accent buttons */
-.ap-accent-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.ap-accent-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--ds-radius-md);
-  border: 1px solid var(--ds-border-base);
-  background: transparent;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  color: var(--ds-text-secondary);
-  transition: border-color 140ms var(--ease-cubic), color 140ms var(--ease-cubic),
-    background 140ms var(--ease-cubic);
-}
-.ap-accent-btn:hover {
-  border-color: var(--ds-border-strong);
-  color: var(--ds-text-primary);
-}
-.ap-accent-btn--active {
-  border-color: var(--ds-teal-400);
-  background: var(--ds-teal-soft);
-  color: var(--ds-text-primary);
-}
-.ap-accent-btn__dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.ap-accent-btn__label {
-  font-weight: 500;
-}
-
-/* Accent color overrides */
+/* ── Accent color overrides (data-accent attribute on :root) ────────── */
 :root[data-accent='violet'] {
   --ds-teal-400: #a78bfa;
   --ds-teal-300: #c4b5fd;
