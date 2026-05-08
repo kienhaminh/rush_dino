@@ -23,12 +23,15 @@ type Props = {
 }
 
 /* Width animation: collapsed -> 0 width, no border, no opacity.
-   Open -> 300px, 1px border, full opacity. Same easing as before. */
+   Open -> 300px, 1px border, full opacity. Same easing as before.
+   `border-border-line` lives on the base so both states animate the
+   border-width without redeclaring border-left in the open variant
+   (twMerge would otherwise drop a duplicate). */
 const PANEL_BASE =
-  'flex-shrink-0 overflow-hidden flex flex-col bg-bg-main ' +
+  'flex-shrink-0 overflow-hidden flex flex-col bg-bg-main border-border-line ' +
   'transition-[width,opacity,border-width] duration-[240ms] ease-ease-cubic'
-const PANEL_CLOSED = 'w-0 opacity-0 border-l-0 border-l border-border-line'
-const PANEL_OPEN = 'w-[300px] opacity-100 border-l border-border-line'
+const PANEL_CLOSED = 'w-0 opacity-0 border-l-0'
+const PANEL_OPEN = 'w-[300px] opacity-100 border-l'
 
 export function AgentPanel({ agentId, conversationId, label, running, open }: Props) {
   const [tab, setTab] = useState<'activity' | 'tasks'>('activity')
