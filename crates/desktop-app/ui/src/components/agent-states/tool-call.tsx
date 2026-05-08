@@ -1,4 +1,5 @@
-import { TEAL, SUCCESS, LINE, SURFACE_2, type StatusKey } from './tokens'
+import { cn } from '@/lib/cn'
+import { type StatusKey } from './tokens'
 import { Card, ArgLabel } from './card'
 
 function formatArgValue(v: unknown): string {
@@ -37,50 +38,29 @@ export function ToolCall({
       compact={entries.length ? `${entries.length} arg${entries.length > 1 ? 's' : ''}` : null}
     >
       {entries.length > 0 && (
-        <div style={{ marginTop: 10 }}>
+        <div className="mt-2.5">
           <ArgLabel>Arguments</ArgLabel>
-          <div
-            style={{
-              background: SURFACE_2,
-              border: `1px solid ${LINE}`,
-              borderRadius: 6,
-              padding: '10px 12px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12,
-              lineHeight: 1.6,
-              color: 'var(--ds-text-primary)',
-              overflowX: 'auto',
-            }}
-          >
+          <div className="bg-bg-card border border-border-line rounded-md px-3 py-2.5 font-mono text-xs leading-[1.6] text-text-primary overflow-x-auto">
             {entries.map(([k, v], i) => (
               <div
                 key={i}
-                style={{ display: 'flex', gap: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                className="flex gap-2.5 whitespace-pre-wrap break-words"
               >
-                <span style={{ color: TEAL, minWidth: 90, flexShrink: 0 }}>{k}:</span>
-                <span style={{ color: 'rgba(255,255,255,.82)' }}>{formatArgValue(v)}</span>
+                <span className="text-teal-400 min-w-[90px] flex-shrink-0">{k}:</span>
+                <span className="text-[rgb(255_255_255_/_0.82)]">{formatArgValue(v)}</span>
               </div>
             ))}
           </div>
         </div>
       )}
       {result != null && (
-        <div style={{ marginTop: 12 }}>
+        <div className="mt-3">
           <ArgLabel>Result</ArgLabel>
           <div
-            style={{
-              background: SURFACE_2,
-              border: `1px solid ${LINE}`,
-              borderRadius: 6,
-              padding: '10px 12px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 12,
-              color: status === 'error' ? 'var(--ds-error)' : SUCCESS,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-              maxHeight: 320,
-              overflow: 'auto',
-            }}
+            className={cn(
+              'bg-bg-card border border-border-line rounded-md px-3 py-2.5 font-mono text-xs whitespace-pre-wrap break-words max-h-80 overflow-auto',
+              status === 'error' ? 'text-error' : 'text-success',
+            )}
           >
             {typeof result === 'object'
               ? JSON.stringify(result, null, 2)

@@ -1,7 +1,13 @@
-import { TEAL, SUCCESS, WARN, ERROR, INK, LINE, type StatusKey } from './tokens'
+import { type StatusKey } from './tokens'
 import { Card } from './card'
 
 export type TermLine = { kind?: 'err' | 'ok' | 'warn'; text: string } | string
+
+const LINE_COLOR: Record<'err' | 'ok' | 'warn', string> = {
+  err: 'text-error',
+  ok: 'text-success',
+  warn: 'text-warning',
+}
 
 export function Terminal({
   cmd = 'cargo test',
@@ -17,33 +23,13 @@ export function Terminal({
   const status: StatusKey = exit === 0 ? 'done' : 'error'
   return (
     <Card kind="SHELL" title={cmd} status={status} defaultOpen={defaultOpen} meta={`exit ${exit}`}>
-      <div
-        style={{
-          marginTop: 10,
-          background: '#050709',
-          border: `1px solid ${LINE}`,
-          borderRadius: 6,
-          padding: '12px 14px',
-          fontFamily: 'var(--font-mono)',
-          fontSize: 12,
-          lineHeight: 1.7,
-          color: INK,
-          overflow: 'auto',
-        }}
-      >
-        <div style={{ color: TEAL }}>$ {cmd}</div>
+      <div className="mt-2.5 bg-[#050709] border border-border-line rounded-md px-3.5 py-3 font-mono text-xs leading-[1.7] text-text-primary overflow-auto">
+        <div className="text-teal-400">$ {cmd}</div>
         {lines.map((l, i) => {
           const line = typeof l === 'string' ? { text: l } : l
-          const color =
-            line.kind === 'err'
-              ? ERROR
-              : line.kind === 'ok'
-                ? SUCCESS
-                : line.kind === 'warn'
-                  ? WARN
-                  : 'rgba(255,255,255,.78)'
+          const cls = line.kind ? LINE_COLOR[line.kind] : 'text-[rgb(255_255_255_/_0.78)]'
           return (
-            <div key={i} style={{ color }}>
+            <div key={i} className={cls}>
               {line.text}
             </div>
           )

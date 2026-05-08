@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { TEAL, MUTED, INK, LINE_STRONG, SURFACE } from './tokens'
+import { cn } from '@/lib/cn'
 
 export function Citation({
   num = 1,
@@ -14,44 +14,23 @@ export function Citation({
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <div style={{ display: 'inline-block' }}>
+    <div className="inline-block">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '3px 10px',
-          borderRadius: 999,
-          background: open ? 'rgba(34,211,200,.15)' : 'rgba(34,211,200,.08)',
-          border: `1px solid rgba(34,211,200,.25)`,
-          color: TEAL,
-          fontSize: 11,
-          cursor: 'pointer',
-          fontWeight: 600,
-          fontFamily: 'inherit',
-        }}
+        className={cn(
+          'inline-flex items-center gap-1.5 px-2.5 py-[3px] rounded-full text-teal-400 text-[11px] cursor-pointer font-semibold font-[inherit] border border-[rgb(34_211_200_/_0.25)]',
+          open ? 'bg-[rgb(34_211_200_/_0.15)]' : 'bg-[rgb(34_211_200_/_0.08)]',
+        )}
       >
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>{String(num).padStart(2, '0')}</span>
+        <span className="font-mono text-[10px]">{String(num).padStart(2, '0')}</span>
         <span>{domain}</span>
       </button>
       {open && (
-        <div
-          style={{
-            marginTop: 8,
-            padding: '10px 12px',
-            background: SURFACE,
-            border: `1px solid ${LINE_STRONG}`,
-            borderRadius: 8,
-            maxWidth: 360,
-            fontSize: 12,
-            lineHeight: 1.5,
-          }}
-        >
-          <div style={{ color: INK, fontWeight: 600, marginBottom: 4 }}>{title}</div>
-          <div style={{ color: TEAL, fontFamily: 'var(--font-mono)', fontSize: 10, marginBottom: 6 }}>{domain}</div>
-          {excerpt && <div style={{ color: MUTED, fontStyle: 'italic' }}>{`"${excerpt}"`}</div>}
+        <div className="mt-2 px-3 py-2.5 bg-bg-surface border border-border-strong rounded-lg max-w-[360px] text-xs leading-[1.5]">
+          <div className="text-text-primary font-semibold mb-1">{title}</div>
+          <div className="text-teal-400 font-mono text-[10px] mb-1.5">{domain}</div>
+          {excerpt && <div className="text-text-muted italic">{`"${excerpt}"`}</div>}
         </div>
       )}
     </div>

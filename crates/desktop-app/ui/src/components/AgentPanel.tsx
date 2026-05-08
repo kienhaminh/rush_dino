@@ -22,6 +22,14 @@ type Props = {
   open: boolean
 }
 
+/* Width animation: collapsed -> 0 width, no border, no opacity.
+   Open -> 300px, 1px border, full opacity. Same easing as before. */
+const PANEL_BASE =
+  'flex-shrink-0 overflow-hidden flex flex-col bg-bg-main ' +
+  'transition-[width,opacity,border-width] duration-[240ms] ease-ease-cubic'
+const PANEL_CLOSED = 'w-0 opacity-0 border-l-0 border-l border-border-line'
+const PANEL_OPEN = 'w-[300px] opacity-100 border-l border-border-line'
+
 export function AgentPanel({ agentId, conversationId, label, running, open }: Props) {
   const [tab, setTab] = useState<'activity' | 'tasks'>('activity')
 
@@ -42,30 +50,21 @@ export function AgentPanel({ agentId, conversationId, label, running, open }: Pr
   const abort = useMutation({ mutationFn: abortRun })
 
   return (
-    <div className={cn('agent-panel', open && 'agent-panel--open')}>
-      <div className="agent-panel__tabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'activity'}
-          className={cn('agent-panel__tab', tab === 'activity' && 'agent-panel__tab--active')}
-          onClick={() => setTab('activity')}
-        >
+    <div className={cn(PANEL_BASE, open ? PANEL_OPEN : PANEL_CLOSED)}>
+      <div
+        role="tablist"
+        className="flex items-center gap-0.5 px-3 pt-2.5 border-b border-border-line"
+      >
+        <Tab active={tab === 'activity'} onClick={() => setTab('activity')}>
           Activity
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === 'tasks'}
-          className={cn('agent-panel__tab', tab === 'tasks' && 'agent-panel__tab--active')}
-          onClick={() => setTab('tasks')}
-        >
+        </Tab>
+        <Tab active={tab === 'tasks'} onClick={() => setTab('tasks')}>
           Tasks
-        </button>
+        </Tab>
       </div>
 
-      <div className="agent-panel__section-head">
-        <span className="agent-panel__section-label">
+      <div className="flex items-center justify-between px-4 pt-3 pb-2">
+        <span className="font-sans text-xs font-medium text-text-muted">
           {running ? 'Running' : runs.data && runs.data.length > 0 ? 'Recent' : 'Idle'}
         </span>
         <span
@@ -76,16 +75,16 @@ export function AgentPanel({ agentId, conversationId, label, running, open }: Pr
         />
       </div>
 
-      <div className="agent-panel__body">
+      <div className="flex-1 overflow-y-auto px-3 pb-3 pt-2 flex flex-col gap-2">
         {tab === 'activity' &&
           (runs.isLoading ? (
-            <ul className="agent-panel__runs">
+            <ul className="list-none m-0 p-0 flex flex-col gap-2">
               <SkeletonAgentRun />
               <SkeletonAgentRun />
               <SkeletonAgentRun />
             </ul>
           ) : runs.data && runs.data.length > 0 ? (
-            <ul className="agent-panel__runs">
+            <ul className="list-none m-0 p-0 flex flex-col gap-2">
               {runs.data.map((run) => (
                 <RunRow
                   key={run.id}
@@ -127,6 +126,39 @@ export function AgentPanel({ agentId, conversationId, label, running, open }: Pr
   )
 }
 
+/* ── Tab ───────────────────────────────────────────────────────────── */
+function Tab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        'px-3 py-1.5 border-none bg-transparent font-sans text-[13px] cursor-pointer',
+        'border-b-2 -mb-px transition-[color,border-color] duration-[140ms] ease-ease-cubic',
+        active
+          ? 'text-text-primary font-medium border-text-primary'
+          : 'text-text-muted border-transparent hover:text-text-primary',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+/* ── Run row ───────────────────────────────────────────────────────── */
+const RUN_BASE =
+  'p-3 rounded-md flex flex-col gap-1 border bg-bg-card transition-[border-color] duration-[140ms] ease-ease-cubic'
+
 function RunRow({
   run,
   onAbort,
@@ -139,27 +171,47 @@ function RunRow({
   const active = run.state === 'Running' || run.state === 'AwaitingApproval' || run.state === 'AwaitingInput'
   const ts = run.completedAt || run.updatedAt || run.startedAt || run.createdAt
   return (
-    <li className={cn('agent-panel__run', active && 'agent-panel__run--active')}>
-      <div className="agent-panel__run-head">
-        <span className={cn('run-pill', `run-pill--${stateClass(run.state)}`)}>
-          {humanState(run.state)}
+    <li
+      className={cn(
+        RUN_BASE,
+        active ? 'border-teal-line bg-teal-soft' : 'border-border-subtle',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <RunPill state={run.state} />
+        <span className="font-mono text-[10px] text-text-dim tracking-[0.04em]">
+          {formatWhen(ts)}
         </span>
-        <span className="agent-panel__run-time mono">{formatWhen(ts)}</span>
       </div>
       {run.toolName && (
-        <div className="agent-panel__run-tool mono">{run.toolName}</div>
+        <div className="font-mono text-[11px] text-teal-300 tracking-[0.02em]">
+          {run.toolName}
+        </div>
       )}
       {run.summary && (
-        <p className="agent-panel__run-summary">{run.summary}</p>
+        <p className="m-0 text-xs text-text-secondary leading-[1.45] line-clamp-2">
+          {run.summary}
+        </p>
       )}
-      {run.error && <p className="agent-panel__run-error">{run.error}</p>}
+      {run.error && (
+        <p className="m-0 font-mono text-[11px] text-error bg-[rgb(248_113_113_/_0.08)] px-1.5 py-1 rounded break-words">
+          {run.error}
+        </p>
+      )}
       {active && (
         <button
           type="button"
-          className="agent-panel__run-abort"
           onClick={onAbort}
           disabled={aborting}
           title="Cancel this run"
+          className={cn(
+            'self-end inline-flex items-center gap-[5px] px-2 py-[3px] rounded',
+            'border border-border-strong bg-transparent text-text-muted',
+            'font-sans text-[10px] uppercase tracking-[0.1em] cursor-pointer',
+            'transition-[color,border-color] duration-[140ms] ease-ease-cubic',
+            'hover:enabled:text-error hover:enabled:border-error',
+            'disabled:opacity-50 disabled:cursor-default',
+          )}
         >
           <StopCircle size={11} strokeWidth={1.8} />
           {aborting ? 'cancelling…' : 'cancel'}
@@ -169,6 +221,26 @@ function RunRow({
   )
 }
 
+/* ── Run pill ──────────────────────────────────────────────────────── */
+const PILL_BASE =
+  'inline-flex items-center px-[7px] py-[2px] rounded-full font-mono text-[9px] font-bold tracking-[0.12em] uppercase'
+
+function RunPill({ state }: { state: RunState }) {
+  const variant = stateVariant(state)
+  const variantCls =
+    variant === 'running'
+      ? 'text-teal-400 bg-teal-soft border border-teal-line'
+      : variant === 'warn'
+        ? 'text-warning bg-[rgb(245_193_24_/_0.1)] border border-[rgb(245_193_24_/_0.35)]'
+        : variant === 'ok'
+          ? 'text-success bg-[rgb(74_222_128_/_0.1)] border border-[rgb(74_222_128_/_0.35)]'
+          : variant === 'error'
+            ? 'text-error bg-[rgb(248_113_113_/_0.1)] border border-[rgb(248_113_113_/_0.35)]'
+            : 'text-text-dim bg-bg-panel border border-border-strong'
+  return <span className={cn(PILL_BASE, variantCls)}>{humanState(state)}</span>
+}
+
+/* ── Tasks pane ────────────────────────────────────────────────────── */
 function TasksContent({ runtime }: { runtime: AgentRuntimeResponse }) {
   const skills = runtime.skills ?? []
   const cron = runtime.cronJobs ?? []
@@ -184,19 +256,17 @@ function TasksContent({ runtime }: { runtime: AgentRuntimeResponse }) {
   }
 
   return (
-    <div className="agent-panel__tasks">
+    <div className="flex flex-col gap-4">
       {skills.length > 0 && (
         <Group title="Skills" icon={<Sparkles size={12} strokeWidth={1.7} />}>
-          <div className="agent-panel__chips">
+          <div className="flex flex-wrap gap-1">
             {skills.slice(0, 18).map((s) => (
-              <span key={s.name} className="agent-panel__chip" title={s.description ?? undefined}>
+              <Chip key={s.name} title={s.description ?? undefined}>
                 {s.name}
-              </span>
+              </Chip>
             ))}
             {skills.length > 18 && (
-              <span className="agent-panel__chip agent-panel__chip--muted">
-                +{skills.length - 18}
-              </span>
+              <Chip muted>+{skills.length - 18}</Chip>
             )}
           </div>
         </Group>
@@ -204,9 +274,12 @@ function TasksContent({ runtime }: { runtime: AgentRuntimeResponse }) {
 
       {cron.length > 0 && (
         <Group title="Scheduled" icon={<Clock size={12} strokeWidth={1.7} />}>
-          <ul className="agent-panel__cron">
+          <ul className="list-none m-0 p-0 flex flex-col gap-1.5">
             {cron.map((job) => (
-              <li key={job.id} className="agent-panel__cron-row">
+              <li
+                key={job.id}
+                className="grid grid-cols-[auto_1fr_auto] items-center gap-2.5 px-2 py-1.5 rounded-sm bg-bg-card border border-border-subtle"
+              >
                 <span
                   className={cn(
                     'status-dot',
@@ -215,8 +288,10 @@ function TasksContent({ runtime }: { runtime: AgentRuntimeResponse }) {
                       : 'status-dot--live',
                   )}
                 />
-                <span className="agent-panel__cron-name">{job.name ?? job.id}</span>
-                <span className="agent-panel__cron-schedule mono">
+                <span className="font-sans text-xs text-text-primary overflow-hidden text-ellipsis whitespace-nowrap">
+                  {job.name ?? job.id}
+                </span>
+                <span className="font-mono text-[10px] text-teal-300 bg-teal-soft px-1.5 py-0.5 rounded tracking-[0.02em]">
                   {job.schedule ?? '—'}
                 </span>
               </li>
@@ -227,11 +302,11 @@ function TasksContent({ runtime }: { runtime: AgentRuntimeResponse }) {
 
       {channels.length > 0 && (
         <Group title="Channels" icon={<Radio size={12} strokeWidth={1.7} />}>
-          <div className="agent-panel__chips">
+          <div className="flex flex-wrap gap-1">
             {channels.map((ch, i) => (
-              <span key={(ch.channelId ?? ch.id ?? i).toString()} className="agent-panel__chip">
+              <Chip key={(ch.channelId ?? ch.id ?? i).toString()}>
                 {(ch.channelId ?? ch.id ?? '—') as string}
-              </span>
+              </Chip>
             ))}
           </div>
         </Group>
@@ -239,17 +314,43 @@ function TasksContent({ runtime }: { runtime: AgentRuntimeResponse }) {
 
       {runtime.files && runtime.files.length > 0 && (
         <Group title="Files" icon={<FileText size={12} strokeWidth={1.7} />}>
-          <ul className="agent-panel__files mono">
+          <ul className="list-none m-0 p-0 flex flex-col gap-0.5 font-mono text-[11px]">
             {runtime.files.slice(0, 8).map((f) => (
-              <li key={f.path}>
-                <span className="agent-panel__file-name">{f.name}</span>
-                <span className="agent-panel__file-size">{f.size}</span>
+              <li
+                key={f.path}
+                className="flex justify-between gap-2.5 px-1 py-[3px] text-text-secondary"
+              >
+                <span className="overflow-hidden text-ellipsis whitespace-nowrap">{f.name}</span>
+                <span className="text-text-dim flex-shrink-0">{f.size}</span>
               </li>
             ))}
           </ul>
         </Group>
       )}
     </div>
+  )
+}
+
+function Chip({
+  children,
+  muted,
+  title,
+}: {
+  children: React.ReactNode
+  muted?: boolean
+  title?: string
+}) {
+  return (
+    <span
+      title={title}
+      className={cn(
+        'inline-flex items-center px-2 py-[3px] rounded-full bg-bg-card border border-border-subtle',
+        'font-mono text-[10px] tracking-[0.02em]',
+        muted ? 'text-text-dim' : 'text-text-secondary',
+      )}
+    >
+      {children}
+    </span>
   )
 }
 
@@ -263,8 +364,8 @@ function Group({
   children: React.ReactNode
 }) {
   return (
-    <div className="agent-panel__group">
-      <h3 className="agent-panel__group-title">
+    <div className="flex flex-col gap-2">
+      <h3 className="m-0 inline-flex items-center gap-1.5 font-sans text-[10px] font-bold tracking-[0.16em] uppercase text-text-dim">
         {icon} {title}
       </h3>
       {children}
@@ -274,14 +375,17 @@ function Group({
 
 function EmptyState({ title, sub }: { title: string; sub: string }) {
   return (
-    <div className="agent-panel__empty-state">
-      <p className="agent-panel__empty-title">{title}</p>
-      <p className="agent-panel__empty-sub">{sub}</p>
+    <div className="flex-1 flex flex-col items-center justify-center text-center gap-1.5 px-4 py-10">
+      <p className="m-0 text-[13px] font-medium text-text-primary">{title}</p>
+      <p className="m-0 text-xs text-text-dim leading-[1.5]">{sub}</p>
     </div>
   )
 }
 
-function stateClass(state: RunState): string {
+/* ── helpers ───────────────────────────────────────────────────────── */
+type PillVariant = 'running' | 'warn' | 'ok' | 'error' | 'muted'
+
+function stateVariant(state: RunState): PillVariant {
   switch (state) {
     case 'Running':
       return 'running'

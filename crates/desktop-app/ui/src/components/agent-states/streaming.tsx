@@ -1,46 +1,18 @@
-import { TEAL, INK, LINE, SURFACE_2 } from './tokens'
-
 export function Streaming({ text = 'Analyzing the request' }: { text?: string }) {
   return (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '8px 12px',
-        background: SURFACE_2,
-        border: `1px solid ${LINE}`,
-        borderRadius: 8,
-        fontSize: 13,
-        color: INK,
-      }}
-    >
-      <span style={{ display: 'inline-flex', gap: 3 }}>
+    <div className="inline-flex items-center gap-2.5 px-3 py-2 bg-bg-card border border-border-line rounded-lg text-[13px] text-text-primary">
+      <span className="inline-flex gap-[3px]">
         {[0, 1, 2].map((i) => (
           <span
             key={i}
-            style={{
-              width: 5,
-              height: 5,
-              borderRadius: 999,
-              background: TEAL,
-              animation: `rd-shimmer 1.2s ease-in-out ${i * 0.15}s infinite`,
-            }}
+            className="w-[5px] h-[5px] rounded-full bg-teal-400"
+            // Per-dot animation delay is computed; keep inline.
+            style={{ animation: `rd-shimmer 1.2s ease-in-out ${i * 0.15}s infinite` }}
           />
         ))}
       </span>
       <span>{text}</span>
-      <span
-        style={{
-          display: 'inline-block',
-          width: 8,
-          height: 14,
-          background: TEAL,
-          animation: 'rd-blink 1s step-end infinite',
-          marginLeft: 2,
-          verticalAlign: 'middle',
-        }}
-      />
+      <span className="inline-block w-2 h-3.5 bg-teal-400 ml-0.5 align-middle animate-[rd-blink_1s_step-end_infinite]" />
     </div>
   )
 }
