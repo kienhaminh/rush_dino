@@ -130,7 +130,7 @@ function PluginsTab({ query, setQuery }: { query: string; setQuery: (v: string) 
       </div>
 
       {q.isLoading && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
           {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
@@ -148,7 +148,7 @@ function PluginsTab({ query, setQuery }: { query: string; setQuery: (v: string) 
         <p className="text-[13px] text-text-muted px-0.5 py-2">No results for "{query}"</p>
       )}
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
         {filtered.map((s, i) => (
           <PluginCard key={s.name ?? `mcp-${i}`} server={s} index={i} />
         ))}
@@ -244,7 +244,7 @@ function SkillsTab({ query, setQuery }: { query: string; setQuery: (v: string) =
       </div>
 
       {q.isLoading && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+        <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
           {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       )}
@@ -280,7 +280,7 @@ function SkillSection({ title, skills }: { title: string; skills: SkillRecord[] 
         <span className="text-[11px] font-bold tracking-[0.15em] uppercase text-text-dim">{title}</span>
         <span className="text-[11px] text-text-faint font-mono">{skills.length}</span>
       </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+      <div className="grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
         {skills.map((s) => <SkillCard key={s.name} skill={s} />)}
       </div>
     </div>

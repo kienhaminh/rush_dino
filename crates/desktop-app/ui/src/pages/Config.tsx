@@ -104,8 +104,8 @@ export default function Config() {
         isRedacted={isRedacted}
       />
 
-      <div className="config-save-bar">
-        <span className={cn('config-save-bar__status', isDirty && 'config-save-bar__status--dirty')}>
+      <div className="flex items-center justify-between gap-3 px-0.5 py-1">
+        <span className={cn('font-mono text-[11px]', isDirty ? 'text-teal-300' : 'text-text-dim')}>
           {isDirty ? `${Object.keys(dirty).length} unsaved change${Object.keys(dirty).length > 1 ? 's' : ''}` : 'all saved'}
         </span>
         <button
@@ -124,18 +124,18 @@ export default function Config() {
         </div>
       )}
 
-      <GlassPanel variant="compact" className="raw-config">
+      <GlassPanel variant="compact" className="!p-[12px_16px]">
         <button
           type="button"
-          className="raw-config__toggle"
+          className="inline-flex items-center gap-2 bg-transparent border-0 text-text-muted font-sans text-[13px] cursor-pointer hover:text-text-primary"
           onClick={() => setRawOpen((v) => !v)}
         >
           {rawOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span>raw config.toml</span>
-          <span className="raw-config__hint mono">read-only</span>
+          <span className="ml-auto text-text-dim font-mono text-[10px] tracking-[0.1em] uppercase">read-only</span>
         </button>
         {rawOpen && (
-          <pre className="raw-config__body mono">
+          <pre className="font-mono text-[11px] text-text-muted mt-2.5 mb-0 p-3 max-h-[460px] overflow-auto bg-bg-base border border-border-strong rounded-md whitespace-pre-wrap break-words">
             {config.data ? JSON.stringify(config.data, null, 2) : '—'}
           </pre>
         )}
@@ -197,27 +197,27 @@ function SecretSection({
   isRedacted: (f: FieldDef) => boolean
 }) {
   return (
-    <GlassPanel variant="body" className="secret-section">
-      <h2 className="secret-section__title">{title}</h2>
-      <div className="secret-section__rows">
+    <GlassPanel variant="body" className="!p-[22px_26px]">
+      <h2 className="font-sans text-xs uppercase tracking-[0.12em] text-text-muted mt-0 mb-3">{title}</h2>
+      <div className="flex flex-col gap-2.5">
         {fields.map((f) => {
           const k = String(f.key)
           const shown = Boolean(reveal[k])
           const redacted = isRedacted(f)
           return (
-            <label key={k} className="secret-row">
-              <span className="secret-row__label">{f.label}</span>
-              <span className="secret-row__input">
+            <label key={k} className="grid grid-cols-[200px_1fr] gap-4 items-center">
+              <span className="text-[13px] text-text-muted">{f.label}</span>
+              <span className="flex items-center gap-1.5 bg-bg-base border border-border-strong rounded-md pl-3 pr-1.5 py-1 focus-within:border-teal-line">
                 <input
                   type={shown || !redacted ? 'text' : 'password'}
-                  className="secret-row__field mono"
+                  className="mono bg-transparent border-0 outline-none text-text-primary font-mono text-xs flex-1 py-2 min-w-0 placeholder:text-text-dim"
                   value={fieldValue(f)}
                   placeholder={f.hint ?? 'not set'}
                   onChange={(e) => setField(f, e.target.value)}
                 />
                 <button
                   type="button"
-                  className="secret-row__eye"
+                  className="inline-flex items-center justify-center w-7 h-7 border-0 bg-transparent text-text-dim cursor-pointer rounded hover:text-teal-300"
                   onClick={() => setReveal({ ...reveal, [k]: !shown })}
                   title={shown ? 'hide' : 'reveal'}
                   aria-label={shown ? 'hide value' : 'reveal value'}

@@ -10,14 +10,12 @@
 /* ── Layout frames used by pages ─────────────────────────────────────── */
 .chat-page,
 .providers-page,
-.agents-page,
 .skills-page,
 .metrics-page,
 .workflows-page,
 .channels-page,
 .guardrail-page,
-.kg-page,
-.config-page {
+.kg-page {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -32,10 +30,8 @@
 .skills-page,
 .providers-page,
 .kg-page,
-.config-page,
 .guardrail-page,
 .channels-page,
-.agents-page,
 .metrics-page {
   max-width: none;
   width: 100%;
@@ -44,14 +40,12 @@
 /* Page headers inside .shell-center */
 .chat-page > header,
 .providers-page > header,
-.agents-page > header,
 .skills-page > header,
 .metrics-page > header,
 .workflows-page > header,
 .channels-page > header,
 .guardrail-page > header,
-.kg-page > header,
-.config-page > header {
+.kg-page > header {
   padding-bottom: 16px;
   border-bottom: 1px solid var(--ds-border-line);
   -webkit-app-region: drag;
@@ -292,17 +286,6 @@ select.chip { font-family: var(--font-mono); font-size: 11px; padding-right: 22p
 .provider-card__specs dt { color: var(--ds-text-dim); letter-spacing: 0.1em; text-transform: uppercase; font-size: 10px; }
 .provider-card__specs dd { margin: 0; color: var(--ds-text-primary); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── Agents ─────────────────────────────────────────────────────────── */
-.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.agent-card { padding: 20px 22px !important; display: flex; flex-direction: column; gap: 6px; }
-.agent-card__head { display: flex; align-items: center; justify-content: space-between; }
-.agent-card__sigil { font-size: 26px; line-height: 1; }
-.agent-card__default { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ds-teal-300); }
-.agent-card__name { font-size: 16px; font-weight: 500; color: var(--ds-text-primary); margin: 2px 0 0; }
-.agent-card__workspace { font-family: var(--font-mono); font-size: 11px; color: var(--ds-text-dim); }
-.agent-card__description { font-size: 13px; color: var(--ds-text-muted); line-height: 1.5; margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.agent-card__tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-
 /* ── Skills ─────────────────────────────────────────────────────────── */
 .skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
 .skill-card { padding: 18px 20px !important; display: flex; flex-direction: column; gap: 8px; }
@@ -384,22 +367,3 @@ select.chip { font-family: var(--font-mono); font-size: 11px; padding-right: 22p
 .config-summary__row { display: grid; grid-template-columns: 180px 1fr; gap: 14px; align-items: baseline; }
 .config-summary__label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ds-text-dim); }
 .config-summary__value { font-size: 13px; color: var(--ds-text-primary); display: flex; gap: 6px; flex-wrap: wrap; }
-.secret-section { padding: 22px 26px !important; }
-.secret-section__title { font-family: var(--font-sans); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ds-text-muted); margin: 0 0 12px; }
-.secret-section__rows { display: flex; flex-direction: column; gap: 10px; }
-.secret-row { display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: center; }
-.secret-row__label { font-size: 13px; color: var(--ds-text-muted); }
-.secret-row__input { display: flex; align-items: center; gap: 6px; background: var(--ds-bg-base); border: 1px solid var(--ds-border-strong); border-radius: var(--ds-radius-md); padding: 4px 6px 4px 12px; }
-.secret-row__input:focus-within { border-color: var(--ds-teal-line); }
-.secret-row__field { background: transparent; border: none; outline: none; color: var(--ds-text-primary); font-family: var(--font-mono); font-size: 12px; flex: 1; padding: 8px 0; min-width: 0; }
-.secret-row__field::placeholder { color: var(--ds-text-dim); }
-.secret-row__eye { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: none; background: transparent; color: var(--ds-text-dim); cursor: pointer; border-radius: 4px; }
-.secret-row__eye:hover { color: var(--ds-teal-300); }
-.config-save-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 2px; }
-.config-save-bar__status { font-family: var(--font-mono); font-size: 11px; color: var(--ds-text-dim); }
-.config-save-bar__status--dirty { color: var(--ds-teal-300); }
-.raw-config { padding: 12px 16px !important; }
-.raw-config__toggle { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: none; color: var(--ds-text-muted); font-family: var(--font-sans); font-size: 13px; cursor: pointer; }
-.raw-config__toggle:hover { color: var(--ds-text-primary); }
-.raw-config__hint { margin-left: auto; color: var(--ds-text-dim); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
-.raw-config__body { margin: 10px 0 0; padding: 12px; max-height: 460px; overflow: auto; background: var(--ds-bg-base); border: 1px solid var(--ds-border-strong); border-radius: var(--ds-radius-md); font-family: var(--font-mono); font-size: 11px; color: var(--ds-text-muted); white-space: pre-wrap; word-break: break-word; }
