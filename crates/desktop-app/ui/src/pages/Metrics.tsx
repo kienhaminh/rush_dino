@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getUsageMetrics, type UsageTotals } from '@/api/metrics'
 import { GlassPanel } from '@/components/glass/GlassPanel'
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader'
+import { cn } from '@/lib/cn'
 
 export default function Metrics() {
   const [range, setRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d')
@@ -21,32 +22,40 @@ export default function Metrics() {
         lede="Tokens and cost rendered in tabular serif numerals — a ledger, not a dashboard. Breakdowns by provider, model, and day sit below."
       />
 
-      <div className="metrics-toolbar">
-        <div className="metrics-range">
-          {(['7d', '30d', '90d', 'all'] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`metrics-range__chip ${item === range ? 'metrics-range__chip--active' : ''}`}
-              onClick={() => setRange(item)}
-            >
-              {rangeLabel(item)}
-            </button>
-          ))}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['7d', '30d', '90d', 'all'] as const).map((item) => {
+            const isActive = item === range
+            return (
+              <button
+                key={item}
+                type="button"
+                className={cn(
+                  'border rounded-pill px-2.5 py-1.5 text-xs cursor-pointer transition-[border-color,color,background] duration-[140ms] ease-ease-cubic',
+                  isActive
+                    ? 'border-teal-400 bg-teal-soft text-text-primary'
+                    : 'border-border-strong bg-bg-card text-text-muted hover:text-text-primary hover:border-teal-line',
+                )}
+                onClick={() => setRange(item)}
+              >
+                {rangeLabel(item)}
+              </button>
+            )
+          })}
         </div>
-        <span className="metrics-toolbar__meta mono">
+        <span className="mono text-[11px] text-text-dim">
           {filters.start && filters.end ? `${filters.start} → ${filters.end}` : 'All recorded usage'}
         </span>
       </div>
 
-      <div className="metrics-totals">
+      <div className="grid grid-cols-4 gap-2.5">
         <StatTile label="Prompt tokens" value={totals?.promptTokens} />
         <StatTile label="Completion tokens" value={totals?.completionTokens} />
         <StatTile label="Total tokens" value={totals?.totalTokens} />
         <StatTile label="Total cost" value={totals?.totalCost} cost />
       </div>
 
-      <div className="metrics-grid">
+      <div className="grid grid-cols-2 gap-3">
         <BreakdownTable
           title="By provider"
           rows={q.data?.aggregates.byProvider ?? []}
@@ -135,25 +144,42 @@ function BreakdownTable({
   wide?: boolean
 }) {
   return (
-    <GlassPanel variant="body" className={wide ? 'breakdown breakdown--wide' : 'breakdown'}>
-      <h2 className="breakdown__title">{title}</h2>
+    <GlassPanel
+      variant="body"
+      className={cn('!px-6 !py-[18px]', wide && 'col-[1/-1]')}
+    >
+      <h2 className="font-sans text-xs tracking-[0.1em] uppercase text-text-muted m-0 mb-3">
+        {title}
+      </h2>
       {rows.length === 0 ? (
         <p className="kg-hint">No data.</p>
       ) : (
-        <table className="breakdown__table">
+        <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
-              <th>Key</th>
-              <th className="num">Tokens</th>
-              <th className="num">Cost</th>
+              <th className="px-1 py-2 text-left font-mono text-[10px] tracking-[0.12em] uppercase text-text-dim border-b border-border-line font-bold">
+                Key
+              </th>
+              <th className="px-1 py-2 text-right font-mono text-[10px] tracking-[0.12em] uppercase text-text-dim border-b border-border-line font-bold tabular-nums">
+                Tokens
+              </th>
+              <th className="px-1 py-2 text-right font-mono text-[10px] tracking-[0.12em] uppercase text-text-dim border-b border-border-line font-bold tabular-nums">
+                Cost
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.key}>
-                <td className="mono breakdown__key">{r.key}</td>
-                <td className="num metric-numeral">{r.totals.totalTokens.toLocaleString()}</td>
-                <td className="num metric-numeral">${r.totals.totalCost.toFixed(2)}</td>
+                <td className="px-1 py-2 text-left text-teal-300 font-mono text-xs border-b border-border-subtle">
+                  {r.key}
+                </td>
+                <td className="px-1 py-2 text-right text-text-primary border-b border-border-subtle metric-numeral tabular-nums font-mono">
+                  {r.totals.totalTokens.toLocaleString()}
+                </td>
+                <td className="px-1 py-2 text-right text-text-primary border-b border-border-subtle metric-numeral tabular-nums font-mono">
+                  ${r.totals.totalCost.toFixed(2)}
+                </td>
               </tr>
             ))}
           </tbody>
