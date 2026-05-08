@@ -140,6 +140,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Anchor for the absolutely-positioned "↓ Jump to latest" pill,
+     which is rendered as a sibling of <Composer>. */
+  position: relative;
 }
 
 /* ── Agent panel ──────────────────────────────────────────────────── */
@@ -547,6 +550,19 @@
   padding: 1px 5px;
   border-radius: 4px;
 }
+
+/* MarkdownRenderer's InlineCode uses inline styles (teal-on-teal) which
+   disappears against the teal user bubble. Force readable fallback. */
+.bubble--user .prose-md code {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: var(--ds-text-primary) !important;
+  border-color: rgba(255, 255, 255, 0.18) !important;
+}
+/* Code-block cards inside the user bubble look out-of-place at full width;
+   pull the margin in and let the card sit flush with the bubble padding. */
+.bubble--user .prose-md > div {
+  margin: 4px 0 6px !important;
+}
 .msg__time {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -557,6 +573,38 @@
 
 .msg--assistant {
   align-items: flex-start;
+}
+
+/* Hover-revealed copy button on assistant messages. The button stays in
+   the layout (visibility, not display) so the row doesn't reflow on hover. */
+.msg__copy {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-text-dim);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-cubic), color 140ms var(--ease-cubic),
+    background 140ms var(--ease-cubic);
+}
+.msg--assistant:hover .msg__copy,
+.msg__copy:focus-visible {
+  opacity: 1;
+}
+.msg__copy:hover {
+  color: var(--ds-text-primary);
+  background: rgba(0, 0, 0, 0.05);
+}
+:root[data-theme='dark'] .msg__copy:hover,
+:root:not([data-theme='light']) .msg__copy:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 .msg__avatar {
   flex-shrink: 0;
@@ -820,6 +868,50 @@
 .chat .composer .composer__send:disabled {
   opacity: 0.25;
   cursor: default;
+}
+
+/* Stop variant: while agent is streaming, send button swaps to a stop button.
+   Uses neutral surface so it reads as "interrupt" rather than "send". */
+.chat .composer .composer__send--stop {
+  background: var(--ds-bg-base);
+  color: var(--ds-text-primary);
+  border: 1px solid var(--ds-border-strong);
+}
+.chat .composer .composer__send--stop:hover {
+  border-color: var(--ds-error);
+  color: var(--ds-error);
+  opacity: 1;
+}
+
+/* "Jump to latest" pill — appears when user has scrolled up while new
+   content arrives, so they can opt back into autoscroll. Sits in the
+   flex flow above the composer (no absolute positioning headaches). */
+.chat-scroll-bottom-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 6px 12px 0;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.chat-scroll-bottom {
+  pointer-events: auto;
+  padding: 6px 14px;
+  background: var(--ds-bg-card);
+  border: 1px solid var(--ds-border-strong);
+  border-radius: 999px;
+  color: var(--ds-text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  transition: color 140ms var(--ease-cubic), border-color 140ms var(--ease-cubic), background 140ms var(--ease-cubic);
+}
+.chat-scroll-bottom:hover {
+  color: var(--ds-teal-300);
+  border-color: var(--ds-teal-line);
+  background: var(--ds-teal-soft);
 }
 
 /* ── Tool call component (agent-states.tsx) ──────────────────────── */

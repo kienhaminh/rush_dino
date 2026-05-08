@@ -13,7 +13,7 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
 
-  const startNewChat = useCallback(() => navigate('/'), [navigate])
+  const startNewChat = useCallback(() => navigate('/?new=1'), [navigate])
   const toggleSidebar = useCallback(() => setCollapsed((v) => !v), [])
 
   /* Poll the updater 5s after mount, then every six hours. Shows an
@@ -30,7 +30,7 @@ export function AppShell() {
         setPaletteOpen((v) => !v)
       } else if (k === 'n') {
         e.preventDefault()
-        navigate('/')
+        navigate('/?new=1')
       } else if (k === ',') {
         e.preventDefault()
         navigate('/settings')
@@ -51,7 +51,7 @@ export function AppShell() {
     const unsubs: Array<() => void> = []
     void import('@tauri-apps/api/event').then(async ({ listen }) => {
       unsubs.push(await listen('palette:toggle', () => setPaletteOpen((v) => !v)))
-      unsubs.push(await listen('menu:new-chat', () => navigate('/')))
+      unsubs.push(await listen('menu:new-chat', () => navigate('/?new=1')))
       unsubs.push(await listen('menu:settings', () => navigate('/settings')))
     })
     return () => {

@@ -36,7 +36,7 @@ export function LeftRail({ onNewChat, onToggleSidebar }: Props) {
 
       {/* Quick actions */}
       <div className="sidebar__quick">
-        <SidebarRow to="/" icon={SquarePen} label="New chat" end onClick={onNewChat} />
+        <SidebarRow to="/?new=1" icon={SquarePen} label="New chat" end onClick={onNewChat} />
         <SidebarRow to="/search" icon={Search} label="Search" />
         <SidebarRow to="/cron" icon={Clock} label="Automations" />
         <SidebarRow to="/kanban" icon={Kanban} label="Kanban" />
@@ -51,14 +51,14 @@ export function LeftRail({ onNewChat, onToggleSidebar }: Props) {
               <button type="button" className="sidebar__ghost-icon" aria-label="Filter">
                 <SlidersHorizontal size={13} strokeWidth={1.7} />
               </button>
-              <button
-                type="button"
+              <NavLink
+                to="/?new=1"
+                onClick={onNewChat}
                 className="sidebar__ghost-icon"
                 aria-label="New chat"
-                onClick={onNewChat}
               >
                 <SquarePen size={13} strokeWidth={1.7} />
-              </button>
+              </NavLink>
             </div>
           </div>
           <div className="sidebar__list">
