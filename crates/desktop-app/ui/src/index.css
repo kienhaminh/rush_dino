@@ -1851,38 +1851,7 @@ select.chip {
 .approval-btn--approve:hover:not(:disabled) { background: var(--ds-teal-300); }
 .approval-btn:disabled { opacity: 0.4; cursor: default; }
 
-/* Metrics */
-.metrics-totals { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.breakdown { padding: 20px 24px !important; }
-.breakdown--wide { grid-column: 1 / -1; }
-.breakdown__title {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ds-text-dim);
-  margin: 0 0 12px;
-  font-weight: 700;
-}
-.breakdown__table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.breakdown__table th, .breakdown__table td { padding: 8px 4px; text-align: left; }
-.breakdown__table th {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ds-text-dim);
-  border-bottom: 1px solid var(--ds-border-line);
-  font-weight: 700;
-}
-.breakdown__table td { border-bottom: 1px solid var(--ds-border-subtle); color: var(--ds-text-primary); }
-.breakdown__table .num { text-align: right; font-feature-settings: 'tnum' 1; font-family: var(--font-mono); }
-.breakdown__key {
-  font-family: var(--font-mono);
-  color: var(--ds-teal-400);
-  font-size: 12px;
-}
+/* Metrics: metrics-totals, metrics-grid, breakdown-* migrated to Tailwind in unit 7. */
 
 /* Config */
 .config-summary { padding: 20px 24px !important; }

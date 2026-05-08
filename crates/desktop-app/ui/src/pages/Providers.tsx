@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, X } from 'lucide-react'
 
@@ -24,6 +24,39 @@ import {
 } from '@/api/system'
 import { SettingsPageHeader } from '@/components/settings/SettingsPageHeader'
 import { cn } from '@/lib/cn'
+
+// ── Reusable utility class fragments ───────────────────────────────────────
+// BTN_BASE intentionally omits border utilities so variants can own them;
+// otherwise Tailwind's `border-none` would override variant `border` rules
+// (CSS source order, not class-string order, decides specificity).
+const BTN_BASE =
+  'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-sans text-[13px] font-medium cursor-pointer transition-[background,opacity] duration-[140ms] ease-ease-cubic whitespace-nowrap disabled:opacity-45 disabled:cursor-not-allowed'
+const BTN_OUTLINE =
+  'bg-transparent border border-border-strong text-text-primary enabled:hover:bg-bg-elevated'
+const BTN_PRIMARY =
+  'bg-teal-600 text-white border border-transparent enabled:hover:bg-teal-800 disabled:bg-bg-elevated disabled:text-text-dim'
+
+const FORM_INPUT =
+  'bg-bg-input border border-border-strong rounded-md px-3 py-[9px] font-sans text-[13px] text-text-primary outline-none transition-[border-color] duration-[140ms] ease-ease-cubic w-full box-border focus:border-teal-400 placeholder:text-text-dim'
+const FORM_SELECT =
+  'bg-bg-input border border-border-strong rounded-md px-3 py-[9px] pr-[30px] font-sans text-[13px] text-text-primary outline-none cursor-pointer w-full transition-[border-color] duration-[140ms] ease-ease-cubic appearance-none focus:border-teal-400'
+// SVG chevron has no design token; raw rgba data URI lives here so it can be
+// applied via inline style alongside FORM_SELECT utilities.
+const SELECT_STYLE: React.CSSProperties = {
+  backgroundImage:
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 10px center',
+}
+
+const BADGE_BASE =
+  'inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-[3px] rounded-full whitespace-nowrap'
+const BADGE_ON =
+  'bg-[rgba(74,222,128,0.12)] text-[#4ade80] border border-[rgba(74,222,128,0.28)]'
+const BADGE_OFF =
+  'bg-[rgba(248,113,113,0.10)] text-[#f87171] border border-[rgba(248,113,113,0.25)]'
+
+const CARD_SURFACE = 'border border-border-strong rounded-md bg-white/[0.02]'
 
 const PROVIDERS = [
   {
@@ -161,17 +194,24 @@ export default function Models() {
         lede="Manage model providers and the embedded gateway connection."
       />
 
-      <div className="ma-section">
-        <div className="ma-section-head">
-          <h2 className="ma-section-title">Models</h2>
-          <button type="button" className="ma-btn ma-btn--outline" onClick={() => setShowDialog(true)}>
+      {/* Models section */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-sm font-semibold text-text-primary m-0">Models</h2>
+          <button
+            type="button"
+            className={cn(BTN_BASE, BTN_OUTLINE)}
+            onClick={() => setShowDialog(true)}
+          >
             Add Model
           </button>
         </div>
         {pageError && <div className="chat-error-banner mono">{pageError}</div>}
-        <div className="ma-model-list glass-panel">
+        <div className="glass-panel flex flex-col !rounded-lg overflow-hidden">
           {profiles.length === 0 ? (
-            <div className="ma-empty">No model profiles configured yet.</div>
+            <div className="px-[18px] py-7 text-center text-text-dim text-[13px]">
+              No model profiles configured yet.
+            </div>
           ) : (
             profiles.map((profile) => (
               <ModelRow
@@ -197,23 +237,19 @@ export default function Models() {
         </div>
       </div>
 
-      <div className="ma-section">
-        <div className="ma-section-head">
-          <div className="ma-gateway-left">
-            <h2 className="ma-section-title">Gateway URL</h2>
-            <span
-              className={cn(
-                'ma-status-badge',
-                isConnected ? 'ma-status-badge--on' : 'ma-status-badge--off',
-              )}
-            >
+      {/* Gateway section */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-sm font-semibold text-text-primary m-0">Gateway URL</h2>
+            <span className={cn(BADGE_BASE, isConnected ? BADGE_ON : BADGE_OFF)}>
               {isConnected ? 'Connected' : 'Disconnected'}
             </span>
           </div>
-          <div className="ma-section-actions">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              className="ma-btn ma-btn--outline"
+              className={cn(BTN_BASE, BTN_OUTLINE)}
               onClick={() => reconnect.mutate()}
               disabled={reconnect.isPending}
             >
@@ -221,7 +257,7 @@ export default function Models() {
             </button>
             <button
               type="button"
-              className="ma-btn ma-btn--outline"
+              className={cn(BTN_BASE, BTN_OUTLINE)}
               onClick={() => refreshStatus.mutate()}
               disabled={refreshStatus.isPending}
             >
@@ -229,7 +265,7 @@ export default function Models() {
             </button>
             <button
               type="button"
-              className="ma-btn ma-btn--outline"
+              className={cn(BTN_BASE, BTN_OUTLINE)}
               onClick={() => setShowDiagnostics(true)}
             >
               Diagnose
@@ -237,45 +273,53 @@ export default function Models() {
           </div>
         </div>
 
-        <div className="ma-info-card glass-panel">
-          <div className="ma-info-card__left">
-            <p className="ma-info-card__title">Port</p>
-            <p className="ma-info-card__desc">
+        <div className="glass-panel flex items-center justify-between gap-5 !px-5 !py-[18px] flex-wrap">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-text-primary m-0 mb-1.5">Port</p>
+            <p className="text-[13px] text-text-muted leading-[1.55] m-0">
               Gateway will restart automatically after changing the port. If the default port is
               occupied, the system will try adjacent ports.
             </p>
           </div>
-          <span className="ma-url-chip">ws://127.0.0.1:{port}</span>
+          <span className="font-mono text-xs text-text-secondary bg-bg-elevated border border-border-strong rounded-md px-3 py-1.5 whitespace-nowrap flex-shrink-0">
+            ws://127.0.0.1:{port}
+          </span>
         </div>
 
-        <div className="ma-runtime-card glass-panel glass-panel--compact">
-          <div className="ma-runtime-card__head">
-            <span className="ma-runtime-card__label">Desktop runtime</span>
-            <span className={cn('ma-status-badge', runtimeBadgeClass(runtimeStatus))}>
-              {runtimeStatus}
-            </span>
-          </div>
-          <div className="ma-runtime-card__grid">
-            <RuntimeStat label="Active provider" value={summaryQ.data?.activeProvider ?? '—'} />
-            <RuntimeStat
-              label="Effective profile"
-              value={summaryQ.data?.effectiveProfileId ?? defaultProfileId ?? '—'}
-            />
-            <RuntimeStat
-              label="Configured profiles"
-              value={String(summaryQ.data?.profilesCount ?? profiles.length)}
-            />
-            <RuntimeStat label="Uptime" value={formatUptime(summaryQ.data?.uptimeSecs)} />
-          </div>
-          {runtimeIssue && <div className="chat-error-banner mono">{runtimeIssue}</div>}
-        </div>
+        <RuntimeCard
+          label="Desktop runtime"
+          status={runtimeStatus}
+          stats={[
+            ['Active provider', summaryQ.data?.activeProvider ?? '—'],
+            [
+              'Effective profile',
+              summaryQ.data?.effectiveProfileId ?? defaultProfileId ?? '—',
+            ],
+            [
+              'Configured profiles',
+              String(summaryQ.data?.profilesCount ?? profiles.length),
+            ],
+            ['Uptime', formatUptime(summaryQ.data?.uptimeSecs)],
+          ]}
+          footer={
+            runtimeIssue ? <div className="chat-error-banner mono">{runtimeIssue}</div> : null
+          }
+        />
 
-        <div className="ma-tips glass-panel glass-panel--compact">
-          <p className="ma-tips__title">If the connection is not working, try these options:</p>
-          <ul className="ma-tips__list">
-            <li>Reconnect refreshes gateway adapters without changing saved model settings.</li>
-            <li>Refresh Status reloads runtime health, profiles, config, and adapter state.</li>
-            <li>Diagnose opens the embedded doctor report with suggested fixes.</li>
+        <div className="glass-panel glass-panel--compact !px-[18px] !py-[14px]">
+          <p className="text-[13px] font-semibold text-text-primary m-0 mb-2">
+            If the connection is not working, try these options:
+          </p>
+          <ul className="m-0 pl-[18px] flex flex-col gap-1">
+            <li className="text-[13px] text-text-muted leading-[1.5]">
+              Reconnect refreshes gateway adapters without changing saved model settings.
+            </li>
+            <li className="text-[13px] text-text-muted leading-[1.5]">
+              Refresh Status reloads runtime health, profiles, config, and adapter state.
+            </li>
+            <li className="text-[13px] text-text-muted leading-[1.5]">
+              Diagnose opens the embedded doctor report with suggested fixes.
+            </li>
           </ul>
         </div>
       </div>
@@ -338,10 +382,10 @@ function ModelRow({
     (profile.provider_kind === 'openai' || profile.provider_kind === 'anthropic')
 
   return (
-    <div className="ma-model-row">
-      <div className="ma-model-copy">
-        <span className="ma-model-name">{profile.name}</span>
-        <span className="ma-model-meta">
+    <div className="flex items-center justify-between px-[18px] py-3.5 border-b border-border-line last:border-b-0">
+      <div className="flex flex-col gap-1 min-w-0">
+        <span className="text-sm text-text-primary">{profile.name}</span>
+        <span className="text-xs text-text-dim [overflow-wrap:anywhere]">
           {formatProfileLabel(profile.provider_kind)} · {formatProfileLabel(profile.auth_method)} ·{' '}
           {profile.default_model}
           {profile.base_url ? ` · ${profile.base_url}` : ''}
@@ -349,19 +393,19 @@ function ModelRow({
         {verifyState && (
           <span
             className={cn(
-              'ma-model-status',
-              verifyState.ok ? 'ma-model-status--ok' : 'ma-model-status--error',
+              'text-xs leading-[1.5]',
+              verifyState.ok ? 'text-success' : 'text-warning',
             )}
           >
             {verifyState.message}
           </span>
         )}
       </div>
-      <div className="ma-model-actions">
+      <div className="flex items-center gap-2.5 flex-wrap justify-end">
         {oauthConnectable && (
           <button
             type="button"
-            className="ma-btn ma-btn--outline"
+            className={cn(BTN_BASE, BTN_OUTLINE)}
             onClick={onConnectOAuth}
             disabled={busy !== null || verifyBusy}
           >
@@ -370,18 +414,18 @@ function ModelRow({
         )}
         <button
           type="button"
-          className="ma-btn ma-btn--outline"
+          className={cn(BTN_BASE, BTN_OUTLINE)}
           onClick={onVerify}
           disabled={busy !== null || verifyBusy}
         >
           {verifyBusy ? 'Verifying…' : 'Verify'}
         </button>
         {isSelected ? (
-          <span className="ma-sel-badge">Current Selection</span>
+          <span className={cn(BADGE_BASE, BADGE_ON)}>Current Selection</span>
         ) : (
           <button
             type="button"
-            className="ma-btn ma-btn--outline"
+            className={cn(BTN_BASE, BTN_OUTLINE)}
             onClick={onSetDefault}
             disabled={busy !== null}
           >
@@ -390,7 +434,7 @@ function ModelRow({
         )}
         <button
           type="button"
-          className="ma-btn ma-btn--outline"
+          className={cn(BTN_BASE, BTN_OUTLINE)}
           onClick={onDelete}
           disabled={busy !== null}
         >
@@ -475,170 +519,155 @@ function AddModelDialog({ onClose, onAdded }: { onClose: () => void; onAdded: ()
   }
 
   return (
-    <dialog ref={dialogRef} className="ma-dialog" onClose={onClose}>
-      <div className="ma-dialog__inner">
-        <div className="ma-dialog__header">
-          <h2 className="ma-dialog__title">Add Model</h2>
-          <button type="button" className="ma-dialog__close" onClick={onClose} aria-label="Close">
-            <X size={18} strokeWidth={1.8} />
-          </button>
-        </div>
+    <DialogShell ref={dialogRef} title="Add Model" onClose={onClose}>
+      <div className="flex items-start gap-2.5 px-3.5 py-3 bg-[rgba(245,193,24,0.08)] border border-[rgba(245,193,24,0.22)] rounded-md text-[13px] text-warning leading-[1.5]">
+        <span>!</span>
+        Adding a provider profile updates the embedded desktop runtime immediately and persists to
+        your local RushDino config.
+      </div>
 
-        <div className="ma-dialog__warning">
-          <span>!</span>
-          Adding a provider profile updates the embedded desktop runtime immediately and persists to
-          your local RushDino config.
-        </div>
+      <FormGroup>
+        <FormLabel required>Provider</FormLabel>
+        <select
+          className={FORM_SELECT}
+          style={SELECT_STYLE}
+          value={provider}
+          onChange={(event) => handleProviderChange(event.target.value as ProviderSelection)}
+        >
+          {PROVIDERS.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </FormGroup>
 
-        <div className="ma-form-group">
-          <label className="ma-form-label">
-            <span className="ma-required">*</span> Provider
-          </label>
+      <div className="grid grid-cols-2 gap-3.5">
+        <FormGroup>
+          <FormLabel required>Model ID</FormLabel>
+          <input
+            className={FORM_INPUT}
+            placeholder="gpt-5.4, claude-3-7-sonnet, llama3.2:latest…"
+            value={modelId}
+            onChange={(event) => setModelId(event.target.value)}
+          />
+        </FormGroup>
+        <FormGroup>
+          <FormLabel>Display Name</FormLabel>
+          <input
+            className={FORM_INPUT}
+            placeholder="Defaults to Model ID"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+          />
+        </FormGroup>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3.5">
+        <FormGroup>
+          <FormLabel>Auth method</FormLabel>
           <select
-            className="ma-form-select"
-            value={provider}
-            onChange={(event) => handleProviderChange(event.target.value as ProviderSelection)}
+            className={FORM_SELECT}
+            style={SELECT_STYLE}
+            value={authMode}
+            onChange={(event) => setAuthMode(event.target.value as 'apikey' | 'oauth')}
+            disabled={!canOAuth}
           >
-            {PROVIDERS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
+            <option value="apikey">API key</option>
+            <option value="oauth">OAuth</option>
+          </select>
+        </FormGroup>
+        {showApiKey ? (
+          <FormGroup>
+            <FormLabel>{provider} API Key</FormLabel>
+            <div className="relative">
+              <input
+                className={cn(FORM_INPUT, 'pr-[38px]')}
+                type={showKey ? 'text' : 'password'}
+                placeholder={
+                  canOAuth && authMode === 'oauth'
+                    ? 'Not needed for OAuth profiles'
+                    : 'Required for API-key profiles'
+                }
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+                disabled={canOAuth && authMode === 'oauth'}
+              />
+              <button
+                type="button"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent border-none text-text-dim cursor-pointer flex items-center p-0.5 transition-colors duration-[140ms] hover:text-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setShowKey((current) => !current)}
+                aria-label="Toggle visibility"
+                disabled={canOAuth && authMode === 'oauth'}
+              >
+                {showKey ? (
+                  <EyeOff size={14} strokeWidth={1.8} />
+                ) : (
+                  <Eye size={14} strokeWidth={1.8} />
+                )}
+              </button>
+            </div>
+          </FormGroup>
+        ) : (
+          <FormGroup>
+            <FormLabel>Authentication</FormLabel>
+            <input className={FORM_INPUT} value="No API key required" disabled />
+          </FormGroup>
+        )}
+        <FormGroup>
+          <FormLabel>API Protocol</FormLabel>
+          <select
+            className={FORM_SELECT}
+            style={SELECT_STYLE}
+            value={protocol}
+            onChange={(event) => setProtocol(event.target.value as ProtocolSelection)}
+            disabled={!showProtocol}
+          >
+            {PROTOCOLS.map((item) => (
+              <option key={item} value={item}>
+                {item}
               </option>
             ))}
           </select>
-        </div>
+        </FormGroup>
+      </div>
 
-        <div className="ma-form-row">
-          <div className="ma-form-group">
-            <label className="ma-form-label">
-              <span className="ma-required">*</span> Model ID
-            </label>
-            <input
-              className="ma-form-input"
-              placeholder="gpt-5.4, claude-3-7-sonnet, llama3.2:latest…"
-              value={modelId}
-              onChange={(event) => setModelId(event.target.value)}
-            />
-          </div>
-          <div className="ma-form-group">
-            <label className="ma-form-label">Display Name</label>
-            <input
-              className="ma-form-input"
-              placeholder="Defaults to Model ID"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-          </div>
-        </div>
+      <FormGroup>
+        <FormLabel>Base URL</FormLabel>
+        <input
+          className={FORM_INPUT}
+          placeholder="https://..."
+          value={baseUrl}
+          onChange={(event) => setBaseUrl(event.target.value)}
+        />
+      </FormGroup>
 
-        <div className="ma-form-row">
-          <div className="ma-form-group">
-            <label className="ma-form-label">Auth method</label>
-            <select
-              className="ma-form-select"
-              value={authMode}
-              onChange={(event) => setAuthMode(event.target.value as 'apikey' | 'oauth')}
-              disabled={!canOAuth}
-            >
-              <option value="apikey">API key</option>
-              <option value="oauth">OAuth</option>
-            </select>
-          </div>
-          {showApiKey ? (
-            <div className="ma-form-group">
-              <label className="ma-form-label">{provider} API Key</label>
-              <div className="ma-input-wrap">
-                <input
-                  className="ma-form-input"
-                  type={showKey ? 'text' : 'password'}
-                  placeholder={
-                    canOAuth && authMode === 'oauth'
-                      ? 'Not needed for OAuth profiles'
-                      : 'Required for API-key profiles'
-                  }
-                  value={apiKey}
-                  onChange={(event) => setApiKey(event.target.value)}
-                  disabled={canOAuth && authMode === 'oauth'}
-                />
-                <button
-                  type="button"
-                  className="ma-eye-btn"
-                  onClick={() => setShowKey((current) => !current)}
-                  aria-label="Toggle visibility"
-                  disabled={canOAuth && authMode === 'oauth'}
-                >
-                  {showKey ? (
-                    <EyeOff size={14} strokeWidth={1.8} />
-                  ) : (
-                    <Eye size={14} strokeWidth={1.8} />
-                  )}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="ma-form-group">
-              <label className="ma-form-label">Authentication</label>
-              <input className="ma-form-input" value="No API key required" disabled />
-            </div>
-          )}
-          <div className="ma-form-group">
-            <label className="ma-form-label">API Protocol</label>
-            <select
-              className="ma-form-select"
-              value={protocol}
-              onChange={(event) => setProtocol(event.target.value as ProtocolSelection)}
-              disabled={!showProtocol}
-            >
-              {PROTOCOLS.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="ma-form-group">
-          <label className="ma-form-label">Base URL</label>
-          <input
-            className="ma-form-input"
-            placeholder="https://..."
-            value={baseUrl}
-            onChange={(event) => setBaseUrl(event.target.value)}
-          />
-        </div>
-
-        <div className="ma-connectivity">
-          <div className="ma-connectivity__info">
-            <div>
-              <p className="ma-connectivity__label">Connectivity test is no longer mocked</p>
-              <p className="ma-connectivity__desc">
-                Save the profile first. Verification and OAuth connection now happen against real
-                saved desktop profiles.
-              </p>
-            </div>
-          </div>
-          <button type="button" className="ma-btn ma-btn--outline" disabled>
+      <ConnectivityCard
+        label="Connectivity test is no longer mocked"
+        desc="Save the profile first. Verification and OAuth connection now happen against real saved desktop profiles."
+        action={
+          <button type="button" className={cn(BTN_BASE, BTN_OUTLINE)} disabled>
             Save first
           </button>
-        </div>
+        }
+      />
 
-        {formError && <div className="chat-error-banner mono">{formError}</div>}
+      {formError && <div className="chat-error-banner mono">{formError}</div>}
 
-        <div className="ma-dialog__footer">
-          <button type="button" className="ma-btn ma-btn--outline" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="ma-btn ma-btn--primary"
-            onClick={handleAdd}
-            disabled={create.isPending || !modelId.trim() || (requiresApiKey && !apiKey.trim())}
-          >
-            {create.isPending ? 'Adding…' : 'Add'}
-          </button>
-        </div>
+      <div className="flex items-center justify-end gap-2.5 pt-1">
+        <button type="button" className={cn(BTN_BASE, BTN_OUTLINE)} onClick={onClose}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className={cn(BTN_BASE, BTN_PRIMARY)}
+          onClick={handleAdd}
+          disabled={create.isPending || !modelId.trim() || (requiresApiKey && !apiKey.trim())}
+        >
+          {create.isPending ? 'Adding…' : 'Add'}
+        </button>
       </div>
-    </dialog>
+    </DialogShell>
   )
 }
 
@@ -663,87 +692,69 @@ function DiagnosticsDialog({
   const findings = doctorQ.data?.findings ?? []
 
   return (
-    <dialog ref={dialogRef} className="ma-dialog" onClose={onClose}>
-      <div className="ma-dialog__inner">
-        <div className="ma-dialog__header">
-          <h2 className="ma-dialog__title">Desktop Diagnostics</h2>
-          <button type="button" className="ma-dialog__close" onClick={onClose} aria-label="Close">
-            <X size={18} strokeWidth={1.8} />
-          </button>
-        </div>
+    <DialogShell ref={dialogRef} title="Desktop Diagnostics" onClose={onClose}>
+      <RuntimeCard
+        label="Overall status"
+        status={doctorQ.data?.status ?? 'attention'}
+        statusText={doctorQ.data?.status ?? 'loading'}
+        stats={[
+          ['Active provider', summary?.activeProvider ?? '—'],
+          ['Default profile', summary?.defaultProfileId ?? '—'],
+          ['Runtime profile', summary?.effectiveProfileId ?? '—'],
+          ['Doctor timestamp', formatTimestamp(doctorQ.data?.generatedAt)],
+        ]}
+      />
 
-        <div className="ma-runtime-card glass-panel glass-panel--compact">
-          <div className="ma-runtime-card__head">
-            <span className="ma-runtime-card__label">Overall status</span>
-            <span
-              className={cn(
-                'ma-status-badge',
-                runtimeBadgeClass(doctorQ.data?.status ?? 'attention'),
-              )}
-            >
-              {doctorQ.data?.status ?? 'loading'}
-            </span>
-          </div>
-          <div className="ma-runtime-card__grid">
-            <RuntimeStat label="Active provider" value={summary?.activeProvider ?? '—'} />
-            <RuntimeStat label="Default profile" value={summary?.defaultProfileId ?? '—'} />
-            <RuntimeStat label="Runtime profile" value={summary?.effectiveProfileId ?? '—'} />
-            <RuntimeStat
-              label="Doctor timestamp"
-              value={formatTimestamp(doctorQ.data?.generatedAt)}
-            />
-          </div>
-        </div>
-
-        <div className="ma-diagnostic-overview">
-          <DiagnosticCounter
-            label="Errors"
-            count={doctorQ.data?.summary.errorCount ?? 0}
-            tone="error"
-          />
-          <DiagnosticCounter
-            label="Warnings"
-            count={doctorQ.data?.summary.warnCount ?? 0}
-            tone="warn"
-          />
-          <DiagnosticCounter
-            label="Info"
-            count={doctorQ.data?.summary.infoCount ?? 0}
-            tone="info"
-          />
-        </div>
-
-        {doctorQ.error instanceof Error && (
-          <div className="chat-error-banner mono">{doctorQ.error.message}</div>
-        )}
-
-        <div className="ma-diagnostic-list">
-          {doctorQ.isLoading ? (
-            <div className="ma-empty">Loading doctor report…</div>
-          ) : findings.length === 0 ? (
-            <div className="ma-empty">No findings reported by the embedded runtime.</div>
-          ) : (
-            findings.map((finding) => (
-              <DiagnosticFinding key={finding.code} finding={finding} />
-            ))
-          )}
-        </div>
-
-        <div className="ma-dialog__footer">
-          <button
-            type="button"
-            className="ma-btn ma-btn--outline"
-            onClick={() => doctorQ.refetch()}
-            disabled={doctorQ.isFetching}
-          >
-            {doctorQ.isFetching ? 'Refreshing…' : 'Refresh Report'}
-          </button>
-          <button type="button" className="ma-btn ma-btn--primary" onClick={onClose}>
-            Close
-          </button>
-        </div>
+      <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+        <DiagnosticCounter
+          label="Errors"
+          count={doctorQ.data?.summary.errorCount ?? 0}
+          tone="error"
+        />
+        <DiagnosticCounter
+          label="Warnings"
+          count={doctorQ.data?.summary.warnCount ?? 0}
+          tone="warn"
+        />
+        <DiagnosticCounter
+          label="Info"
+          count={doctorQ.data?.summary.infoCount ?? 0}
+          tone="info"
+        />
       </div>
-    </dialog>
+
+      {doctorQ.error instanceof Error && (
+        <div className="chat-error-banner mono">{doctorQ.error.message}</div>
+      )}
+
+      <div className="flex flex-col gap-3">
+        {doctorQ.isLoading ? (
+          <div className="px-[18px] py-7 text-center text-text-dim text-[13px]">
+            Loading doctor report…
+          </div>
+        ) : findings.length === 0 ? (
+          <div className="px-[18px] py-7 text-center text-text-dim text-[13px]">
+            No findings reported by the embedded runtime.
+          </div>
+        ) : (
+          findings.map((finding) => <DiagnosticFinding key={finding.code} finding={finding} />)
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-2.5 pt-1">
+        <button
+          type="button"
+          className={cn(BTN_BASE, BTN_OUTLINE)}
+          onClick={() => doctorQ.refetch()}
+          disabled={doctorQ.isFetching}
+        >
+          {doctorQ.isFetching ? 'Refreshing…' : 'Refresh Report'}
+        </button>
+        <button type="button" className={cn(BTN_BASE, BTN_PRIMARY)} onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </DialogShell>
   )
 }
 
@@ -756,42 +767,155 @@ function DiagnosticCounter({
   count: number
   tone: 'error' | 'warn' | 'info'
 }) {
+  const toneBorder = {
+    error: 'border-[rgba(248,113,113,0.32)]',
+    warn: 'border-[rgba(245,193,24,0.28)]',
+    info: 'border-[rgba(34,211,200,0.24)]',
+  }[tone]
   return (
-    <div className={cn('ma-diagnostic-counter', `ma-diagnostic-counter--${tone}`)}>
-      <span className="ma-diagnostic-counter__count">{count}</span>
-      <span className="ma-diagnostic-counter__label">{label}</span>
+    <div
+      className={cn(
+        'flex flex-col gap-1.5 px-4 py-3.5 rounded-md border bg-white/[0.02]',
+        toneBorder,
+      )}
+    >
+      <span className="text-2xl leading-none font-bold text-text-primary">{count}</span>
+      <span className="text-[11px] tracking-[0.08em] uppercase text-text-muted">{label}</span>
     </div>
   )
 }
 
 function DiagnosticFinding({ finding }: { finding: DoctorReport['findings'][number] }) {
   return (
-    <article className="ma-diagnostic-item">
-      <div className="ma-diagnostic-item__head">
-        <span className={cn('ma-model-status', diagnosticToneClass(finding.severity))}>
+    <article className={cn('flex flex-col gap-2 px-[18px] py-4', CARD_SURFACE)}>
+      <div className="flex items-center justify-between gap-2.5">
+        <span className={cn('text-xs leading-[1.5]', diagnosticToneTextClass(finding.severity))}>
           {finding.severity}
         </span>
-        <span className="ma-diagnostic-item__code mono">{finding.code}</span>
+        <span className="text-[11px] text-text-dim mono">{finding.code}</span>
       </div>
-      <strong className="ma-diagnostic-item__title">{finding.title}</strong>
-      <p className="ma-diagnostic-item__detail">{finding.detail}</p>
-      <p className="ma-diagnostic-item__action">{finding.action}</p>
-      <span className="ma-diagnostic-item__fixable mono">
+      <strong className="text-sm text-text-primary">{finding.title}</strong>
+      <p className="m-0 text-[13px] leading-[1.55] text-text-muted">{finding.detail}</p>
+      <p className="m-0 text-[13px] leading-[1.55] text-text-secondary">{finding.action}</p>
+      <span className="text-[11px] text-teal-300 mono">
         {finding.fixable ? 'Fixable from desktop config' : 'Needs manual follow-up'}
       </span>
     </article>
   )
 }
 
-function RuntimeStat({ label, value }: { label: string; value: string }) {
+function RuntimeCard({
+  label,
+  status,
+  statusText,
+  stats,
+  footer,
+}: {
+  label: string
+  status: string
+  statusText?: string
+  stats: ReadonlyArray<readonly [string, string]>
+  footer?: React.ReactNode
+}) {
+  const isOn = status === 'healthy'
   return (
-    <div className="ma-runtime-stat">
-      <span className="ma-runtime-stat__label">{label}</span>
-      <span className="ma-runtime-stat__value mono">{value}</span>
+    <div className="glass-panel glass-panel--compact flex flex-col gap-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-text-dim">
+          {label}
+        </span>
+        <span className={cn(BADGE_BASE, isOn ? BADGE_ON : BADGE_OFF)}>{statusText ?? status}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        {stats.map(([k, v]) => (
+          <RuntimeStat key={k} label={k} value={v} />
+        ))}
+      </div>
+      {footer}
     </div>
   )
 }
 
+function RuntimeStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[11px] text-text-muted uppercase tracking-[0.08em]">{label}</span>
+      <span className="text-[13px] text-text-primary mono">{value}</span>
+    </div>
+  )
+}
+
+// ── Form helpers ────────────────────────────────────────────────────────────
+function FormGroup({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1.5">{children}</div>
+}
+
+function FormLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <label className="text-xs font-medium text-text-muted">
+      {required && <span className="text-error mr-0.5">*</span>}
+      {children}
+    </label>
+  )
+}
+
+function ConnectivityCard({
+  label,
+  desc,
+  action,
+}: {
+  label: string
+  desc: string
+  action: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3.5 bg-bg-card border border-border-base rounded-md">
+      <div className="flex items-start gap-2.5 flex-1">
+        <div>
+          <p className="text-[13px] font-semibold text-text-primary m-0 mb-0.5">{label}</p>
+          <p className="text-xs text-text-dim m-0">{desc}</p>
+        </div>
+      </div>
+      {action}
+    </div>
+  )
+}
+
+// ── Dialog shell ────────────────────────────────────────────────────────────
+type DialogShellProps = {
+  children: ReactNode
+  title: string
+  onClose: () => void
+}
+
+const DialogShell = forwardRef<HTMLDialogElement, DialogShellProps>(
+  function DialogShell({ children, title, onClose }, ref) {
+    return (
+      <dialog
+        ref={ref}
+        onClose={onClose}
+        className="border-none rounded-xl bg-bg-panel shadow-[0_24px_80px_rgba(0,0,0,0.6),0_0_0_1px_var(--ds-border-strong)] p-0 max-w-[680px] w-[calc(100vw-48px)] max-h-[calc(100vh-80px)] overflow-hidden backdrop:bg-[rgba(0,0,0,0.55)] backdrop:[backdrop-filter:blur(4px)]"
+      >
+        <div className="flex flex-col gap-[18px] px-7 pt-6 pb-7 overflow-y-auto max-h-[calc(100vh-80px)]">
+          <div className="flex items-center justify-between">
+            <h2 className="text-[17px] font-semibold text-text-primary m-0">{title}</h2>
+            <button
+              type="button"
+              className="bg-transparent border-none text-text-dim cursor-pointer p-1 rounded-sm flex items-center transition-colors duration-[140ms] hover:text-text-primary"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <X size={18} strokeWidth={1.8} />
+            </button>
+          </div>
+          {children}
+        </div>
+      </dialog>
+    )
+  },
+)
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
 function formatProfileLabel(value: string): string {
   switch (value) {
     case 'apikey':
@@ -803,26 +927,16 @@ function formatProfileLabel(value: string): string {
   }
 }
 
-function runtimeBadgeClass(status: string): string {
-  switch (status) {
-    case 'healthy':
-      return 'ma-status-badge--on'
-    case 'degraded':
-    case 'attention':
-      return 'ma-status-badge--off'
-    default:
-      return 'ma-status-badge--off'
-  }
-}
-
-function diagnosticToneClass(severity: string): string {
+function diagnosticToneTextClass(severity: string): string {
+  // Mirrors legacy ma-model-status--{error,pending,ok}: error→warning hue,
+  // warn→default text, default→success.
   switch (severity) {
     case 'error':
-      return 'ma-model-status--error'
+      return 'text-warning'
     case 'warn':
-      return 'ma-model-status--pending'
+      return ''
     default:
-      return 'ma-model-status--ok'
+      return 'text-success'
   }
 }
 
@@ -885,93 +999,75 @@ function OAuthConnectDialog({
   }, [])
 
   return (
-    <dialog ref={dialogRef} className="ma-dialog" onClose={onClose}>
-      <div className="ma-dialog__inner">
-        <div className="ma-dialog__header">
-          <h2 className="ma-dialog__title">Connect OAuth</h2>
-          <button type="button" className="ma-dialog__close" onClick={onClose} aria-label="Close">
-            <X size={18} strokeWidth={1.8} />
-          </button>
-        </div>
+    <DialogShell ref={dialogRef} title="Connect OAuth" onClose={onClose}>
+      <div className="flex items-start gap-2.5 px-3.5 py-3 bg-[rgba(245,193,24,0.08)] border border-[rgba(245,193,24,0.22)] rounded-md text-[13px] text-warning leading-[1.5]">
+        <span>!</span>
+        Complete OAuth in your browser, then paste the final redirect URL back here so the desktop
+        app can exchange tokens locally.
+      </div>
 
-        <div className="ma-dialog__warning">
-          <span>!</span>
-          Complete OAuth in your browser, then paste the final redirect URL back here so the
-          desktop app can exchange tokens locally.
-        </div>
+      <FormGroup>
+        <FormLabel>Profile</FormLabel>
+        <input
+          className={FORM_INPUT}
+          value={`${profile.name} · ${formatProfileLabel(profile.provider_kind)}`}
+          disabled
+        />
+      </FormGroup>
 
-        <div className="ma-form-group">
-          <label className="ma-form-label">Profile</label>
-          <input
-            className="ma-form-input"
-            value={`${profile.name} · ${formatProfileLabel(profile.provider_kind)}`}
-            disabled
-          />
-        </div>
-
-        <div className="ma-connectivity">
-          <div className="ma-connectivity__info">
-            <div>
-              <p className="ma-connectivity__label">
-                {session ? 'OAuth session ready' : 'Start an OAuth session'}
-              </p>
-              <p className="ma-connectivity__desc">
-                {session
-                  ? 'Open the auth URL below, authorize the provider, then paste the redirected URL.'
-                  : 'The embedded server will generate a PKCE login URL for this saved profile.'}
-              </p>
-            </div>
-          </div>
+      <ConnectivityCard
+        label={session ? 'OAuth session ready' : 'Start an OAuth session'}
+        desc={
+          session
+            ? 'Open the auth URL below, authorize the provider, then paste the redirected URL.'
+            : 'The embedded server will generate a PKCE login URL for this saved profile.'
+        }
+        action={
           <button
             type="button"
-            className="ma-btn ma-btn--outline"
+            className={cn(BTN_BASE, BTN_OUTLINE)}
             onClick={() => start.mutate()}
             disabled={start.isPending}
           >
             {start.isPending ? 'Starting…' : session ? 'Restart OAuth' : 'Start OAuth'}
           </button>
-        </div>
+        }
+      />
 
-        {session && (
-          <>
-            <div className="ma-form-group">
-              <label className="ma-form-label">Authorization URL</label>
-              <textarea
-                className="ma-form-input"
-                value={session.auth_url}
-                readOnly
-                rows={4}
-              />
-            </div>
-            <div className="ma-form-group">
-              <label className="ma-form-label">Redirect URL</label>
-              <textarea
-                className="ma-form-input"
-                placeholder="Paste the full redirect URL after approval"
-                rows={4}
-                value={redirectUrl}
-                onChange={(event) => setRedirectUrl(event.target.value)}
-              />
-            </div>
-          </>
-        )}
+      {session && (
+        <>
+          <FormGroup>
+            <FormLabel>Authorization URL</FormLabel>
+            <textarea className={FORM_INPUT} value={session.auth_url} readOnly rows={4} />
+          </FormGroup>
+          <FormGroup>
+            <FormLabel>Redirect URL</FormLabel>
+            <textarea
+              className={FORM_INPUT}
+              placeholder="Paste the full redirect URL after approval"
+              rows={4}
+              value={redirectUrl}
+              onChange={(event) => setRedirectUrl(event.target.value)}
+            />
+          </FormGroup>
+        </>
+      )}
 
-        {error && <div className="chat-error-banner mono">{error}</div>}
+      {error && <div className="chat-error-banner mono">{error}</div>}
 
-        <div className="ma-dialog__footer">
-          <button type="button" className="ma-btn ma-btn--outline" onClick={onClose}>
-            Close
-          </button>
-          <button
-            type="button"
-            className="ma-btn ma-btn--primary"
-            onClick={() => complete.mutate()}
-            disabled={!session || !redirectUrl.trim() || complete.isPending}
-          >
-            {complete.isPending ? 'Connecting…' : 'Complete OAuth'}
-          </button>
-        </div>
+      <div className="flex items-center justify-end gap-2.5 pt-1">
+        <button type="button" className={cn(BTN_BASE, BTN_OUTLINE)} onClick={onClose}>
+          Close
+        </button>
+        <button
+          type="button"
+          className={cn(BTN_BASE, BTN_PRIMARY)}
+          onClick={() => complete.mutate()}
+          disabled={!session || !redirectUrl.trim() || complete.isPending}
+        >
+          {complete.isPending ? 'Connecting…' : 'Complete OAuth'}
+        </button>
       </div>
-    </dialog>
+    </DialogShell>
   )
 }
