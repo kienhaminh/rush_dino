@@ -109,4 +109,4 @@ grep -rn ".rd-foo" src/design/
 
 - Legacy CSS still wins for any selector it matches; Tailwind is just a tool the converter reaches for.
 - Prefer tokens over hex literals. Reach for arbitrary values only when no token applies.
-- `:focus-visible`, `::selection`, `@keyframes rd-*`, scrollbar styling, and the radial-gradient body background still live in `tokens.css`. Unit 14 moves those to Tailwind layers — leave them alone until then.
+- `:focus-visible`, `::selection`, scrollbar styling, and the radial-gradient body background live in `tailwind.css` `@layer base` (moved from `tokens.css` in Unit 14). `@keyframes rd-*` are global and also live in `tailwind.css`. `tokens.css` is now token-only.

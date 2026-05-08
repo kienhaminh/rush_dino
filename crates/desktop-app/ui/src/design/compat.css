@@ -1,7 +1,8 @@
 /* Compatibility layer: aliases the legacy "Obsidian & Copper" variable
  * names AND typography class names used by the existing component CSS onto
- * the new `--ds-*` design-system tokens + `.rd-*` classes defined in
- * tokens.css and typography.css. Imported AFTER both in main.tsx.
+ * the new `--ds-*` design-system tokens + `.rd-*` classes. Tokens come from
+ * tokens.css; `.rd-*` classes come from tailwind.css `@layer components`
+ * (moved there in Unit 14). Imported AFTER both in main.tsx.
  *
  * When a component is touched it should be migrated to `--ds-*` /
  * `.rd-*` directly; this layer exists to avoid a single atomic rewrite.
