@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from 'react-router-dom'
 import { PanelLeft } from 'lucide-react'
 
 import { CommandPalette } from '@/components/command-palette/CommandPalette'
+import { SearchOverlay } from './SearchOverlay'
 import { LeftRail } from './LeftRail'
 import { UpdateBanner } from './UpdateBanner'
 import { useUpdater } from '@/hooks/useUpdater'
@@ -10,11 +11,14 @@ import { cn } from '@/lib/cn'
 
 export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
 
   const startNewChat = useCallback(() => navigate('/?new=1'), [navigate])
   const toggleSidebar = useCallback(() => setCollapsed((v) => !v), [])
+  const openSearch = useCallback(() => setSearchOpen(true), [])
+  const closeSearch = useCallback(() => setSearchOpen(false), [])
 
   /* Poll the updater 5s after mount, then every six hours. Shows an
      in-window banner when a newer release is available. */
@@ -69,17 +73,14 @@ export function AppShell() {
   return (
     <div
       className={cn(
-        /* Layout: 280px sidebar + main content. Animate the column widths
-           so collapse/expand reads as a smooth slide. The
-           `app-root--collapsed` class is preserved so the un-migrated
-           chat-topbar can still react via its legacy descendant
-           selector — drop after the chat shell unit migrates. */
-        'relative grid h-screen w-screen overflow-hidden bg-bg-side text-text-primary font-sans',
+        /* Stable source-list + detail split. The sidebar width follows the
+           compact range used by native macOS productivity apps. */
+        'relative grid h-screen w-screen overflow-hidden bg-transparent text-text-primary font-sans',
         'transition-[grid-template-columns] duration-[220ms] ease-ease-cubic',
         showBanner && 'grid-rows-[36px_1fr]',
         collapsed
           ? 'app-root--collapsed grid-cols-[0_1fr]'
-          : 'grid-cols-[280px_1fr]',
+          : 'grid-cols-[248px_1fr]',
       )}
     >
       {showBanner && updater.info && (
@@ -93,6 +94,7 @@ export function AppShell() {
       <LeftRail
         onNewChat={startNewChat}
         onToggleSidebar={toggleSidebar}
+        onSearch={openSearch}
         collapsed={collapsed}
         bannerRow={showBanner}
       />
@@ -103,9 +105,9 @@ export function AppShell() {
           aria-label="Show sidebar"
           title="Show sidebar (⌘\)"
           className={cn(
-            /* Floating toggle: parked just right of the macOS traffic
-               lights so it's always reachable when the sidebar is hidden. */
-            'fixed top-[10px] left-[88px] z-50 inline-flex items-center justify-center',
+            /* Keep the control beside the traffic lights when the source
+               list is hidden, as in Finder and Mail. */
+            'fixed top-[14px] left-[88px] z-50 inline-flex items-center justify-center',
             'w-7 h-7 rounded-md border border-transparent bg-transparent text-text-secondary cursor-pointer',
             '[-webkit-app-region:no-drag] [app-region:no-drag]',
             'transition-[background-color,color] duration-[140ms] ease-ease-cubic',
@@ -121,6 +123,7 @@ export function AppShell() {
         <Outlet context={{ collapsed }} />
       </main>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <SearchOverlay open={searchOpen} onClose={closeSearch} />
     </div>
   )
 }

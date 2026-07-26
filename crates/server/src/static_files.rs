@@ -7,7 +7,7 @@ use rust_embed::RustEmbed;
 
 #[cfg(all(not(test), not(debug_assertions)))]
 #[derive(RustEmbed)]
-#[folder = "../../frontend/dist"]
+#[folder = "../desktop-app/ui/dist"]
 struct Assets;
 
 fn load_asset(key: &str) -> Option<Vec<u8>> {

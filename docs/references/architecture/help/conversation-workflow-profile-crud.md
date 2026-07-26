@@ -39,7 +39,7 @@ Wrong conversation ID, stale UI state, or route invocation mismatch.
 
 - `crates/server/src/routes/conversations.rs`
 - `crates/agent/src/conversation.rs`
-- `frontend/src/lib/api.ts`
+- `crates/desktop-app/ui/src/api/`
 
 ### Post-fix checks
 
@@ -79,7 +79,7 @@ Workflow step `agent_id` does not match a configured template name.
 
 - `crates/agent/src/engine.rs`
 - `crates/agent/src/tools/create_workflow.rs`
-- `frontend/src/pages/workflows/*`
+- `crates/desktop-app/ui/src/pages/Workflows.tsx`
 
 ### Post-fix checks
 
@@ -118,7 +118,7 @@ Default profile not set as expected, or refresh path did not apply due to profil
 
 - `crates/server/src/routes/providers.rs`
 - `crates/server/src/lib.rs`
-- `frontend/src/lib/api.ts`
+- `crates/desktop-app/ui/src/api/`
 
 ### Post-fix checks
 

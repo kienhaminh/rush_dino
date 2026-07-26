@@ -297,7 +297,7 @@ pub async fn delete_agent(
     Ok(Json(serde_json::json!({ "deleted": true, "id": agent_id })))
 }
 
-/// Map tool IDs to canonical section IDs that match the frontend's CORE_TOOL_SECTION_ORDER.
+/// Map tool IDs to stable section IDs shared with the desktop UI.
 fn tool_section_id(tool_id: &str) -> &'static str {
     match tool_id {
         "read" | "write" | "edit" => "fs",
@@ -316,7 +316,7 @@ fn tool_section_id(tool_id: &str) -> &'static str {
 
 /// Group a flat list of tool records into ordered sections.
 fn build_tool_sections(tools: Vec<AgentToolRecord>) -> Vec<AgentToolSection> {
-    // Section order mirrors CORE_TOOL_SECTION_ORDER in frontend/src/lib/tool-catalog.ts
+    // Keep this order stable for the desktop UI and other API consumers.
     let section_order: &[(&str, &str)] = &[
         ("fs", "Files"),
         ("runtime", "Runtime"),

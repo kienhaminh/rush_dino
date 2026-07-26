@@ -1,6 +1,6 @@
 ---
 title: "System Overview"
-summary: "Full-stack architecture map for RushDino: backend, gateway, tools, frontend, desktop, persistence, and providers."
+summary: "Full-stack architecture map for RushDino: backend, gateway, tools, desktop UI, persistence, and providers."
 read_when:
   - You need a single mental model before debugging
   - You need to know where each request is handled
@@ -34,9 +34,9 @@ flowchart LR
 
 ## Frontend architecture
 
-- App shell and routes: `frontend/src/App.tsx`, `frontend/src/layouts/AppLayout.tsx`
-- API client surface: `frontend/src/lib/api.ts`
-- Runtime pages (agents, workflows, logs, metrics): `frontend/src/pages/*`
+- App shell and routes: `crates/desktop-app/ui/src/App.tsx`
+- API client surface: `crates/desktop-app/ui/src/api/`
+- Runtime pages (agents, workflows, logs, metrics): `crates/desktop-app/ui/src/pages/*`
 
 ## Desktop architecture
 

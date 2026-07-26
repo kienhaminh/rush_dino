@@ -10,17 +10,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: crates/desktop-app/ui/pnpm-lock.yaml
       - uses: dtolnay/rust-toolchain@stable
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      - name: Frontend build
+      - name: Build desktop UI
         run: |
-          cd frontend
-          npm install
-          npm run build
+          pnpm --dir crates/desktop-app/ui install --frozen-lockfile
+          pnpm --dir crates/desktop-app/ui build
       - name: Check
         run: cargo check --workspace
       - name: Clippy

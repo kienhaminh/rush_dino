@@ -36,14 +36,14 @@ const ENTRIES: NavEntry[] = [
 export default function SettingsLayout() {
   const navigate = useNavigate()
   return (
-    <div className="grid h-screen w-screen grid-cols-[280px_1fr] bg-bg-side">
+    <div className="grid h-screen w-screen grid-cols-[248px_1fr] bg-transparent">
       <aside
-        className="flex flex-col"
+        className="flex flex-col bg-bg-side backdrop-blur-2xl"
         aria-label="Settings navigation"
       >
         {/* Empty drag strip sitting over the macOS traffic-light area. */}
         <div
-          className="h-11 flex-shrink-0 [-webkit-app-region:drag] [app-region:drag]"
+          className="h-14 flex-shrink-0 [-webkit-app-region:drag] [app-region:drag]"
           data-tauri-drag-region
         />
         <button
@@ -59,7 +59,7 @@ export default function SettingsLayout() {
           onClick={() => navigate('/')}
         >
           <ArrowLeft size={14} strokeWidth={1.7} />
-          <span>Back to App</span>
+          <span>Back to RushDino</span>
         </button>
         <nav className="flex flex-col gap-0.5 overflow-y-auto px-2.5 py-3">
           {ENTRIES.map(({ to, label, Icon }) => (
@@ -68,7 +68,7 @@ export default function SettingsLayout() {
               to={to}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-2',
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5',
                   'font-sans text-[13px] no-underline',
                   'transition-colors duration-[140ms] ease-ease-cubic',
                   isActive
@@ -88,7 +88,7 @@ export default function SettingsLayout() {
         </nav>
       </aside>
 
-      <main className="settings-main flex flex-col gap-5 overflow-y-auto rounded-l-xl bg-bg-main px-10 pb-10 pt-8 shadow-[-1px_0_0_var(--ds-border-base)]">
+      <main className="settings-main flex flex-col gap-5 overflow-y-auto bg-bg-main px-8 pb-10 pt-7">
         <Outlet />
       </main>
     </div>

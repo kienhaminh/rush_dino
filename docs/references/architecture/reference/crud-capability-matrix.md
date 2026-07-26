@@ -25,7 +25,7 @@ Labels: `native`, `api`, `ui-wrapper`, `cli`, `shell-fallback`, `unsupported`
 | Workflows | `native` (`create_workflow`) and `api` | `api` | `api` | `api` | Frontend wraps all workflow CRUD routes. |
 | Config | `api` (`PATCH /api/config`) | `api` (`GET /api/config`) | `api` | `unsupported` direct (no delete route) | CLI `config` command is stubbed. |
 | Credentials | `api` (`PATCH /api/credentials`) | `api` (`GET /api/credentials`) | `api` | `unsupported` direct (no delete route) | Redaction sentinel `***` supported in patch flow. |
-| Provider profiles | `api` (`POST /api/profiles`) | `api` (`GET /api/profiles`) | `api` (`PUT /api/profiles/:id`) | `api` (`DELETE /api/profiles/:id`) | UI wrappers exist in frontend API client. |
+| Provider profiles | `api` (`POST /api/profiles`) | `api` (`GET /api/profiles`) | `api` (`PUT /api/profiles/:id`) | `api` (`DELETE /api/profiles/:id`) | UI wrappers exist in the desktop API client. |
 | Knowledge graph inputs/facts | `api` (`/api/documents/ingest`, `/api/graph/backfill`), `native` (`memory_write` ingest hook) | `api` (`/api/graph/*`), `native` (`knowledge_graph_query` when enabled) | `api` (re-ingest/backfill), `native` (new memory writes) | `unsupported` direct | No first-class fact deletion route/tool. |
 
 ## CLI status for CRUD work
@@ -38,6 +38,6 @@ Sources:
 - `crates/server/src/lib.rs`
 - `crates/server/src/routes/*`
 - `crates/cli/src/main.rs`, `crates/cli/src/commands/*`
-- `frontend/src/lib/api.ts`
+- `crates/desktop-app/ui/src/api/`
 
 Last verified: 2026-03-07

@@ -18,14 +18,22 @@ jobs:
             artifact: rushdino-linux-x86_64
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+          run_install: false
       - uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: crates/desktop-app/ui/pnpm-lock.yaml
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - name: Build frontend
-        run: cd frontend && npm install && npm run build
+      - name: Build desktop UI
+        run: |
+          pnpm --dir crates/desktop-app/ui install --frozen-lockfile
+          pnpm --dir crates/desktop-app/ui build
       - name: Build backend
         run: cargo build --release --target ${{ matrix.target }} -p rushdino-cli
       - name: Prepare artifact

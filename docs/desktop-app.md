@@ -29,7 +29,7 @@ crates/desktop-app/
 │       ├── commands.rs        # #[tauri::command]s (keychain, notify, etc.)
 │       ├── keychain.rs        # macOS Keychain via `keyring`
 │       └── window.rs          # NSVisualEffectMaterial::UnderWindowBackground
-└── ui/                        # new React app (not forked from frontend/)
+└── ui/                        # primary React desktop UI
     ├── package.json
     ├── vite.config.ts
     └── src/

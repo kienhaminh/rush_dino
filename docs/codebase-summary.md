@@ -15,8 +15,8 @@ RushDino/
 │   ├── telegram/      # Telegram channel adapter
 │   ├── discord/       # Discord channel adapter
 │   ├── slack/         # Slack channel adapter
-│   └── cli/           # Command-line interface
-├── frontend/          # React/TypeScript web UI
+│   ├── cli/           # Command-line interface
+│   └── desktop-app/   # Tauri app + React/TypeScript desktop UI
 ├── docs/              # Documentation (this directory)
 └── scripts/           # Build and utility scripts
 ```
@@ -106,7 +106,7 @@ pub struct OutgoingMessage {
 - `src/ws.rs` — WebSocket upgrade handler
 - `src/webchat.rs` — `WebChatAdapter: ChannelAdapter` implementation
 - `src/middleware/` — CORS, tracing
-- `src/static_files.rs` — Serve frontend assets
+- `src/static_files.rs` — Serve embedded desktop UI assets
 
 **Gateway Integration:**
 1. Gateway instantiated with `engine` and database pool
@@ -223,9 +223,10 @@ cargo test --workspace
 ./scripts/build-release.sh
 ```
 
-### Frontend Development
+### Desktop UI Development
 ```bash
-cd frontend && npm install && npm run dev
+pnpm --dir crates/desktop-app/ui install
+pnpm --dir crates/desktop-app/ui dev
 ```
 
 ## Recent Changes (v0.1.0)

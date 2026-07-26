@@ -149,8 +149,8 @@ Invalid `agent_id`/`filename`, or misunderstanding of template file vs workspace
 ### Patch target files
 
 - `crates/server/src/routes/agents.rs`
-- `frontend/src/lib/api.ts`
-- `frontend/src/pages/agents/AgentFilesPanel.tsx`
+- `crates/desktop-app/ui/src/api/`
+- `crates/desktop-app/ui/src/pages/Agents.tsx`
 
 ### Post-fix checks
 

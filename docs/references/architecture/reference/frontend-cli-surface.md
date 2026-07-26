@@ -1,8 +1,8 @@
 ---
 title: "Frontend and CLI Surface"
-summary: "How the frontend and CLI currently expose CRUD and operations, including wrappers, gaps, and stubbed commands."
+summary: "How the desktop UI and CLI currently expose CRUD and operations, including wrappers, gaps, and stubbed commands."
 read_when:
-  - You need to know whether to patch frontend, CLI, API, or tools
+  - You need to know whether to patch the desktop UI, CLI, API, or tools
   - You need to avoid relying on stubbed CLI commands
   - You are designing new operational entrypoints
 ---
@@ -11,9 +11,9 @@ read_when:
 
 ## Frontend operational surface
 
-Primary API wrapper: `frontend/src/lib/api.ts`
+Primary API surface: `crates/desktop-app/ui/src/api/`
 
-### High-usage frontend wrappers (`ui-wrapper`)
+### High-usage desktop UI wrappers (`ui-wrapper`)
 
 - Conversations: `fetchConversations`, `fetchConversation`, `deleteConversation`, `sendChat`
 - Agents: `fetchAgents`, `fetchAgentRuntime`, `patchAgentFile`, `fetchAgentProgressBoard`
@@ -27,7 +27,7 @@ Primary API wrapper: `frontend/src/lib/api.ts`
 - `parseJsonOrThrow` explicitly detects accidental HTML fallback responses and raises actionable errors.
 - This protects pages from silent parse failures when backend routes are unavailable.
 
-Source: `frontend/src/lib/api.ts`
+Source: `crates/desktop-app/ui/src/api/`
 
 ## CLI operational surface
 
@@ -60,7 +60,7 @@ Sources:
 
 ## Practical routing decision
 
-- If frontend already wraps an API endpoint, prefer API/UI path first.
+- If the desktop UI already wraps an API endpoint, prefer the API/UI path first.
 - If CLI command is stubbed, use API directly or tool path.
 - For missing first-class endpoints, use `shell_exec` fallback with approval where required.
 

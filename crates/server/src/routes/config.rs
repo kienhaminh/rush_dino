@@ -14,7 +14,7 @@ use rushdino_gateway::ChannelAdapter;
 
 use crate::state::AppState;
 
-/// Redaction sentinel — used when frontend sends "***" to mean "unchanged".
+/// Redaction sentinel — used when the UI sends "***" to mean "unchanged".
 const REDACTED: &str = "***";
 
 /// GET /api/config — return the on-disk AppConfig as JSON.

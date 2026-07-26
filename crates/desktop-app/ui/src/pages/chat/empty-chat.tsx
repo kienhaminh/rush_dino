@@ -1,16 +1,18 @@
+import { Sparkles } from 'lucide-react'
+
 /** Empty state shown when a conversation has no messages yet. */
 export function EmptyChat() {
   return (
-    <div className="max-w-[640px] px-3 pt-10 pb-4">
-      <div className="font-mono text-[10px] font-bold tracking-[0.2em] text-teal-300 mb-[18px]">
-        FRESH SESSION
+    <div className="mx-auto flex max-w-[560px] flex-col items-center px-6 pb-1 text-center">
+      <div className="mb-4 inline-flex size-11 items-center justify-center rounded-xl border border-border-base bg-bg-panel text-teal-400 shadow-sm">
+        <Sparkles size={20} strokeWidth={1.6} aria-hidden />
       </div>
-      <h2 className="text-[clamp(32px,3.2vw,44px)] font-semibold tracking-[-0.02em] leading-[1.08] text-text-primary m-0 mb-[18px]">
-        Run AI everywhere. Own your data.
+      <h2 className="m-0 text-[26px] font-semibold leading-tight tracking-[-0.02em] text-text-primary">
+        Start a conversation
       </h2>
-      <p className="text-sm leading-[1.6] text-text-secondary max-w-[52ch] m-0">
-        RushDino runs locally on your machine. Start with a question, a task, or a paste of code —
-        tool output streams into the same thread.
+      <p className="m-0 mt-2 max-w-[46ch] text-[13px] leading-[1.55] text-text-muted">
+        Ask a question, hand off a task, or paste code. RushDino keeps the work local and streams
+        progress into this thread.
       </p>
     </div>
   )

@@ -49,7 +49,7 @@ This playbook is current-state behavior.
 ## Workflows
 
 - Create: `create_workflow` tool or `POST /api/workflows` (`native`/`api`).
-- Read: workflow list/detail routes (`api`) and frontend wrappers (`ui-wrapper`).
+- Read: workflow list/detail routes (`api`) and desktop UI wrappers (`ui-wrapper`).
 - Update: `PATCH /api/workflows/:id` (`api`, `ui-wrapper`).
 - Delete: `DELETE /api/workflows/:id` (`api`, `ui-wrapper`).
 
@@ -73,6 +73,6 @@ This playbook is current-state behavior.
 - There is no `skill_delete` tool.
 - There is no `agent_template_delete` API route.
 - There is no first-class graph fact delete API route.
-- Several CLI domains are stubbed and not operational for CRUD (see frontend/CLI surface doc).
+- Several CLI domains are stubbed and not operational for CRUD (see the desktop UI/CLI surface doc).
 
 Last verified: 2026-03-05

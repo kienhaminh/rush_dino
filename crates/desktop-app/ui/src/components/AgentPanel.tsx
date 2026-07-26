@@ -22,16 +22,15 @@ type Props = {
   open: boolean
 }
 
-/* Width animation: collapsed -> 0 width, no border, no opacity.
-   Open -> 300px, 1px border, full opacity. Same easing as before.
-   `border-border-line` lives on the base so both states animate the
-   border-width without redeclaring border-left in the open variant
-   (twMerge would otherwise drop a duplicate). */
+/* Native inspector pane: stable trailing column with a hairline separator. */
 const PANEL_BASE =
-  'flex-shrink-0 overflow-hidden flex flex-col bg-bg-main border-border-line ' +
-  'transition-[width,opacity,border-width] duration-[240ms] ease-ease-cubic'
-const PANEL_CLOSED = 'w-0 opacity-0 border-l-0'
-const PANEL_OPEN = 'w-[300px] opacity-100 border-l'
+  'flex-shrink-0 overflow-hidden flex flex-col bg-bg-panel ' +
+  'transition-[width,opacity] duration-[220ms] ease-ease-cubic'
+const PANEL_CLOSED = 'w-0 opacity-0 pointer-events-none'
+const PANEL_OPEN = 'w-[292px] opacity-100'
+
+const PANEL_CARD =
+  'flex flex-col flex-1 min-h-0 border-l border-border-line bg-bg-panel'
 
 export function AgentPanel({ agentId, conversationId, label, running, open }: Props) {
   const [tab, setTab] = useState<'activity' | 'tasks'>('activity')
@@ -54,6 +53,7 @@ export function AgentPanel({ agentId, conversationId, label, running, open }: Pr
 
   return (
     <div className={cn(PANEL_BASE, open ? PANEL_OPEN : PANEL_CLOSED)}>
+      <div className={PANEL_CARD}>
       <div
         role="tablist"
         className="flex items-center gap-0.5 px-3 pt-2.5 border-b border-border-line"
@@ -73,7 +73,7 @@ export function AgentPanel({ agentId, conversationId, label, running, open }: Pr
         <span
           className={cn(
             'status-dot',
-            running ? 'status-dot--warn status-dot--pulse' : 'status-dot--live',
+            running ? 'status-dot--warn status-dot--pulse' : 'status-dot--idle',
           )}
         />
       </div>
@@ -124,6 +124,7 @@ export function AgentPanel({ agentId, conversationId, label, running, open }: Pr
               sub="The agent's configuration couldn't be fetched. Try switching agents."
             />
           ))}
+      </div>
       </div>
     </div>
   )

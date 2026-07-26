@@ -1,6 +1,6 @@
 ---
 title: "Source Map"
-summary: "Exact source-path map for patching each subsystem safely across backend, tools, routes, frontend, and desktop."
+summary: "Exact source-path map for patching each subsystem safely across backend, tools, routes, desktop UI, and native app."
 read_when:
   - You need to identify the exact file to patch for a bug/fix
   - You are tracing behavior from symptom to owner module
@@ -65,13 +65,13 @@ read_when:
 - Home/workspace setup and templates: `crates/common/src/init.rs`
 - Bundled agent templates: `crates/common/src/agents.rs`
 
-## Frontend
+## Desktop UI
 
-- Route shell: `frontend/src/App.tsx`, `frontend/src/layouts/AppLayout.tsx`
-- API wrappers: `frontend/src/lib/api.ts`
-- Agents UI: `frontend/src/pages/agents/*`
-- Workflows UI: `frontend/src/pages/workflows/*`
-- Agent board UI: `frontend/src/pages/agent-board/*`
+- Route shell: `crates/desktop-app/ui/src/App.tsx`
+- API wrappers: `crates/desktop-app/ui/src/api/`
+- Agents UI: `crates/desktop-app/ui/src/pages/Agents.tsx`
+- Workflows UI: `crates/desktop-app/ui/src/pages/Workflows.tsx`
+- Agent board UI: `crates/desktop-app/ui/src/pages/Kanban.tsx`
 
 ## CLI and service management
 
@@ -81,6 +81,6 @@ read_when:
 
 ## Desktop native
 
-- Native desktop app and backend lifecycle: `crates/desktop-native/src/main.rs`
+- Native desktop app and backend lifecycle: `crates/desktop-app/src-tauri/src/main.rs`
 
 Last verified: 2026-03-05

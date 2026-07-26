@@ -36,7 +36,7 @@ const APPROVAL_TIMEOUT_SECS: u64 = 60;
 // ApprovalRequest
 // ---------------------------------------------------------------------------
 
-/// An approval request sent to the frontend when TrustGate requires human
+/// An approval request sent to the UI when TrustGate requires human
 /// input before a command can be executed.
 ///
 /// Does NOT carry a responder channel — the decision is delivered via

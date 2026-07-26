@@ -5,9 +5,9 @@ set -euo pipefail
 # RushDino Installer
 #
 # Modes (auto-detected, can be overridden with env vars):
-#   Source mode  – when Cargo.toml + frontend/ exist relative to this script.
-#                  Checks Rust toolchain + Node.js, builds frontend, builds
-#                  the Rust binary, then installs it.
+#   Source mode  – when Cargo.toml + crates/desktop-app/ui/ exist relative to
+#                  this script. Checks Rust toolchain + Node.js, builds the
+#                  desktop UI, builds the Rust binary, then installs it.
 #   Binary mode  – downloads the pre-built binary from GitHub Releases,
 #                  verifies its checksum, and installs it.
 #
@@ -95,7 +95,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-./install.sh}")" 2>/dev/null && p
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd || pwd)"
 
 source_available=false
-if [[ -f "${REPO_ROOT}/Cargo.toml" ]] && [[ -d "${REPO_ROOT}/frontend" ]]; then
+if [[ -f "${REPO_ROOT}/Cargo.toml" ]] \
+  && [[ -f "${REPO_ROOT}/crates/desktop-app/ui/package.json" ]]; then
   source_available=true
 fi
 
@@ -286,14 +287,18 @@ if [[ "$build_from_source" == "true" ]]; then
     success "Rust toolchain installed: $(cargo --version)"
   fi
 
-  # --- Node.js / npm check ---
+  # --- Node.js / pnpm check ---
   if ! command -v node >/dev/null 2>&1; then
     error "Node.js not found.\n  Install it from https://nodejs.org or via your system package manager (brew, apt, etc.)."
   fi
-  if ! command -v npm >/dev/null 2>&1; then
-    error "npm not found. It is bundled with Node.js — please reinstall from https://nodejs.org"
+  if command -v pnpm >/dev/null 2>&1; then
+    package_manager=(pnpm)
+  elif command -v corepack >/dev/null 2>&1; then
+    package_manager=(corepack pnpm)
+  else
+    error "pnpm or corepack not found. Install pnpm or use a Node.js distribution that includes corepack."
   fi
-  success "Node.js found: $(node --version), npm $(npm --version)"
+  success "Node.js found: $(node --version), pnpm $("${package_manager[@]}" --version)"
 
 else
   # Binary mode only needs a download tool (already handled inside download())
@@ -356,13 +361,13 @@ workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
 if [[ "$build_from_source" == "true" ]]; then
-  # --- 4a: Build frontend ---
-  step "Step 4a: Building Frontend..."
-  info "  Running npm install..."
-  ( cd "${REPO_ROOT}/frontend" && npm install --prefer-offline )
-  info "  Running npm run build..."
-  ( cd "${REPO_ROOT}/frontend" && npm run build )
-  success "Frontend built successfully."
+  # --- 4a: Build desktop UI ---
+  step "Step 4a: Building Desktop UI..."
+  info "  Installing desktop UI dependencies..."
+  ( cd "${REPO_ROOT}/crates/desktop-app/ui" && "${package_manager[@]}" install --frozen-lockfile )
+  info "  Building desktop UI..."
+  ( cd "${REPO_ROOT}/crates/desktop-app/ui" && "${package_manager[@]}" build )
+  success "Desktop UI built successfully."
 
   # --- 4b: Build Rust binary ---
   step "Step 4b: Building Rust Binary..."

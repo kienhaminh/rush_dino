@@ -18,7 +18,7 @@ For building from source, you additionally need:
 |---|---|
 | Rust toolchain | stable (1.70+) |
 | Node.js | 22+ |
-| npm | 10+ |
+| pnpm | 9+ |
 
 ---
 
@@ -125,13 +125,13 @@ git clone https://github.com/rushdino/rushdino.git
 cd rushdino
 ```
 
-**2. Build the frontend and CLI binary**
+**2. Build the desktop UI and CLI binary**
 
 ```bash
 ./scripts/build-release.sh
 ```
 
-This runs `npm install && npm run build` in `frontend/`, then `cargo build --release -p rushdino-cli`. The output binary is at `target/release/rushdino`.
+This installs and builds the React UI in `crates/desktop-app/ui/` with pnpm, then runs `cargo build --release -p rushdino-cli`. The output binary is at `target/release/rushdino`.
 
 **3. Install the binary**
 
@@ -313,7 +313,7 @@ If any step fails before the commit is created, the script restores `Cargo.toml`
 - Clean working tree
 - Branch checked out locally, not detached `HEAD`
 - Upstream configured for the current branch
-- `git`, `cargo`, `node`, `npm`, and `perl` installed
+- `git`, `cargo`, `node`, `pnpm` (or `corepack`), and `perl` installed
 - The target tag must not already exist locally or on `origin`
 
 ### GitHub release behavior

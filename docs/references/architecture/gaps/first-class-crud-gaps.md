@@ -52,7 +52,7 @@ This is a current-state gap analysis. It does not change runtime behavior.
 - `crates/server/src/routes/agents.rs`
 - `crates/server/src/lib.rs`
 - `crates/agent/src/agent_manager.rs`
-- `frontend/src/lib/api.ts`
+- `crates/desktop-app/ui/src/api/`
 
 ### Gap: no first-class graph fact deletion/edit APIs
 
@@ -64,7 +64,7 @@ This is a current-state gap analysis. It does not change runtime behavior.
 - Impacted files:
 - `crates/server/src/routes/graph.rs`
 - `crates/knowledge-graph/src/*`
-- `frontend/src/lib/api.ts`
+- `crates/desktop-app/ui/src/api/`
 
 ## Priority P2
 

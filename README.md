@@ -30,7 +30,7 @@ After installing, run `rushdino init` then `rushdino start`.
 ## Quickstart (from source)
 
 1. Install Rust stable + Node.js 22+
-2. Build frontend and backend:
+2. Build the desktop UI and backend:
    - `./scripts/install.sh`
 3. Initialize config:
    - `rushdino init`

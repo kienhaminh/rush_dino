@@ -1,6 +1,6 @@
 ---
 title: "First 60 Seconds"
-summary: "Fast triage ladder for backend, frontend, and desktop incidents with concrete commands and expected signals."
+summary: "Fast triage ladder for backend, desktop UI, and native app incidents with concrete commands and expected signals."
 read_when:
   - RushDino appears broken and you need immediate triage
   - You need a consistent first-pass diagnostic flow
@@ -37,7 +37,7 @@ curl -s http://127.0.0.1:28847/api/agents
 
 - Service/lifecycle failure: inspect `crates/cli/src/commands/start.rs`, `crates/cli/src/service/*.rs`
 - Health endpoint failure: inspect `crates/server/src/lib.rs`, `crates/server/src/routes/health.rs`
-- Route JSON mismatch/fallback HTML: inspect frontend parser in `frontend/src/lib/api.ts` and server route registration
+- Route JSON mismatch/fallback HTML: inspect the client in `crates/desktop-app/ui/src/api/` and server route registration
 - Agent/tool failures in logs: inspect `crates/agent/src/engine.rs`, `crates/agent/src/react_loop.rs`, and relevant tool file
 
 ## Quick scope split
