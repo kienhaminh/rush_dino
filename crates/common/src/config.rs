@@ -414,6 +414,17 @@ impl AppConfig {
     pub fn load_and_reconcile() -> Result<Self> {
         let home = init::canonical_home_dir();
         let config_path = home.join("config.toml");
+
+        if std::env::var_os("RUSH_DINO_TRANSIENT_CONFIG").is_some() {
+            let mut persisted = Self::load_from_path_without_environment(&config_path)?;
+            reconcile_storage_paths(&mut persisted, &home)?;
+            persisted.save_to_path(&config_path)?;
+
+            let mut runtime = Self::load_from_path(&config_path)?;
+            reconcile_storage_paths(&mut runtime, &home)?;
+            return Ok(runtime);
+        }
+
         let mut config = Self::load_from_path(&config_path)?;
         reconcile_storage_paths(&mut config, &home)?;
         config.save_to_path(&config_path)?;
@@ -421,13 +432,23 @@ impl AppConfig {
     }
 
     pub fn load_from_path(path: &Path) -> Result<Self> {
+        Self::load_from_path_with_environment(path, true)
+    }
+
+    fn load_from_path_without_environment(path: &Path) -> Result<Self> {
+        Self::load_from_path_with_environment(path, false)
+    }
+
+    fn load_from_path_with_environment(path: &Path, include_environment: bool) -> Result<Self> {
         let mut figment = Figment::from(Serialized::defaults(Self::default()));
         if path.exists() {
             let raw = fs::read_to_string(path)?;
             let normalized = normalize_legacy_config_toml(&raw);
             figment = figment.merge(Toml::string(&normalized));
         }
-        let figment = figment.merge(Env::prefixed("RUSHDINO_").split("__"));
+        if include_environment {
+            figment = figment.merge(Env::prefixed("RUSHDINO_").split("__"));
+        }
         Ok(figment.extract()?)
     }
 
@@ -546,6 +567,11 @@ impl CredentialsConfig {
         env_fallback(&mut self.openai_api_key, "OPENAI_API_KEY");
         env_fallback(&mut self.anthropic_api_key, "ANTHROPIC_API_KEY");
         env_fallback(&mut self.gemini_api_key, "GEMINI_API_KEY");
+        if let Ok(secret) = std::env::var("RUSH_DINO_API_SECRET") {
+            if !secret.is_empty() {
+                self.api_secret = Some(secret);
+            }
+        }
         self
     }
 

@@ -1276,4 +1276,3 @@ Execute tasks in this order to minimize integration friction:
 - [ ] `ProviderRouter::chat()` with a failing primary returns the fallback response.
 - [ ] `ProviderRouter::stream_chat_with_recovery()` with an error-first stream retries transparently.
 - [ ] `refresh_runtime_from_disk` builds a `ProviderRouter` when a fallback chain exists.
-- [ ] All changes reviewed by `gitnexus_detect_changes()` — scope matches expected files only.

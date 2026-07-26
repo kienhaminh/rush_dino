@@ -318,21 +318,26 @@ impl Tool for DelegateToAgentTool {
                             run_id: String::new(),
                             conversation_id: delegate_conv_id.clone(),
                         },
-                        StreamingEvent::ToolStart { tool_name, args } => {
-                            WsStreamEvent::ToolStart {
-                                run_id: String::new(),
-                                conversation_id: delegate_conv_id.clone(),
-                                tool_name,
-                                args,
-                            }
-                        }
+                        StreamingEvent::ToolStart {
+                            tool_call_id,
+                            tool_name,
+                            args,
+                        } => WsStreamEvent::ToolStart {
+                            run_id: String::new(),
+                            conversation_id: delegate_conv_id.clone(),
+                            tool_call_id,
+                            tool_name,
+                            args,
+                        },
                         StreamingEvent::ToolEnd {
+                            tool_call_id,
                             tool_name,
                             result,
                             is_error,
                         } => WsStreamEvent::ToolEnd {
                             run_id: String::new(),
                             conversation_id: delegate_conv_id.clone(),
+                            tool_call_id,
                             tool_name,
                             result,
                             is_error,

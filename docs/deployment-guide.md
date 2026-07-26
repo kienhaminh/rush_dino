@@ -8,7 +8,7 @@ Installation, setup, and uninstallation of RushDino.
 
 | Requirement | Version | Notes |
 |---|---|---|
-| OS | macOS 12+, Linux x86_64 (glibc 2.39+) | Windows not yet supported; glibc 2.39 ships with Ubuntu 24.04+, Fedora 40+, and equivalents |
+| OS | macOS 12+ for CLI, macOS 26 for desktop; Linux x86_64 (glibc 2.39+) | Windows not yet supported; glibc 2.39 ships with Ubuntu 24.04+, Fedora 40+, and equivalents |
 | Disk space | ~50 MB | Binary + data directory |
 | Network | Internet access | Required for LLM API calls |
 
@@ -17,8 +17,7 @@ For building from source, you additionally need:
 | Requirement | Version |
 |---|---|
 | Rust toolchain | stable (1.70+) |
-| Node.js | 22+ |
-| pnpm | 9+ |
+| Xcode | 26+ for the native macOS app |
 
 ---
 
@@ -125,13 +124,13 @@ git clone https://github.com/rushdino/rushdino.git
 cd rushdino
 ```
 
-**2. Build the desktop UI and CLI binary**
+**2. Build the CLI binary**
 
 ```bash
 ./scripts/build-release.sh
 ```
 
-This installs and builds the React UI in `crates/desktop-app/ui/` with pnpm, then runs `cargo build --release -p rushdino-cli`. The output binary is at `target/release/rushdino`.
+This runs `cargo build --release -p rushdino-cli`. The output binary is at `target/release/rushdino`. Build the native macOS app separately with `scripts/build-desktop-app.sh`.
 
 **3. Install the binary**
 
@@ -145,22 +144,22 @@ cp target/release/rushdino ~/.local/bin/rushdino
 
 ### Option C — macOS Desktop App
 
-**Build the native desktop binary:**
+**Build the native desktop app bundle:**
 
 ```bash
-./scripts/build-desktop-native.sh
+./scripts/build-desktop-app.sh
 ```
 
-Output: `target/release/rushdino-desktop-native`
+Output: `dist/RushDino.app`
 
-You can run it directly or copy it to `/Applications`:
+You can open it directly or copy the bundle to `/Applications`:
 
 ```bash
 # Run directly
-./target/release/rushdino-desktop-native
+open dist/RushDino.app
 
-# Or install as a macOS app
-cp target/release/rushdino-desktop-native /Applications/RushDino
+# Or install the app bundle
+cp -R dist/RushDino.app /Applications/
 ```
 
 ---
@@ -313,7 +312,7 @@ If any step fails before the commit is created, the script restores `Cargo.toml`
 - Clean working tree
 - Branch checked out locally, not detached `HEAD`
 - Upstream configured for the current branch
-- `git`, `cargo`, `node`, `pnpm` (or `corepack`), and `perl` installed
+- `git`, `cargo`, and `perl` installed
 - The target tag must not already exist locally or on `origin`
 
 ### GitHub release behavior

@@ -14,7 +14,6 @@ members = [
   "crates/auth",
   "crates/knowledge-graph",
   "crates/skill-graph",
-  "crates/desktop-app/src-tauri",
 ]
 resolver = "2"
 
@@ -45,7 +44,6 @@ open = "5"
 pulldown-cmark = "0.13.0"
 rand = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls", "blocking"] }
-rust-embed = "8"
 self_update = { version = "0.41", default-features = false, features = ["archive-zip", "compression-zip-deflate", "rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -64,7 +62,6 @@ neo4rs = "0.9.0-rc.9"
 url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
-eframe = "0.30"
 
 [workspace.lints.clippy]
 pedantic = "warn"

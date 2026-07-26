@@ -269,18 +269,21 @@ fn serialize_ws_event(event: WsStreamEvent) -> serde_json::Value {
         WsStreamEvent::ToolStart {
             run_id,
             conversation_id,
+            tool_call_id,
             tool_name,
             args,
         } => serde_json::json!({
             "type": "tool_start",
             "run_id": run_id,
             "conversation_id": conversation_id,
+            "tool_call_id": tool_call_id,
             "tool_name": tool_name,
             "args": args,
         }),
         WsStreamEvent::ToolEnd {
             run_id,
             conversation_id,
+            tool_call_id,
             tool_name,
             result,
             is_error,
@@ -288,6 +291,7 @@ fn serialize_ws_event(event: WsStreamEvent) -> serde_json::Value {
             "type": "tool_end",
             "run_id": run_id,
             "conversation_id": conversation_id,
+            "tool_call_id": tool_call_id,
             "tool_name": tool_name,
             "result": result,
             "is_error": is_error,
@@ -356,7 +360,7 @@ fn parse_chat_payload(text: &str, active_conversation: &Option<String>) -> Parse
     }
 }
 
-async fn resolve_run_overrides(
+pub(crate) async fn resolve_run_overrides(
     state: &AppState,
     profile_id: Option<String>,
     thinking_mode: Option<ThinkingLevel>,

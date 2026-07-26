@@ -180,6 +180,112 @@ async fn stream_output_persists_partial_text_before_completion() {
 }
 
 #[tokio::test]
+async fn mark_running_transitions_queued_to_running_and_clears_queue_position() {
+    let runtime = create_runtime().await;
+
+    let (_first, _) = runtime
+        .submit_assistant_run("session-mr", "conv-mr", "First", "one", "openai", "gpt-5")
+        .await
+        .expect("submit first");
+    let (second, second_started) = runtime
+        .submit_assistant_run("session-mr", "conv-mr", "Second", "two", "openai", "gpt-5")
+        .await
+        .expect("submit second");
+    assert!(!second_started);
+    assert_eq!(second.state, RunState::Queued);
+    assert_eq!(second.queue_position, Some(1));
+
+    let promoted = runtime
+        .mark_running(&second.id, "promoted manually")
+        .await
+        .expect("mark queued run as running");
+    assert_eq!(promoted.state, RunState::Running);
+    assert_eq!(promoted.queue_position, None);
+    assert!(promoted.started_at.is_some());
+}
+
+#[tokio::test]
+async fn enqueue_lanes_independent_across_sessions() {
+    let runtime = create_runtime().await;
+
+    let (run_a1, started_a1) = runtime
+        .submit_assistant_run("session-A", "conv-A", "A1", "body", "openai", "gpt-5")
+        .await
+        .expect("submit A1");
+    let (run_b1, started_b1) = runtime
+        .submit_assistant_run("session-B", "conv-B", "B1", "body", "openai", "gpt-5")
+        .await
+        .expect("submit B1");
+    let (run_a2, started_a2) = runtime
+        .submit_assistant_run("session-A", "conv-A", "A2", "body", "openai", "gpt-5")
+        .await
+        .expect("submit A2");
+    let (run_b2, started_b2) = runtime
+        .submit_assistant_run("session-B", "conv-B", "B2", "body", "openai", "gpt-5")
+        .await
+        .expect("submit B2");
+
+    assert!(started_a1, "first run in session A starts immediately");
+    assert!(started_b1, "first run in session B starts immediately");
+    assert!(!started_a2, "second run in session A is queued");
+    assert!(!started_b2, "second run in session B is queued");
+    assert_eq!(run_a1.state, RunState::Running);
+    assert_eq!(run_b1.state, RunState::Running);
+    assert_eq!(run_a2.state, RunState::Queued);
+    assert_eq!(run_a2.queue_position, Some(1));
+    assert_eq!(run_b2.state, RunState::Queued);
+    assert_eq!(run_b2.queue_position, Some(1));
+}
+
+#[tokio::test]
+async fn get_run_detail_returns_events_in_reverse_chronological_order() {
+    let runtime = create_runtime().await;
+    let (run, _) = runtime
+        .submit_assistant_run(
+            "session-evt",
+            "conv-evt",
+            "Events",
+            "body",
+            "openai",
+            "gpt-5",
+        )
+        .await
+        .expect("submit run");
+
+    runtime
+        .mark_tool_started(&run.id, "shell", Some("ls -la".to_owned()))
+        .await
+        .expect("mark tool started");
+    runtime
+        .mark_tool_finished(&run.id, "shell", false, "ok".to_owned())
+        .await
+        .expect("mark tool finished");
+    runtime
+        .mark_completed(&run.id, "done")
+        .await
+        .expect("complete");
+
+    let detail = runtime
+        .get_run_detail(&run.id, 100)
+        .await
+        .expect("get_run_detail");
+
+    assert!(
+        detail.events.len() >= 3,
+        "expected at least tool_started + tool_finished + completed events, got {}",
+        detail.events.len()
+    );
+    for window in detail.events.windows(2) {
+        assert!(
+            window[0].created_at >= window[1].created_at,
+            "events returned newest-first: {:?} then {:?}",
+            window[0].created_at,
+            window[1].created_at,
+        );
+    }
+}
+
+#[tokio::test]
 async fn submit_assistant_run_with_origin_persists_override_metadata() {
     let runtime = create_runtime().await;
 

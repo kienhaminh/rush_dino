@@ -230,7 +230,7 @@ src/
 │   ├── documents.rs
 │   └── health.rs
 ├── middleware/     # Request middleware
-└── static_files.rs # Frontend serving
+└── webchat.rs      # WebChat gateway adapter
 ```
 
 **State Management:**

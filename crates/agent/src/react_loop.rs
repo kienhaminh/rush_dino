@@ -54,10 +54,12 @@ pub enum StreamingEvent {
     ChatChunk(ChatChunk),
     AssistantReset,
     ToolStart {
+        tool_call_id: String,
         tool_name: String,
         args: serde_json::Value,
     },
     ToolEnd {
+        tool_call_id: String,
         tool_name: String,
         result: String,
         is_error: bool,
@@ -720,6 +722,7 @@ async fn append_tool_outputs(
             if let Some(event_tx) = event_tx.as_ref() {
                 let _ = event_tx
                     .send(StreamingEvent::ToolStart {
+                        tool_call_id: call.id.clone(),
                         tool_name: call.name.clone(),
                         args: call.arguments.clone(),
                     })
@@ -748,6 +751,7 @@ async fn append_tool_outputs(
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
                         .send(StreamingEvent::ToolEnd {
+                            tool_call_id: result.0.id.clone(),
                             tool_name: result.0.name.clone(),
                             result: result.1.clone(),
                             is_error: result.2,
@@ -782,6 +786,7 @@ async fn append_tool_outputs(
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
                         .send(StreamingEvent::ToolEnd {
+                            tool_call_id: result.0.id.clone(),
                             tool_name: result.0.name.clone(),
                             result: result.1.clone(),
                             is_error: result.2,
@@ -795,6 +800,7 @@ async fn append_tool_outputs(
                 if let Some(event_tx) = event_tx.as_ref() {
                     let _ = event_tx
                         .send(StreamingEvent::ToolEnd {
+                            tool_call_id: result.0.id.clone(),
                             tool_name: result.0.name.clone(),
                             result: result.1.clone(),
                             is_error: result.2,
@@ -815,12 +821,14 @@ async fn append_tool_outputs(
         if let Some(tx) = event_tx {
             let _ = tx
                 .send(StreamingEvent::ToolStart {
+                    tool_call_id: call.id.clone(),
                     tool_name: call.name.clone(),
                     args: call.arguments.clone(),
                 })
                 .await;
             let _ = tx
                 .send(StreamingEvent::ToolEnd {
+                    tool_call_id: call.id.clone(),
                     tool_name: call.name.clone(),
                     result: msg.clone(),
                     is_error: true,

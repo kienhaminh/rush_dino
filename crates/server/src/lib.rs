@@ -14,7 +14,6 @@ mod runtime_log_store;
 mod runtime_state;
 pub mod secret_vault;
 pub mod state;
-pub mod static_files;
 mod system_broker;
 pub mod webchat;
 pub mod ws;
@@ -433,6 +432,7 @@ pub async fn build_app(
         )
         .route("/api/chat", post(routes::chat::chat))
         .route("/api/ws/chat", get(ws::ws_chat))
+        .route("/api/ag-ui/run", post(routes::ag_ui::run_stream))
         .route(
             "/api/channels/mobile/keys",
             get(routes::mobile_gateway::list_mobile_gateway_keys)
@@ -715,7 +715,6 @@ pub async fn build_app(
             post(routes::version::trigger_restart),
         )
         .route("/api/version/skip", post(routes::version::skip_version))
-        .fallback(get(static_files::serve_static))
         .layer(axum_middleware::from_fn_with_state(
             state.clone(),
             rate_limit_middleware,

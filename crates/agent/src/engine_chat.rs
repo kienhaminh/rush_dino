@@ -284,19 +284,26 @@ impl crate::engine::AgentEngine {
                         run_id: "legacy-ws".to_owned(),
                         conversation_id: conversation_id_for_events.clone(),
                     },
-                    StreamingEvent::ToolStart { tool_name, args } => WsStreamEvent::ToolStart {
+                    StreamingEvent::ToolStart {
+                        tool_call_id,
+                        tool_name,
+                        args,
+                    } => WsStreamEvent::ToolStart {
                         run_id: "legacy-ws".to_owned(),
                         conversation_id: conversation_id_for_events.clone(),
+                        tool_call_id,
                         tool_name,
                         args,
                     },
                     StreamingEvent::ToolEnd {
+                        tool_call_id,
                         tool_name,
                         result,
                         is_error,
                     } => WsStreamEvent::ToolEnd {
                         run_id: "legacy-ws".to_owned(),
                         conversation_id: conversation_id_for_events.clone(),
+                        tool_call_id,
                         tool_name,
                         result,
                         is_error,

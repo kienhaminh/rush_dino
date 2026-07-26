@@ -2,10 +2,10 @@
 
 ## Scope
 
-RushDino now supports two product paths in parallel:
+RushDino supports two product paths in parallel:
 
-1. Existing CLI + web UI (`rushdino` + embedded frontend)
-2. Native desktop app scaffold (`rushdino-desktop-native`, macOS-first)
+1. CLI + local API server (`rushdino`)
+2. Native SwiftUI desktop app (`RushDino.app`, macOS 26)
 
 Both paths share the same local data root (`~/.rushdino`) and SQLite database.
 
@@ -59,14 +59,14 @@ Graph facts are available through:
 
 ## Desktop App
 
-`crates/desktop-native` provides:
+`crates/desktop-app` provides:
 
 - App-managed backend lifecycle (start on launch, stop on exit)
-- Tab parity surface for existing web sections
-- Knowledge Graph page (search facts, stats, backfill trigger)
+- Native workspace surfaces backed by the local API
+- Knowledge Graph list and inspector
 
 ## Known v1 Limits
 
-- Desktop parity tabs are scaffolded; many tabs still rely on placeholder/native parity shells.
+- Complex administration surfaces are currently native read-only lists and inspectors.
 - Document ingestion is text-like formats only (no PDF/DOCX parsing yet).
 - Graph extraction quality depends on configured provider behavior.

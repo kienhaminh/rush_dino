@@ -1,3 +1,4 @@
+pub mod ag_ui;
 pub mod agent_progress;
 pub mod agents;
 pub mod approval;

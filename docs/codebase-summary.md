@@ -16,7 +16,7 @@ RushDino/
 │   ├── discord/       # Discord channel adapter
 │   ├── slack/         # Slack channel adapter
 │   ├── cli/           # Command-line interface
-│   └── desktop-app/   # Tauri app + React/TypeScript desktop UI
+│   └── desktop-app/   # Native SwiftUI/AppKit macOS app
 ├── docs/              # Documentation (this directory)
 └── scripts/           # Build and utility scripts
 ```
@@ -106,7 +106,6 @@ pub struct OutgoingMessage {
 - `src/ws.rs` — WebSocket upgrade handler
 - `src/webchat.rs` — `WebChatAdapter: ChannelAdapter` implementation
 - `src/middleware/` — CORS, tracing
-- `src/static_files.rs` — Serve embedded desktop UI assets
 
 **Gateway Integration:**
 1. Gateway instantiated with `engine` and database pool
@@ -223,10 +222,10 @@ cargo test --workspace
 ./scripts/build-release.sh
 ```
 
-### Desktop UI Development
+### Native macOS Development
 ```bash
-pnpm --dir crates/desktop-app/ui install
-pnpm --dir crates/desktop-app/ui dev
+./script/build_and_run.sh
+swift test --package-path crates/desktop-app
 ```
 
 ## Recent Changes (v0.1.0)

@@ -29,14 +29,17 @@ After installing, run `rushdino init` then `rushdino start`.
 
 ## Quickstart (from source)
 
-1. Install Rust stable + Node.js 22+
-2. Build the desktop UI and backend:
+1. Install Rust stable
+2. Build the backend:
    - `./scripts/install.sh`
 3. Initialize config:
    - `rushdino init`
 4. Start server in foreground:
    - `rushdino start`
-5. Open [http://localhost:28847](http://localhost:28847)
+
+On macOS 26, build and run the native app with
+`./script/build_and_run.sh`. The standalone server exposes APIs on port
+`28847`; it no longer serves a browser UI.
 
 ## Release
 

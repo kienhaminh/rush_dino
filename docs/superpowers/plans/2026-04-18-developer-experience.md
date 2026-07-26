@@ -734,4 +734,3 @@ Before declaring the branch ready for review, verify:
 - [ ] Editing `~/.rushdino/config.toml` while the server runs triggers the `config_watcher: reload succeeded` log within 1 s
 - [ ] Shell tool with `sandbox=true` and `cwd` outside `agent_root` returns a `Sandbox violation` error
 - [ ] `rushdino status` shows server health, active run count, provider profiles, and config path
-- [ ] `gitnexus_detect_changes()` confirms only expected files changed

@@ -78,6 +78,8 @@ __tests__
 
 # Rust / RushDino
 /target
+dist/
+crates/desktop-app/.build/
 *.db
 *.db-shm
 *.db-wal
@@ -85,7 +87,6 @@ __tests__
 # Git worktrees
 .worktrees/
 tasks/
-.gitnexus
 .superpowers
 # Local cargo config (machine-specific target-dir path)
 .cargo/

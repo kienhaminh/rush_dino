@@ -606,7 +606,11 @@ async fn forward_runtime_events(
                         .await;
                 }
             }
-            StreamingEvent::ToolStart { tool_name, args } => {
+            StreamingEvent::ToolStart {
+                tool_call_id,
+                tool_name,
+                args,
+            } => {
                 let _ = runtime
                     .mark_tool_started(
                         &run_id,
@@ -619,6 +623,7 @@ async fn forward_runtime_events(
                         .send(WsStreamEvent::ToolStart {
                             run_id: run_id.clone(),
                             conversation_id: conversation_id.clone(),
+                            tool_call_id,
                             tool_name,
                             args,
                         })
@@ -626,6 +631,7 @@ async fn forward_runtime_events(
                 }
             }
             StreamingEvent::ToolEnd {
+                tool_call_id,
                 tool_name,
                 result,
                 is_error,
@@ -647,6 +653,7 @@ async fn forward_runtime_events(
                         .send(WsStreamEvent::ToolEnd {
                             run_id: run_id.clone(),
                             conversation_id: conversation_id.clone(),
+                            tool_call_id,
                             tool_name,
                             result,
                             is_error,

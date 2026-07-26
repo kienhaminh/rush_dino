@@ -297,7 +297,7 @@ impl KanbanDispatcher {
         tokio::spawn(async move {
             while let Some(event) = tool_event_rx.recv().await {
                 match event {
-                    crate::react_loop::StreamingEvent::ToolStart { ref tool_name, ref args } => {
+                    crate::react_loop::StreamingEvent::ToolStart { ref tool_name, ref args, .. } => {
                         let label = build_tool_label(tool_name, args);
                         let _ = broadcast_tx_clone.send(serde_json::json!({
                             "type": "task_tool_event",

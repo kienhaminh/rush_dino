@@ -98,12 +98,14 @@ pub enum WsStreamEvent {
     ToolStart {
         run_id: String,
         conversation_id: String,
+        tool_call_id: String,
         tool_name: String,
         args: Value,
     },
     ToolEnd {
         run_id: String,
         conversation_id: String,
+        tool_call_id: String,
         tool_name: String,
         result: String,
         is_error: bool,

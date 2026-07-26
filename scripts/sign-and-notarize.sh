@@ -2,8 +2,7 @@
 #
 # Sign + notarize + staple the RushDino macOS desktop app.
 #
-# Assumes `cargo tauri build --target <target>` has already produced the
-# .app and .dmg under `crates/desktop-app/src-tauri/target/<target>/release/bundle/`.
+# Assumes `scripts/build-desktop-app.sh` has produced `dist/RushDino.app`.
 #
 # Required environment:
 #   APPLE_SIGNING_IDENTITY   e.g. "Developer ID Application: Your Name (TEAMID)"
@@ -11,7 +10,6 @@
 #                            `xcrun notarytool store-credentials`)
 #
 # Optional:
-#   TAURI_TARGET             default: universal-apple-darwin
 #   APP_NAME                 default: RushDino
 #
 # Usage:
@@ -22,11 +20,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-TAURI_TARGET="${TAURI_TARGET:-universal-apple-darwin}"
 APP_NAME="${APP_NAME:-RushDino}"
-BUNDLE_DIR="crates/desktop-app/src-tauri/target/${TAURI_TARGET}/release/bundle"
-APP_PATH="${BUNDLE_DIR}/macos/${APP_NAME}.app"
-DMG_PATH=$(ls "${BUNDLE_DIR}/dmg/${APP_NAME}"_*_*.dmg 2>/dev/null | head -n 1 || true)
+APP_PATH="dist/${APP_NAME}.app"
 
 : "${APPLE_SIGNING_IDENTITY:?APPLE_SIGNING_IDENTITY is required}"
 : "${APPLE_NOTARY_PROFILE:?APPLE_NOTARY_PROFILE is required}"
@@ -38,7 +33,13 @@ if [[ ! -d "${APP_PATH}" ]]; then
 fi
 
 echo "▸ signing ${APP_PATH}"
-codesign --force --deep --options runtime --timestamp \
+codesign --force --options runtime --timestamp \
+  --sign "${APPLE_SIGNING_IDENTITY}" \
+  "${APP_PATH}/Contents/Resources/rushdino-server"
+codesign --force --options runtime --timestamp \
+  --sign "${APPLE_SIGNING_IDENTITY}" \
+  "${APP_PATH}/Contents/MacOS/${APP_NAME}"
+codesign --force --options runtime --timestamp \
   --sign "${APPLE_SIGNING_IDENTITY}" \
   "${APP_PATH}"
 
@@ -58,16 +59,6 @@ echo "▸ stapling ticket to .app"
 xcrun stapler staple "${APP_PATH}"
 xcrun stapler validate "${APP_PATH}"
 
-if [[ -n "${DMG_PATH}" && -f "${DMG_PATH}" ]]; then
-  echo "▸ signing + stapling ${DMG_PATH}"
-  codesign --force --timestamp --sign "${APPLE_SIGNING_IDENTITY}" "${DMG_PATH}"
-  xcrun notarytool submit "${DMG_PATH}" \
-    --keychain-profile "${APPLE_NOTARY_PROFILE}" \
-    --wait
-  xcrun stapler staple "${DMG_PATH}"
-  xcrun stapler validate "${DMG_PATH}"
-fi
-
 rm -f "${ZIP_PATH}"
 
 echo "▸ final Gatekeeper check"
@@ -75,4 +66,3 @@ spctl -a -vvv -t install "${APP_PATH}" 2>&1 | sed 's/^/  /'
 
 echo "✓ signed, notarized, stapled"
 echo "  app: ${APP_PATH}"
-[[ -n "${DMG_PATH}" ]] && echo "  dmg: ${DMG_PATH}"

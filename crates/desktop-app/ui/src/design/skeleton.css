@@ -1,6 +1,0 @@
-/* Skeleton primitives migrated to Tailwind in src/components/Skeleton.tsx
- * (Unit 13). The single rule below is retained because pages that still
- * reach for `.skeleton--line` directly (KnowledgeGraph) will be migrated
- * in a later unit. Once those pages convert, this file can be deleted. */
-
-.skeleton--line { display: block; margin-top: 6px; }

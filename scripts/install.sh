@@ -5,9 +5,8 @@ set -euo pipefail
 # RushDino Installer
 #
 # Modes (auto-detected, can be overridden with env vars):
-#   Source mode  – when Cargo.toml + crates/desktop-app/ui/ exist relative to
-#                  this script. Checks Rust toolchain + Node.js, builds the
-#                  desktop UI, builds the Rust binary, then installs it.
+#   Source mode  – when Cargo.toml exists relative to this script. Checks the
+#                  Rust toolchain, builds the CLI binary, then installs it.
 #   Binary mode  – downloads the pre-built binary from GitHub Releases,
 #                  verifies its checksum, and installs it.
 #
@@ -95,8 +94,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-./install.sh}")" 2>/dev/null && p
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd || pwd)"
 
 source_available=false
-if [[ -f "${REPO_ROOT}/Cargo.toml" ]] \
-  && [[ -f "${REPO_ROOT}/crates/desktop-app/ui/package.json" ]]; then
+if [[ -f "${REPO_ROOT}/Cargo.toml" ]]; then
   source_available=true
 fi
 
@@ -287,19 +285,6 @@ if [[ "$build_from_source" == "true" ]]; then
     success "Rust toolchain installed: $(cargo --version)"
   fi
 
-  # --- Node.js / pnpm check ---
-  if ! command -v node >/dev/null 2>&1; then
-    error "Node.js not found.\n  Install it from https://nodejs.org or via your system package manager (brew, apt, etc.)."
-  fi
-  if command -v pnpm >/dev/null 2>&1; then
-    package_manager=(pnpm)
-  elif command -v corepack >/dev/null 2>&1; then
-    package_manager=(corepack pnpm)
-  else
-    error "pnpm or corepack not found. Install pnpm or use a Node.js distribution that includes corepack."
-  fi
-  success "Node.js found: $(node --version), pnpm $("${package_manager[@]}" --version)"
-
 else
   # Binary mode only needs a download tool (already handled inside download())
   if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
@@ -361,16 +346,8 @@ workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
 if [[ "$build_from_source" == "true" ]]; then
-  # --- 4a: Build desktop UI ---
-  step "Step 4a: Building Desktop UI..."
-  info "  Installing desktop UI dependencies..."
-  ( cd "${REPO_ROOT}/crates/desktop-app/ui" && "${package_manager[@]}" install --frozen-lockfile )
-  info "  Building desktop UI..."
-  ( cd "${REPO_ROOT}/crates/desktop-app/ui" && "${package_manager[@]}" build )
-  success "Desktop UI built successfully."
-
-  # --- 4b: Build Rust binary ---
-  step "Step 4b: Building Rust Binary..."
+  # --- 4a: Build Rust binary ---
+  step "Step 4a: Building Rust Binary..."
   # Evaluate memory-aware flags before invoking cargo
   # shellcheck disable=SC2046
   extra_flags="$(cargo_build_flags)"
