@@ -29,6 +29,7 @@ pub mod skill_manager;
 pub mod system_broker;
 pub mod system_prompt;
 pub mod task_level_detector;
+pub mod team_ops;
 pub mod tool_registry;
 pub mod tools;
 pub mod usage_metrics_store;
@@ -70,4 +71,8 @@ pub use workflow_types::{
 pub use kanban_store::{
     CreateTaskInput, KanbanBoardStats, KanbanStore, KanbanTask, ReviewVerdict, TaskPriority,
     TaskStatus, UpdateTaskInput,
+};
+pub use team_ops::{
+    assign_work, handoff, list_teammates, persist_teammate, teammate_is_data_capable,
+    AssignWorkInput, AssignmentRecord, HandoffInput, PersistTeammateInput, OPERATOR_ID,
 };
