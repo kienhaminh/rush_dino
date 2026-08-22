@@ -20,11 +20,12 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-  native-macos:
+  desktop-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build native macOS app
-        run: swift build --package-path crates/desktop-app
-      - name: Test native macOS app
-        run: swift test --package-path crates/desktop-app
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Build GPUI desktop app
+        run: cargo build -p rushdino-desktop

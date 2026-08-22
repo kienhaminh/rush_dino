@@ -7,13 +7,14 @@ BUNDLE_ID="ai.rushdino.desktop"
 BUILD_CONFIGURATION="${RUSHDINO_BUILD_CONFIGURATION:-debug}"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PACKAGE_DIR="$ROOT_DIR/crates/desktop-app"
 DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 APP_CONTENTS="$APP_BUNDLE/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
 APP_RESOURCES="$APP_CONTENTS/Resources"
 APP_BINARY="$APP_MACOS/$APP_NAME"
+DESKTOP_PACKAGE="rushdino-desktop"
+SERVER_PACKAGE="rushdino-server"
 APP_VERSION="${RUSHDINO_APP_VERSION:-$(
   awk -F ' *= *' '/^version = / { gsub(/"/, "", $2); print $2; exit }' "$ROOT_DIR/Cargo.toml"
 )}"
@@ -23,13 +24,9 @@ pkill -f "$APP_BINARY" >/dev/null 2>&1 || true
 pkill -f "$APP_RESOURCES/rushdino-server" >/dev/null 2>&1 || true
 
 if [[ "$BUILD_CONFIGURATION" == "release" ]]; then
-  cargo build --release -p rushdino-server
-  swift build --package-path "$PACKAGE_DIR" -c release
-  SWIFT_BIN_DIR="$(swift build --package-path "$PACKAGE_DIR" -c release --show-bin-path)"
+  cargo build --release -p "$SERVER_PACKAGE" -p "$DESKTOP_PACKAGE"
 else
-  cargo build -p rushdino-server
-  swift build --package-path "$PACKAGE_DIR"
-  SWIFT_BIN_DIR="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)"
+  cargo build -p "$SERVER_PACKAGE" -p "$DESKTOP_PACKAGE"
 fi
 
 RUST_TARGET_DIR="$(
@@ -37,13 +34,14 @@ RUST_TARGET_DIR="$(
     | /usr/bin/plutil -extract target_directory raw -o - -
 )"
 SERVER_BINARY="$RUST_TARGET_DIR/$BUILD_CONFIGURATION/rushdino-server"
+DESKTOP_BINARY="$RUST_TARGET_DIR/$BUILD_CONFIGURATION/RushDino"
 
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_MACOS" "$APP_RESOURCES"
-cp "$SWIFT_BIN_DIR/$APP_NAME" "$APP_BINARY"
+cp "$DESKTOP_BINARY" "$APP_BINARY"
 cp "$SERVER_BINARY" "$APP_RESOURCES/rushdino-server"
-cp "$PACKAGE_DIR/Resources/AppIcon.png" "$APP_RESOURCES/AppIcon.png"
-cp "$PACKAGE_DIR/Resources/Info.plist" "$APP_CONTENTS/Info.plist"
+cp "$ROOT_DIR/crates/desktop-app/Resources/AppIcon.png" "$APP_RESOURCES/AppIcon.png"
+cp "$ROOT_DIR/crates/desktop-app/Resources/Info.plist" "$APP_CONTENTS/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" \
   "$APP_CONTENTS/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD_NUMBER" \

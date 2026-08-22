@@ -7,6 +7,7 @@ members = [
   "crates/gateway",
   "crates/security",
   "crates/server",
+  "crates/desktop-app",
   "crates/extensions/telegram",
   "crates/extensions/discord",
   "crates/extensions/slack",
