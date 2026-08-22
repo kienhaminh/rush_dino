@@ -27,32 +27,36 @@ This is a current-state gap analysis. It does not change runtime behavior.
 - `crates/agent/src/engine_bootstrap.rs`
 - `crates/security/src/validation.rs`
 
-### Gap: no first-class skill delete
+### Gap: no first-class skill delete tool or native control
 
 - Current behavior:
-- `create_skill` and `list_skills` exist; delete is shell fallback
+- `create_skill` and `list_skills` tools exist
+- `DELETE /api/skills/:name` exists, but the GPUI desktop client has no delete control
 - Proposal:
-- add `delete_skill` tool with strict name validation
+- add a `delete_skill` tool with strict name validation and a native
+  confirmation action
 - Impacted files:
 - `crates/agent/src/tools/create_skill.rs` (or new `delete_skill.rs`)
 - `crates/agent/src/skill_manager.rs`
 - `crates/agent/src/engine_bootstrap.rs`
+- `crates/desktop-app/src/ui/chat_view.rs` (resource_list renderer)
 
 ## Priority P1
 
-### Gap: no first-class agent template delete API/tool
+### Gap: no first-class agent template delete tool or native control
 
 - Current behavior:
 - create via `spawn_agent`
 - update via file patch endpoint
-- delete via shell fallback only
+- delete via `DELETE /api/agents/:id`
+- no `delete_agent` tool or native delete control
 - Proposal:
-- add `DELETE /api/agents/:id` and optional `delete_agent` tool with safety checks
+- add a `delete_agent` tool with safety checks and a native confirmation action
 - Impacted files:
 - `crates/server/src/routes/agents.rs`
-- `crates/server/src/lib.rs`
 - `crates/agent/src/agent_manager.rs`
-- `crates/desktop-app/ui/src/api/`
+- `crates/desktop-app/src/api_client.rs`
+- `crates/desktop-app/src/ui/chat_view.rs` (resource_list renderer)
 
 ### Gap: no first-class graph fact deletion/edit APIs
 
@@ -64,7 +68,8 @@ This is a current-state gap analysis. It does not change runtime behavior.
 - Impacted files:
 - `crates/server/src/routes/graph.rs`
 - `crates/knowledge-graph/src/*`
-- `crates/desktop-app/ui/src/api/`
+- `crates/desktop-app/src/api_client.rs`
+- `crates/desktop-app/src/ui/chat_view.rs` (resource_list renderer)
 
 ## Priority P2
 
@@ -101,4 +106,4 @@ Any new first-class CRUD operation should include:
 - unit tests for success and failure branches
 - docs update in `docs/references/architecture/reference/crud-capability-matrix.md`
 
-Last verified: 2026-03-06
+Last verified: 2026-08-22

@@ -140,11 +140,18 @@ Key files:
 - `POST /api/runs/:id/abort` marks queued/running/approval-pending work aborted and resolves any pending approval for that run.
 - `GET /api/runs/:id/wait` long-polls the persisted run snapshot until it reaches either a wait-target state or the timeout.
 
-## 6. Desktop flow (native app)
+## 6. Desktop flow (GPUI desktop client)
 
-- Desktop starts backend process (`rushdino-server` or `rushdino start --foreground`).
-- Desktop polls `/healthz` and calls graph endpoints (`/api/graph/stats`, `/api/graph/facts`, `/api/graph/backfill`).
+- `backend_process` starts the bundled `rushdino-server` helper on an
+  available loopback port with a per-launch HMAC secret.
+- `store` verifies `/healthz`, loads resource views through signed
+  HTTP requests, and streams chat through `/api/ws/chat`.
+- The owned helper process is terminated when the app exits.
 
-Key file: `crates/desktop-native/src/main.rs`
+Key files:
+- `crates/desktop-app/src/backend_process.rs`
+- `crates/desktop-app/src/api_client.rs`
+- `crates/desktop-app/src/chat_socket.rs`
+- `crates/desktop-app/src/store.rs`
 
-Last verified: 2026-03-07
+Last verified: 2026-08-22

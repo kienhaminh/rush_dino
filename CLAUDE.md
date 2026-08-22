@@ -6,70 +6,108 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Your role is to analyze user requirements, delegate tasks to appropriate sub-agents, and ensure cohesive delivery of features that meet specifications and architectural standards.
 
-## Workflow Orchestration
+## Workflows
 
-### 1. Plan Mode by Default
+- Primary workflow: `./.claude/rules/primary-workflow.md`
+- Development rules: `./.claude/rules/development-rules.md`
+- Orchestration protocols: `./.claude/rules/orchestration-protocol.md`
+- Documentation management: `./.claude/rules/documentation-management.md`
+- And other workflows: `./.claude/rules/*`
 
-- Enter plan mode for any non-trivial task (3+ steps or architectural decisions).
-- If something is unclear: stop and clarify immediately — do not push forward with assumptions.
-- Use plan mode for verification steps, not only for implementation.
-- Write detailed specifications upfront to reduce ambiguity.
+**IMPORTANT:** Analyze the skills catalog and activate the skills that are needed for the task during the process.
+**IMPORTANT:** DO NOT modify skills in `~/.claude/skills` directory directly. **MUST** modify skills in this current working directory. Unless you are asked to do so.
+**IMPORTANT:** You must follow strictly the development rules in `./.claude/rules/development-rules.md` file.
+**IMPORTANT:** Before you plan or proceed any implementation, always read the `./README.md` file first to get context.
+**IMPORTANT:** Sacrifice grammar for the sake of concision when writing reports.
+**IMPORTANT:** In reports, list any unresolved questions at the end, if any.
 
-### 2. Subagent Strategy
+## UI / Components — shadcn-first (MANDATORY)
 
-- Use subagents deliberately to keep the main context clean and focused.
-- Delegate research, exploration, and parallel analysis to subagents.
-- For complex problems, allocate more compute via additional subagents.
-- One task → one focused subagent for execution.
+**[CRITICAL]** Always use existing primitives from `@workspace/ui/components/*` (shadcn/ui based) before writing custom HTML/markup. Do NOT roll your own search box, list, dialog, dropdown, table, etc. when an equivalent shadcn component exists.
 
-### 3. Self-Improvement Loop
+Before writing any UI:
 
-- After every user correction: update tasks/lessons.md following a consistent pattern.
-- Document rules that prevent repeating the same mistake.
-- Iterate relentlessly until the error rate decreases.
-- Review relevant lessons at the start of each session.
+1. **List `packages/ui/src/components/`** to see what's available.
+2. **Match your need to a primitive:**
+   - Search-and-pick from a list → `command.tsx` (`Command`, `CommandInput`, `CommandList`, `CommandEmpty`, `CommandItem`)
+   - Modal → `dialog.tsx` (`Dialog`, `DialogContent`, ...). For destructive confirmation → `alert-dialog.tsx`
+   - Side panel → `sheet.tsx`
+   - Dropdown → `dropdown-menu.tsx` or `select.tsx` / `native-select.tsx` (single value)
+   - Combobox / autocomplete → `combobox.tsx`
+   - Form fields → `field.tsx` + `input.tsx` / `textarea.tsx` / `number-input.tsx` / `radio-group.tsx` / `checkbox.tsx` / `switch.tsx`
+   - Table → `table.tsx` (basic) or `data-table.tsx` (with tanstack-table integration)
+   - Pagination → `pagination-controls.tsx`
+   - Status/label → `badge.tsx` + project's `TonePill` from `components/admin/shared/status-badge`
+   - Empty/loading/error rows → `components/admin/shared/data-state` helpers
+   - Tooltip → `tooltip.tsx`
+   - Tabs → `tabs.tsx`
+   - Card container → `card.tsx`
+3. **Use the variants the design system already exposes** instead of overriding colors via Tailwind. Examples:
+   - Destructive button → `variant="destructive"` (NOT `variant="outline"` + `text-red-*`)
+   - Outline = indigo brand outline (NOT generic outline)
+   - See `packages/ui/src/components/button.tsx` for the full variant list and intent of each.
+4. **Only build custom markup when no primitive fits** (e.g. business-specific composite). Even then, compose primitives — never reinvent search inputs, focusable list rows, focus rings, etc.
 
-### 4. Verification Before Completion
+**Lint trigger for review:** if you find yourself typing `<input` directly in a `.tsx` file, stop and pick a primitive instead.
 
-- Never mark a task as complete without proving it works.
-- Diff behavior between the main branch and your changes when relevant.
-- Ask yourself: “Would a staff engineer approve this?”
-- Run tests, inspect logs, and demonstrate correctness.
+## URL slugs
 
-### 5. Demand Elegance (Balanced)
+Prefer short single-noun routes (`/purchases`, `/receipts`, `/payouts`, `/stocktake`, `/cogs`) over verbose compound (`/purchase-orders`, `/goods-receipts`). Same applies to API routes.
 
-- For non-trivial changes: pause and ask, “Is there a more elegant solution?”
-- If a fix feels hacky: “Knowing what I know now, implement the correct solution.”
-- Skip trivial improvements that do not add meaningful value.
-- Challenge your own work before presenting it.
+## Git
 
-### 6. Autonomous Bug Fixing
+**DO NOT** use `chore` and `docs` in commit messages of file changes in `.claude` directory.
 
-- When receiving a bug report: fix it directly. Do not ask for hand-holding.
-- Analyze logs, errors, and failing tests before acting.
-- Require zero context switching from the user.
-- Fix failing CI tests without being told how.
+## Hook Response Protocol
 
-## Task Management
+### Privacy Block Hook (`@@PRIVACY_PROMPT@@`)
 
-1. Plan First – Write a checklist-based plan in tasks/todo.md.
-2. Verify the Plan – Review the plan before starting implementation.
-3. Track Progress – Mark items complete as you finish them.
-4. Explain Changes – Provide a high-level summary at each step.
-5. Document Results – Add a review section to tasks/todo.md.
-6. Capture Lessons – Update tasks/lessons.md after corrections.
+When a tool call is blocked by the privacy-block hook, the output contains a JSON marker between `@@PRIVACY_PROMPT_START@@` and `@@PRIVACY_PROMPT_END@@`. **You MUST use the `AskUserQuestion` tool** to get proper user approval.
 
-## Core Principles
+**Required Flow:**
 
-- **Simplicity First** – Make every change as simple as possible. Minimize impact.
-- **No Laziness** – Find root causes. Avoid temporary fixes. Maintain senior-level standards.
-- **Minimal Impact** – Only touch what is necessary. Avoid introducing new bugs.
+1. Parse the JSON from the hook output
+2. Use `AskUserQuestion` with the question data from the JSON
+3. Based on user's selection:
+   - **"Yes, approve access"** → Use `bash cat "filepath"` to read the file (bash is auto-approved)
+   - **"No, skip this file"** → Continue without accessing the file
 
-## Development Principles
+**Example AskUserQuestion call:**
 
-- **YAGNI**: You Aren't Gonna Need It - avoid over-engineering
-- **KISS**: Keep It Simple, Stupid - prefer simple solutions
-- **DRY**: Don't Repeat Yourself - eliminate code duplication
+```json
+{
+  "questions": [
+    {
+      "question": "I need to read \".env\" which may contain sensitive data. Do you approve?",
+      "header": "File Access",
+      "options": [
+        {
+          "label": "Yes, approve access",
+          "description": "Allow reading .env this time"
+        },
+        {
+          "label": "No, skip this file",
+          "description": "Continue without accessing this file"
+        }
+      ],
+      "multiSelect": false
+    }
+  ]
+}
+```
+
+**IMPORTANT:** Always ask the user via `AskUserQuestion` first. Never try to work around the privacy block without explicit user approval.
+
+## Python Scripts (Skills)
+
+When running Python scripts from `.claude/skills/`, use the venv Python interpreter:
+
+- **Linux/macOS:** `.claude/skills/.venv/bin/python3 scripts/xxx.py`
+- **Windows:** `.claude\skills\.venv\Scripts\python.exe scripts\xxx.py`
+
+This ensures packages installed by `install.sh` (google-genai, pypdf, etc.) are available.
+
+**IMPORTANT:** When scripts of skills failed, don't stop, try to fix them directly.
 
 ## [IMPORTANT] Consider Modularization
 
@@ -83,17 +121,16 @@ Your role is to analyze user requirements, delegate tasks to appropriate sub-age
 
 ## Documentation Management
 
-We keep all important docs in `./docs` folder and keep updating them, structure like below:
+Active agent-facing docs live directly in `./docs`.
 
-```
-./docs
-├── project-overview-pdr.md
-├── code-standards.md
-├── codebase-summary.md
-├── design-guidelines.md
-├── deployment-guide.md
-├── system-architecture.md
-└── project-roadmap.md
-```
+Start with:
+
+- `docs/README.md`
+- `docs/project.md`
+- `docs/architecture.md`
+- `docs/features.md`
+- `docs/engineering.md`
+
+Keep docs compact and current-system focused. Prefer updating one of the compact docs above instead of creating new historical planning folders.
 
 **IMPORTANT:** _MUST READ_ and _MUST COMPLY_ all _INSTRUCTIONS_ in project `./CLAUDE.md`, especially _WORKFLOWS_ section is _CRITICALLY IMPORTANT_, this rule is _MANDATORY. NON-NEGOTIABLE. NO EXCEPTIONS. MUST REMEMBER AT ALL TIMES!!!_

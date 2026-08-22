@@ -86,7 +86,7 @@ RushDino provides a clean abstraction layer (Gateway) that decouples channel ada
 ### 4. User Interface
 
 **FR4.1:** Native macOS app
-- SwiftUI/AppKit desktop client
+- GPUI Component (Rust) desktop client
 - Real-time WebSocket chat
 - Conversation history browser
 - Native sidebar, menus, settings, and Liquid Glass
@@ -279,7 +279,7 @@ RushDino provides a clean abstraction layer (Gateway) that decouples channel ada
 - [x] Conversation persistence working
 - [x] Multiple providers supported (OpenAI, Anthropic, Ollama)
 - [x] CLI tool (init, start, stop, status)
-- [x] Native SwiftUI macOS app functional
+- [x] Native GPUI desktop app functional
 - [x] Documentation complete
 
 ### Phase 2 (Multi-Channel Gateway) — COMPLETE

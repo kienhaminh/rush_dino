@@ -22,7 +22,7 @@ read_when:
 | `step ... references unknown agent` | Workflow step points to nonexistent agent template | `crates/agent/src/engine.rs`, `crates/agent/src/workflow_manager.rs` |
 | `agent error for conversation` | Agent execution failed after routing | `crates/gateway/src/router.rs`, `crates/agent/src/engine.rs` |
 | `send error on` | Channel adapter send failure to recipient | `crates/gateway/src/router.rs`, adapter crate (`crates/extensions/*`) |
-| `API ... returned HTML instead of JSON` | Desktop UI called API while backend route unavailable or fallback served | `crates/desktop-app/ui/src/api/`, `crates/server/src/lib.rs` |
+| `Server returned <status>` | Desktop client called an unavailable or rejected API route | `crates/desktop-app/src/api_client.rs`, `crates/server/src/lib.rs` |
 | `failed to create missing markdown file` | First-turn markdown bootstrap write failed | `crates/agent/src/engine_bootstrap.rs` |
 
 ## Usage pattern
@@ -32,4 +32,4 @@ read_when:
 3. Apply minimal fix in owning file first.
 4. Re-run checks from [First 60 Seconds](./first-60-seconds.md).
 
-Last verified: 2026-03-05
+Last verified: 2026-08-22

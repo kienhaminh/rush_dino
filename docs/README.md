@@ -21,6 +21,8 @@ Essential guides for writing code and contributing:
 2. **[Codebase Summary](./codebase-summary.md)** — Crate organization, key files, and recent changes
 3. **[System Architecture](./system-architecture.md)** — Understanding the gateway and adapter system
 4. **[Agent Operating Docs](./references/architecture/index.md)** — Self-repair docs for tools, CRUD contracts, and troubleshooting
+5. **[Notes](./notes.md)** — Current-system operator notes (team HQ, last audit)
+6. **[Tech debt](./tech_debt.md)** — Living register from the 2026-08-18 codebase audit
 
 ### Agent Operating Docs
 
@@ -42,6 +44,8 @@ OpenClaw-style operating docs for autonomous diagnosis and safe system modificat
 | **code-standards.md** | Coding rules, patterns, and best practices | All developers | 355 lines |
 | **project-roadmap.md** | Development phases and progress tracking | All stakeholders | 221 lines |
 | **references/architecture/** | Self-repair operating docs (tools, CRUD, runbooks, gaps) | Developers, operators, agents | Multi-file |
+| **notes.md** | Current-system notes (team HQ + last audit) | Operators, agents | Short |
+| **tech_debt.md** | Prioritized open debt from the 2026-08-18 audit | Developers | Living |
 
 ## Key Topics
 
@@ -135,7 +139,7 @@ See [Codebase Summary - Recent Changes](./codebase-summary.md#recent-changes-v01
 - Codex startup now attempts OAuth token refresh and persists refreshed credentials safely.
 - If Codex refresh fails, the server can use `codex_fallback_provider` from `config.toml` when that provider is correctly configured.
 - WebSocket chat now streams direct engine chunks with typed events (`chat_chunk`, `assistant_reset`, `approval_request`, `approval_result`, `error`).
-- Dangerous `shell_exec` commands now require per-session approval in the web UI.
+- Dangerous `shell_exec` commands now require per-session approval in the native macOS app.
 
 ## Documentation Development
 

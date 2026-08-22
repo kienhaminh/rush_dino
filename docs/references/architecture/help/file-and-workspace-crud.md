@@ -149,12 +149,12 @@ Invalid `agent_id`/`filename`, or misunderstanding of template file vs workspace
 ### Patch target files
 
 - `crates/server/src/routes/agents.rs`
-- `crates/desktop-app/ui/src/api/`
-- `crates/desktop-app/ui/src/pages/Agents.tsx`
+- `crates/desktop-app/src/api_client.rs`
+- `crates/desktop-app/src/ui/chat_view.rs` (resource_list renderer)
 
 ### Post-fix checks
 
 1. Read updated runtime payload from `GET /api/agents/:id/runtime`.
 2. Confirm file content and `missing=false` in response.
 
-Last verified: 2026-03-06
+Last verified: 2026-08-22

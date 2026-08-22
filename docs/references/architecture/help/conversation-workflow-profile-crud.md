@@ -39,7 +39,8 @@ Wrong conversation ID, stale UI state, or route invocation mismatch.
 
 - `crates/server/src/routes/conversations.rs`
 - `crates/agent/src/conversation.rs`
-- `crates/desktop-app/ui/src/api/`
+- `crates/desktop-app/src/api_client.rs`
+- `crates/desktop-app/src/store.rs`
 
 ### Post-fix checks
 
@@ -79,7 +80,7 @@ Workflow step `agent_id` does not match a configured template name.
 
 - `crates/agent/src/engine.rs`
 - `crates/agent/src/tools/create_workflow.rs`
-- `crates/desktop-app/ui/src/pages/Workflows.tsx`
+- `crates/desktop-app/src/ui/chat_view.rs` (resource_list renderer)
 
 ### Post-fix checks
 
@@ -118,11 +119,12 @@ Default profile not set as expected, or refresh path did not apply due to profil
 
 - `crates/server/src/routes/providers.rs`
 - `crates/server/src/lib.rs`
-- `crates/desktop-app/ui/src/api/`
+- `crates/desktop-app/src/api_client.rs`
+- `crates/desktop-app/src/ui/settings_view.rs`
 
 ### Post-fix checks
 
 1. Confirm `default_profile_id` in config state.
 2. Send chat request and verify provider behavior in runtime logs.
 
-Last verified: 2026-03-05
+Last verified: 2026-08-22

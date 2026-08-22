@@ -16,7 +16,7 @@ RushDino/
 │   ├── discord/       # Discord channel adapter
 │   ├── slack/         # Slack channel adapter
 │   ├── cli/           # Command-line interface
-│   └── desktop-app/   # Native SwiftUI/AppKit macOS app
+│   └── desktop-app/   # Native desktop app (GPUI Component, Rust)
 ├── docs/              # Documentation (this directory)
 └── scripts/           # Build and utility scripts
 ```
@@ -225,7 +225,6 @@ cargo test --workspace
 ### Native macOS Development
 ```bash
 ./script/build_and_run.sh
-swift test --package-path crates/desktop-app
 ```
 
 ## Recent Changes (v0.1.0)

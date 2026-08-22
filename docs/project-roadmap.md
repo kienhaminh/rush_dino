@@ -16,7 +16,7 @@ Core agent functionality and data persistence.
 - AgentEngine with conversation management
 - SQLite integration for conversation history
 - Provider abstraction (OpenAI, Anthropic, Ollama, Plugin)
-- Native macOS app (SwiftUI/AppKit)
+- Native desktop app (GPUI Component)
 - CLI tool (init, start, stop, status, upgrade)
 
 **Success Metrics:**
@@ -163,7 +163,7 @@ Reliability and performance optimization.
 - Agent engine with provider abstraction
 - SQLite persistence
 - CLI tool
-- Native SwiftUI macOS app
+- Native GPUI Component desktop app
 
 ---
 

@@ -216,7 +216,12 @@ rushdino start
 rushdino start --foreground
 ```
 
-**Open the web UI** at [http://localhost:3000](http://localhost:3000).
+The standalone daemon exposes HTTP and WebSocket APIs on the configured port;
+it no longer serves a browser UI. On macOS, launch the native client with:
+
+```bash
+./script/build_and_run.sh
+```
 
 **Check status:**
 

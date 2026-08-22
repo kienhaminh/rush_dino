@@ -1,33 +1,38 @@
 ---
-title: "Frontend and CLI Surface"
-summary: "How the desktop UI and CLI currently expose CRUD and operations, including wrappers, gaps, and stubbed commands."
+title: "GPUI Desktop Client and CLI Surface"
+summary: "How the GPUI desktop client and CLI expose current operations, including API boundaries, gaps, and stubbed commands."
 read_when:
   - You need to know whether to patch the desktop UI, CLI, API, or tools
   - You need to avoid relying on stubbed CLI commands
   - You are designing new operational entrypoints
 ---
 
-# Frontend and CLI Surface
+# GPUI Desktop Client and CLI Surface
 
-## Frontend operational surface
+## Desktop client operational surface
 
-Primary API surface: `crates/desktop-app/ui/src/api/`
+Primary HTTP transport:
+`crates/desktop-app/src/api_client.rs`
 
-### High-usage desktop UI wrappers (`ui-wrapper`)
+### Current desktop surfaces
 
-- Conversations: `fetchConversations`, `fetchConversation`, `deleteConversation`, `sendChat`
-- Agents: `fetchAgents`, `fetchAgentRuntime`, `patchAgentFile`, `fetchAgentProgressBoard`
-- Workflows: `fetchWorkflows`, `fetchWorkflow`, `createWorkflow`, `updateWorkflow`, `deleteWorkflow`, run endpoints
-- Config/Credentials: `fetchConfig`, `patchConfig`, `fetchCredentials`, `patchCredentials`
-- Profiles: `fetchProfiles`, `createProfile`, `updateProfile`, `deleteProfile`, `connectCodexProfile`
-- Graph/Logs/Usage endpoints are wrapped for UI pages
+- Conversations: list/detail plus streaming chat in `store`
+- Chat transport: `/api/ws/chat` through `chat_socket`
+- Agents, sessions, workflows, graph, approvals, and logs: read-only
+  resource lists
+- Automations: list, pause/resume, and run-now actions
+- Kanban: board view
+- Models, channels, and privacy settings: read-only settings panes
 
-### Frontend behavior note
+### Client behavior note
 
-- `parseJsonOrThrow` explicitly detects accidental HTML fallback responses and raises actionable errors.
-- This protects pages from silent parse failures when backend routes are unavailable.
+- `api_client` signs each HTTP request with the per-launch HMAC secret, rejects
+  non-2xx status codes, and decodes snake_case JSON into Rust models.
+- `backend_process` owns the bundled helper process and selects an
+  available loopback port per launch.
 
-Source: `crates/desktop-app/ui/src/api/`
+Sources:
+- `crates/desktop-app/src/`
 
 ## CLI operational surface
 
@@ -60,8 +65,8 @@ Sources:
 
 ## Practical routing decision
 
-- If the desktop UI already wraps an API endpoint, prefer the API/UI path first.
+- If the GPUI desktop client already exposes an operation, prefer that path first.
 - If CLI command is stubbed, use API directly or tool path.
 - For missing first-class endpoints, use `shell_exec` fallback with approval where required.
 
-Last verified: 2026-03-05
+Last verified: 2026-08-22

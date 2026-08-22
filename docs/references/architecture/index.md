@@ -28,6 +28,8 @@ It covers:
 - API contract: [HTTP API Surface](./reference/http-api-surface.md)
 - Symptom triage entrypoint: [Troubleshooting Hub](./help/troubleshooting.md)
 - Known missing first-class operations: [First-Class CRUD Gaps](./gaps/first-class-crud-gaps.md)
+- Current-system notes: [Notes](../../notes.md)
+- Prioritized security/runtime debt: [Tech debt](../../tech_debt.md)
 
 ## Capability labels used in this docs set
 

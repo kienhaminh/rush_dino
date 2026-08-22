@@ -5,7 +5,7 @@
 RushDino supports two product paths in parallel:
 
 1. CLI + local API server (`rushdino`)
-2. Native SwiftUI desktop app (`RushDino.app`, macOS 26)
+2. Native desktop app (`RushDino.app`, GPUI Component)
 
 Both paths share the same local data root (`~/.rushdino`) and SQLite database.
 

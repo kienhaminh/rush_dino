@@ -1,6 +1,6 @@
 ---
 title: "Source Map"
-summary: "Exact source-path map for patching each subsystem safely across backend, tools, routes, desktop UI, and native app."
+summary: "Exact source-path map for patching each subsystem safely across backend, tools, routes, and the native macOS app."
 read_when:
   - You need to identify the exact file to patch for a bug/fix
   - You are tracing behavior from symptom to owner module
@@ -65,13 +65,15 @@ read_when:
 - Home/workspace setup and templates: `crates/common/src/init.rs`
 - Bundled agent templates: `crates/common/src/agents.rs`
 
-## Desktop UI
+## GPUI desktop app
 
-- Route shell: `crates/desktop-app/ui/src/App.tsx`
-- API wrappers: `crates/desktop-app/ui/src/api/`
-- Agents UI: `crates/desktop-app/ui/src/pages/Agents.tsx`
-- Workflows UI: `crates/desktop-app/ui/src/pages/Workflows.tsx`
-- Agent board UI: `crates/desktop-app/ui/src/pages/Kanban.tsx`
+- App entry: `crates/desktop-app/src/main.rs`
+- App view root: `crates/desktop-app/src/ui/mod.rs`
+- Sidebar: `crates/desktop-app/src/ui/sidebar_view.rs`
+- HTTP and WebSocket clients: `crates/desktop-app/src/api_client.rs`, `crates/desktop-app/src/chat_socket.rs`
+- State and operations: `crates/desktop-app/src/store.rs`, `crates/desktop-app/src/models.rs`
+- Resource, chat, and settings views: `crates/desktop-app/src/ui/chat_view.rs`, `crates/desktop-app/src/ui/settings_view.rs`
+- Backend helper lifecycle: `crates/desktop-app/src/backend_process.rs`
 
 ## CLI and service management
 
@@ -79,8 +81,4 @@ read_when:
 - CLI command modules: `crates/cli/src/commands/*.rs`
 - OS service managers: `crates/cli/src/service/*.rs`
 
-## Desktop native
-
-- Native desktop app and backend lifecycle: `crates/desktop-app/src-tauri/src/main.rs`
-
-Last verified: 2026-03-05
+Last verified: 2026-08-22

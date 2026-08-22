@@ -1,6 +1,6 @@
 ---
 title: "First 60 Seconds"
-summary: "Fast triage ladder for backend, desktop UI, and native app incidents with concrete commands and expected signals."
+summary: "Fast triage ladder for backend and native macOS incidents with concrete commands and expected signals."
 read_when:
   - RushDino appears broken and you need immediate triage
   - You need a consistent first-pass diagnostic flow
@@ -37,14 +37,14 @@ curl -s http://127.0.0.1:28847/api/agents
 
 - Service/lifecycle failure: inspect `crates/cli/src/commands/start.rs`, `crates/cli/src/service/*.rs`
 - Health endpoint failure: inspect `crates/server/src/lib.rs`, `crates/server/src/routes/health.rs`
-- Route JSON mismatch/fallback HTML: inspect the client in `crates/desktop-app/ui/src/api/` and server route registration
+- Desktop API status or decode failure: inspect `crates/desktop-app/src/api_client.rs` and server route registration
 - Agent/tool failures in logs: inspect `crates/agent/src/engine.rs`, `crates/agent/src/react_loop.rs`, and relevant tool file
 
 ## Quick scope split
 
 - Backend only broken: `/healthz` fails
 - API routing broken: `/healthz` works but `/api/*` fails
-- Frontend only broken: API works via curl but UI errors
+- Desktop client only broken: API works via curl but the GPUI desktop client reports an error
 - Tool execution broken: chat works but tool calls fail in logs/response
 
-Last verified: 2026-03-05
+Last verified: 2026-08-22

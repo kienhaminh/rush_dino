@@ -353,3 +353,95 @@ Before submitting PR:
 - Mark deprecated code with `#[deprecated]` attribute
 - Document migration path
 - Maintain for 2 releases before removal
+
+---
+
+## Deep Module Discipline
+
+### What makes a module deep
+
+Một module *deep* khi interface đơn giản tương đối so với implementation đáng giá nó cover. Module *shallow* (anti-pattern): interface nhiều bằng implementation, caller phải biết internal để dùng.
+
+**Definition (Ousterhout APoSD, Ch 4):**
+- Deep: interface nhỏ + implementation lớn → caller chỉ cần biết 1-2 thứ.
+- Shallow: interface ≈ implementation → wrapper không giảm complexity.
+
+**RushDino ví dụ:**
+- `Provider` trait (`crates/providers/src/lib.rs`) — interface 2 method; implementation ẩn retry, parsing, streaming buffer, error mapping. Deep.
+- `Gateway` (`crates/gateway/src/gateway.rs`) — `register`/`start`; ẩn mpsc routing, session lookup, adapter lifecycle.
+
+**Anti-pattern (classitis):** trait 30+ method 1:1 field accessor → shallow. Trong Rust, multi-file `impl Type { ... }` là idiom OK nếu split theo cohesion (`engine/chat.rs`, `engine/assistant_runs.rs`), không phải mechanical line-count.
+
+### Information hiding checklist
+
+- [ ] Không return `MutexGuard` / lock guard qua public API.
+- [ ] Không expose `Arc<Mutex<T>>` / `Arc<RwLock<T>>` trong public signature — wrap qua method.
+- [ ] Internal state là `pub(crate)` hoặc private, không `pub`.
+- [ ] Caller không cần import sub-module để dùng public API (re-export qua `mod.rs`).
+- [ ] Lifetime detail (background task, channel sender) ẩn sau ctor.
+
+**Ví dụ tốt:** `AgentEngine` ẩn `Arc<Provider>`, `ToolRegistry`, runtime sau ctor — caller chỉ thấy `chat()`, `submit_run()`. **Leak:** route handler import helper internal thay vì qua facade.
+
+### Pull complexity downward (Ousterhout Ch 8)
+
+Special case xử lý trong module gánh complexity, không đẩy cho caller. **Ví dụ:** streaming buffer flush trong `react_loop.rs` — module tự quyết khi flush. Tool execution timeout trong `ToolRegistry` — registry wrap, không bắt caller dùng `tokio::time::timeout` mỗi call. **Rule of thumb:** 2+ caller cùng gọi `setup → main → cleanup` → gộp thành 1 method internal.
+
+---
+
+## Comment & Naming
+
+### Comments describe why, not what
+
+Code chỉ ra *what*. Comment giải thích: invariant không obvious từ tên, lý do design decision (trade-off, constraint), workaround bug cụ thể (link issue/PR nếu durable), non-obvious side effect.
+
+**Không comment:** `// Increment counter` trên `counter += 1`; `// TODO: refactor` không context/owner; reference đến plan phase/finding code/audit label (plan rename → reference rot).
+
+### Invariants and preconditions
+
+Comment trên type → invariant phải giữ qua mọi method.
+Comment trên method → precondition (input assumption) + postcondition (state guarantee) + side effect.
+
+**Ví dụ tốt** (`crates/agent/src/runtime/service.rs`):
+```rust
+/// Invariant: `queued_runs[session_id]` luôn FIFO; `running_run[session_id]`
+/// là Some(id) khi và chỉ khi `id` đang execute (không phải just queued).
+```
+
+### Naming
+
+- Tên ngắn nhất truyền tải đúng ý nghĩa. Không sacrifice rõ ràng vì ngắn.
+- Nhất quán: `submit_*`, `mark_*`, `record_*` đã có pattern trong `AgentRuntime` — method mới giữ pattern.
+- Tránh tên generic: `helper`, `util`, `manager`, `handle` — trừ khi thật sự là manager lifecycle (e.g. `SessionManager`).
+- Crate: kebab-case (`rushdino-gateway`). Module: snake_case. Trait/type: PascalCase. Function: snake_case.
+
+---
+
+## File & Function Budget
+
+### Targets
+
+| Unit | Target | Ceiling | CI enforced |
+|---|---:|---:|---|
+| File (Rust) | 200 LOC | 350 LOC (refactored paths) / 500 LOC (default) | yes |
+| File (TS/TSX) | 200 LOC | 350 LOC | yes |
+| Function | <80 dòng | 150 dòng | no |
+
+200 là *soft target*, 350 là *hard ceiling* enforced bởi CI guard. Default codebase ceiling 500 cho file legacy chưa refactored — waiver list trong CI script.
+
+### When to split
+
+Split khi vượt 350 LOC VÀ có cohesion break thực sự (2+ concern), HOẶC 30+ method trong 1 impl (`SPRAWL`), HOẶC 2+ chế độ stream/non-stream bị duplicate (`DUPLICATE`).
+
+### When NOT to split
+
+KHÔNG split khi: state machine lớn nhưng single concern (`react_loop.rs` sau unification); Rust multi-file `impl` đã cover; test fixture/SQL migration/generated code; split theo line-count thuần → tạo shallow module.
+
+### When to merge
+
+Merge khi 2 file luôn change cùng (high co-change) và logic conjoined; wrapper <50 LOC chỉ re-export; twin function chỉ khác 1 param Optional vs Required.
+
+### Exception process
+
+File legacy >350 LOC chấp nhận tạm với waiver: path trong CI waiver list, kèm note criteria refactor. Không thêm waiver mới không justification.
+
+---

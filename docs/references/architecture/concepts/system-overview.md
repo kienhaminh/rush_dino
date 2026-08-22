@@ -1,6 +1,6 @@
 ---
 title: "System Overview"
-summary: "Full-stack architecture map for RushDino: backend, gateway, tools, desktop UI, persistence, and providers."
+summary: "Architecture map for RushDino: native macOS client, backend, gateway, tools, persistence, and providers."
 read_when:
   - You need a single mental model before debugging
   - You need to know where each request is handled
@@ -11,14 +11,13 @@ read_when:
 
 ```mermaid
 flowchart LR
-  U["User: Web / Telegram / Discord / Slack / CLI / Desktop"] --> S["rushdino-server (axum)"]
+  D["RushDino desktop (GPUI)"] -->|"HMAC-signed HTTP + WebSocket"| S["rushdino-server (axum)"]
+  U["User: Telegram / Discord / Slack / CLI"] --> S
   S --> G["Gateway (channel adapters + router)"]
   G --> E["AgentEngine (ReAct loop + tools)"]
   E --> P["Provider layer (OpenAI / Anthropic / Ollama / Codex / Plugin)"]
   E --> DB[(SQLite data.db)]
   E --> HOME["~/.rushdino workspace files"]
-  S --> FE["Frontend (React routes + API client)"]
-  D["Desktop Native (egui)"] --> S
   S --> KG["Knowledge Graph service"]
   KG --> DB
 ```
@@ -32,16 +31,18 @@ flowchart LR
 - Tool registration/wiring: `crates/agent/src/engine_bootstrap.rs`
 - Shared config/credentials/init: `crates/common/src/*`
 
-## Frontend architecture
+## GPUI desktop client
 
-- App shell and routes: `crates/desktop-app/ui/src/App.tsx`
-- API client surface: `crates/desktop-app/ui/src/api/`
-- Runtime pages (agents, workflows, logs, metrics): `crates/desktop-app/ui/src/pages/*`
+- App entry: `crates/desktop-app/src/main.rs`
+- UI views: `crates/desktop-app/src/ui/`
+- HTTP client and HMAC signing: `crates/desktop-app/src/api_client.rs`, `crates/desktop-app/src/signer.rs`
+- Streaming chat: `crates/desktop-app/src/chat_socket.rs`
 
 ## Desktop architecture
 
-- Native app shell and backend lifecycle: `crates/desktop-native/src/main.rs`
-- Desktop uses backend HTTP endpoints (for example `/healthz`, `/api/graph/*`).
+- Backend helper lifecycle: `crates/desktop-app/src/backend_process.rs`
+- The app bundles `rushdino-server`, starts it on an available loopback port,
+  and uses the same `~/.rushdino` data as the CLI.
 
 ## Persistence and workspace
 
@@ -57,4 +58,4 @@ flowchart LR
 - Provider resolution and runtime refresh: `crates/server/src/lib.rs`, `crates/server/src/routes/providers.rs`
 - Auth methods include API key, OAuth, and none (via profile config in common/auth crates).
 
-Last verified: 2026-03-05
+Last verified: 2026-08-22
