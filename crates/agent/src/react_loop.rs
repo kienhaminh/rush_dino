@@ -86,7 +86,8 @@ pub async fn run_react_loop(
             messages = compact_messages(&provider, messages, config.max_context_tokens).await;
         }
         // --- Context size log (observability) ---
-        let context_tokens_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+        let context_tokens_estimate: usize =
+            messages.iter().map(|m| estimate_tokens(&m.content)).sum();
         tracing::info!(
             trace_id = trace_id.unwrap_or("none"),
             context_tokens_estimate = context_tokens_estimate,
@@ -108,7 +109,11 @@ pub async fn run_react_loop(
             finalize_response_content(&mut response, last_presented_content.take());
             let assistant_message = Message {
                 rich_content: response.rich_content.clone(),
-                ..Message::new(Uuid::new_v4().to_string(), Role::Assistant, response.content.clone())
+                ..Message::new(
+                    Uuid::new_v4().to_string(),
+                    Role::Assistant,
+                    response.content.clone(),
+                )
             };
             messages.push(assistant_message);
             response.usage = total_usage.clone();
@@ -117,7 +122,11 @@ pub async fn run_react_loop(
 
         let assistant_message = Message {
             tool_calls: Some(response.tool_calls.clone()).filter(|x| !x.is_empty()),
-            ..Message::new(Uuid::new_v4().to_string(), Role::Assistant, response.content.clone())
+            ..Message::new(
+                Uuid::new_v4().to_string(),
+                Role::Assistant,
+                response.content.clone(),
+            )
         };
         messages.push(assistant_message);
 
@@ -162,9 +171,10 @@ pub async fn run_react_loop(
     );
     // ----------------------------------------
     let mut response = provider.chat(wrap_up_request).await?;
-    let wrap_up_usage = response.usage.clone().unwrap_or_else(|| {
-        estimate_turn_usage(&messages, &response.content, &[])
-    });
+    let wrap_up_usage = response
+        .usage
+        .clone()
+        .unwrap_or_else(|| estimate_turn_usage(&messages, &response.content, &[]));
     accumulate_usage(&mut total_usage, &wrap_up_usage);
     response.usage = total_usage.clone();
 
@@ -201,7 +211,8 @@ pub async fn run_react_loop_streaming(
             messages = compact_messages(&provider, messages, config.max_context_tokens).await;
         }
         // --- Context size log (observability) ---
-        let context_tokens_estimate: usize = messages.iter().map(|m| estimate_tokens(&m.content)).sum();
+        let context_tokens_estimate: usize =
+            messages.iter().map(|m| estimate_tokens(&m.content)).sum();
         tracing::info!(
             trace_id = trace_id.unwrap_or("none"),
             context_tokens_estimate = context_tokens_estimate,
@@ -290,7 +301,11 @@ pub async fn run_react_loop_streaming(
                 content: final_response.content.clone(),
                 tool_calls: None,
                 rich_content: final_response.rich_content.clone(),
-                thinking: if thinking.is_empty() { None } else { Some(thinking) },
+                thinking: if thinking.is_empty() {
+                    None
+                } else {
+                    Some(thinking)
+                },
                 created_at: Utc::now(),
             });
             let _ = event_tx
@@ -323,7 +338,11 @@ pub async fn run_react_loop_streaming(
             content: response.content.clone(),
             tool_calls: Some(tool_calls),
             rich_content: None,
-            thinking: if thinking.is_empty() { None } else { Some(thinking) },
+            thinking: if thinking.is_empty() {
+                None
+            } else {
+                Some(thinking)
+            },
             created_at: Utc::now(),
         });
 
@@ -426,7 +445,11 @@ pub async fn run_react_loop_streaming(
         content: final_response.content.clone(),
         tool_calls: None,
         rich_content: final_response.rich_content.clone(),
-        thinking: if wrap_up_thinking.is_empty() { None } else { Some(wrap_up_thinking) },
+        thinking: if wrap_up_thinking.is_empty() {
+            None
+        } else {
+            Some(wrap_up_thinking)
+        },
         created_at: Utc::now(),
     });
     let _ = event_tx
@@ -457,7 +480,11 @@ fn build_chat_request(
 ) -> ChatRequest {
     let tools = {
         let defs = session_ctx.active_definitions();
-        if defs.is_empty() { None } else { Some(defs) }
+        if defs.is_empty() {
+            None
+        } else {
+            Some(defs)
+        }
     };
     ChatRequest {
         messages,
@@ -660,7 +687,8 @@ mod tests {
             &mut HashMap::new(),
         )
         .await;
-        let rich_content = rich_content.expect("present_message should capture the last rich payload");
+        let rich_content =
+            rich_content.expect("present_message should capture the last rich payload");
 
         assert_eq!(rich_content.fallback_text, "Second");
         assert_eq!(messages.len(), 2);
@@ -711,7 +739,12 @@ async fn append_tool_outputs(
                     args = %serde_json::to_string(&call.arguments).unwrap_or_default(),
                     "skipping tool call with empty name — likely a malformed provider response"
                 );
-                return (call, "tool call skipped: empty tool name".to_owned(), true, 0i64);
+                return (
+                    call,
+                    "tool call skipped: empty tool name".to_owned(),
+                    true,
+                    0i64,
+                );
             }
 
             tracing::info!(

@@ -54,9 +54,7 @@ impl ApiClient {
 
     async fn parse_response(&self, res: reqwest::Response) -> Result<Value> {
         if res.status().is_success() {
-            if res.status() == reqwest::StatusCode::NO_CONTENT
-                || res.content_length() == Some(0)
-            {
+            if res.status() == reqwest::StatusCode::NO_CONTENT || res.content_length() == Some(0) {
                 return Ok(Value::Null);
             }
             res.json::<Value>()

@@ -7,7 +7,9 @@ use rushdino_providers::types::{ChatChunk, ChatResponse};
 
 use crate::{
     engine::{AgentConfig, WsStreamEvent},
-    engine_bootstrap::{resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message},
+    engine_bootstrap::{
+        resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message,
+    },
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
     tools::bash::{with_tool_execution_context, ToolExecutionContext},
 };
@@ -33,16 +35,15 @@ impl crate::engine::AgentEngine {
     pub async fn chat(&self, conversation_id: &str, user_input: &str) -> Result<ChatResponse> {
         let title = session_title_from_id(conversation_id)
             .unwrap_or_else(|| title_from(user_input).to_owned());
-        let mut messages = self.conversation.ensure_conversation(conversation_id, &title).await?;
+        let mut messages = self
+            .conversation
+            .ensure_conversation(conversation_id, &title)
+            .await?;
 
         // Always prepend the system message at position 0. It is never stored in
         // the DB (dynamic memory/soul files can change between turns), so it must
         // be reconstructed and injected fresh on every request.
-        let skills = resolve_skills_for_prompt(
-            self.skill_manager.as_ref(),
-            user_input,
-        )
-        .await;
+        let skills = resolve_skills_for_prompt(self.skill_manager.as_ref(), user_input).await;
         messages.insert(
             0,
             system_message(
@@ -58,8 +59,7 @@ impl crate::engine::AgentEngine {
         // compaction (messages that disappear) and new messages (messages to save).
         // The system prompt is ephemeral (rebuilt each turn) and never stored.
         let sys_prompt_id = messages[0].id.clone();
-        let persisted_ids: HashSet<String> =
-            messages[1..].iter().map(|m| m.id.clone()).collect();
+        let persisted_ids: HashSet<String> = messages[1..].iter().map(|m| m.id.clone()).collect();
 
         let user_msg = user_message(user_input);
         self.conversation
@@ -123,8 +123,7 @@ impl crate::engine::AgentEngine {
         // Persist compaction: if any previously-saved message ID is absent from
         // all_messages, the react loop compacted it away. Delete those rows so the DB
         // matches what the agent actually used as context.
-        let current_ids: HashSet<&str> =
-            all_messages.iter().map(|m| m.id.as_str()).collect();
+        let current_ids: HashSet<&str> = all_messages.iter().map(|m| m.id.as_str()).collect();
         let dropped: Vec<String> = all_pre_loop_db_ids
             .iter()
             .filter(|id| !current_ids.contains(id.as_str()))
@@ -138,9 +137,8 @@ impl crate::engine::AgentEngine {
 
         // Save every message that is not already in the DB and not an ephemeral
         // message (system prompt or graph context).
-        let is_ephemeral = |id: &str| -> bool {
-            id == sys_prompt_id || graph_ctx_id.as_deref() == Some(id)
-        };
+        let is_ephemeral =
+            |id: &str| -> bool { id == sys_prompt_id || graph_ctx_id.as_deref() == Some(id) };
         for message in &all_messages {
             if !all_pre_loop_db_ids.contains(&message.id) && !is_ephemeral(&message.id) {
                 self.conversation
@@ -153,7 +151,8 @@ impl crate::engine::AgentEngine {
 
         // Persist tool timing records after messages are saved (message_id FK must exist first).
         for record in timing_records {
-            if let Err(e) = self.conversation
+            if let Err(e) = self
+                .conversation
                 .save_tool_log(
                     &record.tool_call_id,
                     &rushdino_common::models::ToolCall {
@@ -231,16 +230,15 @@ impl crate::engine::AgentEngine {
 
         let title = session_title_from_id(&conversation_id)
             .unwrap_or_else(|| title_from(user_input).to_owned());
-        let mut messages = self.conversation.ensure_conversation(&conversation_id, &title).await?;
+        let mut messages = self
+            .conversation
+            .ensure_conversation(&conversation_id, &title)
+            .await?;
 
         // Always prepend the system message at position 0. It is never stored in
         // the DB (dynamic memory/soul files can change between turns), so it must
         // be reconstructed and injected fresh on every request.
-        let skills = resolve_skills_for_prompt(
-            self.skill_manager.as_ref(),
-            user_input,
-        )
-        .await;
+        let skills = resolve_skills_for_prompt(self.skill_manager.as_ref(), user_input).await;
         messages.insert(
             0,
             system_message(
@@ -362,7 +360,8 @@ impl crate::engine::AgentEngine {
 
         // Persist tool timing records after messages are saved (message_id FK must exist first).
         for record in timing_records {
-            if let Err(e) = self.conversation
+            if let Err(e) = self
+                .conversation
                 .save_tool_log(
                     &record.tool_call_id,
                     &rushdino_common::models::ToolCall {

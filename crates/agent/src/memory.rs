@@ -144,7 +144,10 @@ impl MemoryManager {
         if daily {
             // Append to daily notes so multiple writes accumulate rather than overwrite.
             use std::io::Write;
-            let mut file = fs::OpenOptions::new().create(true).append(true).open(&path)?;
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)?;
             file.write_all(content.as_bytes())?;
         } else {
             fs::write(&path, content)?;

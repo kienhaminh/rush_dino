@@ -526,7 +526,10 @@ fn normalize_models(mut models: Vec<ModelInfo>, defaults: &[ModelInfo]) -> Vec<M
 mod tests {
     use std::time::{Duration, Instant};
 
-    use rushdino_common::{config::{AuthMethod, Provider, ProviderProfile}, AppError};
+    use rushdino_common::{
+        config::{AuthMethod, Provider, ProviderProfile},
+        AppError,
+    };
 
     use crate::state::PendingOAuthStore;
 

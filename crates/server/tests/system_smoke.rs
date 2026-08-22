@@ -40,7 +40,11 @@ async fn create_test_app(home: &Path) -> axum::Router {
         .save_to_path(&credentials_path)
         .expect("save credentials");
 
-    let pool = Arc::new(db::init_pool(&home.join("data.db")).await.expect("init pool"));
+    let pool = Arc::new(
+        db::init_pool(&home.join("data.db"))
+            .await
+            .expect("init pool"),
+    );
     db::run_migrations(pool.as_ref())
         .await
         .expect("run migrations");
@@ -160,7 +164,13 @@ async fn offline_app_smoke_covers_core_routes() {
 
     let (status, workflows_before) = send_empty(&app, Method::GET, "/api/workflows").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(workflows_before["items"].as_array().expect("workflow items").len(), 0);
+    assert_eq!(
+        workflows_before["items"]
+            .as_array()
+            .expect("workflow items")
+            .len(),
+        0
+    );
 
     let (status, workflow) = send_json(
         &app,

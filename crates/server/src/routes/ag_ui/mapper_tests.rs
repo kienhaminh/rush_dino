@@ -64,7 +64,11 @@ fn single_chunk_emits_start_content_end() {
     let out = mapper.handle(chat_chunk_event(chunk("hi", true)));
     assert_eq!(
         types(&out),
-        vec!["TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END"]
+        vec![
+            "TEXT_MESSAGE_START",
+            "TEXT_MESSAGE_CONTENT",
+            "TEXT_MESSAGE_END"
+        ]
     );
 }
 
@@ -112,7 +116,11 @@ fn assistant_reset_starts_new_message_id() {
 #[test]
 fn thinking_delta_emits_custom_event_not_text() {
     let mut mapper = AguiMapper::new("t1", "r1");
-    let out = mapper.handle(chat_chunk_event(chunk_with_thinking("", "pondering", false)));
+    let out = mapper.handle(chat_chunk_event(chunk_with_thinking(
+        "",
+        "pondering",
+        false,
+    )));
     assert_eq!(types(&out), vec!["CUSTOM"]);
     assert_eq!(out[0]["name"], "thinking");
     assert_eq!(out[0]["value"]["delta"], "pondering");

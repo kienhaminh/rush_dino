@@ -40,7 +40,6 @@ impl Tool for WebSearchTool {
          to read specific URLs rather than searching again."
     }
 
-
     fn max_calls_per_turn(&self) -> Option<usize> {
         Some(1)
     }
@@ -117,10 +116,7 @@ impl Tool for WebSearchTool {
                             .get("description")
                             .and_then(Value::as_str)
                             .unwrap_or_default();
-                        let age = item
-                            .get("age")
-                            .and_then(Value::as_str)
-                            .unwrap_or_default();
+                        let age = item.get("age").and_then(Value::as_str).unwrap_or_default();
                         let mut result = json!({
                             "title": title,
                             "url": url,

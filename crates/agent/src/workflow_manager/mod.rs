@@ -4,7 +4,9 @@ use sqlx::SqlitePool;
 
 use rushdino_common::{AppError, Result};
 
-use crate::workflow_types::{WorkflowRunStatus, WorkflowRunStepDetail, WorkflowRunStepStatus, WorkflowSource, WorkflowStatus};
+use crate::workflow_types::{
+    WorkflowRunStatus, WorkflowRunStepDetail, WorkflowRunStepStatus, WorkflowSource, WorkflowStatus,
+};
 
 mod runs;
 mod steps;
@@ -112,4 +114,3 @@ pub(super) fn validate_steps(steps: &[crate::workflow_types::WorkflowStepInput])
     }
     Ok(())
 }
-

@@ -1,4 +1,9 @@
-use std::{collections::HashMap, path::PathBuf, sync::{Arc, Mutex}, time::Instant};
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use rushdino_gateway::{GatewayControl, GatewayStateStore, SessionManager};
 use rushdino_security::guardrail::pipeline::GuardrailPipeline;
@@ -11,11 +16,11 @@ use crate::channel_pairing::ChannelPairingService;
 use crate::chat_broadcast::ChatBroadcastHub;
 use crate::input_request_gate::InputRequestGate;
 use crate::mcp_manager::McpManager;
-use crate::secret_vault::SharedSecretVault;
 use crate::middleware::HmacAuthState;
 use crate::mobile_gateway::{MobileGatewayAdapter, MobileGatewayService};
 use crate::runtime_log_store::RuntimeLogStore;
 use crate::runtime_state::{RuntimeState, RuntimeStatus};
+use crate::secret_vault::SharedSecretVault;
 use crate::webchat::WebChatAdapter;
 use rushdino_agent::AgentEngine;
 use rushdino_auth::oauth_pkce::PendingOAuthLogin;
@@ -129,7 +134,10 @@ impl GuardrailRegistry {
 
     /// Register the guardrail pipeline for a newly started agent session.
     pub async fn register_session(&self, session_id: &str, pipeline: Arc<GuardrailPipeline>) {
-        self.pipelines.write().await.insert(session_id.to_owned(), pipeline);
+        self.pipelines
+            .write()
+            .await
+            .insert(session_id.to_owned(), pipeline);
     }
 
     /// Remove the guardrail pipeline for a completed or aborted session.

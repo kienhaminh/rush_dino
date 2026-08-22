@@ -10,11 +10,11 @@ use uuid::Uuid;
 
 use rushdino_common::Result;
 
-use crate::system_broker::InputRequestStatus;
 use crate::runtime::{
     store::{FieldUpdate, RunPatch, RunStore},
     RunDetail, RunKind, RunListFilter, RunOriginMetadata, RunPolicySnapshot, RunSnapshot, RunState,
 };
+use crate::system_broker::InputRequestStatus;
 
 /// Parameters for submitting an assistant run with full origin metadata.
 pub struct AssistantRunParams<'a> {
@@ -334,11 +334,7 @@ impl AgentRuntime {
         Ok(snapshot)
     }
 
-    pub async fn mark_awaiting_input(
-        &self,
-        run_id: &str,
-        tool_name: &str,
-    ) -> Result<RunSnapshot> {
+    pub async fn mark_awaiting_input(&self, run_id: &str, tool_name: &str) -> Result<RunSnapshot> {
         let snapshot = self
             .store
             .patch_run(
@@ -598,8 +594,10 @@ impl AgentRuntime {
             });
         }
 
-        let patch = if matches!(snapshot.state, RunState::AwaitingApproval | RunState::AwaitingInput)
-        {
+        let patch = if matches!(
+            snapshot.state,
+            RunState::AwaitingApproval | RunState::AwaitingInput
+        ) {
             let waiting_message = if snapshot.state == RunState::AwaitingInput {
                 "Run aborted while input was pending.".to_owned()
             } else {

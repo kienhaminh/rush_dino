@@ -7,8 +7,7 @@ use tokio::fs;
 use rushdino_common::{AppError, Result};
 
 use crate::{
-    system_broker::SharedSystemBroker,
-    tool_registry::Tool,
+    system_broker::SharedSystemBroker, tool_registry::Tool,
     tools::bash::current_tool_execution_context,
 };
 
@@ -20,7 +19,10 @@ pub struct FileWriteTool {
 
 impl FileWriteTool {
     pub fn new(workspace: PathBuf) -> Self {
-        Self { workspace, broker: None }
+        Self {
+            workspace,
+            broker: None,
+        }
     }
 
     pub fn with_broker(mut self, broker: SharedSystemBroker) -> Self {
@@ -146,7 +148,11 @@ mod tests {
     fn resolves_new_relative_file_under_workspace() {
         let workspace = tempdir().unwrap();
         let target = resolve_write_target(workspace.path(), "nested/new.txt").unwrap();
-        let expected = workspace.path().canonicalize().unwrap().join("nested/new.txt");
+        let expected = workspace
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join("nested/new.txt");
         assert_eq!(target, expected);
     }
 

@@ -74,9 +74,7 @@ pub async fn run(args: DoctorArgs) -> Result<()> {
         .as_array()
         .cloned()
         .unwrap_or_default();
-    let pending_count = summary["approvals"]["pending_count"]
-        .as_i64()
-        .unwrap_or(0);
+    let pending_count = summary["approvals"]["pending_count"].as_i64().unwrap_or(0);
 
     if args.json {
         println!(
@@ -92,7 +90,13 @@ pub async fn run(args: DoctorArgs) -> Result<()> {
         return Ok(());
     }
 
-    print_report(&findings, &incidents, &recent_failures, &agent_health, pending_count);
+    print_report(
+        &findings,
+        &incidents,
+        &recent_failures,
+        &agent_health,
+        pending_count,
+    );
     Ok(())
 }
 
@@ -239,12 +243,7 @@ fn print_agent_health(agent_health: &[Value]) {
 fn print_summary(findings: &[Value], recent_failures: &[Value], agent_health: &[Value]) {
     let error_count = findings
         .iter()
-        .filter(|f| {
-            matches!(
-                f["severity"].as_str(),
-                Some("error") | Some("warn")
-            )
-        })
+        .filter(|f| matches!(f["severity"].as_str(), Some("error") | Some("warn")))
         .count()
         + recent_failures.len()
         + agent_health

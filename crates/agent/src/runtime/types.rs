@@ -73,7 +73,10 @@ impl RunState {
 
     pub fn is_wait_target(self) -> bool {
         self.is_terminal()
-            || matches!(self, Self::AwaitingApproval | Self::AwaitingInput | Self::Blocked)
+            || matches!(
+                self,
+                Self::AwaitingApproval | Self::AwaitingInput | Self::Blocked
+            )
     }
 }
 

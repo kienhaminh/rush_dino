@@ -8,10 +8,7 @@ use serde_json::{json, Value};
 
 use rushdino_common::Result;
 
-use crate::{
-    kanban_store::KanbanStore,
-    tool_registry::Tool,
-};
+use crate::{kanban_store::KanbanStore, tool_registry::Tool};
 
 pub struct TeamStatusTool {
     store: Arc<KanbanStore>,
@@ -34,7 +31,6 @@ impl Tool for TeamStatusTool {
          Shows active tasks (who is doing what), backlog count, and recently completed work. \
          Use this to coordinate with other agents and avoid duplicate effort."
     }
-
 
     fn parameters(&self) -> Value {
         json!({

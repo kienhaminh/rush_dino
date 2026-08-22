@@ -122,7 +122,6 @@ impl Tool for RequestUserInputTool {
         "Ask the workspace user a question or form, pause the current run, and resume when they respond."
     }
 
-
     fn parameters(&self) -> Value {
         let choice_items = json!({
             "oneOf": [
@@ -332,11 +331,7 @@ fn normalize_field(field: InputFieldArgs) -> Result<InputFieldSpec> {
         max_length: field.max_length,
         options: &options,
     };
-    validate_field_constraints(
-        &name,
-        &field.field_type,
-        &constraints,
-    )?;
+    validate_field_constraints(&name, &field.field_type, &constraints)?;
 
     Ok(InputFieldSpec {
         name,
@@ -392,9 +387,7 @@ fn validate_field_constraints(
             }
             if let Some(value) = default_value {
                 value.as_str().ok_or_else(|| {
-                    AppError::Validation(format!(
-                        "field '{name}' defaultValue must be a string"
-                    ))
+                    AppError::Validation(format!("field '{name}' defaultValue must be a string"))
                 })?;
             }
         }
@@ -407,9 +400,7 @@ fn validate_field_constraints(
             }
             if let Some(value) = default_value {
                 let selected = value.as_str().ok_or_else(|| {
-                    AppError::Validation(format!(
-                        "field '{name}' defaultValue must be a string"
-                    ))
+                    AppError::Validation(format!("field '{name}' defaultValue must be a string"))
                 })?;
                 ensure_option_membership(name, selected, options)?;
             }
@@ -423,9 +414,7 @@ fn validate_field_constraints(
             }
             if let Some(value) = default_value {
                 let values = value.as_array().ok_or_else(|| {
-                    AppError::Validation(format!(
-                        "field '{name}' defaultValue must be an array"
-                    ))
+                    AppError::Validation(format!("field '{name}' defaultValue must be an array"))
                 })?;
                 for item in values {
                     let selected = item.as_str().ok_or_else(|| {
@@ -450,9 +439,7 @@ fn validate_field_constraints(
             }
             if let Some(value) = default_value {
                 value.as_bool().ok_or_else(|| {
-                    AppError::Validation(format!(
-                        "field '{name}' defaultValue must be a boolean"
-                    ))
+                    AppError::Validation(format!("field '{name}' defaultValue must be a boolean"))
                 })?;
             }
         }
@@ -469,9 +456,7 @@ fn validate_field_constraints(
             }
             if let Some(value) = default_value {
                 value.as_i64().ok_or_else(|| {
-                    AppError::Validation(format!(
-                        "field '{name}' defaultValue must be an integer"
-                    ))
+                    AppError::Validation(format!("field '{name}' defaultValue must be an integer"))
                 })?;
             }
         }
@@ -488,7 +473,11 @@ fn validate_option_list(name: &str, options: &[InputFieldOption]) -> Result<()> 
     Ok(())
 }
 
-fn ensure_option_membership(name: &str, selected: &str, options: &[InputFieldOption]) -> Result<()> {
+fn ensure_option_membership(
+    name: &str,
+    selected: &str,
+    options: &[InputFieldOption],
+) -> Result<()> {
     if options.iter().any(|option| option.value == selected) {
         return Ok(());
     }
@@ -527,9 +516,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        system_broker::{
-            InputRequestResult, ShellExecRequest, ShellExecResult, SystemBroker,
-        },
+        system_broker::{InputRequestResult, ShellExecRequest, ShellExecResult, SystemBroker},
         tools::bash::{with_tool_execution_context, ToolExecutionContext},
     };
 
@@ -602,7 +589,10 @@ mod tests {
         assert_eq!(request.payload.spec.kind, InputRequestKind::Question);
         assert_eq!(request.payload.spec.title, "Which project should I target?");
         assert_eq!(request.payload.spec.fields[0].name, "answer");
-        assert_eq!(request.payload.spec.fields[0].field_type, InputFieldType::Select);
+        assert_eq!(
+            request.payload.spec.fields[0].field_type,
+            InputFieldType::Select
+        );
         assert_eq!(request.payload.spec.fields[0].options.len(), 2);
 
         let parsed: Value = serde_json::from_str(&output).expect("output should be valid JSON");

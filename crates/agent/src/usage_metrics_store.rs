@@ -156,7 +156,9 @@ mod tests {
 
     #[tokio::test]
     async fn excludes_oauth_auth_method_from_usage_queries() {
-        let pool = SqlitePool::connect(":memory:").await.expect("connect sqlite");
+        let pool = SqlitePool::connect(":memory:")
+            .await
+            .expect("connect sqlite");
         run_migrations(&pool).await.expect("run migrations");
 
         let store = UsageMetricsStore::new(Arc::new(pool));
@@ -239,7 +241,9 @@ mod tests {
     async fn insert_usage_records_timing() {
         use sqlx::Row;
 
-        let pool = SqlitePool::connect(":memory:").await.expect("connect sqlite");
+        let pool = SqlitePool::connect(":memory:")
+            .await
+            .expect("connect sqlite");
         run_migrations(&pool).await.expect("run migrations");
 
         let store = UsageMetricsStore::new(Arc::new(pool.clone()));
@@ -270,19 +274,18 @@ mod tests {
                 "claude-sonnet-4-6",
                 "apikey",
                 &usage,
-                Some(312),   // ttft_ms
-                Some(1850),  // total_ms
+                Some(312),  // ttft_ms
+                Some(1850), // total_ms
             )
             .await
             .expect("insert usage with timing");
 
-        let row = sqlx::query(
-            "SELECT ttft_ms, total_ms FROM usage_metrics WHERE conversation_id = ?1",
-        )
-        .bind(conversation_id)
-        .fetch_one(&pool)
-        .await
-        .expect("fetch usage row");
+        let row =
+            sqlx::query("SELECT ttft_ms, total_ms FROM usage_metrics WHERE conversation_id = ?1")
+                .bind(conversation_id)
+                .fetch_one(&pool)
+                .await
+                .expect("fetch usage row");
 
         assert_eq!(row.get::<Option<i64>, _>("ttft_ms"), Some(312));
         assert_eq!(row.get::<Option<i64>, _>("total_ms"), Some(1850));

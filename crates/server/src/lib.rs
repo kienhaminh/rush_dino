@@ -571,7 +571,10 @@ pub async fn build_app(
             "/api/usage/metrics",
             get(routes::usage_metrics::get_usage_metrics),
         )
-        .route("/api/agents", get(routes::agents::list_agents))
+        .route(
+            "/api/agents",
+            get(routes::agents::list_agents).post(routes::agent_team::persist_agent),
+        )
         .route(
             "/api/agents/progress",
             get(routes::agent_progress::get_agent_progress),
@@ -579,6 +582,14 @@ pub async fn build_app(
         .route(
             "/api/agents/:id",
             axum::routing::delete(routes::agents::delete_agent),
+        )
+        .route(
+            "/api/agents/:id/assign",
+            post(routes::agent_team::assign_agent_work),
+        )
+        .route(
+            "/api/agents/:id/handoff",
+            post(routes::agent_team::handoff_agent_work),
         )
         .route(
             "/api/agents/:id/runtime",

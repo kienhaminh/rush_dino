@@ -126,10 +126,14 @@ pub async fn run(args: WorkflowArgs) -> Result<()> {
             }
         }
         WorkflowAction::Create { name, steps, json } => {
-            let steps_value: serde_json::Value = serde_json::from_str(&steps)
-                .map_err(|e| rushdino_common::AppError::Validation(format!("invalid steps JSON: {e}")))?;
+            let steps_value: serde_json::Value = serde_json::from_str(&steps).map_err(|e| {
+                rushdino_common::AppError::Validation(format!("invalid steps JSON: {e}"))
+            })?;
             let data = client
-                .post("/api/workflows", serde_json::json!({ "name": name, "steps": steps_value }))
+                .post(
+                    "/api/workflows",
+                    serde_json::json!({ "name": name, "steps": steps_value }),
+                )
                 .await?;
             if json {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());

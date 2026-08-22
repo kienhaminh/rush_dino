@@ -1,7 +1,9 @@
 use colored::Colorize;
 use open;
 
-use rushdino_common::{dashboard_auth::DashboardAuthService, db, init, AppConfig, AppError, Result};
+use rushdino_common::{
+    dashboard_auth::DashboardAuthService, db, init, AppConfig, AppError, Result,
+};
 
 use crate::DashboardAction;
 

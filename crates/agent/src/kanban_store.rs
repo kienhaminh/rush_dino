@@ -379,12 +379,11 @@ impl KanbanStore {
                 .await?;
 
                 // Auto-fail if max revisions exceeded (> 2 revisions = 3 total attempts).
-                let count: (i64,) = sqlx::query_as(
-                    "SELECT revision_count FROM kanban_tasks WHERE id = ?",
-                )
-                .bind(task_id)
-                .fetch_one(self.pool.as_ref())
-                .await?;
+                let count: (i64,) =
+                    sqlx::query_as("SELECT revision_count FROM kanban_tasks WHERE id = ?")
+                        .bind(task_id)
+                        .fetch_one(self.pool.as_ref())
+                        .await?;
                 if count.0 > 2 {
                     sqlx::query(
                         "UPDATE kanban_tasks SET status = 'failed', \
@@ -431,13 +430,11 @@ impl KanbanStore {
 
     /// Get a single task by ID.
     pub async fn get_task(&self, task_id: &str) -> Result<KanbanTask> {
-        let row = sqlx::query_as::<_, KanbanTaskRow>(
-            "SELECT * FROM kanban_tasks WHERE id = ?"
-        )
-        .bind(task_id)
-        .fetch_optional(self.pool.as_ref())
-        .await?
-        .ok_or_else(|| AppError::NotFound(format!("kanban task '{task_id}' not found")))?;
+        let row = sqlx::query_as::<_, KanbanTaskRow>("SELECT * FROM kanban_tasks WHERE id = ?")
+            .bind(task_id)
+            .fetch_optional(self.pool.as_ref())
+            .await?
+            .ok_or_else(|| AppError::NotFound(format!("kanban task '{task_id}' not found")))?;
 
         Ok(row.into_task())
     }

@@ -9,7 +9,9 @@ use crate::{
     agent_manager::AgentManager,
     tool_registry::Tool,
     workflow_manager::WorkflowManager,
-    workflow_types::{CreateWorkflowInput, UpdateWorkflowInput, WorkflowSource, WorkflowStatus, WorkflowStepInput},
+    workflow_types::{
+        CreateWorkflowInput, UpdateWorkflowInput, WorkflowSource, WorkflowStatus, WorkflowStepInput,
+    },
 };
 
 /// Unified CRUD tool for workflow management — create, update, delete, or inspect.
@@ -37,7 +39,6 @@ impl Tool for WorkflowManageTool {
     fn description(&self) -> &str {
         "Manage workflows — create, update, delete, or inspect"
     }
-
 
     fn parameters(&self) -> Value {
         json!({

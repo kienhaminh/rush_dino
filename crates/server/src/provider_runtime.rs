@@ -1,11 +1,17 @@
-use std::{path::Path, sync::Arc, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    path::Path,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use rushdino_agent::{engine_deps::EngineBuildInput, AgentConfig, AgentEngine, KnowledgeGraphAccess};
+use rushdino_agent::{
+    engine_deps::EngineBuildInput, AgentConfig, AgentEngine, KnowledgeGraphAccess,
+};
+use rushdino_auth::{refresh_access_token, refresh_anthropic_token};
 use rushdino_common::{
     config::{AuthMethod, ProfileSecrets, Provider, ProviderProfile},
     AppConfig, AppError, CredentialsConfig, Result,
 };
-use rushdino_auth::{refresh_access_token, refresh_anthropic_token};
 use rushdino_knowledge_graph::KgGateway;
 use rushdino_providers::{
     types::{AnthropicAuth, OpenAIAuth, ProviderConfig},
@@ -110,7 +116,9 @@ pub async fn refresh_runtime_from_disk(
 
             // KgGateway is only connected when the caller explicitly requests it
             // (i.e. after the user enables it via config, not on every startup).
-            let knowledge_graph_service = if config.knowledge_graph.enabled && init_optional_services {
+            let knowledge_graph_service = if config.knowledge_graph.enabled
+                && init_optional_services
+            {
                 let kg_fut = KgGateway::from_config(
                     &config.knowledge_graph,
                     &credentials.knowledge_graph,
@@ -118,12 +126,7 @@ pub async fn refresh_runtime_from_disk(
                     pool.clone(),
                     config.data_dir.clone(),
                 );
-                match tokio::time::timeout(
-                    std::time::Duration::from_millis(500),
-                    kg_fut,
-                )
-                .await
-                {
+                match tokio::time::timeout(std::time::Duration::from_millis(500), kg_fut).await {
                     Ok(Ok(gw)) => Some(Arc::new(gw)),
                     Ok(Err(err)) => {
                         tracing::warn!("knowledge graph gateway init failed: {err}");
@@ -138,8 +141,7 @@ pub async fn refresh_runtime_from_disk(
                 None
             };
             let knowledge_graph_bridge = knowledge_graph_service.as_ref().map(|gw| {
-                Arc::new(KnowledgeGraphBridge::new(gw.clone()))
-                    as Arc<dyn KnowledgeGraphAccess>
+                Arc::new(KnowledgeGraphBridge::new(gw.clone())) as Arc<dyn KnowledgeGraphAccess>
             });
 
             let auth_method = match &resolved.provider_config {
@@ -300,8 +302,7 @@ async fn provider_config_from_profile(
                     base_url: None,
                 })
             } else {
-                let api_key =
-                    require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+                let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
                 Ok(ProviderConfig::OpenAI {
                     auth: OpenAIAuth::ApiKey { api_key },
                     model: profile.default_model.clone(),
@@ -315,8 +316,7 @@ async fn provider_config_from_profile(
                     resolve_anthropic_oauth_api_key(credentials, credentials_path, profile).await?;
                 AnthropicAuth::OAuth { access_token }
             } else {
-                let api_key =
-                    require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
+                let api_key = require_api_key(credentials.profiles.get(&profile.id), &profile.id)?;
                 AnthropicAuth::ApiKey { api_key }
             };
             Ok(ProviderConfig::Anthropic {
@@ -383,10 +383,7 @@ async fn resolve_openai_oauth_api_key(
             let client = reqwest::Client::new();
             match refresh_access_token(&client, &ref_token).await {
                 Ok(new_tokens) => {
-                    let entry = credentials
-                        .profiles
-                        .entry(profile.id.clone())
-                        .or_default();
+                    let entry = credentials.profiles.entry(profile.id.clone()).or_default();
                     entry.access_token = Some(new_tokens.access_token.clone());
                     entry.refresh_token = Some(new_tokens.refresh_token);
                     entry.token_expires_at = Some(new_tokens.expires_at);
@@ -445,10 +442,7 @@ async fn resolve_anthropic_oauth_api_key(
             let client = reqwest::Client::new();
             match refresh_anthropic_token(&client, &ref_token).await {
                 Ok(new_tokens) => {
-                    let entry = credentials
-                        .profiles
-                        .entry(profile.id.clone())
-                        .or_default();
+                    let entry = credentials.profiles.entry(profile.id.clone()).or_default();
                     entry.access_token = Some(new_tokens.access_token.clone());
                     entry.refresh_token = Some(new_tokens.refresh_token);
                     entry.token_expires_at = Some(new_tokens.expires_at);

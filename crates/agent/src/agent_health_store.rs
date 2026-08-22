@@ -111,12 +111,11 @@ impl AgentHealthStore {
 
     /// Total number of recorded task outcomes for an agent across all time.
     pub async fn get_total_tasks(&self, agent_name: &str) -> Result<i64> {
-        let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM agent_match_outcomes WHERE agent_name = ?1",
-        )
-        .bind(agent_name)
-        .fetch_one(self.pool.as_ref())
-        .await?;
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM agent_match_outcomes WHERE agent_name = ?1")
+                .bind(agent_name)
+                .fetch_one(self.pool.as_ref())
+                .await?;
         Ok(row.0)
     }
 

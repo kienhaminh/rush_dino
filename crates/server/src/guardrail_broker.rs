@@ -24,9 +24,7 @@ use rushdino_agent::system_broker::{
 };
 use rushdino_common::{AppError, Result};
 use rushdino_security::guardrail::pipeline::{GuardrailPipeline, InputDecision};
-use rushdino_security::guardrail::types::{
-    ActionCategory, GuardrailAction, SourceTag,
-};
+use rushdino_security::guardrail::types::{ActionCategory, GuardrailAction, SourceTag};
 
 /// Timeout in seconds to wait for a human approval decision before
 /// automatically denying the command.
@@ -165,7 +163,9 @@ impl SystemBroker for GuardrailBroker {
                 )));
             }
 
-            InputDecision::NeedsApproval { redacted_content, .. } => {
+            InputDecision::NeedsApproval {
+                redacted_content, ..
+            } => {
                 // Register waiter BEFORE sending the request so there is no
                 // race between the API layer resolving and us registering.
                 let (tx, rx) = oneshot::channel::<bool>();
@@ -188,11 +188,9 @@ impl SystemBroker for GuardrailBroker {
                     )));
                 }
 
-                let timeout_result = tokio::time::timeout(
-                    std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS),
-                    rx,
-                )
-                .await;
+                let timeout_result =
+                    tokio::time::timeout(std::time::Duration::from_secs(APPROVAL_TIMEOUT_SECS), rx)
+                        .await;
 
                 // Always clean up the pending entry — either the timeout fired
                 // (entry still present) or the receiver was dropped without a
@@ -252,9 +250,7 @@ impl SystemBroker for GuardrailBroker {
                 request.timeout_secs
             ))
         })?
-        .map_err(|err| {
-            rushdino_common::AppError::Agent(format!("shell_exec failed: {err}"))
-        })?;
+        .map_err(|err| rushdino_common::AppError::Agent(format!("shell_exec failed: {err}")))?;
 
         let raw_stdout = String::from_utf8_lossy(&output.stdout).into_owned();
         let raw_stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -267,7 +263,10 @@ impl SystemBroker for GuardrailBroker {
 
         // Prepend injection warnings to stderr when PromptShield detects
         // suspicious content in either stdout or stderr.
-        let stderr = match (stdout_result.injection_warning, stderr_result.injection_warning) {
+        let stderr = match (
+            stdout_result.injection_warning,
+            stderr_result.injection_warning,
+        ) {
             (Some(w1), Some(w2)) => {
                 format!(
                     "[GUARDRAIL WARNING] {w1}\n[GUARDRAIL WARNING] {w2}\n{}",

@@ -2,7 +2,11 @@
 //! executes them in isolated react loops, writes daily memory, and notifies
 //! the originating conversation.
 
-use std::{path::PathBuf, sync::{Arc, Weak}, time::Duration};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Weak},
+    time::Duration,
+};
 
 use chrono::Utc;
 use tokio::time;
@@ -28,8 +32,8 @@ use crate::{
     skill_manager::SkillManager,
     tool_registry::{SessionToolContext, ToolRegistry},
     tools::{
-        delegate_to_agent::parse_tool_list,
         bash::{with_tool_execution_context, ToolExecutionContext},
+        delegate_to_agent::parse_tool_list,
     },
 };
 
@@ -42,10 +46,19 @@ pub const HEARTBEAT_INTERVAL_SECS: u64 = 30;
 ///
 /// The entry is designed to be appended to the day's daily note so an agent
 /// can review what was accomplished during the session.
-pub fn format_task_completion_note(task_id: &str, title: &str, agent: &str, result: &str) -> String {
+pub fn format_task_completion_note(
+    task_id: &str,
+    title: &str,
+    agent: &str,
+    result: &str,
+) -> String {
     let now = Utc::now().format("%Y-%m-%d %H:%M").to_string();
     // Trim result to keep daily notes from growing unbounded.
-    let preview = if result.len() > 500 { &result[..500] } else { result };
+    let preview = if result.len() > 500 {
+        &result[..500]
+    } else {
+        result
+    };
     format!("## {title}\n\n- **Time**: {now}\n- **Agent**: {agent}\n- **Task ID**: {task_id}\n\n{preview}\n\n---\n\n")
 }
 
@@ -124,16 +137,21 @@ impl KanbanDispatcher {
                         "task execution failed"
                     );
                     // Record failure for circuit breaker / matching feedback.
-                    let _ = self.health_store.record_outcome(
-                        &matched.agent_name, &task.id, &task.tags, false,
-                    ).await;
+                    let _ = self
+                        .health_store
+                        .record_outcome(&matched.agent_name, &task.id, &task.tags, false)
+                        .await;
                     // Best-effort status update; ignore secondary failures.
-                    if let Ok(updated) = self.store.update_task_status(&UpdateTaskInput {
-                        task_id: task.id.clone(),
-                        status: TaskStatus::Failed,
-                        result: Some(format!("Execution error: {e}")),
-                        block_reason: None,
-                    }).await {
+                    if let Ok(updated) = self
+                        .store
+                        .update_task_status(&UpdateTaskInput {
+                            task_id: task.id.clone(),
+                            status: TaskStatus::Failed,
+                            result: Some(format!("Execution error: {e}")),
+                            block_reason: None,
+                        })
+                        .await
+                    {
                         let _ = self.broadcast_tx.send(serde_json::json!({
                             "type": "task_status_changed",
                             "task_id": updated.id,
@@ -153,7 +171,11 @@ impl KanbanDispatcher {
     ///
     /// Mirrors the pattern in `DelegateToAgentTool::execute` for isolated
     /// session creation and react-loop execution.
-    async fn execute_task(&self, task: &crate::kanban_store::KanbanTask, agent_name: &str) -> Result<()> {
+    async fn execute_task(
+        &self,
+        task: &crate::kanban_store::KanbanTask,
+        agent_name: &str,
+    ) -> Result<()> {
         // 1. Resolve the agent template.
         let template = self
             .agent_manager
@@ -212,10 +234,13 @@ impl KanbanDispatcher {
         };
 
         // 7. Agent workspace directory.
-        let agent_workspace = self.home_dir.join("agents").join(agent_name).join("workspace");
-        std::fs::create_dir_all(&agent_workspace).map_err(|e| {
-            AppError::Agent(format!("failed to create agent workspace: {e}"))
-        })?;
+        let agent_workspace = self
+            .home_dir
+            .join("agents")
+            .join(agent_name)
+            .join("workspace");
+        std::fs::create_dir_all(&agent_workspace)
+            .map_err(|e| AppError::Agent(format!("failed to create agent workspace: {e}")))?;
 
         // 8. Build system prompt, injecting workspace, tool list, and task history.
         let mut system_content = template.system_prompt.clone();
@@ -246,7 +271,11 @@ impl KanbanDispatcher {
         if let Some(ref parent_id) = task.parent_task_id {
             if let Ok(parent) = self.store.get_task(parent_id).await {
                 if let Some(ref result) = parent.result {
-                    let preview = if result.len() > 500 { &result[..500] } else { result };
+                    let preview = if result.len() > 500 {
+                        &result[..500]
+                    } else {
+                        result
+                    };
                     system_content.push_str(&format!(
                         "\n\n## Parent Task Result\n\nParent task \"{}\" produced:\n{}",
                         parent.title, preview
@@ -270,7 +299,11 @@ impl KanbanDispatcher {
         );
 
         let sys_msg = Message::new(Uuid::new_v4().to_string(), Role::System, system_content);
-        let user_msg = Message::new(Uuid::new_v4().to_string(), Role::User, task_description.clone());
+        let user_msg = Message::new(
+            Uuid::new_v4().to_string(),
+            Role::User,
+            task_description.clone(),
+        );
 
         // Persist opening messages immediately so they are visible on error.
         self.conversation.save_message(&conv_id, &sys_msg).await?;
@@ -290,14 +323,19 @@ impl KanbanDispatcher {
         };
 
         // Create streaming event channel to intercept tool calls for WS broadcast
-        let (tool_event_tx, mut tool_event_rx) = tokio::sync::mpsc::channel::<crate::react_loop::StreamingEvent>(256);
+        let (tool_event_tx, mut tool_event_rx) =
+            tokio::sync::mpsc::channel::<crate::react_loop::StreamingEvent>(256);
         let broadcast_tx_clone = self.broadcast_tx.clone();
         let task_id_for_events = task.id.clone();
 
         tokio::spawn(async move {
             while let Some(event) = tool_event_rx.recv().await {
                 match event {
-                    crate::react_loop::StreamingEvent::ToolStart { ref tool_name, ref args, .. } => {
+                    crate::react_loop::StreamingEvent::ToolStart {
+                        ref tool_name,
+                        ref args,
+                        ..
+                    } => {
                         let label = build_tool_label(tool_name, args);
                         let _ = broadcast_tx_clone.send(serde_json::json!({
                             "type": "task_tool_event",
@@ -348,12 +386,15 @@ impl KanbanDispatcher {
         }
 
         // 12. Mark task as Done (store will promote to InReview automatically).
-        let updated_task = self.store.update_task_status(&UpdateTaskInput {
-            task_id: task.id.clone(),
-            status: TaskStatus::Done,
-            result: Some(response.content.clone()),
-            block_reason: None,
-        }).await?;
+        let updated_task = self
+            .store
+            .update_task_status(&UpdateTaskInput {
+                task_id: task.id.clone(),
+                status: TaskStatus::Done,
+                result: Some(response.content.clone()),
+                block_reason: None,
+            })
+            .await?;
         let _ = self.broadcast_tx.send(serde_json::json!({
             "type": "task_status_changed",
             "task_id": updated_task.id,
@@ -364,13 +405,17 @@ impl KanbanDispatcher {
         }));
 
         // 13. Write daily note entry.
-        let note = format_task_completion_note(&task.id, &task.title, agent_name, &response.content);
+        let note =
+            format_task_completion_note(&task.id, &task.title, agent_name, &response.content);
         if let Err(e) = self.memory.write_memory(&note, true) {
             tracing::warn!(task_id = %task.id, error = %e, "failed to write daily note for kanban task");
         }
 
         // 14. Log to per-agent task memory.
-        if let Err(e) = self.task_memory.append_task(agent_name, &task_description, &response.content) {
+        if let Err(e) =
+            self.task_memory
+                .append_task(agent_name, &task_description, &response.content)
+        {
             tracing::warn!(agent = agent_name, error = %e, "failed to write agent task log for kanban task");
         }
 
@@ -393,7 +438,11 @@ impl KanbanDispatcher {
         }
 
         // 16. Record success for matching feedback / circuit breaker.
-        if let Err(e) = self.health_store.record_outcome(agent_name, &task.id, &task.tags, true).await {
+        if let Err(e) = self
+            .health_store
+            .record_outcome(agent_name, &task.id, &task.tags, true)
+            .await
+        {
             tracing::warn!(task_id = %task.id, error = %e, "failed to record health outcome");
         }
 
@@ -428,7 +477,8 @@ fn build_tool_label(tool_name: &str, args: &serde_json::Value) -> String {
         "edit" | "Edit" => format!("Edit {}", get_filename("file_path")),
         "write" | "Write" => format!("Write {}", get_filename("file_path")),
         "bash" | "Bash" => {
-            let cmd = args.get("command")
+            let cmd = args
+                .get("command")
                 .and_then(|v| v.as_str())
                 .unwrap_or("command");
             if cmd.len() > 40 {
@@ -514,7 +564,10 @@ mod tests {
         let args = serde_json::json!({ "command": cmd });
         let result = build_tool_label("bash", &args);
         assert_eq!(result, format!("Bash: {}", "b".repeat(40)));
-        assert!(!result.contains('…'), "40-char command should not be truncated");
+        assert!(
+            !result.contains('…'),
+            "40-char command should not be truncated"
+        );
     }
 
     #[test]
@@ -522,7 +575,10 @@ mod tests {
         let args = serde_json::json!({});
         assert_eq!(build_tool_label("glob", &args), "glob");
         assert_eq!(build_tool_label("grep", &args), "grep");
-        assert_eq!(build_tool_label("some_custom_tool", &args), "some_custom_tool");
+        assert_eq!(
+            build_tool_label("some_custom_tool", &args),
+            "some_custom_tool"
+        );
     }
 
     #[test]

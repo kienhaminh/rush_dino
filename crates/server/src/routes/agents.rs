@@ -29,6 +29,8 @@ pub struct AgentListItem {
     pub claims_tasks: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<String>,
+    pub inbox_enabled: bool,
+    pub data_capable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -128,22 +130,13 @@ pub async fn list_agents(State(state): State<AppState>) -> Result<Json<serde_jso
     let mut items = engine.list_agent_templates();
     items.sort_by(|a, b| a.name.cmp(&b.name));
 
+    let agents_dir = config.data_dir.join("agents");
     let mapped = items
         .into_iter()
         .enumerate()
-        .map(|(idx, agent)| AgentListItem {
-            id: agent.name.clone(),
-            name: humanize_agent_name(&agent.name),
-            emoji: agent.icon.unwrap_or_else(|| "🤖".to_owned()),
-            is_default: idx == 0,
-            workspace: agent_definition_path(&config.data_dir.join("agents"), &agent.name)
-                .display()
-                .to_string(),
-            description: agent.description,
-            sandbox_policy: agent.sandbox_policy,
-            claim_tags: agent.claim_tags.clone(),
-            claims_tasks: agent.claims_tasks,
-            tools: agent.tools.clone(),
+        .map(|(idx, agent)| {
+            let workspace = agent_workspace(&agents_dir, &agent.name);
+            agent_to_list_item(agent, workspace, idx == 0)
         })
         .collect::<Vec<_>>();
 
@@ -443,7 +436,35 @@ fn is_valid_agent_id(id: &str) -> bool {
     !id.is_empty() && !id.starts_with('.') && !id.contains('/') && !id.contains('\\')
 }
 
-fn humanize_agent_name(raw: &str) -> String {
+pub(crate) fn agent_workspace(agents_dir: &FsPath, agent_id: &str) -> String {
+    agent_definition_path(agents_dir, agent_id)
+        .display()
+        .to_string()
+}
+
+pub(crate) fn agent_to_list_item(
+    agent: rushdino_agent::AgentTemplate,
+    workspace: String,
+    is_default: bool,
+) -> AgentListItem {
+    let data_capable = rushdino_agent::teammate_is_data_capable(&agent);
+    AgentListItem {
+        id: agent.name.clone(),
+        name: humanize_agent_name(&agent.name),
+        emoji: agent.icon.unwrap_or_else(|| "🤖".to_owned()),
+        is_default,
+        workspace,
+        description: agent.description,
+        sandbox_policy: agent.sandbox_policy,
+        claim_tags: agent.claim_tags,
+        claims_tasks: agent.claims_tasks,
+        tools: agent.tools,
+        inbox_enabled: agent.inbox_enabled,
+        data_capable,
+    }
+}
+
+pub(crate) fn humanize_agent_name(raw: &str) -> String {
     raw.split('-')
         .filter(|part| !part.is_empty())
         .map(|part| {
@@ -630,6 +651,8 @@ mod tests {
             claim_tags: vec![],
             claims_tasks: true,
             tools: None,
+            inbox_enabled: true,
+            data_capable: false,
             sandbox_policy: Some(SandboxPolicy {
                 version: "1".to_owned(),
                 sandbox: SandboxConfig {
@@ -676,11 +699,15 @@ mod tests {
             claim_tags: vec![],
             claims_tasks: true,
             tools: None,
+            inbox_enabled: true,
+            data_capable: false,
             sandbox_policy: None,
         };
 
         let value = serde_json::to_value(item).expect("agent list item should serialize");
         assert!(value.get("model").is_none());
+        assert_eq!(value["dataCapable"], false);
+        assert_eq!(value["inboxEnabled"], true);
     }
 
     #[test]

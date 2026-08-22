@@ -39,7 +39,6 @@ impl Tool for AgentInboxTool {
          Use action 'check' to see unread messages in your inbox."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

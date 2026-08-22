@@ -82,7 +82,11 @@ pub async fn run(args: KanbanArgs) -> Result<()> {
                 }
             }
         }
-        KanbanAction::List { status, agent, json } => {
+        KanbanAction::List {
+            status,
+            agent,
+            json,
+        } => {
             let mut path = "/api/kanban/tasks".to_owned();
             let mut params: Vec<String> = Vec::new();
             if let Some(s) = &status {

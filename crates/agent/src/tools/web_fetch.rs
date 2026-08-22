@@ -90,7 +90,6 @@ impl Tool for WebFetchTool {
         "Fetch and extract readable content from a URL (HTML, JSON, or plain text). Use for lightweight page access without browser automation."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -361,7 +360,11 @@ async fn extract_with_llm(provider: &Provider, url: &str, text: &str) -> Result<
 
     let request = ChatRequest {
         messages: vec![
-            Message::new(Uuid::new_v4().to_string(), Role::System, system_instructions.to_owned()),
+            Message::new(
+                Uuid::new_v4().to_string(),
+                Role::System,
+                system_instructions.to_owned(),
+            ),
             Message::new(Uuid::new_v4().to_string(), Role::User, user_prompt),
         ],
         tools: None,

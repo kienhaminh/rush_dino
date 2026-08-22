@@ -78,7 +78,10 @@ pub async fn get_trust_levels(
     State(state): State<AppState>,
     Path(agent_id): Path<String>,
 ) -> Result<Json<TrustLevelResponse>, StatusCode> {
-    let ts_arc = state.guardrail_registry.get_or_init_agent_state(&agent_id).await;
+    let ts_arc = state
+        .guardrail_registry
+        .get_or_init_agent_state(&agent_id)
+        .await;
     // Recover from a poisoned mutex rather than propagating a panic to the request handler.
     let ts = ts_arc.lock().unwrap_or_else(|e| e.into_inner());
 
@@ -92,7 +95,10 @@ pub async fn get_trust_levels(
         })
         .collect();
 
-    Ok(Json(TrustLevelResponse { agent_id, trust_levels }))
+    Ok(Json(TrustLevelResponse {
+        agent_id,
+        trust_levels,
+    }))
 }
 
 /// PUT /api/agents/:agent_id/guardrail/trust
@@ -101,7 +107,10 @@ pub async fn set_trust_level(
     Path(agent_id): Path<String>,
     Json(body): Json<SetTrustLevelRequest>,
 ) -> Result<StatusCode, StatusCode> {
-    let ts_arc = state.guardrail_registry.get_or_init_agent_state(&agent_id).await;
+    let ts_arc = state
+        .guardrail_registry
+        .get_or_init_agent_state(&agent_id)
+        .await;
     let mut ts = ts_arc.lock().unwrap_or_else(|e| e.into_inner());
     ts.set_level(body.category, body.level);
     Ok(StatusCode::NO_CONTENT)

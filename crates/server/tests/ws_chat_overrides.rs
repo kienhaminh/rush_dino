@@ -48,7 +48,11 @@ async fn create_test_app(home: &Path) -> Router {
         .save_to_path(&credentials_path)
         .expect("save credentials");
 
-    let pool = Arc::new(db::init_pool(&home.join("data.db")).await.expect("init pool"));
+    let pool = Arc::new(
+        db::init_pool(&home.join("data.db"))
+            .await
+            .expect("init pool"),
+    );
     db::run_migrations(pool.as_ref())
         .await
         .expect("run migrations");
@@ -106,9 +110,7 @@ async fn websocket_chat_persists_override_metadata_in_run_snapshot() {
     let ws_url = base_url.replacen("http://", "ws://", 1) + "/api/ws/chat";
     let conversation_id = "ws-conversation-override";
 
-    let (mut socket, _response) = connect_async(&ws_url)
-        .await
-        .expect("connect websocket");
+    let (mut socket, _response) = connect_async(&ws_url).await.expect("connect websocket");
 
     socket
         .send(Message::Text(

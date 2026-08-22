@@ -74,7 +74,10 @@ impl InputRequestGate {
 
         if let Some(sender) = self.sessions.lock().await.get(session_id).cloned() {
             if sender.send(request).await.is_err() {
-                tracing::warn!(session_id = session_id, "failed to deliver input request to live session");
+                tracing::warn!(
+                    session_id = session_id,
+                    "failed to deliver input request to live session"
+                );
             }
         }
 
@@ -239,7 +242,10 @@ mod tests {
             .expect("request should resolve");
         assert_eq!(resolved.request_id, request.request_id);
 
-        let result = waiter.await.expect("waiter should complete").expect("request should succeed");
+        let result = waiter
+            .await
+            .expect("waiter should complete")
+            .expect("request should succeed");
         assert_eq!(result, resolution);
     }
 
@@ -272,7 +278,10 @@ mod tests {
             .await
             .expect("reload recovery should still resolve");
 
-        let waited = waiter.await.expect("waiter should complete").expect("request should succeed");
+        let waited = waiter
+            .await
+            .expect("waiter should complete")
+            .expect("request should succeed");
         assert_eq!(waited, result);
     }
 

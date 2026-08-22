@@ -321,12 +321,10 @@ impl WorkflowRunner {
                             )
                             .await
                         }
-                        StepType::Transform => {
-                            execute_transform_step(
-                                &step_clone.instructions,
-                                &previous_outputs_clone,
-                            )
-                        }
+                        StepType::Transform => execute_transform_step(
+                            &step_clone.instructions,
+                            &previous_outputs_clone,
+                        ),
                     };
 
                     StepTaskResult {
@@ -492,12 +490,9 @@ impl WorkflowRunner {
         timeout_secs: Option<u64>,
     ) -> Result<String> {
         if let Some(secs) = timeout_secs {
-            time::timeout(
-                Duration::from_secs(secs),
-                self.execute_step(step),
-            )
-            .await
-            .unwrap_or_else(|_| Err(AppError::Validation("step timed out".to_owned())))
+            time::timeout(Duration::from_secs(secs), self.execute_step(step))
+                .await
+                .unwrap_or_else(|_| Err(AppError::Validation("step timed out".to_owned())))
         } else {
             self.execute_step(step).await
         }
@@ -524,7 +519,11 @@ impl WorkflowRunner {
 
         let messages = vec![
             Message::new(Uuid::new_v4().to_string(), Role::System, system_content),
-            Message::new(Uuid::new_v4().to_string(), Role::User, step_input.to_owned()),
+            Message::new(
+                Uuid::new_v4().to_string(),
+                Role::User,
+                step_input.to_owned(),
+            ),
         ];
 
         let tool_context = ToolExecutionContext {

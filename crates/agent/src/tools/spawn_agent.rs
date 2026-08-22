@@ -32,7 +32,6 @@ impl Tool for SpawnAgentTool {
          fits the user's specialized need."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

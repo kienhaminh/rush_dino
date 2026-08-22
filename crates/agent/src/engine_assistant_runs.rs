@@ -9,17 +9,21 @@ use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
-use rushdino_common::{
-    models::Message,
-    Result,
-};
+use rushdino_common::{models::Message, Result};
 use rushdino_providers::{types::ChatResponse, Provider};
 
 use crate::{
-    engine::{AgentConfig, AssistantRunJob, AssistantRunOverrides, GatewayRunHandle, WsStreamEvent},
-    engine_bootstrap::{resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message},
+    engine::{
+        AgentConfig, AssistantRunJob, AssistantRunOverrides, GatewayRunHandle, WsStreamEvent,
+    },
+    engine_bootstrap::{
+        resolve_skills_for_prompt, session_title_from_id, system_message, title_from, user_message,
+    },
     react_loop::{run_react_loop, run_react_loop_streaming, StreamingEvent},
-    runtime::{AgentRuntime, AssistantRunParams, RunCounts, RunDetail, RunListFilter, RunOriginMetadata, RunSnapshot},
+    runtime::{
+        AgentRuntime, AssistantRunParams, RunCounts, RunDetail, RunListFilter, RunOriginMetadata,
+        RunSnapshot,
+    },
     tools::bash::{with_tool_execution_context, ToolExecutionContext},
 };
 
@@ -456,7 +460,8 @@ impl crate::engine::AgentEngine {
 
         let effective_config = AgentConfig {
             model_override: Some(model.to_owned()),
-            thinking_level: thinking_level_override.unwrap_or_else(|| self.effective_thinking_level()),
+            thinking_level: thinking_level_override
+                .unwrap_or_else(|| self.effective_thinking_level()),
             ..self.config.clone()
         };
         let provider = provider_override.unwrap_or_else(|| self.provider.clone());
@@ -509,13 +514,12 @@ impl crate::engine::AgentEngine {
     ) -> Result<(Vec<Message>, usize)> {
         let title = session_title_from_id(conversation_id)
             .unwrap_or_else(|| title_from(user_input).to_owned());
-        let mut messages = self.conversation.ensure_conversation(conversation_id, &title).await?;
+        let mut messages = self
+            .conversation
+            .ensure_conversation(conversation_id, &title)
+            .await?;
 
-        let skills = resolve_skills_for_prompt(
-            self.skill_manager.as_ref(),
-            user_input,
-        )
-        .await;
+        let skills = resolve_skills_for_prompt(self.skill_manager.as_ref(), user_input).await;
         messages.insert(
             0,
             system_message(

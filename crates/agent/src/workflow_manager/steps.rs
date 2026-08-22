@@ -73,14 +73,12 @@ impl WorkflowManager {
 
     pub async fn mark_run_step_skipped(&self, run_step_id: &str) -> Result<()> {
         let now = Utc::now().to_rfc3339();
-        sqlx::query(
-            "UPDATE workflow_run_steps SET status = ?1, completed_at = ?2 WHERE id = ?3",
-        )
-        .bind(WorkflowRunStepStatus::Skipped.as_str())
-        .bind(&now)
-        .bind(run_step_id)
-        .execute(self.pool.as_ref())
-        .await?;
+        sqlx::query("UPDATE workflow_run_steps SET status = ?1, completed_at = ?2 WHERE id = ?3")
+            .bind(WorkflowRunStepStatus::Skipped.as_str())
+            .bind(&now)
+            .bind(run_step_id)
+            .execute(self.pool.as_ref())
+            .await?;
         Ok(())
     }
 

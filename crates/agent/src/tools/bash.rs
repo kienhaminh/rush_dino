@@ -69,7 +69,6 @@ impl Tool for ShellExecTool {
          Use for shell operations, running tests, git commands, build tools, and system tasks."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

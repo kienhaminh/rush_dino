@@ -36,7 +36,6 @@ impl Tool for ImageTool {
         and returns the file path."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

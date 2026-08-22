@@ -63,7 +63,10 @@ pub async fn resolve_input_request(
         }
     };
 
-    let request = state.input_gate.resolve(&request_id, result.clone()).await?;
+    let request = state
+        .input_gate
+        .resolve(&request_id, result.clone())
+        .await?;
 
     let _ = state
         .runtime_logs

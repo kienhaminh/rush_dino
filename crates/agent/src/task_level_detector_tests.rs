@@ -6,7 +6,8 @@ fn assert_immediate(request: &str) {
         d.strategy,
         HandlingStrategy::ImmediateResponse,
         "expected ImmediateResponse for: {request:?}\n  got: {:?} ({})",
-        d.strategy, d.reasoning
+        d.strategy,
+        d.reasoning
     );
 }
 
@@ -16,7 +17,8 @@ fn assert_inline(request: &str) {
         d.strategy,
         HandlingStrategy::InlineTool,
         "expected InlineTool for: {request:?}\n  got: {:?} ({})",
-        d.strategy, d.reasoning
+        d.strategy,
+        d.reasoning
     );
 }
 
@@ -26,7 +28,8 @@ fn assert_board(request: &str) {
         d.strategy,
         HandlingStrategy::PostToBoard,
         "expected PostToBoard for: {request:?}\n  got: {:?} ({})",
-        d.strategy, d.reasoning
+        d.strategy,
+        d.reasoning
     );
 }
 
@@ -140,9 +143,7 @@ fn inline_any_updates_on_github_outage() {
 /// Classic "help me build" request — clearly multi-step.
 #[test]
 fn board_help_me_set_up_jwt_auth() {
-    assert_board(
-        "Help me set up JWT authentication with refresh tokens and logout support.",
-    );
+    assert_board("Help me set up JWT authentication with refresh tokens and logout support.");
 }
 
 /// Full feature implementation.
@@ -182,25 +183,19 @@ fn board_set_up_cicd_pipeline() {
 /// Refactor + test — two concerns, clearly board-worthy.
 #[test]
 fn board_refactor_auth_module() {
-    assert_board(
-        "Refactor the authentication module to use the new provider interface.",
-    );
+    assert_board("Refactor the authentication module to use the new provider interface.");
 }
 
 /// Migration task — schema + code + test.
 #[test]
 fn board_migrate_postgres_to_sqlite() {
-    assert_board(
-        "Migrate our database from PostgreSQL to SQLite and update all the queries.",
-    );
+    assert_board("Migrate our database from PostgreSQL to SQLite and update all the queries.");
 }
 
 /// Design + implement in the same request.
 #[test]
 fn board_design_and_implement_rate_limiter() {
-    assert_board(
-        "Design and implement a rate limiter middleware for the API gateway.",
-    );
+    assert_board("Design and implement a rate limiter middleware for the API gateway.");
 }
 
 /// Very long natural request — word count alone triggers board.
@@ -225,21 +220,19 @@ fn board_long_architecture_request() {
 
 #[tokio::test]
 async fn assistant_session_only_posts_complex_tasks() {
-    use std::str::FromStr;
-    use std::sync::Arc;
+    use crate::kanban_store::KanbanStore;
+    use crate::tool_registry::Tool;
+    use crate::tools::kanban_tools::PostTaskTool;
     use sqlx::sqlite::SqliteConnectOptions;
     use sqlx::SqlitePool;
-    use crate::kanban_store::KanbanStore;
-    use crate::tools::kanban_tools::PostTaskTool;
-    use crate::tool_registry::Tool;
+    use std::str::FromStr;
+    use std::sync::Arc;
 
     // ── Setup ──────────────────────────────────────────────────────────
     let pool = Arc::new(
-        SqlitePool::connect_with(
-            SqliteConnectOptions::from_str("sqlite::memory:").unwrap(),
-        )
-        .await
-        .unwrap(),
+        SqlitePool::connect_with(SqliteConnectOptions::from_str("sqlite::memory:").unwrap())
+            .await
+            .unwrap(),
     );
     rushdino_common::db::run_migrations(&pool).await.unwrap();
     let store = Arc::new(KanbanStore::new(pool));
@@ -378,9 +371,7 @@ fn board_review_all_endpoints_is_complex() {
 /// "Deploy" is always a multi-step operation.
 #[test]
 fn board_deploy_to_production() {
-    assert_board(
-        "Deploy the new release to production and verify the health checks pass.",
-    );
+    assert_board("Deploy the new release to production and verify the health checks pass.");
 }
 
 /// "Configure" signals infrastructure work.

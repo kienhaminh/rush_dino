@@ -15,7 +15,9 @@ use tokio::sync::mpsc;
 use rushdino_common::{AppConfig, AppError, Result};
 
 use crate::{
-    mobile_gateway::{AuthenticatedMobileGatewayKey, IssuedMobileGatewayKey, MobileGatewayKeyRecord},
+    mobile_gateway::{
+        AuthenticatedMobileGatewayKey, IssuedMobileGatewayKey, MobileGatewayKeyRecord,
+    },
     state::AppState,
 };
 
@@ -223,7 +225,10 @@ async fn handle_mobile_socket(
             };
 
             if let Some((request_id, approved)) = parse_approval_response(&text) {
-                match gate.resolve(&session_id_for_recv, &request_id, approved).await {
+                match gate
+                    .resolve(&session_id_for_recv, &request_id, approved)
+                    .await
+                {
                     Ok(request) => {
                         let _ = outbound_tx
                             .send(json!({
@@ -263,7 +268,10 @@ async fn handle_mobile_socket(
         _ = &mut recv_task => send_task.abort(),
     }
 
-    state.mobile_gateway_adapter.disconnect(&auth.sender_id).await;
+    state
+        .mobile_gateway_adapter
+        .disconnect(&auth.sender_id)
+        .await;
     state.gate.unregister_session(&session_id).await;
 }
 

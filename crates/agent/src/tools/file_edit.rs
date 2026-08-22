@@ -8,8 +8,7 @@ use rushdino_common::{AppError, Result};
 use rushdino_security::validation::validate_path;
 
 use crate::{
-    system_broker::SharedSystemBroker,
-    tool_registry::Tool,
+    system_broker::SharedSystemBroker, tool_registry::Tool,
     tools::bash::current_tool_execution_context,
 };
 
@@ -21,7 +20,10 @@ pub struct FileEditTool {
 
 impl FileEditTool {
     pub fn new(workspace: PathBuf) -> Self {
-        Self { workspace, broker: None }
+        Self {
+            workspace,
+            broker: None,
+        }
     }
 
     pub fn with_broker(mut self, broker: SharedSystemBroker) -> Self {

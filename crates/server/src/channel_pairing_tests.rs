@@ -150,7 +150,8 @@ async fn ingress_policy_blocks_unpaired_direct_messages() {
         .expect("connect sqlite");
     run_migrations(&pool).await.expect("run migrations");
     let logs = Arc::new(RuntimeLogStore::new(Arc::new(pool), None));
-    let policy = ChannelPairingIngressPolicy::new(config_path, service.clone(), logs, dummy_broadcast_tx());
+    let policy =
+        ChannelPairingIngressPolicy::new(config_path, service.clone(), logs, dummy_broadcast_tx());
 
     let decision = policy
         .evaluate(&IncomingMessage {

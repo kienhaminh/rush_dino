@@ -135,13 +135,23 @@ mod session_ctx_tests {
     use async_trait::async_trait;
     use serde_json::{json, Value};
 
-    struct FakeTool { n: &'static str }
+    struct FakeTool {
+        n: &'static str,
+    }
     #[async_trait]
     impl Tool for FakeTool {
-        fn name(&self) -> &str { self.n }
-        fn description(&self) -> &str { "fake" }
-        fn parameters(&self) -> Value { json!({}) }
-        async fn execute(&self, _: Value) -> rushdino_common::Result<String> { Ok(String::new()) }
+        fn name(&self) -> &str {
+            self.n
+        }
+        fn description(&self) -> &str {
+            "fake"
+        }
+        fn parameters(&self) -> Value {
+            json!({})
+        }
+        async fn execute(&self, _: Value) -> rushdino_common::Result<String> {
+            Ok(String::new())
+        }
     }
 
     fn make_pool() -> Vec<Arc<dyn Tool>> {
@@ -162,7 +172,11 @@ mod session_ctx_tests {
     fn scoped_filters_pool() {
         let pool = make_pool();
         let ctx = SessionToolContext::scoped(&pool, &["read", "web_search"]);
-        let names: Vec<String> = ctx.pool_tools().iter().map(|t| t.name().to_owned()).collect();
+        let names: Vec<String> = ctx
+            .pool_tools()
+            .iter()
+            .map(|t| t.name().to_owned())
+            .collect();
         assert_eq!(names.len(), 2);
         assert!(names.contains(&"read".to_owned()));
         assert!(names.contains(&"web_search".to_owned()));

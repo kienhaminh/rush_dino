@@ -84,7 +84,9 @@ fn invalid_timezone_returns_error() {
 #[test]
 fn detect_system_timezone_is_valid() {
     let tz_name = detect_system_timezone();
-    let tz: Tz = tz_name.parse().expect("detected timezone must be valid IANA name");
+    let tz: Tz = tz_name
+        .parse()
+        .expect("detected timezone must be valid IANA name");
     // Verify it can be used for cron matching
     let now = Utc::now();
     let next = next_cron_occurrence("0 0 * * *", now, tz).expect("next cron with detected tz");

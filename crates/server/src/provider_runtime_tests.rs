@@ -52,10 +52,9 @@ async fn resolves_valid_default_openai_profile_from_profile_secrets() {
     credentials.openai_api_key = Some("sk-legacy".to_owned());
     let temp_path = temp_credentials_path();
 
-    let resolved =
-        resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
-            .await
-            .expect("profile should resolve");
+    let resolved = resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
+        .await
+        .expect("profile should resolve");
 
     match resolved.provider_config {
         ProviderConfig::OpenAI {
@@ -129,10 +128,9 @@ async fn resolves_openai_oauth_profile_from_stored_access_token() {
     );
     let temp_path = temp_credentials_path();
 
-    let resolved =
-        resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
-            .await
-            .expect("oauth profile should resolve from stored access token");
+    let resolved = resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
+        .await
+        .expect("oauth profile should resolve from stored access token");
 
     match resolved.provider_config {
         ProviderConfig::OpenAI {
@@ -158,10 +156,9 @@ async fn rejects_oauth_profile_with_no_stored_credentials() {
     let mut credentials = CredentialsConfig::default();
     let temp_path = temp_credentials_path();
 
-    let err =
-        resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
-            .await
-            .expect_err("oauth profile with no credentials must fail");
+    let err = resolve_default_profile_provider(&config, &mut credentials, temp_path.as_path())
+        .await
+        .expect_err("oauth profile with no credentials must fail");
     assert!(err.to_string().contains("please log in again"));
 
     let _ = fs::remove_file(temp_path);

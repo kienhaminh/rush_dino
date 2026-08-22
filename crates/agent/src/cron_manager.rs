@@ -189,9 +189,7 @@ impl CronManager {
 
         let now = Utc::now();
         let id = Uuid::new_v4().to_string();
-        let timezone = input
-            .timezone
-            .unwrap_or_else(detect_system_timezone);
+        let timezone = input.timezone.unwrap_or_else(detect_system_timezone);
         let next_run_at = compute_next_run_at(&input.schedule, &timezone, now)?;
         let state = if input.enabled.unwrap_or(true) {
             CronJobState::Active
@@ -305,10 +303,7 @@ impl CronManager {
 
     async fn set_enabled_state(&self, id: &str, enabled: bool) -> Result<CronJobRecord> {
         let job = self.get_job(id).await?;
-        let timezone = job
-            .timezone
-            .as_deref()
-            .unwrap_or("UTC");
+        let timezone = job.timezone.as_deref().unwrap_or("UTC");
         let next_run_at = if enabled {
             compute_next_run_at(&job.schedule, timezone, Utc::now())?
         } else {
@@ -394,10 +389,7 @@ impl CronManager {
 
     pub async fn complete_run(&self, p: CompleteRunParams<'_>) -> Result<CronJobRecord> {
         let job = self.get_job(p.job_id).await?;
-        let timezone = job
-            .timezone
-            .as_deref()
-            .unwrap_or("UTC");
+        let timezone = job.timezone.as_deref().unwrap_or("UTC");
         let next_run_at = if job.enabled {
             compute_next_run_after(&job.schedule, timezone, p.now)?
         } else {

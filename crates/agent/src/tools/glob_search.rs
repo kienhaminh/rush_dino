@@ -149,7 +149,6 @@ impl Tool for GlobSearchTool {
          `{a,b}` (alternation), `[abc]` (character class)."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -178,10 +177,7 @@ impl Tool for GlobSearchTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("pattern is required".to_owned()))?;
 
-        let limit = args
-            .get("limit")
-            .and_then(Value::as_u64)
-            .unwrap_or(100) as usize;
+        let limit = args.get("limit").and_then(Value::as_u64).unwrap_or(100) as usize;
 
         let effective_workspace = current_tool_execution_context()
             .and_then(|ctx| ctx.workspace_override)
@@ -206,11 +202,7 @@ impl Tool for GlobSearchTool {
         for entry in WalkDir::new(&search_root)
             .follow_links(false)
             .into_iter()
-            .filter_entry(|e| {
-                e.file_name()
-                    .to_str()
-                    .is_none_or(|name| !should_skip(name))
-            })
+            .filter_entry(|e| e.file_name().to_str().is_none_or(|name| !should_skip(name)))
         {
             let entry = match entry {
                 Ok(e) => e,
@@ -317,10 +309,7 @@ mod tests {
         std::fs::write(dir.path().join("readme.md"), "# README").unwrap();
 
         let tool = GlobSearchTool::new(dir.path().to_path_buf());
-        let result = tool
-            .execute(json!({"pattern": "**/*.rs"}))
-            .await
-            .unwrap();
+        let result = tool.execute(json!({"pattern": "**/*.rs"})).await.unwrap();
 
         let parsed: Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["total"], 2);

@@ -372,10 +372,12 @@ async fn reconcile_discord_adapter(
 
     state
         .gateway_control
-        .upsert_adapter(Arc::new(rushdino_discord::DiscordAdapter::new_with_allowlist(
-            token,
-            config.gateway.discord.allowed_user_ids.clone(),
-        )) as Arc<dyn ChannelAdapter>)
+        .upsert_adapter(
+            Arc::new(rushdino_discord::DiscordAdapter::new_with_allowlist(
+                token,
+                config.gateway.discord.allowed_user_ids.clone(),
+            )) as Arc<dyn ChannelAdapter>,
+        )
         .await
 }
 

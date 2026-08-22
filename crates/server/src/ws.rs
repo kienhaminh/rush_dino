@@ -12,7 +12,10 @@ use rushdino_agent::engine::{AssistantRunOverrides, WsStreamEvent};
 use rushdino_common::CredentialsConfig;
 use rushdino_providers::{types::ThinkingLevel, ProviderService};
 
-use crate::{provider_runtime::{provider_kind_label, resolve_profile_provider}, state::AppState};
+use crate::{
+    provider_runtime::{provider_kind_label, resolve_profile_provider},
+    state::AppState,
+};
 
 #[derive(Debug, Deserialize)]
 struct WsChatRequest {
@@ -467,7 +470,10 @@ mod tests {
     async fn resolve_profile_override_builds_run_specific_provider_and_model() {
         let credentials_path = temp_credentials_path();
         let mut config = AppConfig::default();
-        config.profiles = vec![profile("primary", "gpt-5.4"), profile("secondary", "gpt-4.1-mini")];
+        config.profiles = vec![
+            profile("primary", "gpt-5.4"),
+            profile("secondary", "gpt-4.1-mini"),
+        ];
 
         let mut credentials = CredentialsConfig::default();
         credentials.profiles.insert(
@@ -494,7 +500,10 @@ mod tests {
         assert_eq!(overrides.provider_name.as_deref(), Some("openai"));
         assert_eq!(overrides.model.as_deref(), Some("gpt-4.1-mini"));
         assert_eq!(overrides.thinking_level, Some(ThinkingLevel::Low));
-        assert!(overrides.provider.is_some(), "provider override should be built");
+        assert!(
+            overrides.provider.is_some(),
+            "provider override should be built"
+        );
 
         let _ = fs::remove_file(credentials_path);
     }

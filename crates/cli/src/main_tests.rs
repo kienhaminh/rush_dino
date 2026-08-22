@@ -83,8 +83,8 @@ fn upgrade_subcommand_rejects_beta_and_version_together() {
 
 #[test]
 fn downgrade_subcommand_requires_version_flag() {
-    let err = Cli::try_parse_from(["rushdino", "downgrade"])
-        .expect_err("downgrade should need version");
+    let err =
+        Cli::try_parse_from(["rushdino", "downgrade"]).expect_err("downgrade should need version");
 
     assert!(err.to_string().contains("--version"));
 }
@@ -102,8 +102,8 @@ fn downgrade_subcommand_parses_version_flag() {
 
 #[test]
 fn sessions_list_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "sessions", "list"])
-        .expect("sessions list should parse");
+    let cli =
+        Cli::try_parse_from(["rushdino", "sessions", "list"]).expect("sessions list should parse");
     assert!(matches!(cli.command, Command::Sessions(_)));
 }
 
@@ -142,8 +142,8 @@ fn sessions_message_parses() {
 
 #[test]
 fn agents_list_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "agents", "list"])
-        .expect("agents list should parse");
+    let cli =
+        Cli::try_parse_from(["rushdino", "agents", "list"]).expect("agents list should parse");
     assert!(matches!(cli.command, Command::Agents(_)));
 }
 
@@ -162,9 +162,56 @@ fn agents_get_parses() {
 }
 
 #[test]
+fn agents_create_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino",
+        "agents",
+        "create",
+        "--name",
+        "csv-wrangler",
+        "--description",
+        "Cleans local CSVs",
+        "--data-capable",
+    ])
+    .expect("agents create should parse");
+    assert!(matches!(cli.command, Command::Agents(_)));
+}
+
+#[test]
+fn agents_assign_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino",
+        "agents",
+        "assign",
+        "data-analyst",
+        "--message",
+        "Count rows in sales.csv",
+    ])
+    .expect("agents assign should parse");
+    assert!(matches!(cli.command, Command::Agents(_)));
+}
+
+#[test]
+fn agents_handoff_parses() {
+    let cli = Cli::try_parse_from([
+        "rushdino",
+        "agents",
+        "handoff",
+        "--from",
+        "researcher",
+        "--to",
+        "writer",
+        "--message",
+        "Draft the notes",
+    ])
+    .expect("agents handoff should parse");
+    assert!(matches!(cli.command, Command::Agents(_)));
+}
+
+#[test]
 fn workflow_list_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "workflow", "list"])
-        .expect("workflow list should parse");
+    let cli =
+        Cli::try_parse_from(["rushdino", "workflow", "list"]).expect("workflow list should parse");
     assert!(matches!(cli.command, Command::Workflow(_)));
 }
 
@@ -190,15 +237,15 @@ fn workflow_run_parses_with_input() {
 
 #[test]
 fn kanban_board_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "kanban", "board"])
-        .expect("kanban board should parse");
+    let cli =
+        Cli::try_parse_from(["rushdino", "kanban", "board"]).expect("kanban board should parse");
     assert!(matches!(cli.command, Command::Kanban(_)));
 }
 
 #[test]
 fn kanban_list_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "kanban", "list"])
-        .expect("kanban list should parse");
+    let cli =
+        Cli::try_parse_from(["rushdino", "kanban", "list"]).expect("kanban list should parse");
     assert!(matches!(cli.command, Command::Kanban(_)));
 }
 
@@ -240,7 +287,12 @@ fn approvals_approve_requires_session() {
 #[test]
 fn approvals_approve_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "approvals", "approve", "req-1", "--session", "sess-1",
+        "rushdino",
+        "approvals",
+        "approve",
+        "req-1",
+        "--session",
+        "sess-1",
     ])
     .expect("approvals approve with args should parse");
     assert!(matches!(cli.command, Command::Approvals(_)));
@@ -249,7 +301,12 @@ fn approvals_approve_parses() {
 #[test]
 fn approvals_deny_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "approvals", "deny", "req-1", "--session", "sess-1",
+        "rushdino",
+        "approvals",
+        "deny",
+        "req-1",
+        "--session",
+        "sess-1",
     ])
     .expect("approvals deny with args should parse");
     assert!(matches!(cli.command, Command::Approvals(_)));
@@ -272,9 +329,12 @@ fn configure_brave_api_key_parses() {
 #[test]
 fn configure_multiple_keys_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "configure",
-        "--openai-key", "sk-test",
-        "--anthropic-key", "ant-test",
+        "rushdino",
+        "configure",
+        "--openai-key",
+        "sk-test",
+        "--anthropic-key",
+        "ant-test",
     ])
     .expect("configure with multiple flags should parse");
     assert!(matches!(cli.command, Command::Configure(_)));
@@ -282,15 +342,14 @@ fn configure_multiple_keys_parses() {
 
 #[test]
 fn doctor_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "doctor"])
-        .expect("doctor should parse");
+    let cli = Cli::try_parse_from(["rushdino", "doctor"]).expect("doctor should parse");
     assert!(matches!(cli.command, Command::Doctor(_)));
 }
 
 #[test]
 fn doctor_json_flag_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "doctor", "--json"])
-        .expect("doctor --json should parse");
+    let cli =
+        Cli::try_parse_from(["rushdino", "doctor", "--json"]).expect("doctor --json should parse");
     assert!(matches!(cli.command, Command::Doctor(_)));
 }
 
@@ -303,9 +362,13 @@ fn sessions_spawn_requires_agent_and_prompt() {
 #[test]
 fn sessions_spawn_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "sessions", "spawn",
-        "--agent", "agent-123",
-        "--prompt", "do the thing",
+        "rushdino",
+        "sessions",
+        "spawn",
+        "--agent",
+        "agent-123",
+        "--prompt",
+        "do the thing",
     ])
     .expect("sessions spawn with args should parse");
     assert!(matches!(cli.command, Command::Sessions(_)));
@@ -314,9 +377,13 @@ fn sessions_spawn_parses() {
 #[test]
 fn sessions_spawn_json_flag_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "sessions", "spawn",
-        "--agent", "agent-123",
-        "--prompt", "do the thing",
+        "rushdino",
+        "sessions",
+        "spawn",
+        "--agent",
+        "agent-123",
+        "--prompt",
+        "do the thing",
         "--json",
     ])
     .expect("sessions spawn --json should parse");
@@ -347,17 +414,14 @@ fn sessions_history_limit_parses() {
 
 #[test]
 fn sessions_history_json_flag_parses() {
-    let cli = Cli::try_parse_from([
-        "rushdino", "sessions", "history", "sess-abc", "--json",
-    ])
-    .expect("sessions history --json should parse");
+    let cli = Cli::try_parse_from(["rushdino", "sessions", "history", "sess-abc", "--json"])
+        .expect("sessions history --json should parse");
     assert!(matches!(cli.command, Command::Sessions(_)));
 }
 
 #[test]
 fn cron_list_parses() {
-    let cli = Cli::try_parse_from(["rushdino", "cron", "list"])
-        .expect("cron list should parse");
+    let cli = Cli::try_parse_from(["rushdino", "cron", "list"]).expect("cron list should parse");
     assert!(matches!(cli.command, Command::Cron(_)));
 }
 
@@ -370,8 +434,7 @@ fn cron_list_json_parses() {
 
 #[test]
 fn cron_get_requires_id() {
-    Cli::try_parse_from(["rushdino", "cron", "get"])
-        .expect_err("cron get without id should fail");
+    Cli::try_parse_from(["rushdino", "cron", "get"]).expect_err("cron get without id should fail");
 }
 
 #[test]
@@ -390,9 +453,13 @@ fn cron_create_requires_schedule_and_prompt() {
 #[test]
 fn cron_create_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "cron", "create",
-        "--schedule", "0 * * * *",
-        "--prompt", "run daily report",
+        "rushdino",
+        "cron",
+        "create",
+        "--schedule",
+        "0 * * * *",
+        "--prompt",
+        "run daily report",
     ])
     .expect("cron create with required args should parse");
     assert!(matches!(cli.command, Command::Cron(_)));
@@ -401,10 +468,15 @@ fn cron_create_parses() {
 #[test]
 fn cron_create_with_agent_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "cron", "create",
-        "--schedule", "0 * * * *",
-        "--prompt", "run daily report",
-        "--agent", "agent-123",
+        "rushdino",
+        "cron",
+        "create",
+        "--schedule",
+        "0 * * * *",
+        "--prompt",
+        "run daily report",
+        "--agent",
+        "agent-123",
     ])
     .expect("cron create --agent should parse");
     assert!(matches!(cli.command, Command::Cron(_)));
@@ -493,9 +565,13 @@ fn workflow_create_requires_name_and_steps() {
 #[test]
 fn workflow_create_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "workflow", "create",
-        "--name", "my-wf",
-        "--steps", r#"[{"type":"prompt","prompt":"hello"}]"#,
+        "rushdino",
+        "workflow",
+        "create",
+        "--name",
+        "my-wf",
+        "--steps",
+        r#"[{"type":"prompt","prompt":"hello"}]"#,
     ])
     .expect("workflow create with args should parse");
     assert!(matches!(cli.command, Command::Workflow(_)));
@@ -504,10 +580,7 @@ fn workflow_create_parses() {
 #[test]
 fn workflow_create_json_flag_parses() {
     let cli = Cli::try_parse_from([
-        "rushdino", "workflow", "create",
-        "--name", "my-wf",
-        "--steps", r#"[]"#,
-        "--json",
+        "rushdino", "workflow", "create", "--name", "my-wf", "--steps", r#"[]"#, "--json",
     ])
     .expect("workflow create --json should parse");
     assert!(matches!(cli.command, Command::Workflow(_)));

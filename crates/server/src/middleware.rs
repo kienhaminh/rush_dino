@@ -271,9 +271,7 @@ fn extract_ip(request: &Request, trusted_proxies: &[IpNet]) -> IpAddr {
         .unwrap_or_else(|| "0.0.0.0".parse().unwrap());
 
     // Only honor XFF when the peer is a configured trusted proxy.
-    if !trusted_proxies.is_empty()
-        && trusted_proxies.iter().any(|net| net.contains(&peer_ip))
-    {
+    if !trusted_proxies.is_empty() && trusted_proxies.iter().any(|net| net.contains(&peer_ip)) {
         if let Some(forwarded) = request
             .headers()
             .get("X-Forwarded-For")

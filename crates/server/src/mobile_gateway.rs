@@ -70,7 +70,11 @@ impl MobileGatewayService {
         let id = Uuid::new_v4().to_string();
         let sender_id = format!("mobile-{}", Uuid::new_v4().simple());
         let created_at = Utc::now().to_rfc3339();
-        let api_key = format!("mobile_{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+        let api_key = format!(
+            "mobile_{}{}",
+            Uuid::new_v4().simple(),
+            Uuid::new_v4().simple()
+        );
         let label = label.map(str::trim).filter(|value| !value.is_empty());
 
         sqlx::query(
@@ -301,8 +305,11 @@ impl ChannelAdapter for MobileGatewayAdapter {
         let delta = if let Some(delta) = text.strip_prefix(&previous) {
             delta.to_owned()
         } else {
-            self.send_event(recipient, json!({ "type": "assistant_reset", "run_id": run_id }))
-                .await?;
+            self.send_event(
+                recipient,
+                json!({ "type": "assistant_reset", "run_id": run_id }),
+            )
+            .await?;
             text.to_owned()
         };
 
@@ -347,8 +354,11 @@ impl ChannelAdapter for MobileGatewayAdapter {
             .lock()
             .await
             .remove(&preview_key(recipient, run_id));
-        self.send_event(recipient, json!({ "type": "assistant_reset", "run_id": run_id }))
-            .await
+        self.send_event(
+            recipient,
+            json!({ "type": "assistant_reset", "run_id": run_id }),
+        )
+        .await
     }
 }
 

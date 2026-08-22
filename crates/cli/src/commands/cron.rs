@@ -119,12 +119,21 @@ pub async fn run(args: CronArgs) -> Result<()> {
                     for run in runs.iter().take(5) {
                         let run_id = run["id"].as_str().unwrap_or("-");
                         let run_status = run["status"].as_str().unwrap_or("-");
-                        println!("    {} {}", run_id.dimmed(), format!("[{run_status}]").yellow());
+                        println!(
+                            "    {} {}",
+                            run_id.dimmed(),
+                            format!("[{run_status}]").yellow()
+                        );
                     }
                 }
             }
         }
-        CronAction::Create { schedule, prompt, agent, json } => {
+        CronAction::Create {
+            schedule,
+            prompt,
+            agent,
+            json,
+        } => {
             let name = prompt.chars().take(60).collect::<String>();
             let mut target = serde_json::json!({
                 "kind": "agent_turn",
@@ -151,15 +160,21 @@ pub async fn run(args: CronArgs) -> Result<()> {
             println!("{} Cron job {} deleted.", "✔".green(), id.bold());
         }
         CronAction::Pause { id } => {
-            client.post(&format!("/api/cron/{id}/pause"), json!({})).await?;
+            client
+                .post(&format!("/api/cron/{id}/pause"), json!({}))
+                .await?;
             println!("{} Cron job {} paused.", "✔".green(), id.bold());
         }
         CronAction::Resume { id } => {
-            client.post(&format!("/api/cron/{id}/resume"), json!({})).await?;
+            client
+                .post(&format!("/api/cron/{id}/resume"), json!({}))
+                .await?;
             println!("{} Cron job {} resumed.", "✔".green(), id.bold());
         }
         CronAction::Trigger { id, json } => {
-            let data = client.post(&format!("/api/cron/{id}/run"), json!({})).await?;
+            let data = client
+                .post(&format!("/api/cron/{id}/run"), json!({}))
+                .await?;
             if json {
                 println!("{}", serde_json::to_string(&data).unwrap_or_default());
             } else {

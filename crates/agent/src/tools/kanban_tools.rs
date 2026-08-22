@@ -153,7 +153,8 @@ impl Tool for PostTaskTool {
         };
 
         let task = self.store.create_task(&input).await?;
-        Ok(serde_json::to_string_pretty(&task).unwrap_or_else(|_| format!("Task created: {}", task.id)))
+        Ok(serde_json::to_string_pretty(&task)
+            .unwrap_or_else(|_| format!("Task created: {}", task.id)))
     }
 }
 
@@ -210,7 +211,8 @@ impl Tool for ClaimTaskTool {
             .ok_or_else(|| AppError::Validation("agent_name is required".into()))?;
 
         let task = self.store.claim_task(task_id, agent_name).await?;
-        Ok(serde_json::to_string_pretty(&task).unwrap_or_else(|_| format!("Task claimed: {}", task.id)))
+        Ok(serde_json::to_string_pretty(&task)
+            .unwrap_or_else(|_| format!("Task claimed: {}", task.id)))
     }
 }
 
@@ -291,7 +293,8 @@ impl Tool for UpdateTaskTool {
         };
 
         let task = self.store.update_task_status(&input).await?;
-        Ok(serde_json::to_string_pretty(&task).unwrap_or_else(|_| format!("Task updated: {}", task.id)))
+        Ok(serde_json::to_string_pretty(&task)
+            .unwrap_or_else(|_| format!("Task updated: {}", task.id)))
     }
 }
 
@@ -384,7 +387,8 @@ impl Tool for ReviewTaskTool {
             }
         }
 
-        Ok(serde_json::to_string_pretty(&task).unwrap_or_else(|_| format!("Task reviewed: {}", task.id)))
+        Ok(serde_json::to_string_pretty(&task)
+            .unwrap_or_else(|_| format!("Task reviewed: {}", task.id)))
     }
 }
 

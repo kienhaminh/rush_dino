@@ -147,7 +147,11 @@ pub async fn run(args: SessionsArgs) -> Result<()> {
             client.delete(&format!("/api/sessions/{id}")).await?;
             println!("{} Session {} deleted.", "✔".green(), id.bold());
         }
-        SessionsAction::Spawn { agent, prompt, json } => {
+        SessionsAction::Spawn {
+            agent,
+            prompt,
+            json,
+        } => {
             let data = client
                 .post(
                     "/api/runs",

@@ -116,10 +116,7 @@ impl Tool for FileReadTool {
             .and_then(Value::as_str)
             .ok_or_else(|| AppError::Validation("path is required".to_owned()))?;
 
-        let offset = args
-            .get("offset")
-            .and_then(Value::as_u64)
-            .unwrap_or(0) as usize;
+        let offset = args.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
 
         let limit = args
             .get("limit")
@@ -261,7 +258,10 @@ mod tests {
         let tool = make_tool(home_dir.path().to_path_buf());
         let result = tool.execute(json!({"path": "credentials.toml"})).await;
 
-        assert!(result.is_err(), "credentials.toml must be denied via relative path");
+        assert!(
+            result.is_err(),
+            "credentials.toml must be denied via relative path"
+        );
         assert!(result.unwrap_err().to_string().contains("Access denied"));
     }
 

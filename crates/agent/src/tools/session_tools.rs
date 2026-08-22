@@ -141,7 +141,6 @@ impl Tool for SessionManageTool {
         "Manage sessions: create, get, or delete. Use `action` to specify the operation."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -262,7 +261,6 @@ impl Tool for SessionSendTool {
     fn description(&self) -> &str {
         "Send a message into an existing session and wait for the agent reply."
     }
-
 
     fn parameters(&self) -> Value {
         json!({

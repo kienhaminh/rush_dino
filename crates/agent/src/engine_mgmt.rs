@@ -18,7 +18,9 @@ impl crate::engine::AgentEngine {
         self.conversation.list_conversations().await
     }
 
-    pub async fn list_agent_conversations(&self) -> Result<Vec<rushdino_common::models::Conversation>> {
+    pub async fn list_agent_conversations(
+        &self,
+    ) -> Result<Vec<rushdino_common::models::Conversation>> {
         self.conversation.list_agent_conversations().await
     }
 
@@ -188,11 +190,38 @@ impl crate::engine::AgentEngine {
     }
 
     pub fn list_agent_templates(&self) -> Vec<AgentTemplate> {
-        self.agent_manager.list()
+        crate::team_ops::list_teammates(&self.agent_manager)
     }
 
     pub fn get_agent_template(&self, name: &str) -> Option<AgentTemplate> {
         self.agent_manager.get(name)
+    }
+
+    pub fn persist_teammate(
+        &self,
+        input: crate::team_ops::PersistTeammateInput,
+    ) -> Result<AgentTemplate> {
+        crate::team_ops::persist_teammate(&self.agent_manager, input)
+    }
+
+    pub async fn assign_work_to_agent(
+        &self,
+        input: crate::team_ops::AssignWorkInput,
+    ) -> Result<crate::team_ops::AssignmentRecord> {
+        crate::team_ops::assign_work(
+            &self.agent_manager,
+            &self.message_store,
+            &self.conversation,
+            input,
+        )
+        .await
+    }
+
+    pub async fn handoff_between_agents(
+        &self,
+        input: crate::team_ops::HandoffInput,
+    ) -> Result<crate::agent_message_store::AgentMessage> {
+        crate::team_ops::handoff(&self.agent_manager, &self.message_store, input).await
     }
 
     pub fn delete_agent_template(&self, name: &str) -> Result<()> {

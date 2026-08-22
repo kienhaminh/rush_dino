@@ -40,7 +40,11 @@ async fn create_test_app(home: &Path) -> axum::Router {
         .save_to_path(&credentials_path)
         .expect("save credentials");
 
-    let pool = Arc::new(db::init_pool(&home.join("data.db")).await.expect("init pool"));
+    let pool = Arc::new(
+        db::init_pool(&home.join("data.db"))
+            .await
+            .expect("init pool"),
+    );
     db::run_migrations(pool.as_ref())
         .await
         .expect("run migrations");
@@ -79,11 +83,7 @@ async fn send_request(
             .expect("build request")
     };
 
-    let response = app
-        .clone()
-        .oneshot(request)
-        .await
-        .expect("send request");
+    let response = app.clone().oneshot(request).await.expect("send request");
     let status = response.status();
     let payload = to_bytes(response.into_body(), usize::MAX)
         .await
@@ -117,7 +117,11 @@ async fn mobile_channel_key_can_be_issued_validated_and_revoked() {
         None,
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "config patch failed: {config_after}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "config patch failed: {config_after}"
+    );
 
     let (status, issued) = send_request(
         &app,
@@ -140,14 +144,8 @@ async fn mobile_channel_key_can_be_issued_validated_and_revoked() {
     );
     assert_eq!(issued["qrPayload"]["apiKey"], api_key);
 
-    let (status, listed) = send_request(
-        &app,
-        Method::GET,
-        "/api/channels/mobile/keys",
-        None,
-        None,
-    )
-    .await;
+    let (status, listed) =
+        send_request(&app, Method::GET, "/api/channels/mobile/keys", None, None).await;
     assert_eq!(status, StatusCode::OK, "key list failed: {listed}");
     let items = listed["items"].as_array().expect("items array");
     assert_eq!(items.len(), 1);
@@ -171,10 +169,7 @@ async fn mobile_channel_key_can_be_issued_validated_and_revoked() {
     assert_eq!(connected["channelId"], "mobile");
     assert_eq!(connected["senderId"], sender_id);
     assert_eq!(connected["label"], "Alice iPhone");
-    assert_eq!(
-        connected["publishHost"],
-        "https://rushdino.tailnet.ts.net"
-    );
+    assert_eq!(connected["publishHost"], "https://rushdino.tailnet.ts.net");
     assert_eq!(connected["websocketPath"], "/api/channels/mobile/ws");
 
     let (status, revoked) = send_request(
@@ -196,7 +191,11 @@ async fn mobile_channel_key_can_be_issued_validated_and_revoked() {
         Some(&api_key),
     )
     .await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "connect should fail: {denied}");
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "connect should fail: {denied}"
+    );
     assert_eq!(denied["error"], "mobile_api_key_invalid");
 
     let _ = std::fs::remove_dir_all(home);

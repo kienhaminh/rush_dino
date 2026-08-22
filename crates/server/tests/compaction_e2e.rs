@@ -113,9 +113,13 @@ async fn create_live_app(home: &Path, provider: &LiveProvider) -> (axum::Router,
     let (profile, profile_id) = match provider {
         LiveProvider::OpenAI(key) => {
             let id = "test-openai".to_owned();
-            credentials
-                .profiles
-                .insert(id.clone(), ProfileSecrets { api_key: Some(key.clone()), ..Default::default() });
+            credentials.profiles.insert(
+                id.clone(),
+                ProfileSecrets {
+                    api_key: Some(key.clone()),
+                    ..Default::default()
+                },
+            );
             (
                 ProviderProfile {
                     id: id.clone(),
@@ -130,9 +134,13 @@ async fn create_live_app(home: &Path, provider: &LiveProvider) -> (axum::Router,
         }
         LiveProvider::Anthropic(key) => {
             let id = "test-anthropic".to_owned();
-            credentials
-                .profiles
-                .insert(id.clone(), ProfileSecrets { api_key: Some(key.clone()), ..Default::default() });
+            credentials.profiles.insert(
+                id.clone(),
+                ProfileSecrets {
+                    api_key: Some(key.clone()),
+                    ..Default::default()
+                },
+            );
             (
                 ProviderProfile {
                     id: id.clone(),
@@ -184,7 +192,12 @@ async fn create_live_app(home: &Path, provider: &LiveProvider) -> (axum::Router,
 /// directly into the DB so that their estimated token cost
 /// (`content_len / 4` per message) pushes the conversation over the compaction
 /// threshold.
-async fn seed_large_messages(pool: &SqlitePool, conversation_id: &str, count: usize, content_len: usize) {
+async fn seed_large_messages(
+    pool: &SqlitePool,
+    conversation_id: &str,
+    count: usize,
+    content_len: usize,
+) {
     let now = Utc::now().to_rfc3339();
     let filler = "x".repeat(content_len);
 
@@ -220,8 +233,7 @@ async fn compaction_marker_appears_after_context_overflow() {
         return;
     };
 
-    let home = std::env::temp_dir()
-        .join(format!("rushdino-compaction-{}", Uuid::new_v4()));
+    let home = std::env::temp_dir().join(format!("rushdino-compaction-{}", Uuid::new_v4()));
 
     let (app, pool) = create_live_app(&home, &live_provider).await;
 
@@ -233,7 +245,11 @@ async fn compaction_marker_appears_after_context_overflow() {
         json!({ "title": "Compaction E2E" }),
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "create session failed: {created_session}");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "create session failed: {created_session}"
+    );
     let session_id = created_session["id"]
         .as_str()
         .expect("session id")
@@ -253,11 +269,7 @@ async fn compaction_marker_appears_after_context_overflow() {
         json!({ "message": "What is 2 + 2? Reply with just the number." }),
     )
     .await;
-    assert_eq!(
-        status,
-        StatusCode::OK,
-        "chat request failed: {response}"
-    );
+    assert_eq!(status, StatusCode::OK, "chat request failed: {response}");
 
     // The agent should answer the question (not re-initialise).
     let reply = response["reply"].as_str().unwrap_or("").trim().to_owned();
@@ -267,12 +279,8 @@ async fn compaction_marker_appears_after_context_overflow() {
     );
 
     // 4. Fetch conversation detail and verify the compaction marker.
-    let (status, detail) = send_empty(
-        &app,
-        Method::GET,
-        &format!("/api/sessions/{session_id}"),
-    )
-    .await;
+    let (status, detail) =
+        send_empty(&app, Method::GET, &format!("/api/sessions/{session_id}")).await;
     assert_eq!(status, StatusCode::OK, "get session failed: {detail}");
 
     let messages = detail["messages"]

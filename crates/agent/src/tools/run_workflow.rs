@@ -31,7 +31,6 @@ impl Tool for RunWorkflowTool {
         "Start a new run of a workflow"
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",

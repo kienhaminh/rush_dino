@@ -48,11 +48,10 @@ pub async fn check_version(_state: State<AppState>) -> Result<Json<serde_json::V
 /// Returns `{ success, installed_version, cleanup_files }`.
 pub async fn trigger_upgrade(_state: State<AppState>) -> Result<Json<serde_json::Value>> {
     // Fetch releases off the async executor — self_update uses reqwest blocking.
-    let releases =
-        tokio::task::spawn_blocking(fetch_releases)
-            .await
-            .map_err(|e| AppError::Agent(format!("spawn_blocking join error: {e}")))?
-            .map_err(|e| AppError::Agent(format!("failed to fetch releases: {e}")))?;
+    let releases = tokio::task::spawn_blocking(fetch_releases)
+        .await
+        .map_err(|e| AppError::Agent(format!("spawn_blocking join error: {e}")))?
+        .map_err(|e| AppError::Agent(format!("failed to fetch releases: {e}")))?;
 
     let resolved = resolve_latest_stable(&releases)?;
     let new_version = resolved.release.version.clone();
@@ -82,15 +81,15 @@ pub async fn trigger_upgrade(_state: State<AppState>) -> Result<Json<serde_json:
 
     // Run cleanup manifest for the newly installed version.
     let home = init::default_home_dir();
-    let cleanup_files = if let Some(manifest) = cleanup_manifests::get_cleanup_manifest(&new_version) {
-        cleanup_manifests::execute_cleanup(&home, &manifest)
-            .unwrap_or_else(|e| {
+    let cleanup_files =
+        if let Some(manifest) = cleanup_manifests::get_cleanup_manifest(&new_version) {
+            cleanup_manifests::execute_cleanup(&home, &manifest).unwrap_or_else(|e| {
                 tracing::warn!("cleanup manifest execution failed: {e}");
                 vec![]
             })
-    } else {
-        vec![]
-    };
+        } else {
+            vec![]
+        };
 
     // Invalidate cached version result so the next check reflects the upgrade.
     invalidate_cache().await;
@@ -175,5 +174,7 @@ pub async fn skip_version(
 ) -> Result<Json<serde_json::Value>> {
     let home = init::default_home_dir();
     add_skipped_version(&home, &body.version)?;
-    Ok(Json(json!({ "status": "skipped", "version": body.version })))
+    Ok(Json(
+        json!({ "status": "skipped", "version": body.version }),
+    ))
 }

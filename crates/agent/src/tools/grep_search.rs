@@ -131,7 +131,6 @@ impl Tool for GrepSearchTool {
          `count` (match counts per file). Skips binary files and common build directories."
     }
 
-
     fn parameters(&self) -> Value {
         json!({
             "type": "object",
@@ -203,10 +202,7 @@ impl Tool for GrepSearchTool {
             .and_then(Value::as_u64)
             .unwrap_or(0) as usize;
 
-        let max_results = args
-            .get("maxResults")
-            .and_then(Value::as_u64)
-            .unwrap_or(50) as usize;
+        let max_results = args.get("maxResults").and_then(Value::as_u64).unwrap_or(50) as usize;
 
         let file_glob = args.get("glob").and_then(Value::as_str);
 
@@ -236,11 +232,7 @@ impl Tool for GrepSearchTool {
         for entry in WalkDir::new(&search_root)
             .follow_links(false)
             .into_iter()
-            .filter_entry(|e| {
-                e.file_name()
-                    .to_str()
-                    .is_none_or(|name| !should_skip(name))
-            })
+            .filter_entry(|e| e.file_name().to_str().is_none_or(|name| !should_skip(name)))
         {
             if total_collected >= max_results {
                 break;
@@ -390,8 +382,11 @@ mod tests {
     #[tokio::test]
     async fn searches_files_in_temp_dir() {
         let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("hello.rs"), "fn main() {\n    println!(\"hello\");\n}\n")
-            .unwrap();
+        fs::write(
+            dir.path().join("hello.rs"),
+            "fn main() {\n    println!(\"hello\");\n}\n",
+        )
+        .unwrap();
         fs::write(
             dir.path().join("lib.rs"),
             "pub fn greet() {\n    println!(\"greet\");\n}\n",

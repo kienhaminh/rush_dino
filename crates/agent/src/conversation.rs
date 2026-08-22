@@ -71,7 +71,11 @@ impl ConversationManager {
 
     /// Ensure a conversation exists for `id`, creating it with `title` if it has no messages yet.
     /// Returns the existing messages (empty vec if newly created).
-    pub async fn ensure_conversation(&self, id: &str, title: &str) -> Result<Vec<rushdino_common::models::Message>> {
+    pub async fn ensure_conversation(
+        &self,
+        id: &str,
+        title: &str,
+    ) -> Result<Vec<rushdino_common::models::Message>> {
         let messages = self.get_messages(id).await.unwrap_or_default();
         if messages.is_empty() {
             let _ = self.create_conversation_with_id(id, title).await?;
@@ -162,7 +166,7 @@ impl ConversationManager {
         // Subtasks are deleted first (parent FK is SET NULL but we want full cleanup).
         sqlx::query(
             "DELETE FROM kanban_tasks WHERE parent_task_id IN \
-             (SELECT id FROM kanban_tasks WHERE conversation_id = ?1)"
+             (SELECT id FROM kanban_tasks WHERE conversation_id = ?1)",
         )
         .bind(id)
         .execute(self.pool.as_ref())
@@ -190,9 +194,8 @@ impl ConversationManager {
             return Ok(());
         }
         let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let sql = format!(
-            "DELETE FROM messages WHERE conversation_id = ? AND id IN ({placeholders})"
-        );
+        let sql =
+            format!("DELETE FROM messages WHERE conversation_id = ? AND id IN ({placeholders})");
         let mut q = sqlx::query(&sql).bind(conversation_id);
         for id in ids {
             q = q.bind(id.as_str());
@@ -409,13 +412,11 @@ mod tests {
             .await
             .expect("save_tool_log with duration and success");
 
-        let row = sqlx::query(
-            "SELECT duration_ms, success FROM tool_logs WHERE message_id = ?1",
-        )
-        .bind(&msg_id)
-        .fetch_one(&pool)
-        .await
-        .expect("fetch tool log");
+        let row = sqlx::query("SELECT duration_ms, success FROM tool_logs WHERE message_id = ?1")
+            .bind(&msg_id)
+            .fetch_one(&pool)
+            .await
+            .expect("fetch tool log");
 
         assert_eq!(row.get::<Option<i64>, _>("duration_ms"), Some(123));
         assert_eq!(row.get::<i64, _>("success"), 1);

@@ -132,12 +132,14 @@ impl McpManager {
             // Mark as connecting for new servers; reset to connecting if config changed.
             {
                 let mut map = self.state.write().expect("mcp state lock poisoned");
-                let entry = map.entry(cfg.name.clone()).or_insert_with(|| McpServerState {
-                    config: cfg.clone(),
-                    status: McpConnectionStatus::Connecting,
-                    tools: vec![],
-                    last_seen_at: None,
-                });
+                let entry = map
+                    .entry(cfg.name.clone())
+                    .or_insert_with(|| McpServerState {
+                        config: cfg.clone(),
+                        status: McpConnectionStatus::Connecting,
+                        tools: vec![],
+                        last_seen_at: None,
+                    });
                 // Reset status when url or auth_header has changed so stale status is not shown.
                 if entry.config != *cfg {
                     entry.status = McpConnectionStatus::Connecting;
@@ -223,7 +225,8 @@ impl McpManager {
     /// Return a snapshot of all server statuses, sorted by name for stable UI ordering.
     pub fn status_snapshot(&self) -> Vec<McpServerStatus> {
         let map = self.state.read().expect("mcp state lock poisoned");
-        let mut result: Vec<McpServerStatus> = map.values()
+        let mut result: Vec<McpServerStatus> = map
+            .values()
             .map(|s| McpServerStatus {
                 name: s.config.name.clone(),
                 status: s.status.clone(),
@@ -242,7 +245,11 @@ impl McpManager {
 
 /// Wraps a streaming reqwest response and parses Server-Sent Events.
 struct SseReader {
-    stream: Box<dyn futures::Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>> + Unpin + Send>,
+    stream: Box<
+        dyn futures::Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>>
+            + Unpin
+            + Send,
+    >,
     buffer: String,
 }
 
@@ -277,7 +284,10 @@ impl SseReader {
                 for line in raw.lines() {
                     if let Some(val) = line.strip_prefix("event:") {
                         event_type = val.trim().to_owned();
-                    } else if let Some(val) = line.strip_prefix("data: ").or_else(|| line.strip_prefix("data:")) {
+                    } else if let Some(val) = line
+                        .strip_prefix("data: ")
+                        .or_else(|| line.strip_prefix("data:"))
+                    {
                         if !data.is_empty() {
                             data.push('\n');
                         }
@@ -311,7 +321,11 @@ impl SseReader {
     async fn wait_for_id(&mut self, id: u64) -> anyhow::Result<Value> {
         loop {
             match self.next_event().await? {
-                None => return Err(anyhow::anyhow!("SSE stream closed before receiving id={id}")),
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "SSE stream closed before receiving id={id}"
+                    ))
+                }
                 Some((_evt, data)) => {
                     let v = match serde_json::from_str::<Value>(&data) {
                         Ok(v) => v,
@@ -346,10 +360,7 @@ fn resolve_message_endpoint(sse_url: &str, path: &str) -> String {
             parsed.scheme(),
             parsed.host_str().unwrap_or("localhost")
         );
-        let port_part = parsed
-            .port()
-            .map(|p| format!(":{p}"))
-            .unwrap_or_default();
+        let port_part = parsed.port().map(|p| format!(":{p}")).unwrap_or_default();
         return format!("{}{}{}", base, port_part, path);
     }
     // Fallback: just concatenate
@@ -625,5 +636,4 @@ mod tests {
             resolve_message_endpoint("http://localhost:3100/sse", "/messages?sessionId=abc");
         assert_eq!(result, "http://localhost:3100/messages?sessionId=abc");
     }
-
 }
